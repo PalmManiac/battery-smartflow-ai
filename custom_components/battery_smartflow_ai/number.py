@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from homeassistant.components.number import NumberEntity, NumberEntityDescription
+from homeassistant.components.number import (
+    NumberEntity,
+    NumberEntityDescription,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -17,22 +20,11 @@ from .const import (
     DEFAULT_BATTERY_PACKS,
     SETTING_PEAK_FACTOR,
     DEFAULT_PEAK_FACTOR,
-    SETTING_SOC_MIN,
-    SETTING_SOC_MAX,
-    SETTING_MAX_CHARGE,
-    SETTING_MAX_DISCHARGE,
-    SETTING_EMERGENCY_CHARGE,
-    SETTING_EMERGENCY_SOC,
-    SETTING_PROFIT_MARGIN_PCT,
-    SETTING_VERY_EXPENSIVE_THRESHOLD,
-    DEFAULT_SOC_MIN,
-    DEFAULT_SOC_MAX,
-    DEFAULT_MAX_CHARGE,
-    DEFAULT_MAX_DISCHARGE,
-    DEFAULT_EMERGENCY_CHARGE,
-    DEFAULT_EMERGENCY_SOC,
-    DEFAULT_PROFIT_MARGIN_PCT,
-    DEFAULT_VERY_EXPENSIVE_THRESHOLD,
+    # PV-Forecast (v3.2)
+    SETTING_DAYTIME_CONSUMPTION_W,
+    DEFAULT_DAYTIME_CONSUMPTION_W,
+    SETTING_NIGHTTIME_CONSUMPTION_W,
+    DEFAULT_NIGHTTIME_CONSUMPTION_W,
 )
 
 # --- NEW SETTINGS ---
@@ -49,6 +41,7 @@ class ZendureNumberEntityDescription(NumberEntityDescription):
 
 
 NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
+
     ZendureNumberEntityDescription(
         key=SETTING_BATTERY_PACKS,
         translation_key="battery_packs",
@@ -58,6 +51,7 @@ NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
         native_step=1,
         mode="box",
     ),
+
     ZendureNumberEntityDescription(
         key=SETTING_PEAK_FACTOR,
         translation_key="peak_factor",
@@ -68,6 +62,11 @@ NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
         mode="box",
         icon="mdi:chart-bell-curve",
     ),
+
+    # -----------------------------------------------------
+    # NEW: Valley Factor
+    # -----------------------------------------------------
+
     ZendureNumberEntityDescription(
         key=SETTING_VALLEY_FACTOR,
         translation_key="valley_factor",
@@ -78,6 +77,11 @@ NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
         mode="box",
         icon="mdi:chart-bell-curve",
     ),
+
+    # -----------------------------------------------------
+    # NEW: Very Cheap Price
+    # -----------------------------------------------------
+
     ZendureNumberEntityDescription(
         key=SETTING_VERY_CHEAP_PRICE,
         translation_key="very_cheap_price",
@@ -86,107 +90,126 @@ NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
         native_max_value=1.0,
         native_step=0.01,
         native_unit_of_measurement="€/kWh",
+        mode="box",
         icon="mdi:cash",
     ),
+
     ZendureNumberEntityDescription(
-        key=SETTING_SOC_MIN,
+        key="soc_min",
         translation_key="soc_min",
-        runtime_key=SETTING_SOC_MIN,
+        runtime_key="soc_min",
         native_min_value=0,
         native_max_value=100,
         native_step=1,
         native_unit_of_measurement="%",
+        mode="box",
         icon="mdi:battery-alert",
     ),
     ZendureNumberEntityDescription(
-        key=SETTING_SOC_MAX,
+        key="soc_max",
         translation_key="soc_max",
-        runtime_key=SETTING_SOC_MAX,
+        runtime_key="soc_max",
         native_min_value=0,
         native_max_value=100,
         native_step=1,
         native_unit_of_measurement="%",
+        mode="box",
         icon="mdi:battery-check",
     ),
     ZendureNumberEntityDescription(
-        key=SETTING_MAX_CHARGE,
+        key="max_charge",
         translation_key="max_charge",
-        runtime_key=SETTING_MAX_CHARGE,
+        runtime_key="max_charge",
         native_min_value=0,
         native_max_value=2400,
         native_step=50,
         native_unit_of_measurement="W",
+        mode="box",
         icon="mdi:battery-arrow-up",
     ),
     ZendureNumberEntityDescription(
-        key=SETTING_MAX_DISCHARGE,
+        key="max_discharge",
         translation_key="max_discharge",
-        runtime_key=SETTING_MAX_DISCHARGE,
+        runtime_key="max_discharge",
         native_min_value=0,
         native_max_value=2400,
         native_step=50,
         native_unit_of_measurement="W",
+        mode="box",
         icon="mdi:battery-arrow-down",
     ),
     ZendureNumberEntityDescription(
-        key=SETTING_EMERGENCY_CHARGE,
+        key="emergency_charge",
         translation_key="emergency_charge",
-        runtime_key=SETTING_EMERGENCY_CHARGE,
+        runtime_key="emergency_charge",
         native_min_value=0,
         native_max_value=2400,
         native_step=50,
         native_unit_of_measurement="W",
+        mode="box",
         icon="mdi:flash-alert",
     ),
     ZendureNumberEntityDescription(
-        key=SETTING_EMERGENCY_SOC,
+        key="emergency_soc",
         translation_key="emergency_soc",
-        runtime_key=SETTING_EMERGENCY_SOC,
+        runtime_key="emergency_soc",
         native_min_value=0,
         native_max_value=100,
         native_step=1,
         native_unit_of_measurement="%",
+        mode="box",
         icon="mdi:alert-circle",
     ),
     ZendureNumberEntityDescription(
-        key=SETTING_PROFIT_MARGIN_PCT,
+        key="profit_margin_pct",
         translation_key="profit_margin_pct",
-        runtime_key=SETTING_PROFIT_MARGIN_PCT,
+        runtime_key="profit_margin_pct",
         native_min_value=0,
         native_max_value=1000,
         native_step=1,
         native_unit_of_measurement="%",
+        mode="box",
         icon="mdi:chart-line",
     ),
     ZendureNumberEntityDescription(
-        key=SETTING_VERY_EXPENSIVE_THRESHOLD,
+        key="very_expensive_threshold",
         translation_key="very_expensive_threshold",
-        runtime_key=SETTING_VERY_EXPENSIVE_THRESHOLD,
+        runtime_key="very_expensive_threshold",
         native_min_value=0,
         native_max_value=2,
         native_step=0.01,
         native_unit_of_measurement="€/kWh",
+        mode="box",
         icon="mdi:currency-eur",
     ),
+
+    # --- PV-Forecast-basierte Nachtladung (v3.2) ---
+    # Hinweis: pv_forecast_enabled wird als Switch-Entität verwaltet (switch.py)
+
+    ZendureNumberEntityDescription(
+        key=SETTING_DAYTIME_CONSUMPTION_W,
+        translation_key="daytime_consumption_w",
+        runtime_key=SETTING_DAYTIME_CONSUMPTION_W,
+        native_min_value=0.0,
+        native_max_value=2000.0,
+        native_step=50.0,
+        native_unit_of_measurement="W",
+        mode="box",
+        icon="mdi:weather-sunny",
+    ),
+
+    ZendureNumberEntityDescription(
+        key=SETTING_NIGHTTIME_CONSUMPTION_W,
+        translation_key="nighttime_consumption_w",
+        runtime_key=SETTING_NIGHTTIME_CONSUMPTION_W,
+        native_min_value=0.0,
+        native_max_value=2000.0,
+        native_step=50.0,
+        native_unit_of_measurement="W",
+        mode="box",
+        icon="mdi:weather-night",
+    ),
 )
-
-
-def _default_for_key(key: str) -> float:
-    defaults: dict[str, float] = {
-        SETTING_BATTERY_PACKS: DEFAULT_BATTERY_PACKS,
-        SETTING_PEAK_FACTOR: DEFAULT_PEAK_FACTOR,
-        SETTING_VALLEY_FACTOR: DEFAULT_VALLEY_FACTOR,
-        SETTING_VERY_CHEAP_PRICE: DEFAULT_VERY_CHEAP_PRICE,
-        SETTING_SOC_MIN: DEFAULT_SOC_MIN,
-        SETTING_SOC_MAX: DEFAULT_SOC_MAX,
-        SETTING_MAX_CHARGE: DEFAULT_MAX_CHARGE,
-        SETTING_MAX_DISCHARGE: DEFAULT_MAX_DISCHARGE,
-        SETTING_EMERGENCY_CHARGE: DEFAULT_EMERGENCY_CHARGE,
-        SETTING_EMERGENCY_SOC: DEFAULT_EMERGENCY_SOC,
-        SETTING_PROFIT_MARGIN_PCT: DEFAULT_PROFIT_MARGIN_PCT,
-        SETTING_VERY_EXPENSIVE_THRESHOLD: DEFAULT_VERY_EXPENSIVE_THRESHOLD,
-    }
-    return float(defaults.get(key, 0.0))
 
 
 async def async_setup_entry(
@@ -203,15 +226,29 @@ async def async_setup_entry(
 
     add_entities(entities)
 
-    # --- Initialize runtime settings once ---
+    # --- INITIALIZE RUNTIME SETTINGS ---
+    # Always run: defensive __init__ may have pre-populated with native_min_value
+    # instead of the proper defaults. entry.options wins if user has already saved.
     for ent in entities:
         key = ent.entity_description.runtime_key
 
-        if key not in coordinator.runtime_settings:
-            coordinator.runtime_settings[key] = entry.options.get(
-                key,
-                _default_for_key(key),
-            )
+        if key == SETTING_PEAK_FACTOR:
+            default_value = DEFAULT_PEAK_FACTOR
+        elif key == SETTING_VALLEY_FACTOR:
+            default_value = DEFAULT_VALLEY_FACTOR
+        elif key == SETTING_VERY_CHEAP_PRICE:
+            default_value = DEFAULT_VERY_CHEAP_PRICE
+        elif key == SETTING_DAYTIME_CONSUMPTION_W:
+            default_value = DEFAULT_DAYTIME_CONSUMPTION_W
+        elif key == SETTING_NIGHTTIME_CONSUMPTION_W:
+            default_value = DEFAULT_NIGHTTIME_CONSUMPTION_W
+        else:
+            default_value = ent.entity_description.native_min_value
+
+        coordinator.runtime_settings[key] = entry.options.get(
+            key,
+            default_value,
+        )
 
 
 class ZendureSmartFlowNumber(NumberEntity):
@@ -236,31 +273,29 @@ class ZendureSmartFlowNumber(NumberEntity):
             "sw_version": INTEGRATION_VERSION,
         }
 
+        # Defensive init
         if description.runtime_key not in coordinator.runtime_settings:
             coordinator.runtime_settings[description.runtime_key] = entry.options.get(
                 description.runtime_key,
-                _default_for_key(description.runtime_key),
+                description.native_min_value,
             )
 
     @property
     def native_value(self) -> float:
         return float(
             self.coordinator.runtime_settings.get(
-                self.entity_description.runtime_key,
-                _default_for_key(self.entity_description.runtime_key),
+                self.entity_description.runtime_key, 0
             )
         )
 
     async def async_set_native_value(self, value: float) -> None:
-        value = float(value)
-
-        self.coordinator.runtime_settings[self.entity_description.runtime_key] = value
+        self.coordinator.runtime_settings[self.entity_description.runtime_key] = float(value)
 
         self.hass.config_entries.async_update_entry(
             self._entry,
             options={
                 **self._entry.options,
-                self.entity_description.runtime_key: value,
+                self.entity_description.runtime_key: float(value),
             },
         )
 

@@ -4,9 +4,9 @@ import logging
 from dataclasses import dataclass
 
 from homeassistant.components.sensor import (
-    SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorDeviceClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -14,6 +14,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .device_profiles import DEVICE_PROFILES
 from .const import (
     DOMAIN,
     INTEGRATION_NAME,
@@ -25,7 +26,6 @@ from .const import (
     RECO_ENUMS,
     NEXT_ACTION_STATE_ENUMS,
 )
-from .device_profiles import DEVICE_PROFILES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +49,7 @@ class ZendureSensorEntityDescription(SensorEntityDescription):
 
 
 SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
+
     # --------------------------------------------------
     # SYSTEM STATUS
     # --------------------------------------------------
@@ -84,6 +85,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         options=FAULT_LEVEL_ENUMS,
         icon="mdi:alert-circle-outline",
     ),
+
     # --------------------------------------------------
     # ACTION STATE
     # --------------------------------------------------
@@ -102,6 +104,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:clock-start",
     ),
+
     # --------------------------------------------------
     # ENGINE TRANSPARENCY
     # --------------------------------------------------
@@ -123,6 +126,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="engine_health",
         icon="mdi:heart-pulse",
     ),
+
     # --------------------------------------------------
     # PRICE TRANSPARENCY
     # --------------------------------------------------
@@ -147,6 +151,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         native_unit_of_measurement="€/kWh",
         icon="mdi:chart-bell-curve-cumulative",
     ),
+    # --- Numeric sensors ---
     ZendureSensorEntityDescription(
         key="house_load",
         translation_key="house_load",
@@ -161,6 +166,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         native_unit_of_measurement="€/kWh",
         icon="mdi:currency-eur",
     ),
+
     # --------------------------------------------------
     # ECONOMICS
     # --------------------------------------------------
@@ -178,6 +184,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         native_unit_of_measurement="€",
         icon="mdi:cash",
     ),
+
     # --------------------------------------------------
     # DEVICE / MODE
     # --------------------------------------------------
@@ -204,6 +211,60 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=SOC_LIMIT_ENUMS,
         icon="mdi:shield-alert-outline",
+    ),
+
+    # --------------------------------------------------
+    # NACHTLADUNG TRANSPARENZ (v3.2)
+    # --------------------------------------------------
+    ZendureSensorEntityDescription(
+        key="night_charge_status",
+        translation_key="night_charge_status",
+        runtime_key="night_charge_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=["charging", "goal_reached", "no_need", "discharge_paused", "inactive"],
+        icon="mdi:weather-night",
+    ),
+    ZendureSensorEntityDescription(
+        key="night_charge_pv_kwh",
+        translation_key="night_charge_pv_kwh",
+        runtime_key="night_charge_pv_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:solar-power",
+    ),
+    ZendureSensorEntityDescription(
+        key="night_charge_byd_target_soc",
+        translation_key="night_charge_byd_target_soc",
+        runtime_key="night_charge_byd_target_soc",
+        native_unit_of_measurement="%",
+        icon="mdi:battery-arrow-up-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="night_charge_byd_kwh",
+        translation_key="night_charge_byd_kwh",
+        runtime_key="night_charge_byd_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:battery-arrow-up-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="night_charge_zendure_target_soc",
+        translation_key="night_charge_zendure_target_soc",
+        runtime_key="night_charge_zendure_target_soc",
+        native_unit_of_measurement="%",
+        icon="mdi:lightning-bolt",
+    ),
+    ZendureSensorEntityDescription(
+        key="night_charge_zendure_kwh",
+        translation_key="night_charge_zendure_kwh",
+        runtime_key="night_charge_zendure_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:lightning-bolt",
+    ),
+    ZendureSensorEntityDescription(
+        key="total_available_kwh",
+        translation_key="total_available_kwh",
+        runtime_key="total_available_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:battery-high",
     ),
 )
 
@@ -246,6 +307,9 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
         details = data.get("details") or {}
         key = self.entity_description.runtime_key
 
+        # -------------------------
+        # TIMESTAMP
+        # -------------------------
         if self.device_class == SensorDeviceClass.TIMESTAMP:
             val = data.get(key)
             if val is None:
@@ -257,6 +321,9 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 return dt_util.as_utc(dt) if dt else None
             return None
 
+        # -------------------------
+        # ENUM
+        # -------------------------
         if self.device_class == SensorDeviceClass.ENUM:
             val = details.get(key, data.get(key))
             options = self.entity_description.options or []
@@ -264,11 +331,15 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 return val
             return options[0] if options else None
 
+        # -------------------------
+        # NUMERIC
+        # -------------------------
         val = details.get(key, data.get(key))
 
         if val is None:
             return None
 
+        # Numeric detection via unit
         if self.entity_description.native_unit_of_measurement:
             try:
                 return float(val)
@@ -277,52 +348,7 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         return val
 
-    def _build_device_profile_attributes(self) -> dict:
-        data = self.coordinator.data or {}
-        details = data.get("details") or {}
-
-        base_profile = details.get("device_profile")
-        installed_pv_wp = details.get("installed_pv_wp")
-
-        profile_overrides = self._entry.options.get("profile_overrides", {})
-        if not isinstance(profile_overrides, dict):
-            profile_overrides = {}
-
-        season_thresholds = self.coordinator._persist.get("season_thresholds", {})
-        if not isinstance(season_thresholds, dict):
-            season_thresholds = {}
-
-        attrs = {
-            "base_profile": base_profile,
-            "profile_overrides_active": bool(profile_overrides),
-            "profile_override_count": len(profile_overrides),
-            "installed_pv_wp": installed_pv_wp,
-            "effective_target_import_w": details.get("effective_target_import_w"),
-            "effective_deadband_w": details.get("effective_deadband_w"),
-            "effective_export_guard_w": details.get("effective_export_guard_w"),
-            "effective_kp_up": details.get("effective_kp_up"),
-            "effective_kp_down": details.get("effective_kp_down"),
-            "effective_max_step_up": details.get("effective_max_step_up"),
-            "effective_max_step_down": details.get("effective_max_step_down"),
-            "effective_keepalive_min_deficit_w": details.get("effective_keepalive_min_deficit_w"),
-            "effective_keepalive_min_output_w": details.get("effective_keepalive_min_output_w"),
-            "season_summer_pv_threshold": season_thresholds.get("summer_pv_threshold"),
-            "season_summer_export_threshold": season_thresholds.get("summer_export_threshold"),
-            "season_winter_pv_threshold": season_thresholds.get("winter_pv_threshold"),
-            "season_winter_export_threshold": season_thresholds.get("winter_export_threshold"),
-            "season_counter": season_thresholds.get("counter"),
-        }
-
-        attrs["profile_overrides"] = profile_overrides
-
-        return attrs
-
     def _handle_coordinator_update(self) -> None:
         data = self.coordinator.data or {}
-        details = dict(data.get("details") or {})
-
-        if self.entity_description.runtime_key == "device_profile":
-            details.update(self._build_device_profile_attributes())
-
-        self._attr_extra_state_attributes = details
+        self._attr_extra_state_attributes = data.get("details") or {}
         super()._handle_coordinator_update()

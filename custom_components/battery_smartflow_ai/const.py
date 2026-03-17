@@ -10,12 +10,13 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "3.2.0"
+INTEGRATION_VERSION = "3.1.2"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.NUMBER,
     Platform.SELECT,
+    Platform.SWITCH,
 ]
 
 # ==================================================
@@ -31,6 +32,18 @@ CONF_PRICE_EXPORT_ENTITY = "price_export_entity"  # Tibber Export (attributes.da
 CONF_PRICE_NOW_ENTITY = "price_now_entity"        # direkter Preis-Sensor (€/kWh)
 
 CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY = "additional_battery_charge_entity"
+CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY = "additional_battery_discharge_entity"
+CONF_WALLBOX_POWER_ENTITY = "wallbox_power_entity"
+
+# PV-Forecast-basierte Nachtladung (v3.2)
+CONF_PV_FORECAST_ENTITY              = "pv_forecast_entity"
+CONF_ADDITIONAL_BATTERY_SOC_ENTITY   = "additional_battery_soc_entity"
+CONF_ADDITIONAL_BATTERY_CAPACITY_KWH = "additional_battery_capacity_kwh"
+CONF_ADDITIONAL_BATTERY_MODE_ENTITY  = "additional_battery_mode_entity"    # input_select (optional)
+CONF_ADDITIONAL_BATTERY_POWER_ENTITY = "additional_battery_power_entity"   # input_number (optional)
+CONF_ADDITIONAL_BATTERY_CHARGE_MODE  = "additional_battery_charge_mode"    # z.B. "Akku schnell laden"
+CONF_ADDITIONAL_BATTERY_STOP_MODE    = "additional_battery_stop_mode"      # z.B. "Akku automatisch"
+CONF_ADDITIONAL_BATTERY_PAUSE_MODE   = "additional_battery_pause_mode"     # z.B. "Akku Pause" (kein Laden, kein Entladen)
 
 # Zendure Steuer-Entitäten
 CONF_AC_MODE_ENTITY = "ac_mode_entity"            # select input/output
@@ -47,18 +60,16 @@ CONF_GRID_EXPORT_ENTITY = "grid_export_entity"    # export W
 CONF_PACK_CAPACITY_KWH = "pack_capacity_kwh"
 CONF_BATTERY_AC_POWER_ENTITY = "battery_ac_power_entity"
 
-# --- New for V3.2.0 ---
-CONF_INSTALLED_PV_WP = "installed_pv_wp"
-CONF_PROFILE_OVERRIDES = "profile_overrides"
-
-# --- Helper constants for dynamic GUI profile override entities ---
-PROFILE_OVERRIDE_PREFIX = "profile_override_"
-
 # --- Runtime settings ---
 SETTING_BATTERY_PACKS = "battery_packs"
 
 SETTING_VALLEY_FACTOR = "valley_factor"
 SETTING_VERY_CHEAP_PRICE = "very_cheap_price"
+
+# PV-Forecast Runtime-Einstellungen (v3.2)
+SETTING_PV_FORECAST_ENABLED      = "pv_forecast_enabled"       # 0.0 = aus, 1.0 = an
+SETTING_DAYTIME_CONSUMPTION_W    = "daytime_consumption_w"     # Hausverbrauch tagsüber (08–18 Uhr) in W
+SETTING_NIGHTTIME_CONSUMPTION_W  = "nighttime_consumption_w"   # Hausverbrauch nachts + Morgenbrücke in W
 
 # Default
 DEFAULT_PACK_CAPACITY_KWH = 2.88
@@ -67,19 +78,20 @@ DEFAULT_BATTERY_PACKS = 1
 DEFAULT_VALLEY_FACTOR = 0.85
 DEFAULT_VERY_CHEAP_PRICE = None
 
-# --- New default for V3.2.0 ---
-DEFAULT_INSTALLED_PV_WP = 0.0
+# PV-Forecast Defaults (v3.2)
+DEFAULT_ADDITIONAL_BATTERY_CAPACITY_KWH = 0.0
+DEFAULT_PV_FORECAST_ENABLED      = 0.0
+DEFAULT_DAYTIME_CONSUMPTION_W    = 500.0   # Watt (08–18 Uhr, 10h → 5 kWh Direktverbrauch)
+DEFAULT_NIGHTTIME_CONSUMPTION_W  = 500.0   # Watt (Nacht + Brücke 05–08 Uhr)
 
 # --------------------------------------------------
-# Device profiles (V1.5.x / V3.2.0 overrides)
+# Device profiles (V1.5.x)
 # --------------------------------------------------
 
 CONF_DEVICE_PROFILE = "device_profile"
 
 DEVICE_PROFILE_SF2400AC = "SF2400AC"
 DEVICE_PROFILE_SF800PRO = "SF800Pro"
-DEVICE_PROFILE_SF1600AC = "SF1600AC"
-DEVICE_PROFILE_HYPER2000 = "Hyper 2000"
 
 DEFAULT_DEVICE_PROFILE = DEVICE_PROFILE_SF2400AC
 
@@ -100,8 +112,9 @@ AI_MODES = [AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_WINTER, AI_MODE_MANUAL]
 MANUAL_STANDBY = "standby"
 MANUAL_CHARGE = "charge"
 MANUAL_DISCHARGE = "discharge"
+MANUAL_CONST_DISCHARGE = "constant_discharge"
 
-MANUAL_ACTIONS = [MANUAL_STANDBY, MANUAL_CHARGE, MANUAL_DISCHARGE]
+MANUAL_ACTIONS = [MANUAL_STANDBY, MANUAL_CHARGE, MANUAL_DISCHARGE, MANUAL_CONST_DISCHARGE]
 
 # ==================================================
 # Settings (Number entities) – entity keys

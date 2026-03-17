@@ -5,19 +5,16 @@
         "title": "Reconfigurer Battery SmartFlow AI",
         "description": "Ajustez les capteurs sélectionnés",
         "data": {
-          "device_profile": "Profil d’appareil",
-          "soc_entity": "Capteur SoC de batterie",
-          "soc_limit_entity": "Statut de limite SoC (optionnel)",
+          "device_profile": "Profil d'appareil",
+          "soc_entity": "Capteur SoC batterie",
+          "soc_limit_entity": "Statut limite SoC (optionnel)",
           "pack_capacity_kwh": "Capacité par pack batterie (kWh)",
-          "battery_ac_power_entity": "Capteur de puissance batterie (W)",
-          "additional_battery_charge_entity": "Puissance de charge batterie supplémentaire (optionnel)",
           "capacity_entity": "Capteur de capacité (optionnel)",
-          "installed_pv_wp": "Puissance PV installée (Wp)",
-          "pv_entity": "Capteur de puissance PV",
-          "price_now_entity": "Prix actuel de l’électricité",
-          "price_export_entity": "Courbe de prix (p. ex. Tibber / EPEX)",
-          "grid_mode": "Mesure réseau",
-          "grid_power_entity": "Puissance réseau (simple)",
+          "pv_entity": "Capteur puissance PV",
+          "price_now_entity": "Prix actuel de l'électricité",
+          "price_export_entity": "Prévision des prix (ex. Tibber / EPEX)",
+          "grid_mode": "Mesure du réseau",
+          "grid_power_entity": "Puissance réseau (unique)",
           "grid_import_entity": "Import réseau (split)",
           "grid_export_entity": "Export réseau (split)",
           "ac_mode_entity": "Mode AC Zendure",
@@ -25,71 +22,66 @@
           "output_limit_entity": "Puissance de décharge Zendure"
         },
         "data_description": {
-          "device_profile": "Sélectionnez le profil d’appareil approprié pour votre système Zendure. Le profil contient des paramètres de régulation ajustés.",
-          "soc_entity": "Capteur avec l’état de charge actuel de la batterie en pourcentage. Base centrale pour toutes les décisions.",
-          "soc_limit_entity": "Capteur optionnel de l’intégration Zendure signalant les limites BMS actives, comme le blocage de charge ou de décharge.",
-          "pack_capacity_kwh": "Capacité utilisable d’un pack batterie unique en kWh. Elle est multipliée par le nombre de packs installés pour calculer la capacité totale.",
-          "battery_ac_power_entity": "Capteur de la puissance AC de la batterie. La valeur doit être positive lors de la décharge. Recommandé : sensor.solarflow_2400_ac_bat_in_out",
-          "additional_battery_charge_entity": "Capteur optionnel d’un second système batterie. Si ce capteur signale une puissance de charge positive, Battery SmartFlow AI bloque la décharge.",
-          "capacity_entity": "Capteur optionnel avec la capacité batterie disponible calculée automatiquement en kWh, par exemple depuis l’intégration Zendure. S’il est défini, il remplace le calcul manuel.",
-          "installed_pv_wp": "Puissance théorique installée des modules PV du système en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et pour d’autres logiques liées au PV.",
-          "pv_entity": "Capteur avec la puissance PV actuelle en watts. Utilisé pour détecter le surplus.",
-          "price_now_entity": "Capteur avec le prix actuel de l’électricité, par exemple de Tibber. Utilisé pour les décisions économiques.",
-          "price_export_entity": "Capteur avec les données de prévision de prix, par exemple Tibber / EPEX. Permet une planification basée sur les prix.",
-          "grid_mode": "Choisissez comment votre consommation réseau est mesurée : un capteur combiné ou des capteurs séparés pour l’import et l’export.",
-          "grid_power_entity": "Un capteur unique avec une puissance positive lors de l’import réseau et négative lors de l’export.",
-          "grid_import_entity": "Capteur avec la puissance actuelle d’import réseau, uniquement des valeurs positives.",
-          "grid_export_entity": "Capteur avec la puissance actuelle d’export réseau, uniquement des valeurs positives.",
-          "ac_mode_entity": "Entité select de l’intégration Zendure qui bascule entre charge (INPUT) et décharge (OUTPUT).",
-          "input_limit_entity": "Entité number utilisée pour définir la puissance de charge en watts.",
-          "output_limit_entity": "Entité number utilisée pour définir la puissance de décharge en watts."
+          "device_profile": "Choisissez le profil adapté à votre système Zendure. Le profil contient des paramètres de régulation optimisés.",
+          "soc_entity": "Capteur indiquant l’état de charge (State of Charge) de la batterie en pourcentage. Base centrale pour toutes les décisions.",
+          "soc_limit_entity": "Capteur optionnel de l’intégration Zendure indiquant des limites BMS actives (ex. blocage charge/décharge).",
+          "pack_capacity_kwh": "Capacité utilisable d’un pack batterie en kWh. Multipliée par le nombre de packs installés pour obtenir la capacité totale.",
+          "capacity_entity": "Capteur optionnel avec capacité batterie disponible calculée automatiquement en kWh. S’il est défini, il remplace le calcul manuel.",
+          "pv_entity": "Capteur de puissance PV actuelle en watts. Utilisé pour détecter un surplus.",
+          "price_now_entity": "Capteur du prix actuel de l’électricité (ex. Tibber). Utilisé pour les décisions économiques.",
+          "price_export_entity": "Capteur contenant des données de prévision des prix (ex. Tibber / EPEX). Permet la planification.",
+          "grid_mode": "Choisissez comment la consommation réseau est mesurée : capteur unique ou capteurs séparés import/export.",
+          "grid_power_entity": "Capteur unique : puissance positive = import réseau, puissance négative = export réseau.",
+          "grid_import_entity": "Capteur de puissance d’import réseau (valeur positive uniquement).",
+          "grid_export_entity": "Capteur de puissance d’export réseau (valeur positive uniquement).",
+          "ac_mode_entity": "Entité Select Zendure basculant entre charge (INPUT) et décharge (OUTPUT).",
+          "input_limit_entity": "Entité Number pour régler la puissance de charge en watts.",
+          "output_limit_entity": "Entité Number pour régler la puissance de décharge en watts."
         }
       },
       "reconfigure_grid": {
         "title": "Configurer la mesure réseau",
-        "description": "Sélectionnez les capteurs réseau correspondant au mode",
+        "description": "Choisissez les capteurs réseau selon le mode",
         "data": {
-          "grid_power_entity": "Puissance réseau (simple)",
+          "grid_power_entity": "Puissance réseau (unique)",
           "grid_import_entity": "Import réseau (split)",
           "grid_export_entity": "Export réseau (split)"
         },
         "data_description": {
-          "grid_power_entity": "Un capteur unique avec une puissance positive lors de l’import et négative lors de l’export.",
-          "grid_import_entity": "Capteur avec la puissance actuelle d’import réseau en watts.",
-          "grid_export_entity": "Capteur avec la puissance actuelle d’export réseau en watts."
+          "grid_power_entity": "Capteur unique : positif = import, négatif = export.",
+          "grid_import_entity": "Capteur de puissance d’import réseau en watts.",
+          "grid_export_entity": "Capteur de puissance d’export réseau en watts."
         }
       },
       "grid": {
         "title": "Configurer la mesure réseau",
-        "description": "Sélectionnez les capteurs réseau correspondant au mode",
+        "description": "Choisissez les capteurs réseau selon le mode",
         "data": {
-          "grid_power_entity": "Puissance réseau (simple)",
+          "grid_power_entity": "Puissance réseau (unique)",
           "grid_import_entity": "Import réseau (split)",
           "grid_export_entity": "Export réseau (split)"
         },
         "data_description": {
-          "grid_power_entity": "Un capteur unique avec une puissance positive lors de l’import et négative lors de l’export.",
-          "grid_import_entity": "Capteur avec la puissance actuelle d’import réseau en watts.",
-          "grid_export_entity": "Capteur avec la puissance actuelle d’export réseau en watts."
+          "grid_power_entity": "Capteur unique : positif = import, négatif = export.",
+          "grid_import_entity": "Capteur de puissance d’import réseau en watts.",
+          "grid_export_entity": "Capteur de puissance d’export réseau en watts."
         }
       },
       "user": {
         "title": "Configurer Battery SmartFlow AI",
-        "description": "Sélectionnez les capteurs requis",
+        "description": "Sélectionnez les capteurs nécessaires",
         "data": {
-          "device_profile": "Profil d’appareil",
-          "soc_entity": "Capteur SoC de batterie",
-          "soc_limit_entity": "Statut de limite SoC (optionnel)",
+          "device_profile": "Profil d'appareil",
+          "soc_entity": "Capteur SoC batterie",
+          "soc_limit_entity": "Statut limite SoC (optionnel)",
           "pack_capacity_kwh": "Capacité par pack batterie (kWh)",
           "battery_ac_power_entity": "Capteur de puissance batterie (W)",
-          "additional_battery_charge_entity": "Puissance de charge batterie supplémentaire (optionnel)",
           "capacity_entity": "Capteur de capacité (optionnel)",
-          "installed_pv_wp": "Puissance PV installée (Wp)",
-          "pv_entity": "Capteur de puissance PV",
-          "price_now_entity": "Prix actuel de l’électricité",
-          "price_export_entity": "Courbe de prix (p. ex. Tibber / EPEX)",
-          "grid_mode": "Mesure réseau",
-          "grid_power_entity": "Puissance réseau (simple)",
+          "pv_entity": "Capteur puissance PV",
+          "price_now_entity": "Prix actuel de l'électricité",
+          "price_export_entity": "Prévision des prix (ex. Tibber / EPEX)",
+          "grid_mode": "Mesure du réseau",
+          "grid_power_entity": "Puissance réseau (unique)",
           "grid_import_entity": "Import réseau (split)",
           "grid_export_entity": "Export réseau (split)",
           "ac_mode_entity": "Mode AC Zendure",
@@ -97,54 +89,22 @@
           "output_limit_entity": "Puissance de décharge Zendure"
         },
         "data_description": {
-          "device_profile": "Sélectionnez le profil d’appareil approprié pour votre système Zendure. Les paramètres de régulation sont ajustés automatiquement.",
-          "soc_entity": "Capteur avec l’état de charge actuel de la batterie en pourcentage.",
-          "soc_limit_entity": "Capteur d’état optionnel de l’intégration Zendure pour détecter les limites BMS actives.",
-          "pack_capacity_kwh": "Capacité utilisable d’un pack batterie unique en kWh. Elle est multipliée par le nombre de packs installés pour calculer la capacité totale.",
-          "battery_ac_power_entity": "Capteur de la puissance AC de la batterie. La valeur doit être positive lors de la décharge. Recommandé : sensor.solarflow_2400_ac_bat_in_out",
-          "additional_battery_charge_entity": "Capteur optionnel d’un second système batterie. Si ce capteur signale une puissance de charge positive, Battery SmartFlow AI bloque la décharge.",
-          "capacity_entity": "Capteur optionnel avec la capacité batterie disponible calculée automatiquement en kWh, par exemple depuis l’intégration Zendure. S’il est défini, il remplace le calcul manuel.",
-          "installed_pv_wp": "Puissance théorique installée des modules PV du système en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et pour d’autres logiques liées au PV.",
-          "pv_entity": "Capteur avec la puissance PV actuelle en watts.",
-          "price_now_entity": "Prix actuel de l’électricité. Permet une décharge basée sur les prix.",
-          "price_export_entity": "Données de prévision de prix pour les prochaines heures. Permet une planification intelligente de la charge.",
-          "grid_mode": "Définit comment l’import et l’export réseau sont mesurés.",
-          "grid_power_entity": "Un capteur réseau combiné (positif = import, négatif = export).",
-          "grid_import_entity": "Capteur pour l’import réseau (mode split).",
-          "grid_export_entity": "Capteur pour l’export réseau (mode split).",
+          "device_profile": "Choisissez le profil adapté à votre système Zendure. Les paramètres de régulation sont ajustés automatiquement.",
+          "soc_entity": "Capteur indiquant l’état de charge actuel de la batterie en pourcentage.",
+          "soc_limit_entity": "Capteur optionnel pour détecter des blocages BMS actifs.",
+          "pack_capacity_kwh": "Capacité utilisable d’un pack batterie en kWh. Multipliée par le nombre de packs installés pour obtenir la capacité totale.",
+          "battery_ac_power_entity": "Capteur de puissance AC de la batterie. La valeur doit être positive en décharge. Recommandé : sensor.solarflow_2400_ac_bat_in_out",
+          "capacity_entity": "Capteur optionnel de capacité disponible calculée automatiquement en kWh. S’il est défini, il remplace le calcul manuel.",
+          "pv_entity": "Capteur de puissance PV actuelle en watts.",
+          "price_now_entity": "Prix actuel de l’électricité. Permet la décharge selon le prix.",
+          "price_export_entity": "Prévisions des prix pour les prochaines heures. Permet une planification intelligente de la charge.",
+          "grid_mode": "Détermine comment l’import et l’export réseau sont mesurés.",
+          "grid_power_entity": "Capteur réseau combiné (positif = import, négatif = export).",
+          "grid_import_entity": "Capteur import réseau (mode split).",
+          "grid_export_entity": "Capteur export réseau (mode split).",
           "ac_mode_entity": "Mode AC Zendure (INPUT/OUTPUT). Contrôlé automatiquement par l’intégration.",
-          "input_limit_entity": "Puissance de charge configurable en watts.",
-          "output_limit_entity": "Puissance de décharge configurable en watts."
-        }
-      }
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Modifier le profil de régulation",
-        "description": "Paramètres experts pour le profil d’appareil actif. Ces valeurs modifient le comportement interne de régulation et ne doivent être ajustées que si vous en comprenez l’effet.",
-        "data": {
-          "TARGET_IMPORT_W": "Import réseau cible",
-          "DEADBAND_W": "Bande morte",
-          "EXPORT_GUARD_W": "Protection export",
-          "KP_UP": "KP montée",
-          "KP_DOWN": "KP descente",
-          "MAX_STEP_UP": "Étape max. de montée",
-          "MAX_STEP_DOWN": "Étape max. de descente",
-          "KEEPALIVE_MIN_DEFICIT_W": "Déficit minimum keepalive",
-          "KEEPALIVE_MIN_OUTPUT_W": "Puissance minimum keepalive"
-        },
-        "data_description": {
-          "TARGET_IMPORT_W": "Valeur cible pour un petit import réseau volontaire. Une valeur plus élevée réduit le risque d’export non souhaité mais augmente légèrement la consommation réseau.",
-          "DEADBAND_W": "Plage de tolérance dans laquelle aucune régulation n’est appliquée. Une valeur plus élevée rend la régulation plus stable, une valeur plus faible plus agressive et précise.",
-          "EXPORT_GUARD_W": "Marge de sécurité supplémentaire contre un export réseau non souhaité. Des valeurs plus élevées rendent la régulation plus prudente.",
-          "KP_UP": "Gain utilisé lors de l’augmentation de puissance. Des valeurs plus élevées réagissent plus vite mais peuvent provoquer plus facilement un dépassement.",
-          "KP_DOWN": "Gain utilisé lors de la réduction de puissance. Des valeurs plus élevées réduisent la puissance plus rapidement mais peuvent rendre le comportement moins fluide.",
-          "MAX_STEP_UP": "Étape maximale de puissance par cycle de régulation lors de l’augmentation. Des valeurs plus élevées rendent la régulation plus rapide mais potentiellement plus agressive.",
-          "MAX_STEP_DOWN": "Étape maximale de puissance par cycle de régulation lors de la réduction. Des valeurs plus élevées freinent plus rapidement mais peuvent provoquer des sauts plus importants.",
-          "KEEPALIVE_MIN_DEFICIT_W": "Déficit minimum nécessaire pour maintenir la décharge active. Aide à éviter les oscillations pour de très petites charges.",
-          "KEEPALIVE_MIN_OUTPUT_W": "Puissance minimale de décharge pour maintenir une décharge stable. Évite les activations et désactivations inutiles."
+          "input_limit_entity": "Puissance de charge réglable en watts.",
+          "output_limit_entity": "Puissance de décharge réglable en watts."
         }
       }
     }
@@ -164,76 +124,39 @@
         "name": "Action manuelle",
         "state": {
           "standby": "Veille",
-          "charge": "Charge",
-          "discharge": "Décharge"
+          "charge": "Charger",
+          "discharge": "Décharger"
         }
       }
     },
     "number": {
-      "battery_packs": {
-        "name": "Nombre de packs batterie"
-      },
-      "soc_min": {
-        "name": "SoC minimum"
-      },
-      "soc_max": {
-        "name": "SoC maximum"
-      },
-      "max_charge": {
-        "name": "Puissance de charge max."
-      },
-      "max_discharge": {
-        "name": "Puissance de décharge max."
-      },
-      "emergency_charge": {
-        "name": "Puissance de charge d’urgence"
-      },
-      "emergency_soc": {
-        "name": "Charge d’urgence sous SoC"
-      },
-      "very_expensive_threshold": {
-        "name": "Seuil très cher"
-      },
-      "profit_margin_pct": {
-        "name": "Marge de profit (%)"
-      },
-      "peak_factor": {
-        "name": "Facteur de pic"
-      },
-      "valley_factor": {
-        "name": "Facteur de creux"
-      },
-      "very_cheap_price": {
-        "name": "Seuil très bon marché"
-      }
+      "battery_packs": { "name": "Nombre de packs batterie" },
+      "soc_min": { "name": "SoC minimum" },
+      "soc_max": { "name": "SoC maximum" },
+      "max_charge": { "name": "Puissance de charge max." },
+      "max_discharge": { "name": "Puissance de décharge max." },
+      "emergency_charge": { "name": "Puissance de charge d’urgence" },
+      "emergency_soc": { "name": "Charge d’urgence à partir de SoC" },
+      "very_expensive_threshold": { "name": "Seuil très cher" },
+      "profit_margin_pct": { "name": "Marge (%)" },
+      "peak_factor": { "name": "Facteur de pic" }
     },
     "sensor": {
-      "device_profile": {
-        "name": "Profil d’appareil actif"
-      },
-      "adaptive_peak_active": {
-        "name": "Pic adaptatif détecté"
-      },
-      "price_daily_average": {
-        "name": "Prix journalier moyen"
-      },
-      "current_peak_threshold": {
-        "name": "Seuil de pic actuel"
-      },
-      "current_valley_threshold": {
-        "name": "Seuil de creux actuel"
-      },
+      "device_profile": { "name": "Profil d’appareil actif" },
+      "adaptive_peak_active": { "name": "Pic adaptatif détecté" },
+      "price_daily_average": { "name": "Prix moyen journalier" },
+      "current_peak_threshold": { "name": "Seuil de pic actuel" },
       "engine_health": {
         "name": "État du moteur",
         "state": {
           "ok": "Système normal",
           "no_price_data": "Aucune donnée de prix disponible",
-          "no_current_price": "Aucun prix actuel de l’électricité",
-          "sensor_invalid": "Données de capteur invalides"
+          "no_current_price": "Aucun prix actuel",
+          "sensor_invalid": "Données capteurs invalides"
         }
       },
       "season_mode": {
-        "name": "Mode de fonctionnement détecté",
+        "name": "Mode détecté",
         "state": {
           "winter": "Mode hiver",
           "summer": "Mode été",
@@ -241,38 +164,38 @@
         }
       },
       "soc_limit_status": {
-        "name": "Statut de limite SoC",
+        "name": "Statut limite SoC",
         "state": {
-          "not_configured": "Aucun capteur de limite SoC configuré",
+          "not_configured": "Aucun capteur limite SoC configuré",
           "no_limit": "Aucune limite active",
-          "upper_limit_active": "Limite SoC supérieure active (charge bloquée)",
-          "lower_limit_active": "Limite SoC inférieure active (décharge bloquée)"
+          "upper_limit_active": "Limite supérieure active (charge bloquée)",
+          "lower_limit_active": "Limite inférieure active (décharge bloquée)"
         }
       },
       "fault_level_status": {
-        "name": "Statut de défaut",
+        "name": "Statut d’erreur",
         "state": {
-          "normal": "Aucun défaut / tout est normal",
-          "warning": "Avertissement (l’appareil continue de fonctionner)",
+          "normal": "Aucune erreur / tout est normal",
+          "warning": "Avertissement (l’appareil continue)",
           "error": "Erreur / protection active"
         }
       },
       "status": {
-        "name": "Statut système",
+        "name": "Statut du système",
         "state": {
           "init": "Initialisation",
           "ok": "OK",
-          "sensor_invalid": "Données capteur invalides",
+          "sensor_invalid": "Données capteurs invalides",
           "price_invalid": "Données de prix invalides"
         }
       },
       "ai_status": {
         "name": "Statut IA",
         "state": {
-          "standby": "Veille",
+          "standby": "En attente",
           "charge_surplus": "Charge (surplus PV)",
-          "cover_deficit": "Décharge (couvrir la charge de la maison)",
-          "expensive_discharge": "Décharge (prix élevé de l’électricité)",
+          "cover_deficit": "Décharge (couvrir la charge maison)",
+          "expensive_discharge": "Décharge (prix élevé)",
           "very_expensive_force": "Décharge forcée (prix extrêmes)",
           "emergency_charge": "Charge d’urgence active",
           "manual": "Mode manuel"
@@ -282,25 +205,23 @@
         "name": "Recommandation IA",
         "state": {
           "standby": "Aucune action",
-          "charge": "Charge",
-          "discharge": "Décharge",
+          "charge": "Charger",
+          "discharge": "Décharger",
           "emergency": "Charge d’urgence"
         }
       },
       "decision_reason": {
-        "name": "Raison de la décision",
+        "name": "Raison de décision",
         "state": {
-          "standby": "Veille",
-          "state_idle": "Aucune demande détectée",
-          "state_enter_discharge": "Décharge démarrée (demande détectée)",
-          "state_discharging": "Décharge active (couverture de la charge maison)",
+          "standby": "En attente",
+          "state_idle": "Aucun besoin détecté",
+          "state_enter_discharge": "Décharge démarrée (besoin détecté)",
+          "state_discharging": "Décharge active (couvrir la charge maison)",
           "state_enter_charge": "Charge démarrée (surplus détecté)",
           "state_charging": "Charge active",
-          "expensive_discharge": "Décharge en raison d’un prix élevé de l’électricité",
-          "very_expensive_force_discharge": "Décharge forcée en raison d’un pic de prix extrême",
+          "expensive_discharge": "Décharge à cause d’un prix élevé",
+          "very_expensive_force_discharge": "Décharge forcée à cause d’un pic extrême",
           "emergency_latched_charge": "Charge d’urgence active (verrouillée)",
-          "summer_cover_deficit": "Été : couvrir la charge de la maison",
-          "pv_surplus_charge": "Charge à partir du surplus PV",
           "soc_min_enforced": "Décharge arrêtée (SoC minimum atteint)",
           "soc_limit_upper": "Charge bloquée (limite SoC supérieure active)",
           "soc_limit_lower": "Décharge bloquée (limite SoC inférieure active)",
@@ -308,12 +229,9 @@
           "manual_standby": "Veille manuelle",
           "manual_charge": "Charge manuelle",
           "manual_discharge": "Décharge manuelle",
-          "manual_idle": "Veille manuelle",
+          "manual_idle": "Attente manuelle",
           "idle": "Prêt",
-          "adaptive_peak_discharge": "Décharge en raison d’un pic de prix",
-          "price_based_discharge": "Décharge basée sur le prix",
-          "valley_boost_charge": "Creux de prix détecté. Charge maximale",
-          "additional_battery_charging_block": "Batterie supplémentaire en charge : décharge bloquée"
+          "adaptive_peak_discharge": "Décharge à cause d’un pic de prix"
         }
       },
       "next_planned_action": {
@@ -326,37 +244,13 @@
           "emergency": "Charge d’urgence"
         }
       },
-      "next_action_state": {
-        "name": "Prochaine action",
-        "state": {
-          "none": "Aucune action planifiée",
-          "planned_charge": "Charge planifiée",
-          "planned_discharge": "Décharge planifiée",
-          "charging_active": "Charge active",
-          "discharging_active": "Décharge active",
-          "manual_charge": "Charge manuelle",
-          "manual_discharge": "Décharge manuelle",
-          "emergency_charge": "Charge d’urgence"
-        }
-      },
-      "next_action_time": {
-        "name": "Heure de début de la prochaine action"
-      },
-      "ai_debug": {
-        "name": "Debug IA"
-      },
-      "house_load": {
-        "name": "Charge maison"
-      },
-      "price_now": {
-        "name": "Prix actuel de l’électricité"
-      },
-      "avg_charge_price": {
-        "name": "Prix moyen de charge batterie"
-      },
-      "profit_eur": {
-        "name": "Économies / profit (total)"
-      }
+      "next_action_time": { "name": "Heure de début de la prochaine action" },
+      "ai_debug": { "name": "Debug IA" },
+      "house_load": { "name": "Charge maison" },
+      "price_now": { "name": "Prix actuel de l’électricité" },
+      "avg_charge_price": { "name": "Prix moyen de charge batterie" },
+      "profit_eur": { "name": "Économies / profit (total)" },
+      "total_available_kwh": { "name": "Énergie disponible (total)" }
     }
   }
 }

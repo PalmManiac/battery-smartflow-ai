@@ -9,10 +9,7 @@
           "soc_entity": "Batterie-SoC Sensor",
           "soc_limit_entity": "SoC-Limit Status (optional)",
           "pack_capacity_kwh": "Kapazität pro Akku-Pack (kWh)",
-          "battery_ac_power_entity": "Batterie Leistungssensor (W)",
-          "additional_battery_charge_entity": "Zusatzakku Ladeleistung (optional)",
           "capacity_entity": "Kapazitätssensor (optional)",
-          "installed_pv_wp": "Installierte PV-Leistung (Wp)",
           "pv_entity": "PV-Leistung Sensor",
           "price_now_entity": "Aktueller Strompreis",
           "price_export_entity": "Preisverlauf (z. B. Tibber / EPEX)",
@@ -22,17 +19,21 @@
           "grid_export_entity": "Netzeinspeisung (Split)",
           "ac_mode_entity": "Zendure AC-Modus",
           "input_limit_entity": "Zendure Ladeleistung",
-          "output_limit_entity": "Zendure Entladeleistung"
+          "output_limit_entity": "Zendure Entladeleistung",
+          "pv_forecast_entity": "PV-Prognose Sensor (optional)",
+          "additional_battery_soc_entity": "Zweite Batterie SoC Sensor (optional)",
+          "additional_battery_capacity_kwh": "Zweite Batterie Kapazität (kWh)",
+          "additional_battery_mode_entity": "Zweite Batterie Modus input_select (optional)",
+          "additional_battery_power_entity": "Zweite Batterie Leistung input_number (optional)",
+          "additional_battery_charge_mode": "Lademodus-String (z. B. 'Akku schnell laden')",
+          "additional_battery_stop_mode": "Stopmodus-String (z. B. 'Akku automatisch')"
         },
         "data_description": {
           "device_profile": "Wähle das passende Geräteprofil für dein Zendure-System. Das Profil enthält abgestimmte Regelparameter.",
           "soc_entity": "Sensor mit dem aktuellen Ladezustand (State of Charge) der Batterie in Prozent. Zentrale Grundlage für alle Entscheidungen.",
           "soc_limit_entity": "Optionaler Sensor aus der Zendure-Integration, der aktive BMS-Grenzen meldet (z. B. Lade- oder Entladesperre).",
           "pack_capacity_kwh": "Nutzbare Kapazität eines einzelnen Akku-Packs in kWh. Wird mit der Anzahl der installierten Packs multipliziert, um die Gesamtkapazität zu berechnen.",
-          "battery_ac_power_entity": "Sensor für die AC-Leistung der Batterie. Der Wert muss bei Entladung positiv sein. Empfohlen: sensor.solarflow_2400_ac_bat_in_out",
-          "additional_battery_charge_entity": "Optionaler Sensor eines zweiten Akkusystems. Wenn dieser Sensor eine positive Ladeleistung meldet, wird die Entladung von Battery SmartFlow AI blockiert.",
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
-          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt. Wird zur Erkennung von Überschuss verwendet.",
           "price_now_entity": "Sensor mit dem aktuellen Strompreis (z. B. Tibber). Wird für wirtschaftliche Entscheidungen genutzt.",
           "price_export_entity": "Sensor mit Preisprognosedaten (z. B. Tibber / EPEX). Ermöglicht Preis-Vorplanung.",
@@ -82,9 +83,7 @@
           "soc_limit_entity": "SoC-Limit Status (optional)",
           "pack_capacity_kwh": "Kapazität pro Akku-Pack (kWh)",
           "battery_ac_power_entity": "Batterie Leistungssensor (W)",
-          "additional_battery_charge_entity": "Zusatzakku Ladeleistung (optional)",
           "capacity_entity": "Kapazitätssensor (optional)",
-          "installed_pv_wp": "Installierte PV-Leistung (Wp)",
           "pv_entity": "PV-Leistung Sensor",
           "price_now_entity": "Aktueller Strompreis",
           "price_export_entity": "Preisverlauf (z. B. Tibber / EPEX)",
@@ -94,7 +93,14 @@
           "grid_export_entity": "Netzeinspeisung (Split)",
           "ac_mode_entity": "Zendure AC-Modus",
           "input_limit_entity": "Zendure Ladeleistung",
-          "output_limit_entity": "Zendure Entladeleistung"
+          "output_limit_entity": "Zendure Entladeleistung",
+          "pv_forecast_entity": "PV-Prognose Sensor (optional)",
+          "additional_battery_soc_entity": "Zweite Batterie SoC Sensor (optional)",
+          "additional_battery_capacity_kwh": "Zweite Batterie Kapazität (kWh)",
+          "additional_battery_mode_entity": "Zweite Batterie Modus input_select (optional)",
+          "additional_battery_power_entity": "Zweite Batterie Leistung input_number (optional)",
+          "additional_battery_charge_mode": "Lademodus-String (z. B. 'Akku schnell laden')",
+          "additional_battery_stop_mode": "Stopmodus-String (z. B. 'Akku automatisch')"
         },
         "data_description": {
           "device_profile": "Wähle das passende Geräteprofil für dein Zendure-System. Die Regelparameter werden automatisch angepasst.",
@@ -102,9 +108,7 @@
           "soc_limit_entity": "Optionaler Statussensor aus der Zendure-Integration zur Erkennung aktiver BMS-Sperren.",
           "pack_capacity_kwh": "Nutzbare Kapazität eines einzelnen Akku-Packs in kWh. Wird mit der Anzahl der installierten Packs multipliziert, um die Gesamtkapazität zu berechnen.",
           "battery_ac_power_entity": "Sensor für die AC-Leistung der Batterie. Der Wert muss bei Entladung positiv sein. Empfohlen: sensor.solarflow_2400_ac_bat_in_out",
-          "additional_battery_charge_entity": "Optionaler Sensor eines zweiten Akkusystems. Wenn dieser Sensor eine positive Ladeleistung meldet, wird die Entladung von Battery SmartFlow AI blockiert.",
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
-          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt.",
           "price_now_entity": "Aktueller Strompreis. Ermöglicht preisabhängige Entladung.",
           "price_export_entity": "Preisprognosedaten für die nächsten Stunden. Ermöglicht intelligente Ladeplanung.",
@@ -119,36 +123,7 @@
       }
     }
   },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Regelprofil bearbeiten",
-        "description": "Experteneinstellungen für das aktive Geräteprofil. Diese Werte ändern das interne Regelverhalten und sollten nur angepasst werden, wenn du die Wirkung kennst.",
-        "data": {
-          "TARGET_IMPORT_W": "Ziel-Netzbezug",
-          "DEADBAND_W": "Deadband",
-          "EXPORT_GUARD_W": "Export-Schutz",
-          "KP_UP": "KP Hochregeln",
-          "KP_DOWN": "KP Runterregeln",
-          "MAX_STEP_UP": "Max. Schritt Hochregeln",
-          "MAX_STEP_DOWN": "Max. Schritt Runterregeln",
-          "KEEPALIVE_MIN_DEFICIT_W": "Keepalive Mindestdefizit",
-          "KEEPALIVE_MIN_OUTPUT_W": "Keepalive Mindestleistung"
-        },
-        "data_description": {
-          "TARGET_IMPORT_W": "Zielwert für einen kleinen gewollten Netzbezug. Ein höherer Wert reduziert das Risiko ungewollter Einspeisung, erhöht aber den Netzverbrauch leicht.",
-          "DEADBAND_W": "Toleranzbereich, in dem nicht nachgeregelt wird. Ein höherer Wert macht die Regelung ruhiger, ein niedrigerer aggressiver und präziser.",
-          "EXPORT_GUARD_W": "Zusätzliche Schutzreserve gegen ungewollte Einspeisung. Höhere Werte machen die Regelung vorsichtiger.",
-          "KP_UP": "Verstärkung beim Hochregeln der Leistung. Höhere Werte reagieren schneller, können aber eher überschwingen.",
-          "KP_DOWN": "Verstärkung beim Runterregeln der Leistung. Höhere Werte reduzieren Leistung schneller, können aber unruhiger wirken.",
-          "MAX_STEP_UP": "Maximaler Leistungsschritt pro Regelzyklus beim Hochregeln. Höhere Werte machen die Regelung schneller, aber potenziell aggressiver.",
-          "MAX_STEP_DOWN": "Maximaler Leistungsschritt pro Regelzyklus beim Runterregeln. Höhere Werte bremsen schneller ab, können aber stärker springen.",
-          "KEEPALIVE_MIN_DEFICIT_W": "Mindestdefizit, ab dem die Entladung aktiv gehalten wird. Hilft gegen Flattern bei sehr kleinen Lasten.",
-          "KEEPALIVE_MIN_OUTPUT_W": "Mindest-Entladeleistung zum stabilen Aktivhalten der Entladung. Verhindert unnötiges Ein- und Ausschalten."
-        }
-      }
-    }
-  },
+
   "entity": {
     "select": {
       "ai_mode": {
@@ -165,52 +140,35 @@
         "state": {
           "standby": "Standby",
           "charge": "Laden",
-          "discharge": "Entladen"
+          "discharge": "Entladen",
+          "constant_discharge": "Konstante Entladung"
         }
       }
     },
+
     "number": {
-      "battery_packs": {
-        "name": "Anzahl Akku-Packs"
-      },
-      "soc_min": {
-        "name": "SoC Minimum"
-      },
-      "soc_max": {
-        "name": "SoC Maximum"
-      },
-      "max_charge": {
-        "name": "Max. Ladeleistung"
-      },
-      "max_discharge": {
-        "name": "Max. Entladeleistung"
-      },
-      "emergency_charge": {
-        "name": "Notladeleistung"
-      },
-      "emergency_soc": {
-        "name": "Notladung ab SoC"
-      },
-      "very_expensive_threshold": {
-        "name": "Sehr-teuer-Schwelle"
-      },
-      "profit_margin_pct": {
-        "name": "Gewinnmarge (%)"
-      },
-      "peak_factor": {
-        "name": "Peak-Faktor"
-      },
-      "valley_factor": {
-        "name": "Tal-Faktor"
-      },
-      "very_cheap_price": {
-        "name": "Sehr-billig Schwelle"
-      }
+      "battery_packs": { "name": "Anzahl Akku-Packs" }, 
+      "soc_min": { "name": "SoC Minimum" },
+      "soc_max": { "name": "SoC Maximum" },
+      "max_charge": { "name": "Max. Ladeleistung" },
+      "max_discharge": { "name": "Max. Entladeleistung" },
+      "emergency_charge": { "name": "Notladeleistung" },
+      "emergency_soc": { "name": "Notladung ab SoC" },
+      "very_expensive_threshold": { "name": "Sehr-teuer-Schwelle" },
+      "profit_margin_pct": { "name": "Gewinnmarge (%)" },
+      "peak_factor": { "name": "Peak-Faktor" },
+      "valley_factor": { "name": "Tal-Faktor" },
+      "very_cheap_price": { "name": "Sehr-günstig-Schwelle (€/kWh)" },
+      "daytime_consumption_w": { "name": "Tagesverbrauch (W)" },
+      "nighttime_consumption_w": { "name": "Nachtverbrauch (W)" }
     },
+
+    "switch": {
+      "pv_forecast_enabled": { "name": "PV-Nachtladung" }
+    },
+
     "sensor": {
-      "device_profile": {
-        "name": "Aktives Geräteprofil"
-      },
+      "device_profile": { "name": "Aktives Geräteprofil" },
       "adaptive_peak_active": {
         "name": "Adaptiver Peak erkannt"
       },
@@ -219,9 +177,6 @@
       },
       "current_peak_threshold": {
         "name": "Aktuelle Peak-Schwelle"
-      },
-      "current_valley_threshold": {
-        "name": "Aktuelle Tal-Schwelle"
       },
       "engine_health": {
         "name": "Engine-Status",
@@ -232,6 +187,7 @@
           "sensor_invalid": "Ungültige Sensordaten"
         }
       },
+
       "season_mode": {
         "name": "Erkannter Betriebsmodus",
         "state": {
@@ -240,6 +196,7 @@
           "manual": "Manueller Betrieb"
         }
       },
+
       "soc_limit_status": {
         "name": "SoC-Limit Status",
         "state": {
@@ -249,6 +206,7 @@
           "lower_limit_active": "Unteres SoC-Limit aktiv (Entladen gesperrt)"
         }
       },
+
       "fault_level_status": {
         "name": "Fehlerstatus",
         "state": {
@@ -257,6 +215,7 @@
           "error": "Fehler / Schutz aktiv"
         }
       },
+
       "status": {
         "name": "Systemstatus",
         "state": {
@@ -266,6 +225,7 @@
           "price_invalid": "Preisdaten ungültig"
         }
       },
+
       "ai_status": {
         "name": "KI-Status",
         "state": {
@@ -278,6 +238,7 @@
           "manual": "Manueller Modus"
         }
       },
+
       "recommendation": {
         "name": "KI-Empfehlung",
         "state": {
@@ -287,6 +248,7 @@
           "emergency": "Notladung"
         }
       },
+
       "decision_reason": {
         "name": "Entscheidungsgrund",
         "state": {
@@ -299,8 +261,6 @@
           "expensive_discharge": "Entladen wegen hohem Strompreis",
           "very_expensive_force_discharge": "Zwangsentladung wegen extremer Preisspitze",
           "emergency_latched_charge": "Notladung aktiv (verriegelt)",
-          "summer_cover_deficit": "Sommer: Hauslast decken",
-          "pv_surplus_charge": "PV-Überschuss laden",
           "soc_min_enforced": "Entladung gestoppt (SoC-Minimum erreicht)",
           "soc_limit_upper": "Laden blockiert (oberes SoC-Limit aktiv)",
           "soc_limit_lower": "Entladen blockiert (unteres SoC-Limit aktiv)",
@@ -308,14 +268,15 @@
           "manual_standby": "Manueller Standby",
           "manual_charge": "Manuelles Laden",
           "manual_discharge": "Manuelles Entladen",
+          "manual_constant_discharge": "Konstante Entladung aktiv",
           "manual_idle": "Manuelle Bereitschaft",
           "idle": "Bereit",
           "adaptive_peak_discharge": "Entladen wegen Preisspitze",
-          "price_based_discharge": "Preisbasierte Entladung",
-          "valley_boost_charge": "Preis-Tal erkannt. Maximalladung",
-          "additional_battery_charging_block": "Zusatzakku lädt: Entladung blockiert"
+          "pv_surplus_charge": "Laden (PV-Überschuss)",
+          "valley_boost_charge": "Laden (Günstiger Nachtstrom)"
         }
       },
+
       "next_planned_action": {
         "name": "Geplante nächste Aktion",
         "state": {
@@ -326,37 +287,30 @@
           "emergency": "Notladung"
         }
       },
-      "next_action_state": {
-        "name": "Nächste Aktion",
+      
+      "next_action_time": { "name": "Startzeit nächste Aktion" },
+
+      "ai_debug": { "name": "KI-Debug" },
+      "house_load": { "name": "Hauslast" },
+      "price_now": { "name": "Aktueller Strompreis" },
+      "avg_charge_price": { "name": "Ø Ladepreis Akku" },
+      "profit_eur": { "name": "Ersparnis / Gewinn (gesamt)" },
+
+      "night_charge_status": {
+        "name": "Nachtladung Status",
         "state": {
-          "none": "Keine Aktion geplant",
-          "planned_charge": "Geplantes Laden",
-          "planned_discharge": "Geplante Entladung",
-          "charging_active": "Ladevorgang aktiv",
-          "discharging_active": "Entladevorgang aktiv",
-          "manual_charge": "Manuelles Laden",
-          "manual_discharge": "Manuelle Entladung",
-          "emergency_charge": "Notladung"
+          "charging": "Aktiv – BYD lädt",
+          "goal_reached": "Ziel erreicht",
+          "no_need": "Kein Ladebedarf",
+          "inactive": "Inaktiv"
         }
       },
-      "next_action_time": {
-        "name": "Startzeit nächste Aktion"
-      },
-      "ai_debug": {
-        "name": "KI-Debug"
-      },
-      "house_load": {
-        "name": "Hauslast"
-      },
-      "price_now": {
-        "name": "Aktueller Strompreis"
-      },
-      "avg_charge_price": {
-        "name": "Ø Ladepreis Akku"
-      },
-      "profit_eur": {
-        "name": "Ersparnis / Gewinn (gesamt)"
-      }
+      "night_charge_pv_kwh": { "name": "Nachtladung PV-Prognose" },
+      "night_charge_byd_target_soc": { "name": "Nachtladung BYD Ziel-SoC" },
+      "night_charge_byd_kwh": { "name": "Nachtladung BYD Ladung" },
+      "night_charge_zendure_target_soc": { "name": "Nachtladung Zendure Ziel-SoC" },
+      "night_charge_zendure_kwh": { "name": "Nachtladung Zendure Ladung" },
+      "total_available_kwh": { "name": "Verfügbare Energie (Gesamt)" }
     }
   }
 }
