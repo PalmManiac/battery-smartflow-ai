@@ -316,16 +316,6 @@
           "additional_battery_charging_block": "Zusatzakku lädt: Entladung blockiert"
         }
       },
-      "next_planned_action": {
-        "name": "Geplante nächste Aktion",
-        "state": {
-          "none": "Keine Aktion geplant",
-          "charge": "Geplantes Laden",
-          "discharge": "Geplante Entladung",
-          "wait": "Warten",
-          "emergency": "Notladung"
-        }
-      },
       "next_action_state": {
         "name": "Nächste Aktion",
         "state": {

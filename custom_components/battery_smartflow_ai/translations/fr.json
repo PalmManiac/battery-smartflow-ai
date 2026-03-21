@@ -316,16 +316,6 @@
           "additional_battery_charging_block": "Batterie supplémentaire en charge : décharge bloquée"
         }
       },
-      "next_planned_action": {
-        "name": "Prochaine action planifiée",
-        "state": {
-          "none": "Aucune action planifiée",
-          "charge": "Charge planifiée",
-          "discharge": "Décharge planifiée",
-          "wait": "Attendre",
-          "emergency": "Charge d’urgence"
-        }
-      },
       "next_action_state": {
         "name": "Prochaine action",
         "state": {

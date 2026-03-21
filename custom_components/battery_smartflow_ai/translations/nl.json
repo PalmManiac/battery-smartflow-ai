@@ -316,16 +316,6 @@
           "additional_battery_charging_block": "Extra batterij laadt: ontladen geblokkeerd"
         }
       },
-      "next_planned_action": {
-        "name": "Volgende geplande actie",
-        "state": {
-          "none": "Geen actie gepland",
-          "charge": "Gepland laden",
-          "discharge": "Gepland ontladen",
-          "wait": "Wachten",
-          "emergency": "Noodladen"
-        }
-      },
       "next_action_state": {
         "name": "Volgende actie",
         "state": {

@@ -316,16 +316,6 @@
           "additional_battery_charging_block": "Additional battery charging: discharge blocked"
         }
       },
-      "next_planned_action": {
-        "name": "Next planned action",
-        "state": {
-          "none": "No action planned",
-          "charge": "Planned charging",
-          "discharge": "Planned discharge",
-          "wait": "Wait",
-          "emergency": "Emergency charge"
-        }
-      },
       "next_action_state": {
         "name": "Next action",
         "state": {
