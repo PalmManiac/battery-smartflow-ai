@@ -133,7 +133,7 @@ class PeakRule(BaseRule):
             return None
         if (
             ctx.soc > ctx.soc_min
-            and ctx.ai_mode in ("automatic", "winter")
+            and ctx.ai_mode in ("automatic", "winter", "summer")
         ):
             if (
                 engine._detect_adaptive_peak(ctx)
@@ -177,7 +177,7 @@ class ArbitrageRule(BaseRule):
             ctx.price_now is not None
             and ctx.avg_charge_price is not None
             and ctx.soc > ctx.soc_min
-            and ctx.ai_mode in ("automatic", "winter")
+            and ctx.ai_mode in ("automatic", "winter", "summer")
             and engine._is_market_discharge_window(ctx)
             and engine._is_effective_discharge_price_reached(ctx)
         ):
@@ -524,7 +524,7 @@ class DecisionEngine:
 
     def _evaluate_adaptive_planning(self, ctx: DecisionContext) -> Optional[DecisionResult]:
         if (
-            ctx.ai_mode not in ("automatic", "winter")
+            ctx.ai_mode not in ("automatic", "winter", "summer")
             or not ctx.price_points
             or ctx.price_now is None
             or ctx.soc >= ctx.soc_max
