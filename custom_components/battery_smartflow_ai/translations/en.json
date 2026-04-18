@@ -244,6 +244,9 @@
       "battery_packs": {
         "name": "Number of battery packs"
       },
+      "pv_charge_start_export_w": {
+        "name": "PV charge start at export"
+      },
       "soc_min": {
         "name": "Minimum SoC"
       },

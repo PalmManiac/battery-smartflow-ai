@@ -260,6 +260,9 @@
       "battery_packs": {
         "name": "Anzahl Akku-Packs"
       },
+      "pv_charge_start_export_w": {
+        "name": "PV-Ladestart ab Einspeisung"
+      },
       "soc_min": {
         "name": "SoC Minimum"
       },

@@ -33,14 +33,13 @@ from .const import (
     DEFAULT_EMERGENCY_SOC,
     DEFAULT_PROFIT_MARGIN_PCT,
     DEFAULT_VERY_EXPENSIVE_THRESHOLD,
+    SETTING_VALLEY_FACTOR,
+    DEFAULT_VALLEY_FACTOR,
+    SETTING_VERY_CHEAP_PRICE,
+    DEFAULT_VERY_CHEAP_PRICE,
+    SETTING_PV_CHARGE_START_EXPORT_W,
+    DEFAULT_PV_CHARGE_START_EXPORT_W,
 )
-
-# --- NEW SETTINGS ---
-SETTING_VALLEY_FACTOR = "valley_factor"
-DEFAULT_VALLEY_FACTOR = 0.85
-
-SETTING_VERY_CHEAP_PRICE = "very_cheap_price"
-DEFAULT_VERY_CHEAP_PRICE = 0.0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -87,6 +86,16 @@ NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
         native_step=0.01,
         native_unit_of_measurement="€/kWh",
         icon="mdi:cash",
+    ),
+    ZendureNumberEntityDescription(
+        key=SETTING_PV_CHARGE_START_EXPORT_W,
+        translation_key="pv_charge_start_export_w",
+        runtime_key=SETTING_PV_CHARGE_START_EXPORT_W,
+        native_min_value=0,
+        native_max_value=1000,
+        native_step=10,
+        native_unit_of_measurement="W",
+        icon="mdi:solar-power-variant",
     ),
     ZendureNumberEntityDescription(
         key=SETTING_SOC_MIN,
@@ -177,6 +186,7 @@ def _default_for_key(key: str) -> float:
         SETTING_PEAK_FACTOR: DEFAULT_PEAK_FACTOR,
         SETTING_VALLEY_FACTOR: DEFAULT_VALLEY_FACTOR,
         SETTING_VERY_CHEAP_PRICE: DEFAULT_VERY_CHEAP_PRICE,
+        SETTING_PV_CHARGE_START_EXPORT_W: DEFAULT_PV_CHARGE_START_EXPORT_W,
         SETTING_SOC_MIN: DEFAULT_SOC_MIN,
         SETTING_SOC_MAX: DEFAULT_SOC_MAX,
         SETTING_MAX_CHARGE: DEFAULT_MAX_CHARGE,
@@ -203,7 +213,6 @@ async def async_setup_entry(
 
     add_entities(entities)
 
-    # --- Initialize runtime settings once ---
     for ent in entities:
         key = ent.entity_description.runtime_key
 

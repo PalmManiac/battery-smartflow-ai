@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "3.5.1"
+INTEGRATION_VERSION = "3.6.4"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -85,12 +85,14 @@ SETTING_CELL_VOLTAGE_WARNING = "cell_voltage_warning"
 SETTING_CELL_VOLTAGE_CUTOFF = "cell_voltage_cutoff"
 SETTING_CELL_VOLTAGE_RESUME = "cell_voltage_resume"
 
+SETTING_PV_CHARGE_START_EXPORT_W = "pv_charge_start_export_w"
+
 # Default
 DEFAULT_PACK_CAPACITY_KWH = 2.88
 DEFAULT_BATTERY_PACKS = 1
 
 DEFAULT_VALLEY_FACTOR = 0.85
-DEFAULT_VERY_CHEAP_PRICE = None
+DEFAULT_VERY_CHEAP_PRICE = 0.0
 
 # --- New defaults for V3.2.0 / V3.5.0 ---
 DEFAULT_INSTALLED_PV_WP = 0.0
@@ -101,6 +103,8 @@ DEFAULT_CELL_VOLTAGE_PROTECTION_ENABLED = False
 DEFAULT_CELL_VOLTAGE_WARNING = 3.10
 DEFAULT_CELL_VOLTAGE_CUTOFF = 3.00
 DEFAULT_CELL_VOLTAGE_RESUME = 3.18
+
+DEFAULT_PV_CHARGE_START_EXPORT_W = 80.0
 
 # --------------------------------------------------
 # Device profiles (V1.5.x / V3.2.0 overrides)

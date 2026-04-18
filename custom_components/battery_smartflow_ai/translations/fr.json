@@ -244,6 +244,9 @@
       "battery_packs": {
         "name": "Nombre de packs batterie"
       },
+      "pv_charge_start_export_w": {
+        "name": "Démarrage de charge PV à partir de l’injection"
+      },
       "soc_min": {
         "name": "SoC minimum"
       },

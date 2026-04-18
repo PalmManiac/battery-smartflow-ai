@@ -55,6 +55,7 @@ from .const import (
     SETTING_CELL_VOLTAGE_WARNING,
     SETTING_CELL_VOLTAGE_CUTOFF,
     SETTING_CELL_VOLTAGE_RESUME,
+    SETTING_PV_CHARGE_START_EXPORT_W,
     # defaults
     DEFAULT_SOC_MIN,
     DEFAULT_SOC_MAX,
@@ -75,6 +76,7 @@ from .const import (
     DEFAULT_CELL_VOLTAGE_WARNING,
     DEFAULT_CELL_VOLTAGE_CUTOFF,
     DEFAULT_CELL_VOLTAGE_RESUME,
+    DEFAULT_PV_CHARGE_START_EXPORT_W,
     # modes
     AI_MODE_AUTOMATIC,
     AI_MODE_SUMMER,
@@ -956,6 +958,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ) or DEFAULT_VALLEY_FACTOR
             )
 
+            pv_charge_start_export_w = self._get_setting(
+                SETTING_PV_CHARGE_START_EXPORT_W,
+                DEFAULT_PV_CHARGE_START_EXPORT_W,
+            )
+
             very_cheap_price = self.runtime_settings.get("very_cheap_price", None)
             if very_cheap_price is not None:
                 try:
@@ -1061,6 +1068,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 valley_factor=valley_factor,
                 very_cheap_price=very_cheap_price,
                 additional_battery_charge_w=additional_battery_charge_w,
+                pv_charge_start_export_w=float(pv_charge_start_export_w),
                 cell_voltage_emergency_active=cell_voltage_emergency_active,
             )
 
@@ -1232,6 +1240,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 valley_factor=valley_factor,
                 very_cheap_price=very_cheap_price,
                 additional_battery_charge_w=additional_battery_charge_w,
+                pv_charge_start_export_w=float(pv_charge_start_export_w),
                 cell_voltage_emergency_active=cell_voltage_emergency_active,
             )
 
@@ -1294,6 +1303,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "profile_max_output_w": profile_max_out,
                 "soc_limit": soc_limit,
                 "additional_battery_charge_w": additional_battery_charge_w,
+                "pv_charge_start_export_w": float(pv_charge_start_export_w),
                 "installed_pv_wp": self._get_installed_pv_wp(),
                 "soc_limit_status": (
                     "not_configured"
