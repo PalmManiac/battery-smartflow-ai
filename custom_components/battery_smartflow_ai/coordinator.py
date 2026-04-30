@@ -1345,6 +1345,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 and price_now is not None
                 and decision.ac_mode == "output"
                 and float(decision.discharge_w or 0.0) > 0.0
+                and decision.reason != "pv_house_load_passthrough"
             ):
                 sold_kwh = abs(float(delta_kwh))
                 avg_price = self._persist.get("trade_avg_charge_price")
@@ -1561,6 +1562,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "device_profile": self.device_profile_key,
                 "profile_max_input_w": profile_max_in,
                 "profile_max_output_w": profile_max_out,
+                "pv_houseload_passthrough_enabled": bool(
+                    profile.get("PV_HOUSELOAD_PASSTHROUGH", False)
+                ),
+                "pv_houseload_passthrough_active": decision.reason == "pv_house_load_passthrough",
                 "soc_limit": soc_limit,
                 "additional_battery_charge_w": additional_battery_charge_w,
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
