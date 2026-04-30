@@ -485,6 +485,7 @@
           "summer_cover_deficit": "Sommer: Hauslast decken",
           "pv_surplus_charge": "PV-Überschuss laden",
           "soc_min_enforced": "Entladung gestoppt (SoC-Minimum erreicht)",
+          "pv_house_load_passthrough": "SF800Pro: PV-Hauslast-Passthrough aktiv",
           "soc_limit_upper": "Laden blockiert (oberes SoC-Limit aktiv)",
           "soc_limit_lower": "Entladen blockiert (unteres SoC-Limit aktiv)",
           "manual_mode": "Manueller Modus aktiv",
