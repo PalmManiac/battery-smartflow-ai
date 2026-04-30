@@ -356,6 +356,71 @@ class ValleyOpportunityRule(BaseRule):
         )
 
 
+class PvHouseLoadPassthroughRule(BaseRule):
+    def evaluate(self, engine, ctx):
+        if not engine._pv_houseload_passthrough_enabled(ctx):
+            return None
+
+        if ctx.ai_mode == "manual":
+            return None
+
+        if ctx.soc <= ctx.soc_min:
+            return None
+
+        if engine._discharge_protection_active(ctx):
+            return None
+
+        if ctx.cell_voltage_emergency_active:
+            return None
+
+        if float(ctx.additional_battery_charge_w or 0.0) > 0.0:
+            return None
+
+        pv_w = max(0.0, float(ctx.pv_w or 0.0))
+        house_load_w = max(0.0, float(ctx.house_load_w or 0.0))
+        grid_export_w = max(0.0, float(ctx.grid_export_w or 0.0))
+        grid_import_w = max(0.0, float(ctx.grid_import_w or 0.0))
+
+        if pv_w < 80.0:
+            return None
+
+        if house_load_w < 80.0:
+            return None
+
+        # Wenn bereits echter Export vorhanden ist, soll die normale PV-Ladung
+        # oder reguläre Logik Vorrang haben. Passthrough ist für den "idle,
+        # aber PV geht sonst in den Akku"-Fall gedacht.
+        if grid_export_w >= max(40.0, float(ctx.pv_charge_start_export_w or 0.0) * 0.5):
+            return None
+
+        # Bei starkem Netzbezug nicht blind entladen; das wäre normale
+        # Hauslastdeckung und soll nicht als SF800Pro-PV-Passthrough missbraucht werden.
+        if grid_import_w > max(250.0, house_load_w * 0.50):
+            return None
+
+        passthrough_w = min(
+            pv_w,
+            house_load_w,
+            float(ctx.max_discharge_w),
+        )
+
+        # Kleine Mindestleistung, damit Zendure überhaupt sauber in OUTPUT arbeitet,
+        # aber keine aggressive Entladung.
+        if passthrough_w < 60.0:
+            return None
+
+        return engine._with_thresholds(
+            ctx,
+            DecisionResult(
+                action="discharge",
+                ac_mode="output",
+                charge_w=0.0,
+                discharge_w=passthrough_w,
+                reason="pv_house_load_passthrough",
+            ),
+        )
+        
+
 class PvRule(BaseRule):
     def evaluate(self, engine, ctx):
         planning = engine._evaluate_adaptive_planning(ctx)
@@ -557,6 +622,7 @@ class DecisionEngine:
             PlanningRule(),
             ValleyBoostRule(),
             ValleyOpportunityRule(),
+            PvHouseLoadPassthroughRule(),
             SummerRule(),
         ]
 
@@ -590,6 +656,9 @@ class DecisionEngine:
 
     def _low_soc_discharge_requires_cell_resume(self, ctx: DecisionContext) -> bool:
         return self._profile_flag(ctx, "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME", False)
+
+    def _pv_houseload_passthrough_enabled(self, ctx: DecisionContext) -> bool:
+        return self._profile_flag(ctx, "PV_HOUSELOAD_PASSTHROUGH", False)
 
     def _discharge_protection_active(self, ctx: DecisionContext) -> bool:
         return bool(
