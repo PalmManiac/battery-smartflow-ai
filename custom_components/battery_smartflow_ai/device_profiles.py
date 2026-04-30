@@ -194,6 +194,11 @@ SF800PRO_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": True,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": True,
 
+    # --- SF800Pro-specific PV routing behavior ---
+    # Some SF800Pro setups without P1 / smart meter do not route PV neutrally
+    # in idle/output 0. This passthrough pulls PV towards house load.
+    "PV_HOUSELOAD_PASSTHROUGH": True,
+
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 35.0,
     "CHARGE_KP_UP": 0.40,
@@ -235,6 +240,9 @@ SF2400AC_PROFILE = {
     "LOW_SOC_PROTECTION_STRICT": False,
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
+
+    # --- SF800Pro-specific PV routing behavior ---
+    "PV_HOUSELOAD_PASSTHROUGH": False,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -278,6 +286,9 @@ SF2400PRO_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
 
+    # --- SF800Pro-specific PV routing behavior ---
+    "PV_HOUSELOAD_PASSTHROUGH": False,
+
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
     "CHARGE_KP_UP": 0.65,
@@ -319,6 +330,9 @@ SF1600AC_PROFILE = {
     "LOW_SOC_PROTECTION_STRICT": False,
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
+
+    # --- SF800Pro-specific PV routing behavior ---
+    "PV_HOUSELOAD_PASSTHROUGH": False,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 40.0,
@@ -362,6 +376,9 @@ HYPER2000_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
 
+    # --- SF800Pro-specific PV routing behavior ---
+    "PV_HOUSELOAD_PASSTHROUGH": False,
+
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
     "CHARGE_KP_UP": 0.65,
@@ -403,6 +420,9 @@ HUB2000_PROFILE = {
     "LOW_SOC_PROTECTION_STRICT": False,
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
+
+    # --- SF800Pro-specific PV routing behavior ---
+    "PV_HOUSELOAD_PASSTHROUGH": False,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
