@@ -246,13 +246,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # PV charge debounce / hysteresis
             "pv_charge_start_counter": 0,
             "pv_charge_stop_counter": 0,
+            "pv_charge_latched": False,
 
+            # Forecast / reality override
             "forecast_wait_block_counter": 0,
 
-            # PV charge debounce / hysteresis
-            "pv_charge_start_counter": 0,
-            "pv_charge_stop_counter": 0,
-            "pv_charge_latched": False,
+            # SF800Pro PV house-load passthrough hysteresis
+            "pv_houseload_passthrough_active": False,
+            "pv_houseload_passthrough_started_ts": None,
+            "pv_houseload_passthrough_export_counter": 0,
+            "pv_houseload_passthrough_target_w": 0.0,
+            "pv_houseload_passthrough_stop_reason": "none",
 
             # debug
             "debug": "init",
@@ -539,20 +543,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         start_threshold = float(pv_charge_start_export_w or 0.0)
 
-        # Start darf erst bei echtem Export erfolgen.
         start_required_cycles = 2
-
-        # Stop bewusst träger, damit Wolken/Regelrauschen nicht sofort abbrechen.
         stop_required_cycles = 8
 
-        # Halteschwelle: laufende PV-Ladung bleibt auch bei kleinerem Export aktiv.
         hold_export_threshold = max(20.0, start_threshold * 0.5)
-
-        # Kleiner Import ist bei laufender Regelung erlaubt, weil der Delta-Regler
-        # die Ladeleistung sanft zurücknehmen soll.
         small_import_tolerance_w = 100.0
-
-        # Echte Schwäche: deutlicher Import und praktisch kein Export.
         hard_import_threshold_w = 140.0
         weak_export_threshold = max(10.0, start_threshold * 0.15)
 
@@ -560,7 +555,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         import_w = max(0.0, float(grid_import_w or 0.0))
 
         has_start_surplus = export_w >= start_threshold
-
         has_hold_surplus = export_w >= hold_export_threshold
         import_is_small = import_w <= small_import_tolerance_w
 
@@ -577,7 +571,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif has_hold_surplus or import_is_small:
                 stop_counter = 0
             else:
-                # Grauzone: nicht sofort stoppen, aber langsam zählen.
                 stop_counter += 1
 
             if stop_counter >= stop_required_cycles:
@@ -602,7 +595,174 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["pv_charge_latched"] = latched
 
         return start_counter, stop_counter, latched
-    
+
+    def _update_pv_houseload_passthrough(
+        self,
+        now,
+        profile: dict[str, Any],
+        soc: float,
+        soc_min: float,
+        pv_w: float,
+        house_load_w: float,
+        grid_import_w: float,
+        grid_export_w: float,
+        max_output_w: float,
+        pv_charge_start_export_w: float,
+        discharge_blocked_by_soc_min: bool,
+        cell_voltage_discharge_blocked: bool,
+        cell_voltage_emergency_active: bool,
+        additional_battery_charge_w: float,
+    ) -> tuple[bool, float, str]:
+        enabled = bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False))
+
+        active = bool(self._persist.get("pv_houseload_passthrough_active", False))
+        started_ts_raw = self._persist.get("pv_houseload_passthrough_started_ts")
+        export_counter = int(
+            self._persist.get("pv_houseload_passthrough_export_counter", 0) or 0
+        )
+
+        hold_seconds = float(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 90.0) or 90.0
+        )
+        min_pv_w = float(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W", 120.0) or 120.0
+        )
+        min_house_load_w = float(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W", 120.0) or 120.0
+        )
+        export_stop_cycles = int(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES", 6) or 6
+        )
+
+        stop_reason = "none"
+        target_w = 0.0
+
+        protection_active = bool(
+            discharge_blocked_by_soc_min
+            or cell_voltage_discharge_blocked
+            or cell_voltage_emergency_active
+        )
+
+        if not enabled:
+            active = False
+            target_w = 0.0
+            stop_reason = "disabled"
+
+        elif protection_active:
+            active = False
+            target_w = 0.0
+            stop_reason = "protection_active"
+
+        elif float(additional_battery_charge_w or 0.0) > 0.0:
+            active = False
+            target_w = 0.0
+            stop_reason = "additional_battery_charging"
+
+        elif float(soc) <= float(soc_min):
+            active = False
+            target_w = 0.0
+            stop_reason = "soc_min"
+
+        else:
+            pv_val = max(0.0, float(pv_w or 0.0))
+            house_val = max(0.0, float(house_load_w or 0.0))
+            export_val = max(0.0, float(grid_export_w or 0.0))
+            import_val = max(0.0, float(grid_import_w or 0.0))
+
+            target_w = min(
+                pv_val,
+                house_val,
+                float(max_output_w or 0.0),
+            )
+
+            enough_pv = pv_val >= min_pv_w
+            enough_house_load = house_val >= min_house_load_w
+            useful_target = target_w >= 60.0
+
+            stable_export_for_pv_charge = (
+                export_val >= float(pv_charge_start_export_w or 0.0)
+            )
+
+            if stable_export_for_pv_charge:
+                export_counter += 1
+            else:
+                export_counter = 0
+
+            hold_active = False
+            if active and started_ts_raw:
+                try:
+                    started = dt_util.parse_datetime(str(started_ts_raw))
+                    if started is not None:
+                        elapsed = (
+                            dt_util.as_utc(now) - dt_util.as_utc(started)
+                        ).total_seconds()
+                        hold_active = elapsed < hold_seconds
+                except Exception:
+                    hold_active = False
+
+            if active:
+                if not enough_pv:
+                    if hold_active:
+                        stop_reason = "hold_pv_low"
+                    else:
+                        active = False
+                        target_w = 0.0
+                        stop_reason = "pv_low"
+
+                elif not enough_house_load:
+                    if hold_active:
+                        stop_reason = "hold_house_load_low"
+                    else:
+                        active = False
+                        target_w = 0.0
+                        stop_reason = "house_load_low"
+
+                elif export_counter >= export_stop_cycles:
+                    active = False
+                    target_w = 0.0
+                    stop_reason = "stable_export_handover_to_pv_charge"
+
+                elif not useful_target:
+                    if hold_active:
+                        stop_reason = "hold_target_low"
+                    else:
+                        active = False
+                        target_w = 0.0
+                        stop_reason = "target_low"
+
+                else:
+                    stop_reason = "active"
+
+            else:
+                export_counter = 0
+
+                if (
+                    enough_pv
+                    and enough_house_load
+                    and useful_target
+                    and export_val < float(pv_charge_start_export_w or 0.0)
+                    and import_val <= max(250.0, house_val * 0.50)
+                ):
+                    active = True
+                    self._persist["pv_houseload_passthrough_started_ts"] = (
+                        dt_util.as_utc(now).isoformat()
+                    )
+                    stop_reason = "started"
+                else:
+                    target_w = 0.0
+                    stop_reason = "conditions_not_met"
+
+        if not active:
+            self._persist["pv_houseload_passthrough_started_ts"] = None
+            export_counter = 0
+
+        self._persist["pv_houseload_passthrough_active"] = bool(active)
+        self._persist["pv_houseload_passthrough_export_counter"] = int(export_counter)
+        self._persist["pv_houseload_passthrough_target_w"] = float(target_w or 0.0)
+        self._persist["pv_houseload_passthrough_stop_reason"] = str(stop_reason)
+
+        return bool(active), float(target_w or 0.0), str(stop_reason)
+
     def _update_discharge_resume_hysteresis(
         self,
         soc: float,
@@ -676,8 +836,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         Notes:
         - PV / surplus charging must be counted as a real charge event with 0 €/kWh.
-        - The logic intentionally biases towards PV/free charging unless there is
-          strong evidence that the battery is really being charged from grid.
+        - Price-driven charging must use price_now even if PV lowers grid import.
+        - The fallback logic intentionally biases towards PV/free charging unless
+          there is strong evidence that the battery is really being charged from grid.
         """
         if delta_kwh <= 0:
             return False, 0.0, "no_charge_delta"
@@ -743,7 +904,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         - Broken Octopus slots (end <= start)
         - DST edge cases
         """
-
         if not self.entities.price_export:
             return []
 
@@ -990,9 +1150,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if reason == "valley_opportunity_charge_mixed_forecast":
             return "valley_opportunity_mixed"
-            
+
         return "none"
-    
+
     async def _async_update_data(self) -> dict[str, Any]:
         try:
             if self._persist.get("last_ts") is None:
@@ -1171,9 +1331,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             global_lowest_cell_voltage = self._get_global_lowest_cell_voltage()
-            cell_voltage_status = self._get_cell_voltage_status(
-                global_lowest_cell_voltage
-            )
+            cell_voltage_status = self._get_cell_voltage_status(global_lowest_cell_voltage)
             cell_voltage_soc_plausibility = self._get_cell_voltage_soc_plausibility(
                 soc=float(soc),
                 soc_min=float(soc_min),
@@ -1193,6 +1351,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 soc_min=float(soc_min),
                 resume_margin=float(resume_margin),
             )
+
             if float(soc) <= float(soc_min):
                 self._persist["trade_avg_charge_price"] = 0.0
                 self._persist["trade_charged_kwh"] = 0.0
@@ -1209,6 +1368,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         SETTING_CELL_VOLTAGE_WARNING,
                         DEFAULT_CELL_VOLTAGE_WARNING,
                     )
+                )
+            )
+
+            pv_houseload_passthrough_active, pv_houseload_passthrough_target_w, pv_houseload_passthrough_stop_reason = (
+                self._update_pv_houseload_passthrough(
+                    now=now,
+                    profile=profile,
+                    soc=float(soc),
+                    soc_min=float(soc_min),
+                    pv_w=float(pv_w),
+                    house_load_w=float(house_load),
+                    grid_import_w=float(grid_import or 0.0),
+                    grid_export_w=float(grid_export or 0.0),
+                    max_output_w=float(max_discharge),
+                    pv_charge_start_export_w=float(pv_charge_start_export_w),
+                    discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
+                    cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
+                    cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+                    additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
                 )
             )
 
@@ -1251,9 +1429,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 forecast_wait_block_counter=int(self._persist.get("forecast_wait_block_counter", 0)),
                 discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
                 cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
+                pv_houseload_passthrough_active=bool(pv_houseload_passthrough_active),
+                pv_houseload_passthrough_target_w=float(pv_houseload_passthrough_target_w),
+                pv_houseload_passthrough_stop_reason=str(pv_houseload_passthrough_stop_reason),
             )
 
-            base_required_kwh = battery_capacity_kwh * max(0.0, float(soc_max) - float(soc)) / 100.0
+            base_required_kwh = (
+                battery_capacity_kwh
+                * max(0.0, float(soc_max) - float(soc))
+                / 100.0
+            )
 
             if (
                 self._engine._forecast_supports_waiting(ctx, base_required_kwh)
@@ -1269,7 +1454,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ctx.forecast_wait_block_counter = int(
                 self._persist.get("forecast_wait_block_counter", 0)
             )
-            
+
             decision = self._engine.evaluate(ctx)
 
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
@@ -1288,9 +1473,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 and float(decision.charge_w or 0.0) > 0.0
                 and decision.reason == "pv_surplus_charge"
             ):
-                # SF800Pro-Schutz:
-                # In der Low-SoC-/Zellschutz-Sperrzone darf PV-Ladung nur bei echtem,
-                # stabilem Export stattfinden. Kein Akku-Vorrang bei kleiner PV-Anlaufleistung.
                 if (
                     float(grid_export or 0.0) < float(pv_charge_start_export_w)
                     or float(grid_import or 0.0) > 30.0
@@ -1306,7 +1488,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             is_grid_charge = False
 
             if delta_kwh > 0:
-                is_below_soc_min_cycle = bool(self._persist.get("trade_cycle_below_soc_min", False))
+                is_below_soc_min_cycle = bool(
+                    self._persist.get("trade_cycle_below_soc_min", False)
+                )
 
                 is_grid_charge, applied_price, charge_source = self._classify_charge_source(
                     delta_kwh=float(delta_kwh),
@@ -1372,7 +1556,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             adaptive_peak_active = decision.reason == "adaptive_peak_discharge"
 
-            self._persist["prev_discharge_w"] = float(decision.discharge_w or 0.0)
+            if decision.reason == "pv_house_load_passthrough":
+                self._persist["prev_discharge_w"] = 0.0
+            else:
+                self._persist["prev_discharge_w"] = float(decision.discharge_w or 0.0)
 
             if decision.ac_mode == "input" and float(decision.charge_w or 0.0) > 0.0:
                 self._persist["prev_charge_w"] = float(decision.charge_w)
@@ -1445,7 +1632,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 action=decision.action,
                 reason=decision.reason,
             )
-            recommendation = self._map_reco(decision.action)
+
+            if decision.reason == "pv_house_load_passthrough":
+                recommendation = RECO_STANDBY
+            else:
+                recommendation = self._map_reco(decision.action)
 
             charge_strategy = self._map_charge_strategy(
                 ai_mode=ai_mode,
@@ -1492,6 +1683,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 forecast_wait_block_counter=int(self._persist.get("forecast_wait_block_counter", 0)),
                 discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
                 cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
+                pv_houseload_passthrough_active=bool(pv_houseload_passthrough_active),
+                pv_houseload_passthrough_target_w=float(pv_houseload_passthrough_target_w),
+                pv_houseload_passthrough_stop_reason=str(pv_houseload_passthrough_stop_reason),
             )
 
             transparency_result = self._engine._with_thresholds(
@@ -1565,7 +1759,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "pv_houseload_passthrough_enabled": bool(
                     profile.get("PV_HOUSELOAD_PASSTHROUGH", False)
                 ),
-                "pv_houseload_passthrough_active": decision.reason == "pv_house_load_passthrough",
+                "pv_houseload_passthrough_active": bool(
+                    pv_houseload_passthrough_active
+                ),
+                "pv_houseload_passthrough_applied": (
+                    decision.reason == "pv_house_load_passthrough"
+                ),
+                "pv_houseload_passthrough_target_w": float(
+                    pv_houseload_passthrough_target_w
+                ),
+                "pv_houseload_passthrough_stop_reason": str(
+                    pv_houseload_passthrough_stop_reason
+                ),
+                "pv_houseload_passthrough_export_counter": int(
+                    self._persist.get("pv_houseload_passthrough_export_counter", 0)
+                ),
+                "pv_houseload_passthrough_hold_seconds": float(
+                    profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 0.0)
+                ),
                 "soc_limit": soc_limit,
                 "additional_battery_charge_w": additional_battery_charge_w,
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
@@ -1573,7 +1784,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "pv_charge_start_counter": int(self._persist.get("pv_charge_start_counter", 0)),
                 "pv_charge_stop_counter": int(self._persist.get("pv_charge_stop_counter", 0)),
                 "pv_charge_hold_export_threshold_w": max(20.0, float(pv_charge_start_export_w) * 0.5),
-                "pv_charge_stop_import_tolerance_w": 80.0,
+                "pv_charge_stop_import_tolerance_w": 100.0,
                 "installed_pv_wp": self._get_installed_pv_wp(),
                 "soc_limit_status": (
                     "not_configured"
@@ -1621,7 +1832,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "cell_voltage_resume_threshold"
                 ),
                 "cell_voltage_emergency_active": cell_voltage_emergency_active,
-                # V4.0.0 forecast transparency
                 "forecast_status": forecast_summary.status,
                 "pv_outlook": forecast_summary.pv_outlook,
                 "forecast_remaining_today_kwh": float(forecast_summary.remaining_today_kwh),
@@ -1631,7 +1841,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "forecast_peak_today_w": float(forecast_summary.peak_today_w),
                 "forecast_peak_tomorrow_w": float(forecast_summary.peak_tomorrow_w),
                 "forecast_source_name": forecast_summary.source_name,
-                "forecast_wait_block_counter": int(self._persist.get("forecast_wait_block_counter", 0)),
+                "forecast_wait_block_counter": int(
+                    self._persist.get("forecast_wait_block_counter", 0)
+                ),
                 "forecast_base_load_w": float(forecast_base_load_w),
             }
 
