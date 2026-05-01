@@ -198,7 +198,11 @@ SF800PRO_PROFILE = {
     # Some SF800Pro setups without P1 / smart meter do not route PV neutrally
     # in idle/output 0. This passthrough pulls PV towards house load.
     "PV_HOUSELOAD_PASSTHROUGH": True,
-
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 90.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 120.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 120.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 6,
+    
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 35.0,
     "CHARGE_KP_UP": 0.40,
@@ -243,6 +247,10 @@ SF2400AC_PROFILE = {
 
     # --- SF800Pro-specific PV routing behavior ---
     "PV_HOUSELOAD_PASSTHROUGH": False,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -288,6 +296,10 @@ SF2400PRO_PROFILE = {
 
     # --- SF800Pro-specific PV routing behavior ---
     "PV_HOUSELOAD_PASSTHROUGH": False,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -333,6 +345,10 @@ SF1600AC_PROFILE = {
 
     # --- SF800Pro-specific PV routing behavior ---
     "PV_HOUSELOAD_PASSTHROUGH": False,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 40.0,
@@ -378,6 +394,10 @@ HYPER2000_PROFILE = {
 
     # --- SF800Pro-specific PV routing behavior ---
     "PV_HOUSELOAD_PASSTHROUGH": False,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -423,6 +443,10 @@ HUB2000_PROFILE = {
 
     # --- SF800Pro-specific PV routing behavior ---
     "PV_HOUSELOAD_PASSTHROUGH": False,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
