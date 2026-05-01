@@ -81,6 +81,11 @@ class DecisionContext:
     discharge_blocked_by_soc_min: bool = False
     cell_voltage_discharge_blocked: bool = False
 
+    # SF800Pro PV house-load passthrough state
+    pv_houseload_passthrough_active: bool = False
+    pv_houseload_passthrough_target_w: float = 0.0
+    pv_houseload_passthrough_stop_reason: str = "none"
+
 
 @dataclass
 class DecisionResult:
@@ -361,52 +366,11 @@ class PvHouseLoadPassthroughRule(BaseRule):
         if not engine._pv_houseload_passthrough_enabled(ctx):
             return None
 
-        if ctx.ai_mode == "manual":
+        if not bool(ctx.pv_houseload_passthrough_active):
             return None
 
-        if ctx.soc <= ctx.soc_min:
-            return None
-
-        if engine._discharge_protection_active(ctx):
-            return None
-
-        if ctx.cell_voltage_emergency_active:
-            return None
-
-        if float(ctx.additional_battery_charge_w or 0.0) > 0.0:
-            return None
-
-        pv_w = max(0.0, float(ctx.pv_w or 0.0))
-        house_load_w = max(0.0, float(ctx.house_load_w or 0.0))
-        grid_export_w = max(0.0, float(ctx.grid_export_w or 0.0))
-        grid_import_w = max(0.0, float(ctx.grid_import_w or 0.0))
-
-        if pv_w < 80.0:
-            return None
-
-        if house_load_w < 80.0:
-            return None
-
-        # Wenn bereits echter Export vorhanden ist, soll die normale PV-Ladung
-        # oder reguläre Logik Vorrang haben. Passthrough ist für den "idle,
-        # aber PV geht sonst in den Akku"-Fall gedacht.
-        if grid_export_w >= max(40.0, float(ctx.pv_charge_start_export_w or 0.0) * 0.5):
-            return None
-
-        # Bei starkem Netzbezug nicht blind entladen; das wäre normale
-        # Hauslastdeckung und soll nicht als SF800Pro-PV-Passthrough missbraucht werden.
-        if grid_import_w > max(250.0, house_load_w * 0.50):
-            return None
-
-        passthrough_w = min(
-            pv_w,
-            house_load_w,
-            float(ctx.max_discharge_w),
-        )
-
-        # Kleine Mindestleistung, damit Zendure überhaupt sauber in OUTPUT arbeitet,
-        # aber keine aggressive Entladung.
-        if passthrough_w < 60.0:
+        target_w = max(0.0, float(ctx.pv_houseload_passthrough_target_w or 0.0))
+        if target_w <= 0.0:
             return None
 
         return engine._with_thresholds(
@@ -415,7 +379,7 @@ class PvHouseLoadPassthroughRule(BaseRule):
                 action="discharge",
                 ac_mode="output",
                 charge_w=0.0,
-                discharge_w=passthrough_w,
+                discharge_w=min(target_w, float(ctx.max_discharge_w)),
                 reason="pv_house_load_passthrough",
             ),
         )
@@ -616,13 +580,13 @@ class DecisionEngine:
             AdditionalBatteryBlockRule(),
             ManualRule(),
             VeryCheapRule(),
+            PvHouseLoadPassthroughRule(),
             PvRule(),
             PeakRule(),
             ArbitrageRule(),
             PlanningRule(),
             ValleyBoostRule(),
             ValleyOpportunityRule(),
-            PvHouseLoadPassthroughRule(),
             SummerRule(),
         ]
 
