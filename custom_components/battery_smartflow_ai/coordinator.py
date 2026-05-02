@@ -258,6 +258,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "pv_houseload_passthrough_target_w": 0.0,
             "pv_houseload_passthrough_stop_reason": "none",
 
+            # SF800Pro PV charge latch / mode arbiter
+            "sf800_pv_charge_latched": False,
+            "sf800_pv_charge_started_ts": None,
+            "sf800_pv_charge_stop_counter": 0,
+            "sf800_mode_arbiter_state": "none",
+            "sf800_mode_arbiter_reason": "none",
+
             # debug
             "debug": "init",
         }
@@ -622,7 +629,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         hold_seconds = float(
-            profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 90.0) or 90.0
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 180.0) or 180.0
         )
         min_pv_w = float(
             profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W", 120.0) or 120.0
@@ -631,7 +638,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W", 120.0) or 120.0
         )
         export_stop_cycles = int(
-            profile.get("PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES", 6) or 6
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES", 12) or 12
         )
 
         stop_reason = "none"
@@ -668,6 +675,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             house_val = max(0.0, float(house_load_w or 0.0))
             export_val = max(0.0, float(grid_export_w or 0.0))
             import_val = max(0.0, float(grid_import_w or 0.0))
+            pv_charge_latched = bool(self._persist.get("sf800_pv_charge_latched", False))
 
             target_w = min(
                 pv_val,
@@ -737,7 +745,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 export_counter = 0
 
                 if (
-                    enough_pv
+                    not pv_charge_latched
+                    and enough_pv
                     and enough_house_load
                     and useful_target
                     and export_val < float(pv_charge_start_export_w or 0.0)
@@ -762,6 +771,234 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["pv_houseload_passthrough_stop_reason"] = str(stop_reason)
 
         return bool(active), float(target_w or 0.0), str(stop_reason)
+
+    def _is_sf800_pv_houseload_passthrough_enabled(self, profile: dict[str, Any]) -> bool:
+        return bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False))
+
+    def _sf800_hold_active(
+        self,
+        now,
+        started_ts_raw: str | None,
+        hold_seconds: float,
+    ) -> bool:
+        if not started_ts_raw:
+            return False
+
+        try:
+            started = dt_util.parse_datetime(str(started_ts_raw))
+            if started is None:
+                return False
+
+            elapsed = (
+                dt_util.as_utc(now) - dt_util.as_utc(started)
+            ).total_seconds()
+
+            return elapsed < float(hold_seconds)
+        except Exception:
+            return False
+
+    def _sf800_update_pv_charge_latch(
+        self,
+        now,
+        profile: dict[str, Any],
+        decision: DecisionResult,
+        grid_import_w: float,
+        grid_export_w: float,
+        pv_charge_start_export_w: float,
+        protection_active: bool,
+    ) -> tuple[bool, str]:
+        enabled = self._is_sf800_pv_houseload_passthrough_enabled(profile)
+        if not enabled:
+            self._persist["sf800_pv_charge_latched"] = False
+            self._persist["sf800_pv_charge_started_ts"] = None
+            self._persist["sf800_pv_charge_stop_counter"] = 0
+            return False, "disabled"
+
+        latched = bool(self._persist.get("sf800_pv_charge_latched", False))
+        started_ts = self._persist.get("sf800_pv_charge_started_ts")
+        stop_counter = int(self._persist.get("sf800_pv_charge_stop_counter", 0) or 0)
+
+        hold_seconds = float(profile.get("PV_CHARGE_LATCH_HOLD_SECONDS", 180.0) or 180.0)
+        stop_cycles = int(profile.get("PV_CHARGE_LATCH_STOP_CYCLES", 12) or 12)
+
+        export_w = max(0.0, float(grid_export_w or 0.0))
+        import_w = max(0.0, float(grid_import_w or 0.0))
+        start_threshold = float(pv_charge_start_export_w or 0.0)
+
+        hold_active = self._sf800_hold_active(now, started_ts, hold_seconds)
+
+        decision_is_pv_charge = (
+            decision.ac_mode == "input"
+            and float(decision.charge_w or 0.0) > 0.0
+            and decision.reason == "pv_surplus_charge"
+        )
+
+        if protection_active:
+            latched = False
+            started_ts = None
+            stop_counter = 0
+            reason = "protection_active"
+
+        elif decision_is_pv_charge:
+            if not latched:
+                started_ts = dt_util.as_utc(now).isoformat()
+            latched = True
+            stop_counter = 0
+            reason = "pv_charge_decision"
+
+        elif latched:
+            weak_pv_charge_conditions = (
+                export_w < max(10.0, start_threshold * 0.15)
+                and import_w > 140.0
+            )
+
+            if hold_active:
+                reason = "hold_active"
+            elif weak_pv_charge_conditions:
+                stop_counter += 1
+                reason = "weakness_counting"
+                if stop_counter >= stop_cycles:
+                    latched = False
+                    started_ts = None
+                    stop_counter = 0
+                    reason = "weakness_stop"
+            else:
+                stop_counter = 0
+                reason = "latched"
+
+        else:
+            reason = "not_latched"
+
+        self._persist["sf800_pv_charge_latched"] = bool(latched)
+        self._persist["sf800_pv_charge_started_ts"] = started_ts
+        self._persist["sf800_pv_charge_stop_counter"] = int(stop_counter)
+
+        return bool(latched), str(reason)
+
+    def _sf800_apply_mode_arbiter(
+        self,
+        now,
+        profile: dict[str, Any],
+        decision: DecisionResult,
+        pv_w: float,
+        house_load_w: float,
+        grid_import_w: float,
+        grid_export_w: float,
+        max_discharge_w: float,
+        pv_charge_start_export_w: float,
+        discharge_blocked_by_soc_min: bool,
+        cell_voltage_discharge_blocked: bool,
+        cell_voltage_emergency_active: bool,
+        additional_battery_charge_w: float,
+    ) -> DecisionResult:
+        """
+        SF800Pro special mode arbiter.
+
+        Prevents hard OUTPUT/INPUT ping-pong between:
+        - PV house-load passthrough / cover_deficit
+        - PV surplus charging
+
+        This runs after the normal decision engine and before applying AC mode.
+        """
+        enabled = self._is_sf800_pv_houseload_passthrough_enabled(profile)
+        if not enabled:
+            self._persist["sf800_mode_arbiter_state"] = "disabled"
+            self._persist["sf800_mode_arbiter_reason"] = "disabled"
+            return decision
+
+        protection_active = bool(
+            discharge_blocked_by_soc_min
+            or cell_voltage_discharge_blocked
+            or cell_voltage_emergency_active
+            or float(additional_battery_charge_w or 0.0) > 0.0
+        )
+
+        pv_charge_latched, pv_charge_latch_reason = self._sf800_update_pv_charge_latch(
+            now=now,
+            profile=profile,
+            decision=decision,
+            grid_import_w=float(grid_import_w or 0.0),
+            grid_export_w=float(grid_export_w or 0.0),
+            pv_charge_start_export_w=float(pv_charge_start_export_w),
+            protection_active=protection_active,
+        )
+
+        passthrough_active = bool(
+            self._persist.get("pv_houseload_passthrough_active", False)
+        )
+        passthrough_target_w = float(
+            self._persist.get("pv_houseload_passthrough_target_w", 0.0) or 0.0
+        )
+
+        decision_is_price_or_emergency_charge = (
+            decision.ac_mode == "input"
+            and float(decision.charge_w or 0.0) > 0.0
+            and decision.reason
+            in {
+                "very_cheap_force_charge",
+                "valley_boost_charge",
+                "valley_boost_charge_mixed_forecast",
+                "planning_latest_start",
+                "planning_forecast_poor",
+                "planning_forecast_mixed",
+                "planning_forecast_reality_override",
+                "valley_opportunity_charge",
+                "valley_opportunity_charge_mixed_forecast",
+                "emergency_latched_charge",
+                "cell_voltage_emergency_charge",
+                "manual_charge",
+            }
+        )
+
+        if protection_active:
+            self._persist["sf800_mode_arbiter_state"] = "protection"
+            self._persist["sf800_mode_arbiter_reason"] = "protection_active"
+            return decision
+
+        if decision_is_price_or_emergency_charge:
+            self._persist["sf800_mode_arbiter_state"] = "priority_charge"
+            self._persist["sf800_mode_arbiter_reason"] = decision.reason
+            return decision
+
+        if pv_charge_latched:
+            if decision.reason == "pv_house_load_passthrough":
+                self._persist["sf800_mode_arbiter_state"] = "pv_charge_latched"
+                self._persist["sf800_mode_arbiter_reason"] = (
+                    f"blocked_passthrough_{pv_charge_latch_reason}"
+                )
+                return DecisionResult(
+                    action="charge",
+                    ac_mode="input",
+                    charge_w=max(80.0, float(decision.charge_w or 0.0)),
+                    discharge_w=0.0,
+                    reason="pv_surplus_charge",
+                    target_soc=decision.target_soc,
+                )
+
+            if decision.ac_mode == "input":
+                self._persist["sf800_mode_arbiter_state"] = "pv_charge_latched"
+                self._persist["sf800_mode_arbiter_reason"] = pv_charge_latch_reason
+                return decision
+
+        if passthrough_active and passthrough_target_w > 0.0:
+            self._persist["sf800_mode_arbiter_state"] = "passthrough_latched"
+            self._persist["sf800_mode_arbiter_reason"] = "hold_output"
+
+            return DecisionResult(
+                action="discharge",
+                ac_mode="output",
+                charge_w=0.0,
+                discharge_w=min(
+                    float(passthrough_target_w),
+                    float(max_discharge_w),
+                ),
+                reason="pv_house_load_passthrough",
+                target_soc=decision.target_soc,
+            )
+
+        self._persist["sf800_mode_arbiter_state"] = "normal"
+        self._persist["sf800_mode_arbiter_reason"] = "normal_decision"
+        return decision
 
     def _update_discharge_resume_hysteresis(
         self,
@@ -1457,6 +1694,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             decision = self._engine.evaluate(ctx)
 
+            decision = self._sf800_apply_mode_arbiter(
+                now=now,
+                profile=profile,
+                decision=decision,
+                pv_w=float(pv_w),
+                house_load_w=float(house_load),
+                grid_import_w=float(grid_import or 0.0),
+                grid_export_w=float(grid_export or 0.0),
+                max_discharge_w=float(max_discharge),
+                pv_charge_start_export_w=float(pv_charge_start_export_w),
+                discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
+                cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
+                cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+                additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
+            )
+
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
             low_soc_pv_charge_requires_export = bool(
                 profile.get("LOW_SOC_PV_CHARGE_REQUIRES_EXPORT", False)
@@ -1756,6 +2009,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "device_profile": self.device_profile_key,
                 "profile_max_input_w": profile_max_in,
                 "profile_max_output_w": profile_max_out,
+
+                # SF800Pro passthrough / arbiter debug
                 "pv_houseload_passthrough_enabled": bool(
                     profile.get("PV_HOUSELOAD_PASSTHROUGH", False)
                 ),
@@ -1777,6 +2032,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "pv_houseload_passthrough_hold_seconds": float(
                     profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 0.0)
                 ),
+                "sf800_pv_charge_latched": bool(
+                    self._persist.get("sf800_pv_charge_latched", False)
+                ),
+                "sf800_pv_charge_stop_counter": int(
+                    self._persist.get("sf800_pv_charge_stop_counter", 0)
+                ),
+                "sf800_mode_arbiter_state": str(
+                    self._persist.get("sf800_mode_arbiter_state", "none")
+                ),
+                "sf800_mode_arbiter_reason": str(
+                    self._persist.get("sf800_mode_arbiter_reason", "none")
+                ),
+
                 "soc_limit": soc_limit,
                 "additional_battery_charge_w": additional_battery_charge_w,
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
