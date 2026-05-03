@@ -534,7 +534,8 @@
           "manual_charge": "Manuelles Laden",
           "manual_discharge": "Manuelle Entladung",
           "manual_constant_discharge": "Konstante Entladung aktiv",
-          "emergency_charge": "Notladung"
+          "emergency_charge": "Notladung",
+          "pv_house_load_passthrough_active": "SF800Pro: PV-Hauslast-Passthrough aktiv"
         }
       },
       "next_action_time": {
