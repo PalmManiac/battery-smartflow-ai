@@ -215,7 +215,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "prev_charge_w": 0.0,
 
             # basic state
-            "power_state": "idle",  # idle|charging|discharging
+            "power_state": "idle",  # idle|charging|discharging|passthrough
             "emergency_active": False,
             "discharge_blocked_by_soc_min": False,
             "discharge_resume_soc": None,
@@ -264,6 +264,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "sf800_pv_charge_stop_counter": 0,
             "sf800_mode_arbiter_state": "none",
             "sf800_mode_arbiter_reason": "none",
+
+            # SF800Pro passthrough output smoothing
+            "sf800_passthrough_prev_output_w": 0.0,
+            "sf800_passthrough_smoothed_target_w": 0.0,
 
             # debug
             "debug": "init",
@@ -603,6 +607,68 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return start_counter, stop_counter, latched
 
+    def _sf800_compute_passthrough_output(
+        self,
+        profile: dict[str, Any],
+        raw_target_w: float,
+        max_output_w: float,
+        latch_active: bool,
+        force_zero: bool = False,
+    ) -> float:
+        """Smooth and rate-limit SF800Pro passthrough output."""
+        if force_zero:
+            self._persist["sf800_passthrough_prev_output_w"] = 0.0
+            self._persist["sf800_passthrough_smoothed_target_w"] = 0.0
+            return 0.0
+
+        raw_target = max(
+            0.0,
+            min(float(raw_target_w or 0.0), float(max_output_w or 0.0)),
+        )
+
+        prev_output = float(
+            self._persist.get("sf800_passthrough_prev_output_w", 0.0) or 0.0
+        )
+        prev_smoothed = float(
+            self._persist.get("sf800_passthrough_smoothed_target_w", raw_target)
+            or raw_target
+        )
+
+        min_output = float(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W", 80.0) or 80.0
+        )
+        max_step_up = float(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W", 100.0) or 100.0
+        )
+        max_step_down = float(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W", 150.0) or 150.0
+        )
+        alpha = float(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA", 0.30) or 0.30
+        )
+
+        alpha = max(0.05, min(alpha, 1.0))
+
+        smoothed_target = (prev_smoothed * (1.0 - alpha)) + (raw_target * alpha)
+
+        if smoothed_target > prev_output:
+            next_output = prev_output + min(smoothed_target - prev_output, max_step_up)
+        else:
+            next_output = prev_output - min(prev_output - smoothed_target, max_step_down)
+
+        next_output = max(0.0, min(next_output, float(max_output_w or 0.0)))
+
+        if latch_active and raw_target > 0.0:
+            next_output = max(next_output, min_output)
+
+        if not latch_active and next_output < min_output:
+            next_output = 0.0
+
+        self._persist["sf800_passthrough_prev_output_w"] = float(next_output)
+        self._persist["sf800_passthrough_smoothed_target_w"] = float(smoothed_target)
+
+        return float(next_output)
+
     def _update_pv_houseload_passthrough(
         self,
         now,
@@ -629,7 +695,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         hold_seconds = float(
-            profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 180.0) or 180.0
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 300.0) or 300.0
         )
         min_pv_w = float(
             profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W", 120.0) or 120.0
@@ -638,7 +704,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W", 120.0) or 120.0
         )
         export_stop_cycles = int(
-            profile.get("PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES", 12) or 12
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES", 18) or 18
         )
 
         stop_reason = "none"
@@ -677,15 +743,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             import_val = max(0.0, float(grid_import_w or 0.0))
             pv_charge_latched = bool(self._persist.get("sf800_pv_charge_latched", False))
 
-            target_w = min(
+            raw_target_w = min(
                 pv_val,
                 house_val,
                 float(max_output_w or 0.0),
             )
 
+            target_w = raw_target_w
+
             enough_pv = pv_val >= min_pv_w
             enough_house_load = house_val >= min_house_load_w
-            useful_target = target_w >= 60.0
+            useful_target = raw_target_w >= 60.0
 
             stable_export_for_pv_charge = (
                 export_val >= float(pv_charge_start_export_w or 0.0)
@@ -725,7 +793,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         target_w = 0.0
                         stop_reason = "house_load_low"
 
-                elif export_counter >= export_stop_cycles:
+                elif export_counter >= export_stop_cycles and not hold_active:
                     active = False
                     target_w = 0.0
                     stop_reason = "stable_export_handover_to_pv_charge"
@@ -764,6 +832,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not active:
             self._persist["pv_houseload_passthrough_started_ts"] = None
             export_counter = 0
+
+        if active:
+            target_w = self._sf800_compute_passthrough_output(
+                profile=profile,
+                raw_target_w=float(target_w or 0.0),
+                max_output_w=float(max_output_w or 0.0),
+                latch_active=True,
+                force_zero=False,
+            )
+        else:
+            target_w = self._sf800_compute_passthrough_output(
+                profile=profile,
+                raw_target_w=0.0,
+                max_output_w=float(max_output_w or 0.0),
+                latch_active=False,
+                force_zero=True,
+            )
 
         self._persist["pv_houseload_passthrough_active"] = bool(active)
         self._persist["pv_houseload_passthrough_export_counter"] = int(export_counter)
@@ -818,8 +903,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         started_ts = self._persist.get("sf800_pv_charge_started_ts")
         stop_counter = int(self._persist.get("sf800_pv_charge_stop_counter", 0) or 0)
 
-        hold_seconds = float(profile.get("PV_CHARGE_LATCH_HOLD_SECONDS", 180.0) or 180.0)
-        stop_cycles = int(profile.get("PV_CHARGE_LATCH_STOP_CYCLES", 12) or 12)
+        hold_seconds = float(profile.get("PV_CHARGE_LATCH_HOLD_SECONDS", 300.0) or 300.0)
+        stop_cycles = int(profile.get("PV_CHARGE_LATCH_STOP_CYCLES", 18) or 18)
 
         export_w = max(0.0, float(grid_export_w or 0.0))
         import_w = max(0.0, float(grid_import_w or 0.0))
@@ -891,15 +976,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cell_voltage_emergency_active: bool,
         additional_battery_charge_w: float,
     ) -> DecisionResult:
-        """
-        SF800Pro special mode arbiter.
-
-        Prevents hard OUTPUT/INPUT ping-pong between:
-        - PV house-load passthrough / cover_deficit
-        - PV surplus charging
-
-        This runs after the normal decision engine and before applying AC mode.
-        """
         enabled = self._is_sf800_pv_houseload_passthrough_enabled(profile)
         if not enabled:
             self._persist["sf800_mode_arbiter_state"] = "disabled"
@@ -930,20 +1006,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist.get("pv_houseload_passthrough_target_w", 0.0) or 0.0
         )
 
-        decision_is_price_or_emergency_charge = (
+        decision_is_true_priority_charge = (
             decision.ac_mode == "input"
             and float(decision.charge_w or 0.0) > 0.0
             and decision.reason
             in {
                 "very_cheap_force_charge",
-                "valley_boost_charge",
-                "valley_boost_charge_mixed_forecast",
-                "planning_latest_start",
-                "planning_forecast_poor",
-                "planning_forecast_mixed",
-                "planning_forecast_reality_override",
-                "valley_opportunity_charge",
-                "valley_opportunity_charge_mixed_forecast",
                 "emergency_latched_charge",
                 "cell_voltage_emergency_charge",
                 "manual_charge",
@@ -955,7 +1023,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist["sf800_mode_arbiter_reason"] = "protection_active"
             return decision
 
-        if decision_is_price_or_emergency_charge:
+        if decision_is_true_priority_charge:
             self._persist["sf800_mode_arbiter_state"] = "priority_charge"
             self._persist["sf800_mode_arbiter_reason"] = decision.reason
             return decision
@@ -985,7 +1053,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist["sf800_mode_arbiter_reason"] = "hold_output"
 
             return DecisionResult(
-                action="discharge",
+                action="passthrough",
                 ac_mode="output",
                 charge_w=0.0,
                 discharge_w=min(
@@ -1006,7 +1074,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         soc_min: float,
         resume_margin: float,
     ) -> bool:
-        """Maintain hysteresis for discharge re-enable around soc_min."""
         blocked = bool(self._persist.get("discharge_blocked_by_soc_min", False))
         effective_resume_soc = float(soc_min) + max(0.0, float(resume_margin))
 
@@ -1024,7 +1091,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         global_lowest_cell_voltage: float | None,
     ) -> bool:
-        """Maintain hysteresis for discharge re-enable based on cell voltage."""
         blocked = bool(self._persist.get("cell_voltage_discharge_blocked", False))
 
         if not self._cell_voltage_protection_enabled():
@@ -1066,17 +1132,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         price_now: float | None,
         decision_reason: str | None = None,
     ) -> tuple[bool, float, str]:
-        """Classify the source of a positive battery charge delta.
-
-        Returns:
-            (is_grid_charge, applied_price, charge_source)
-
-        Notes:
-        - PV / surplus charging must be counted as a real charge event with 0 €/kWh.
-        - Price-driven charging must use price_now even if PV lowers grid import.
-        - The fallback logic intentionally biases towards PV/free charging unless
-          there is strong evidence that the battery is really being charged from grid.
-        """
         if delta_kwh <= 0:
             return False, 0.0, "no_charge_delta"
 
@@ -1126,21 +1181,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return False, 0.0, "mixed_bias_pv"
 
     def _parse_price_points(self, now) -> list[PricePoint]:
-        """
-        Universal price parser (production hardened).
-
-        Supports:
-        - Tibber (attributes.data[])
-        - Octopus (attributes.rates[])
-        - Octopus Germany (unit_rate_forecast[])
-        - EPEX style exports
-        - Generic 15min APIs
-
-        Handles:
-        - Mixed timezones (UTC / CET)
-        - Broken Octopus slots (end <= start)
-        - DST edge cases
-        """
         if not self.entities.price_export:
             return []
 
@@ -1262,10 +1302,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return out
 
     def _season_detection(self, pv_w: float, export_w: float) -> str:
-        """
-        Season detection based on installed PV power.
-        Slow anti-flip counter with relative thresholds.
-        """
         season = self._persist.get("season_mode", "winter")
         counter = int(self._persist.get("season_counter", 0))
 
@@ -1326,6 +1362,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _map_ai_status(self, ai_mode: str, action: str, reason: str) -> str:
         if ai_mode == AI_MODE_MANUAL:
             return AI_STATUS_MANUAL
+        if action == "passthrough" or reason == "pv_house_load_passthrough":
+            return AI_STATUS_STANDBY
         if action == "emergency":
             return AI_STATUS_EMERGENCY_CHARGE
         if action == "charge":
@@ -1343,6 +1381,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return AI_STATUS_STANDBY
 
     def _map_reco(self, action: str) -> str:
+        if action == "passthrough":
+            return RECO_STANDBY
         if action == "charge":
             return RECO_CHARGE
         if action == "discharge":
@@ -1833,6 +1873,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.ac_mode == "output"
                 and float(decision.discharge_w or 0.0) > 0.0
                 and discharge_blocked_by_soc_min
+                and decision.reason != "pv_house_load_passthrough"
             ):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
@@ -1842,6 +1883,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.ac_mode == "output"
                 and float(decision.discharge_w or 0.0) > 0.0
                 and cell_voltage_discharge_blocked
+                and decision.reason != "pv_house_load_passthrough"
             ):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
@@ -1854,6 +1896,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             in_w = float(decision.charge_w) if ac_mode == ZENDURE_MODE_INPUT else 0.0
             out_w = float(decision.discharge_w) if ac_mode == ZENDURE_MODE_OUTPUT else 0.0
+            is_passthrough = decision.reason == "pv_house_load_passthrough"
 
             if ac_mode == ZENDURE_MODE_INPUT:
                 if self._persist.get("last_set_output_w", 0) != 0:
@@ -1866,16 +1909,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist["last_set_output_w"] = out_w
 
             is_charging = ac_mode == ZENDURE_MODE_INPUT and in_w > 0.0
-            is_discharging = ac_mode == ZENDURE_MODE_OUTPUT and out_w > 0.0
+            is_discharging = (
+                ac_mode == ZENDURE_MODE_OUTPUT
+                and out_w > 0.0
+                and not is_passthrough
+            )
 
-            if is_charging:
+            if is_passthrough and out_w > 0.0:
+                self._persist["power_state"] = "passthrough"
+            elif is_charging:
                 self._persist["power_state"] = "charging"
             elif is_discharging:
                 self._persist["power_state"] = "discharging"
             else:
                 self._persist["power_state"] = "idle"
 
-            if is_charging or is_discharging:
+            if is_charging or is_discharging or (is_passthrough and out_w > 0.0):
                 self._persist["next_action_time"] = now.isoformat()
             else:
                 self._persist["next_action_time"] = None
@@ -1886,10 +1935,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 reason=decision.reason,
             )
 
-            if decision.reason == "pv_house_load_passthrough":
-                recommendation = RECO_STANDBY
-            else:
-                recommendation = self._map_reco(decision.action)
+            recommendation = self._map_reco(decision.action)
 
             charge_strategy = self._map_charge_strategy(
                 ai_mode=ai_mode,
@@ -2044,6 +2090,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "sf800_mode_arbiter_reason": str(
                     self._persist.get("sf800_mode_arbiter_reason", "none")
                 ),
+                "sf800_passthrough_prev_output_w": float(
+                    self._persist.get("sf800_passthrough_prev_output_w", 0.0) or 0.0
+                ),
+                "sf800_passthrough_smoothed_target_w": float(
+                    self._persist.get("sf800_passthrough_smoothed_target_w", 0.0) or 0.0
+                ),
+                "sf800_passthrough_min_output_w": float(
+                    profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W", 0.0) or 0.0
+                ),
+                "sf800_passthrough_max_step_up_w": float(
+                    profile.get("PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W", 0.0) or 0.0
+                ),
+                "sf800_passthrough_max_step_down_w": float(
+                    profile.get("PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W", 0.0) or 0.0
+                ),
+                "sf800_passthrough_smoothing_alpha": float(
+                    profile.get("PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA", 0.0) or 0.0
+                ),
 
                 "soc_limit": soc_limit,
                 "additional_battery_charge_w": additional_battery_charge_w,
@@ -2131,6 +2195,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if self._persist.get("power_state") == "charging"
                 else "discharging_active"
                 if self._persist.get("power_state") == "discharging"
+                else "pv_house_load_passthrough_active"
+                if self._persist.get("power_state") == "passthrough"
                 else "none"
             )
 
