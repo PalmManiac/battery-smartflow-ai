@@ -12,7 +12,7 @@ from .power_controller import PowerController, PowerContext
 
 AiMode = Literal["automatic", "summer", "winter", "manual"]
 ZendureMode = Literal["input", "output"]
-ActionType = Literal["idle", "charge", "discharge", "emergency"]
+ActionType = Literal["idle", "charge", "discharge", "emergency", "passthrough"]
 
 
 @dataclass
@@ -376,7 +376,7 @@ class PvHouseLoadPassthroughRule(BaseRule):
         return engine._with_thresholds(
             ctx,
             DecisionResult(
-                action="discharge",
+                action="passthrough",
                 ac_mode="output",
                 charge_w=0.0,
                 discharge_w=min(target_w, float(ctx.max_discharge_w)),
@@ -392,6 +392,12 @@ class PvRule(BaseRule):
             return None
 
         if ctx.soc >= ctx.soc_max:
+            return None
+
+        if (
+            engine._pv_houseload_passthrough_enabled(ctx)
+            and bool(ctx.pv_houseload_passthrough_active)
+        ):
             return None
 
         export_w = float(ctx.grid_export_w or 0.0)
