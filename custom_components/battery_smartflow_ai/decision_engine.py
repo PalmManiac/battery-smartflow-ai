@@ -431,13 +431,23 @@ class PvRule(BaseRule):
 
         charge_already_active = bool(ctx.pv_charge_latched)
 
+        sf800_passthrough_enabled = engine._pv_houseload_passthrough_enabled(ctx)
+
         soft_start_ready = (
             False
-            if protection_active and engine._low_soc_pv_charge_requires_export(ctx)
+            if (
+                sf800_passthrough_enabled
+                or (protection_active and engine._low_soc_pv_charge_requires_export(ctx))
+            )
             else engine._pv_soft_start_ready(ctx)
         )
 
-        start_allowed = (has_direct_surplus and start_counter >= 2) or soft_start_ready
+        required_start_cycles = 6 if sf800_passthrough_enabled else 2
+
+        start_allowed = (
+            has_direct_surplus
+            and start_counter >= required_start_cycles
+        )
 
         # Laufende PV-Ladung deutlich stärker halten.
         # Solange keine echte anhaltende Schwäche vorliegt, bleiben wir im PV-Zweig.
@@ -476,9 +486,15 @@ class PvRule(BaseRule):
         # Wenn die PV-Ladung bereits läuft, soll primär die Leistung geregelt werden,
         # nicht der ganze Ladezustand verloren gehen.
         if keepalive_charge:
-            charge_w = max(charge_w, engine._charge_keepalive_w(ctx))
+            if sf800_passthrough_enabled:
+                # Beim SF800Pro darf INPUT nicht künstlich über 80 W gehalten werden,
+                # wenn kein echter stabiler Export vorhanden ist.
+                if not has_direct_surplus:
+                    return None
+            else:
+                charge_w = max(charge_w, engine._charge_keepalive_w(ctx))
 
-        if soft_start_ready and not keepalive_charge:
+        if soft_start_ready and not keepalive_charge and not sf800_passthrough_enabled:
             if import_w <= 60.0:
                 charge_w = max(charge_w, 80.0)
 
