@@ -447,6 +447,9 @@ class PvRule(BaseRule):
         start_allowed = (
             has_direct_surplus
             and start_counter >= required_start_cycles
+        ) or (
+            soft_start_ready
+            and not sf800_passthrough_enabled
         )
 
         # Laufende PV-Ladung deutlich stärker halten.
