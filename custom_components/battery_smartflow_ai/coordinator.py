@@ -1600,6 +1600,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 + float(pv_w)
                 + float(battery_discharge_w)
                 - float(grid_export)
+                - float(battery_charge_w)
             )
 
             season = self._season_detection(
