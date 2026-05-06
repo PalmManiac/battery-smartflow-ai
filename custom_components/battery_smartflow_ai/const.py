@@ -31,6 +31,7 @@ CONF_PRICE_EXPORT_ENTITY = "price_export_entity"  # Tibber Export (attributes.da
 CONF_PRICE_NOW_ENTITY = "price_now_entity"        # direkter Preis-Sensor (€/kWh)
 
 CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY = "additional_battery_charge_entity"
+CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY = "additional_battery_discharge_entity"
 
 # V4.0.0 optionale PV-Forecast-Sensoren (zuerst Solcast)
 CONF_PV_FORECAST_TODAY_ENTITY = "pv_forecast_today_entity"
