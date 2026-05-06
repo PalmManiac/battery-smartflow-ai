@@ -32,6 +32,7 @@ from .const import (
     CONF_PACK_CAPACITY_KWH,
     CONF_BATTERY_AC_POWER_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
+    CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
     CONF_DEVICE_PROFILE,
     CONF_PROFILE_OVERRIDES,
     CONF_INSTALLED_PV_WP,
@@ -145,6 +146,7 @@ class SelectedEntities:
     output_limit: str
     battery_ac_power: str
     additional_battery_charge: str | None
+    additional_battery_discharge: str | None
     soc_limit: str | None
     grid_mode: str
     grid_power: str | None
@@ -181,6 +183,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or entry.data.get(CONF_BATTERY_AC_POWER_ENTITY, "")
             ),
             additional_battery_charge=entry.data.get(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY),
+            additional_battery_discharge=entry.data.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY),
             price_export=entry.data.get(CONF_PRICE_EXPORT_ENTITY),
             price_now=entry.data.get(CONF_PRICE_NOW_ENTITY),
             ac_mode=str(entry.data[CONF_AC_MODE_ENTITY]),
@@ -1540,6 +1543,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             additional_battery_charge_w = float(additional_battery_charge_w or 0.0)
 
+            additional_battery_discharge_w = _to_float(
+                self._state(self.entities.additional_battery_discharge),
+                0.0,
+            )
+            additional_battery_discharge_w = float(additional_battery_discharge_w or 0.0)
+            additional_battery_discharge_active = additional_battery_discharge_w > 50.0
+
+            if additional_battery_discharge_active:
+                self._persist["pv_charge_latched"] = False
+                self._persist["pv_charge_start_counter"] = 0
+                self._persist["pv_charge_stop_counter"] = 0
+
+                self._persist["sf800_pv_charge_latched"] = False
+                self._persist["sf800_pv_charge_started_ts"] = None
+                self._persist["sf800_pv_charge_stop_counter"] = 0
+
             daily_avg_price = None
             if price_points:
                 prices = [p.price for p in price_points]
@@ -1698,6 +1717,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 valley_factor=valley_factor,
                 very_cheap_price=very_cheap_price,
                 additional_battery_charge_w=additional_battery_charge_w,
+                additional_battery_discharge_w=additional_battery_discharge_w,
                 pv_charge_start_export_w=float(pv_charge_start_export_w),
                 cell_voltage_emergency_active=cell_voltage_emergency_active,
                 forecast=forecast_summary,
@@ -1974,6 +1994,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 valley_factor=valley_factor,
                 very_cheap_price=very_cheap_price,
                 additional_battery_charge_w=additional_battery_charge_w,
+                additional_battery_discharge_w=additional_battery_discharge_w,
                 pv_charge_start_export_w=float(pv_charge_start_export_w),
                 cell_voltage_emergency_active=cell_voltage_emergency_active,
                 forecast=forecast_summary,
@@ -2112,6 +2133,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 "soc_limit": soc_limit,
                 "additional_battery_charge_w": additional_battery_charge_w,
+                "additional_battery_discharge_w": additional_battery_discharge_w,
+                "additional_battery_discharge_active": bool(additional_battery_discharge_active),
+                "additional_battery_discharge_block_threshold_w": 50.0,
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
                 "pv_charge_latched": bool(pv_charge_latched),
                 "pv_charge_start_counter": int(self._persist.get("pv_charge_start_counter", 0)),
