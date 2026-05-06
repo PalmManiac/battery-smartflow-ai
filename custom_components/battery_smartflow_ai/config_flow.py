@@ -15,6 +15,7 @@ from .const import (
     CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_BATTERY_AC_POWER_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
+    CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
     CONF_AC_MODE_ENTITY,
@@ -95,6 +96,9 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not self._user_input.get(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY):
                 self._user_input.pop(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY, None)
 
+            if not self._user_input.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY):
+                self._user_input.pop(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY, None)
+
             if not self._user_input.get(CONF_PV_FORECAST_TODAY_ENTITY):
                 self._user_input.pop(CONF_PV_FORECAST_TODAY_ENTITY, None)
 
@@ -171,6 +175,9 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not cleaned.get(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY):
                 cleaned.pop(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY, None)
+
+            if not cleaned.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY):
+                cleaned.pop(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY, None)
 
             if not cleaned.get(CONF_PV_FORECAST_TODAY_ENTITY):
                 cleaned.pop(CONF_PV_FORECAST_TODAY_ENTITY, None)
@@ -335,6 +342,23 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         else:
             schema[
                 vol.Optional(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY)
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
+
+        additional_battery_discharge_val = _val(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY)
+        if additional_battery_discharge_val:
+            schema[
+                vol.Optional(
+                    CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
+                    default=additional_battery_discharge_val,
+                )
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
+        else:
+            schema[
+                vol.Optional(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY)
             ] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
             )
