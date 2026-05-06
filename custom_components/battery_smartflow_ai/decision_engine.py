@@ -59,6 +59,7 @@ class DecisionContext:
     battery_capacity_kwh: float
 
     additional_battery_charge_w: float = 0.0
+    additional_battery_discharge_w: float = 0.0
     pv_charge_start_export_w: float = 80.0
 
     peak_factor: float = 1.35
@@ -137,6 +138,16 @@ class AdditionalBatteryBlockRule(BaseRule):
             return engine._idle_result(
                 ctx,
                 reason="additional_battery_charging_block",
+            )
+        return None
+
+
+class AdditionalBatteryDischargeBlockRule(BaseRule):
+    def evaluate(self, engine, ctx):
+        if float(ctx.additional_battery_discharge_w or 0.0) > 50.0:
+            return engine._idle_result(
+                ctx,
+                reason="additional_battery_discharging_block",
             )
         return None
 
@@ -394,6 +405,9 @@ class PvRule(BaseRule):
         if ctx.soc >= ctx.soc_max:
             return None
 
+        if float(ctx.additional_battery_discharge_w or 0.0) > 50.0:
+            return None
+
         if (
             engine._pv_houseload_passthrough_enabled(ctx)
             and bool(ctx.pv_houseload_passthrough_active)
@@ -603,6 +617,7 @@ class DecisionEngine:
         self._rules = [
             EmergencyRule(),
             AdditionalBatteryBlockRule(),
+            AdditionalBatteryDischargeBlockRule(),
             ManualRule(),
             VeryCheapRule(),
             PvHouseLoadPassthroughRule(),
