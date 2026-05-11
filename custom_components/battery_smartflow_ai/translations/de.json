@@ -353,7 +353,91 @@
           "valley_opportunity": "Opportunistische Tal-Ladung",
           "valley_opportunity_mixed": "Opportunistische Tal-Ladung bei gemischter Prognose"
         }
-      },      
+      },
+      "learned_planning_status": {
+        "name": "Ladeplanung: Lernstatus",
+        "state": {
+          "not_started": "Noch nicht gestartet",
+          "collecting": "Daten werden gesammelt",
+          "insufficient_data": "Nicht genügend Lerndaten",
+          "ready": "Bereit",
+          "active": "Aktiv"
+        }
+      },
+      "learned_planning_mode": {
+        "name": "Ladeplanung: Modus",
+        "state": {
+          "classic": "Klassische Planung",
+          "learned_wait": "Lernplanung wartet auf Ladefenster",
+          "learned_active": "Lernplanung aktiv",
+          "disabled": "Deaktiviert"
+        }
+      },
+      "learned_planning_optimal_charge_start": {
+        "name": "Ladeplanung: Geplanter Ladestart"
+      },
+      "learned_planning_deadline": {
+        "name": "Ladeplanung: Deadline"
+      },
+      "learned_planning_required_charge_energy_kwh": {
+        "name": "Ladeplanung: Nachladeenergie"
+      },
+      "learned_planning_effective_window_minutes": {
+        "name": "Ladeplanung: Fenstergröße"
+      },
+      "learned_planning_blocking_reason": {
+        "name": "Diagnose: Lernplanung Blocking Reason",
+        "state": {
+          "none": "Kein Blocker",
+          "not_started": "Lernplanung noch nicht gestartet",
+          "not_ready": "Lernmodell noch nicht bereit",
+          "not_enough_days": "Nicht genügend Historientage",
+          "not_enough_usable_days": "Nicht genügend verwertbare Lerntage",
+          "night_window_coverage_too_low": "Nachtfenster zu wenig abgedeckt",
+          "morning_window_coverage_too_low": "Morgenfenster zu wenig abgedeckt",
+          "evening_window_coverage_too_low": "Abendfenster zu wenig abgedeckt",
+          "data_quality_too_low": "Datenqualität zu niedrig",
+          "no_price_data": "Keine Preisdaten verfügbar",
+          "no_deadline": "Keine gültige Deadline",
+          "no_charge_needed": "Keine Nachladung erforderlich",
+          "invalid_search_space": "Kein gültiger Suchraum",
+          "deadline_too_close_start_now": "Deadline zu nah, sofort starten",
+          "latest_start_reached": "Spätester Startzeitpunkt erreicht"
+        }
+      },
+      "learned_planning_history_days": {
+        "name": "Diagnose: Lernplanung Historientage"
+      },
+      "learned_planning_usable_days": {
+        "name": "Diagnose: Lernplanung Nutzbare Tage"
+      },
+      "learned_planning_data_coverage": {
+        "name": "Diagnose: Lernplanung Datenabdeckung"
+      },
+      "learned_planning_sample_count": {
+        "name": "Diagnose: Lernplanung Samples"
+      },
+      "learned_planning_expected_consumption_kwh": {
+        "name": "Diagnose: Lernplanung erwarteter Verbrauch"
+      },
+      "learned_planning_available_battery_energy_kwh": {
+        "name": "Diagnose: Lernplanung verfügbare Akkuenergie"
+      },
+      "learned_planning_reserve_margin_kwh": {
+        "name": "Diagnose: Lernplanung Reserve"
+      },
+      "learned_planning_forecast_adjustment_kwh": {
+        "name": "Diagnose: Lernplanung Forecast-Zuschlag"
+      },
+      "learned_planning_effective_charge_power_w": {
+        "name": "Diagnose: Lernplanung effektive Ladeleistung"
+      },
+      "learned_planning_effective_window_slots": {
+        "name": "Diagnose: Lernplanung Fensterslots"
+      },
+      "learned_planning_window_score": {
+        "name": "Diagnose: Lernplanung Fensterscore"
+      },
       "forecast_remaining_today_kwh": {
         "name": "PV-Prognose heute"
       },
@@ -505,6 +589,11 @@
           "planning_latest_start": "Preisladung gestartet (spätester sinnvoller Startzeitpunkt erreicht)",
           "planning_forecast_poor": "Preisladung wegen schwacher PV-Prognose",
           "planning_forecast_mixed": "Preisladung bei gemischter PV-Prognose",
+          "learned_charge_window_not_ready": "Lernbasierte Ladeplanung noch nicht bereit",
+          "learned_charge_window_wait": "Lernbasierte Ladeplanung wartet auf optimales Ladefenster",
+          "learned_charge_window_active": "Lernbasiertes Ladefenster aktiv",
+          "learned_charge_window_latest_start_reached": "Lernplanung: spätester Startzeitpunkt erreicht",
+          "learned_charge_window_no_charge_needed": "Lernplanung: keine Nachladung erforderlich",
           "valley_opportunity_charge": "Preis-Tal genutzt, da real kaum PV verfügbar ist",
           "valley_opportunity_charge_mixed_forecast": "Preis-Tal genutzt bei gemischter Prognose und schwacher realer PV",
           "valley_boost_charge_mixed_forecast": "Preis-Tal erkannt, aber wegen gemischter PV-Prognose abgeschwächt",
