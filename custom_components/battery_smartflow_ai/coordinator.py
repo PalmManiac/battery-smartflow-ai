@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -114,6 +114,12 @@ from .decision_engine import (
     PricePoint,
 )
 from .forecast import build_forecast_summary
+from .learned_planning import (
+    LearningSample,
+    build_learned_charge_plan,
+    build_slot_model,
+    evaluate_readiness,
+)
 
 _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
@@ -253,6 +259,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             # Forecast / reality override
             "forecast_wait_block_counter": 0,
+
+            # V4.1.0 learned charge-window planning
+            "learned_load_slots": {},
+            "learned_load_last_ts": None,
 
             # SF800Pro PV house-load passthrough hysteresis
             "pv_houseload_passthrough_active": False,
@@ -543,6 +553,140 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return 0.0
 
         return pack_capacity * packs
+
+    def _learning_slot_start(self, ts: datetime) -> datetime:
+        """Return the local 15-minute slot start for a timestamp."""
+        local = dt_util.as_local(ts)
+
+        minute = (local.minute // 15) * 15
+
+        slot_local = local.replace(
+            minute=minute,
+            second=0,
+            microsecond=0,
+        )
+
+        return dt_util.as_utc(slot_local)
+
+    def _update_learned_load_history(
+        self,
+        now: datetime,
+        house_load_w: float,
+    ) -> None:
+        """Accumulate learned house-load energy into 15-minute slots.
+
+        Stored format:
+            learned_load_slots = {
+                "<slot_start_utc_iso>": energy_kwh
+            }
+
+        We store already aggregated 15-minute slot energy, not every 10-second
+        sample, so the Store remains small enough for long-term use.
+        """
+        now_utc = dt_util.as_utc(now)
+
+        slots_raw = self._persist.get("learned_load_slots", {})
+        if not isinstance(slots_raw, dict):
+            slots_raw = {}
+
+        last_raw = self._persist.get("learned_load_last_ts")
+        if not last_raw:
+            self._persist["learned_load_last_ts"] = now_utc.isoformat()
+            self._persist["learned_load_slots"] = slots_raw
+            return
+
+        try:
+            last_dt = dt_util.parse_datetime(str(last_raw))
+            if last_dt is None:
+                raise ValueError("invalid learned_load_last_ts")
+            last_utc = dt_util.as_utc(last_dt)
+        except Exception:
+            self._persist["learned_load_last_ts"] = now_utc.isoformat()
+            self._persist["learned_load_slots"] = slots_raw
+            return
+
+        delta_seconds = (now_utc - last_utc).total_seconds()
+
+        if delta_seconds <= 0:
+            self._persist["learned_load_last_ts"] = now_utc.isoformat()
+            self._persist["learned_load_slots"] = slots_raw
+            return
+
+        max_gap_seconds = max(60.0, float(UPDATE_INTERVAL) * 3.0)
+        usable_seconds = min(delta_seconds, max_gap_seconds)
+
+        load_w = max(0.0, min(float(house_load_w or 0.0), 20000.0))
+        energy_kwh = load_w * (usable_seconds / 3600.0) / 1000.0
+
+        if energy_kwh > 0.0:
+            midpoint = last_utc + timedelta(seconds=usable_seconds / 2.0)
+            slot_start = self._learning_slot_start(midpoint)
+            key = slot_start.isoformat()
+
+            old = 0.0
+            try:
+                old = float(slots_raw.get(key, 0.0) or 0.0)
+            except Exception:
+                old = 0.0
+
+            slots_raw[key] = round(old + energy_kwh, 6)
+
+        cutoff = now_utc - timedelta(days=15)
+        cleaned: dict[str, float] = {}
+
+        for key, value in slots_raw.items():
+            try:
+                slot_dt = dt_util.parse_datetime(str(key))
+                if slot_dt is None:
+                    continue
+
+                slot_utc = dt_util.as_utc(slot_dt)
+                if slot_utc < cutoff:
+                    continue
+
+                val = float(value or 0.0)
+                if val <= 0.0:
+                    continue
+
+                cleaned[slot_utc.isoformat()] = round(val, 6)
+            except Exception:
+                continue
+
+        self._persist["learned_load_slots"] = cleaned
+        self._persist["learned_load_last_ts"] = now_utc.isoformat()
+
+    def _get_learned_load_samples(self) -> list[LearningSample]:
+        """Convert persisted 15-minute slot energy into LearningSample objects."""
+        slots_raw = self._persist.get("learned_load_slots", {})
+        if not isinstance(slots_raw, dict):
+            return []
+
+        samples: list[LearningSample] = []
+
+        for key, value in slots_raw.items():
+            try:
+                start = dt_util.parse_datetime(str(key))
+                if start is None:
+                    continue
+
+                start = dt_util.as_utc(start)
+                energy_kwh = float(value or 0.0)
+
+                if energy_kwh <= 0.0:
+                    continue
+
+                samples.append(
+                    LearningSample(
+                        start=start,
+                        end=start + timedelta(minutes=15),
+                        energy_kwh=energy_kwh,
+                    )
+                )
+            except Exception:
+                continue
+
+        samples.sort(key=lambda s: s.start)
+        return samples
 
     def _update_pv_charge_hysteresis(
         self,
@@ -1622,6 +1766,38 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 - float(battery_charge_w)
             )
 
+            # V4.1.0 learned charge-window planning:
+            # Data collection and diagnostics only. No decision impact yet.
+            self._update_learned_load_history(
+                now=now,
+                house_load_w=float(house_load),
+            )
+
+            learned_samples = self._get_learned_load_samples()
+
+            learned_slot_model = build_slot_model(
+                samples=learned_samples,
+                now=now,
+            )
+
+            learned_readiness = evaluate_readiness(learned_slot_model)
+
+            learned_charge_plan = build_learned_charge_plan(
+                model=learned_slot_model,
+                readiness=learned_readiness,
+                now=now,
+                price_points=price_points,
+                forecast=forecast_summary,
+                total_battery_capacity_kwh=float(battery_capacity_kwh),
+                current_soc=float(soc),
+                soc_min=float(soc_min),
+                soc_max=float(soc_max),
+                profile_charge_limit_w=float(max_charge),
+                current_effective_charge_cap_w=float(max_charge),
+                learned_typical_charge_power_w=None,
+                force_active=False,
+            )
+
             season = self._season_detection(
                 pv_w=pv_w,
                 export_w=float(grid_export),
@@ -2202,6 +2378,60 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist.get("forecast_wait_block_counter", 0)
                 ),
                 "forecast_base_load_w": float(forecast_base_load_w),
+
+                # V4.1.0 learned charge-window planning diagnostics
+                "learned_planning_status": learned_charge_plan.status,
+                "learned_planning_mode": learned_charge_plan.mode,
+                "learned_planning_blocking_reason": learned_charge_plan.blocking_reason,
+                "learned_planning_decision_reason": learned_charge_plan.decision_reason,
+                "learned_planning_history_days": int(learned_readiness.history_days),
+                "learned_planning_usable_days": int(learned_readiness.usable_days),
+                "learned_planning_night_window_days": int(learned_readiness.night_window_days),
+                "learned_planning_morning_window_days": int(learned_readiness.morning_window_days),
+                "learned_planning_evening_window_days": int(learned_readiness.evening_window_days),
+                "learned_planning_data_coverage": round(float(learned_readiness.data_coverage), 3),
+                "learned_planning_sample_count": len(learned_samples),
+                "learned_planning_expected_consumption_kwh": float(
+                    learned_charge_plan.expected_consumption_kwh
+                ),
+                "learned_planning_available_battery_energy_kwh": float(
+                    learned_charge_plan.available_battery_energy_kwh
+                ),
+                "learned_planning_reserve_margin_kwh": float(
+                    learned_charge_plan.reserve_margin_kwh
+                ),
+                "learned_planning_forecast_adjustment_kwh": float(
+                    learned_charge_plan.forecast_adjustment_kwh
+                ),
+                "learned_planning_required_charge_energy_kwh": float(
+                    learned_charge_plan.required_charge_energy_kwh
+                ),
+                "learned_planning_effective_charge_power_w": float(
+                    learned_charge_plan.effective_charge_power_w
+                ),
+                "learned_planning_effective_window_slots": int(
+                    learned_charge_plan.effective_window_slots
+                ),
+                "learned_planning_effective_window_minutes": int(
+                    learned_charge_plan.effective_window_minutes
+                ),
+                "learned_planning_deadline": (
+                    learned_charge_plan.planning_deadline.isoformat()
+                    if learned_charge_plan.planning_deadline
+                    else None
+                ),
+                "learned_planning_deadline_reason": learned_charge_plan.deadline_reason,
+                "learned_planning_optimal_charge_start": (
+                    learned_charge_plan.optimal_charge_start.isoformat()
+                    if learned_charge_plan.optimal_charge_start
+                    else None
+                ),
+                "learned_planning_optimal_charge_end": (
+                    learned_charge_plan.optimal_charge_end.isoformat()
+                    if learned_charge_plan.optimal_charge_end
+                    else None
+                ),
+                "learned_planning_window_score": learned_charge_plan.window_score,
             }
 
             def _iso_or_none(val):
