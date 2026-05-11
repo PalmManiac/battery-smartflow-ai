@@ -176,7 +176,7 @@ def _slot_start_for_date(day: date, slot: int) -> datetime:
     minutes = slot * SLOT_MINUTES
     base = datetime.combine(day, time(0, 0))
     local_tz = dt_util.get_default_time_zone()
-    base = dt_util.replace(base, tzinfo=local_tz)
+    base = base.replace(tzinfo=local_tz)
     return base + timedelta(minutes=minutes)
 
 
@@ -610,8 +610,7 @@ def choose_deadline(
 
     tomorrow = now_local.date()
     morning_deadline = datetime.combine(tomorrow, time(6, 0))
-    morning_deadline = dt_util.replace(
-        morning_deadline,
+    morning_deadline = morning_deadline.replace(
         tzinfo=dt_util.get_default_time_zone(),
     )
 
@@ -622,8 +621,7 @@ def choose_deadline(
         return morning_deadline, DEADLINE_REASON_BEFORE_TYPICAL_MORNING_LOAD
 
     fallback = datetime.combine(now_local.date() + timedelta(days=1), time(6, 0))
-    fallback = dt_util.replace(
-        fallback,
+    fallback = fallback.replace(
         tzinfo=dt_util.get_default_time_zone(),
     )
 
