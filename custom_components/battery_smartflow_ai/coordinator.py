@@ -1358,7 +1358,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if not dt:
                 return None
             if dt.tzinfo is None:
-                return dt_util.replace(dt, tzinfo=tz)
+                return dt.replace(tzinfo=tz)
             return dt.astimezone(tz)
 
         now = normalize(now)
