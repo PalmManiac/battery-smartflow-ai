@@ -4,7 +4,7 @@ import math
 import statistics
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from typing import Literal, Optional
+from typing import Literal
 
 from homeassistant.util import dt as dt_util
 
@@ -723,9 +723,16 @@ def build_learned_charge_plan(
     learned_typical_charge_power_w: float | None = None,
     force_active: bool = False,
 ) -> LearnedChargePlan:
-    """Build a complete learned charge plan summary."""
+    """Build a complete learned charge plan summary.
 
-    if not readiness.ready:
+    Important:
+    - If readiness is not ready, the function still calculates diagnostic values.
+    - In that case, mode stays classic_fallback and the plan must not actively control charging.
+    """
+
+    diagnostics_only = not readiness.ready
+
+    if diagnostics_only and model.history_days <= 0:
         return LearnedChargePlan(
             status=readiness.status,
             mode=LEARNED_MODE_CLASSIC_FALLBACK,
@@ -776,9 +783,11 @@ def build_learned_charge_plan(
 
     if required_kwh <= 0.0:
         return LearnedChargePlan(
-            status=LEARNED_STATUS_ACTIVE if force_active else readiness.status,
-            mode=LEARNED_MODE_READY,
-            blocking_reason=None,
+            status=readiness.status if diagnostics_only else (
+                LEARNED_STATUS_ACTIVE if force_active else readiness.status
+            ),
+            mode=LEARNED_MODE_CLASSIC_FALLBACK if diagnostics_only else LEARNED_MODE_READY,
+            blocking_reason=readiness.blocking_reason if diagnostics_only else None,
             expected_consumption_kwh=round(expected_kwh, 3),
             available_battery_energy_kwh=round(available_kwh, 3),
             reserve_margin_kwh=round(reserve_kwh, 3),
@@ -789,7 +798,7 @@ def build_learned_charge_plan(
             effective_charge_power_w=round(eff_power_w, 1),
             planning_deadline=deadline,
             deadline_reason=deadline_reason,
-            decision_reason=LEARNED_REASON_NO_CHARGE_NEEDED,
+            decision_reason=LEARNED_REASON_NOT_READY if diagnostics_only else LEARNED_REASON_NO_CHARGE_NEEDED,
         )
 
     window_slots, window_minutes = compute_window_slots(
@@ -810,6 +819,8 @@ def build_learned_charge_plan(
             required_charge_energy_kwh=round(required_kwh, 3),
             max_chargeable_energy_kwh=round(chargeable_kwh, 3),
             effective_charge_power_w=round(eff_power_w, 1),
+            effective_window_slots=int(window_slots),
+            effective_window_minutes=int(window_minutes),
             planning_deadline=deadline,
             deadline_reason=deadline_reason,
             decision_reason=LEARNED_REASON_NOT_READY,
@@ -837,10 +848,19 @@ def build_learned_charge_plan(
         mode = LEARNED_MODE_WAIT
         decision_reason = LEARNED_REASON_WAIT
 
+    if diagnostics_only:
+        mode = LEARNED_MODE_CLASSIC_FALLBACK
+        decision_reason = LEARNED_REASON_NOT_READY
+        blocking_reason = readiness.blocking_reason
+        status = readiness.status
+    else:
+        blocking_reason = None
+        status = LEARNED_STATUS_ACTIVE if force_active else readiness.status
+
     return LearnedChargePlan(
-        status=LEARNED_STATUS_ACTIVE if force_active else readiness.status,
+        status=status,
         mode=mode,
-        blocking_reason=None,
+        blocking_reason=blocking_reason,
         expected_consumption_kwh=round(expected_kwh, 3),
         available_battery_energy_kwh=round(available_kwh, 3),
         reserve_margin_kwh=round(reserve_kwh, 3),
