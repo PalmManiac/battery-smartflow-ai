@@ -351,7 +351,8 @@
           "emergency": "Notladung",
           "manual": "Manuelle Ladestrategie",
           "valley_opportunity": "Opportunistische Tal-Ladung",
-          "valley_opportunity_mixed": "Opportunistische Tal-Ladung bei gemischter Prognose"
+          "valley_opportunity_mixed": "Opportunistische Tal-Ladung bei gemischter Prognose",
+		  "learned_planning": "Lernbasierte Ladefenster-Planung"
         }
       },
       "learned_planning_status": {

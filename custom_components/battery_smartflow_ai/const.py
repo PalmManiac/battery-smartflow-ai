@@ -257,6 +257,7 @@ NEXT_ACTION_STATE_ENUMS = [
     "manual_discharge",
     "manual_constant_discharge",
     "emergency_charge",
+    "pv_house_load_passthrough_active",
 ]
 
 NEXT_PLANNED_ACTION_ENUMS = [
@@ -329,6 +330,9 @@ CHARGE_STRATEGY_ENUMS = [
     "very_cheap",
     "emergency",
     "manual",
+    "valley_opportunity",
+    "valley_opportunity_mixed",
+    "learned_planning",
 ]
 
 # ==================================================
