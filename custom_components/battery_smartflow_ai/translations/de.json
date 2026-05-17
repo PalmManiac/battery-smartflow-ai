@@ -201,12 +201,14 @@
       },
       "expert": {
         "title": "Regelprofil bearbeiten – Expertenmodus",
-        "description": "Erweiterte Schutz- und Diagnosefunktionen. Aktiviere zuerst den Expertenmodus. Danach kann optional der Zellspannungs-Schutz aktiviert werden. Bei aktivem Zellspannungs-Schutz werden zusätzliche Sensoren passend zur eingestellten Akku-Anzahl angezeigt.",
+        "description": "Erweiterte Schutz-, Diagnose- und Planungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
         "data": {
-          "expert_mode_enabled": "Expertenmodus aktivieren"
+          "expert_mode_enabled": "Expertenmodus aktivieren",
+          "learned_planning_enabled": "Lernbasierte Ladefenster-Planung verwenden"
         },
         "data_description": {
-          "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen."
+          "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen.",
+          "learned_planning_enabled": "Wenn aktiviert, nutzt Battery SmartFlow AI die lernbasierte Ladefenster-Planung automatisch, sobald genügend Lerndaten vorhanden sind. Bis dahin bleibt die klassische Planung aktiv. Wenn deaktiviert, wird dauerhaft die klassische Planung verwendet."
         }
       },
       "expert_cell_voltage": {

@@ -47,9 +47,11 @@ from .const import (
     SETTING_CELL_VOLTAGE_WARNING,
     SETTING_CELL_VOLTAGE_CUTOFF,
     SETTING_CELL_VOLTAGE_RESUME,
+    SETTING_LEARNED_PLANNING_ENABLED,
     DEFAULT_CELL_VOLTAGE_WARNING,
     DEFAULT_CELL_VOLTAGE_CUTOFF,
     DEFAULT_CELL_VOLTAGE_RESUME,
+    DEFAULT_LEARNED_PLANNING_ENABLED,
 )
 
 from .device_profiles import DEVICE_PROFILES, PROFILE_OVERRIDE_FIELDS
@@ -567,6 +569,11 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             merged_options[CONF_CELL_VOLTAGE_PROTECTION_ENABLED] = bool(
                 user_input[CONF_CELL_VOLTAGE_PROTECTION_ENABLED]
             )
+            
+        if SETTING_LEARNED_PLANNING_ENABLED in user_input:
+            merged_options[SETTING_LEARNED_PLANNING_ENABLED] = bool(
+                user_input[SETTING_LEARNED_PLANNING_ENABLED]
+            )
 
         for key in LOWEST_CELL_VOLTAGE_CONFIG_KEYS:
             if key in user_input:
@@ -891,6 +898,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         options_schema = vol.Schema(
             {
                 vol.Optional(CONF_EXPERT_MODE_ENABLED): selector.BooleanSelector(),
+                vol.Optional(SETTING_LEARNED_PLANNING_ENABLED): selector.BooleanSelector(),
             }
         )
 
@@ -898,6 +906,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             CONF_EXPERT_MODE_ENABLED: preview.get(
                 CONF_EXPERT_MODE_ENABLED,
                 DEFAULT_EXPERT_MODE_ENABLED,
+            ),
+            SETTING_LEARNED_PLANNING_ENABLED: preview.get(
+                SETTING_LEARNED_PLANNING_ENABLED,
+                DEFAULT_LEARNED_PLANNING_ENABLED,
             ),
         }
 

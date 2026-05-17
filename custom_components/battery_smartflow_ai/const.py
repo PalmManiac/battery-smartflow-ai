@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.1.0-Test1"
+INTEGRATION_VERSION = "4.1.0-Test2"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -117,7 +117,7 @@ DEFAULT_PV_CHARGE_START_EXPORT_W = 80.0
 
 DEFAULT_FORECAST_BASE_LOAD = 300.0
 
-DEFAULT_LEARNED_PLANNING_ENABLED = False
+DEFAULT_LEARNED_PLANNING_ENABLED = True
 
 # --------------------------------------------------
 # Device profiles (V1.5.x / V3.2.0 overrides)
