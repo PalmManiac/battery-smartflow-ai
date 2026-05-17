@@ -1906,6 +1906,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_houseload_passthrough_active=bool(pv_houseload_passthrough_active),
                 pv_houseload_passthrough_target_w=float(pv_houseload_passthrough_target_w),
                 pv_houseload_passthrough_stop_reason=str(pv_houseload_passthrough_stop_reason),
+                learned_charge_plan=learned_charge_plan,
+                learned_planning_enabled=False,
             )
 
             base_required_kwh = (

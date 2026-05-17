@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from .const import MANUAL_CONST_DISCHARGE
 from .forecast import ForecastSummary
@@ -71,6 +71,12 @@ class DecisionContext:
 
     # V4.0.0 optional forecast input
     forecast: Optional[ForecastSummary] = None
+    
+    # V4.1.0 learned charge-window planning
+    # Passed in from coordinator as an object from learned_planning.py.
+    # Keep this typed as Any to avoid circular imports.
+    learned_charge_plan: Any | None = None
+    learned_planning_enabled: bool = False
 
     # Runtime counters / debounce
     pv_charge_start_counter: int = 0
@@ -224,6 +230,111 @@ class ArbitrageRule(BaseRule):
             )
         return None
 
+class LearnedPlanningRule(BaseRule):
+    def evaluate(self, engine, ctx):
+        """V4.1.0 learned charge-window planning.
+
+        Safe activation gate:
+        - completely inactive unless learned_planning_enabled is True
+        - only uses plans with status ready/active
+        - only handles learned wait/charge decisions
+        - classic planning remains fallback
+        """
+        if not bool(getattr(ctx, "learned_planning_enabled", False)):
+            return None
+
+        plan = getattr(ctx, "learned_charge_plan", None)
+        if plan is None:
+            return None
+
+        if ctx.ai_mode not in ("automatic", "winter"):
+            return None
+
+        if ctx.soc >= ctx.soc_max:
+            return None
+
+        if ctx.price_now is None or not ctx.price_points:
+            return None
+
+        if ctx.battery_capacity_kwh <= 0 or ctx.max_charge_w <= 0:
+            return None
+
+        if float(ctx.additional_battery_discharge_w or 0.0) > 50.0:
+            return None
+
+        if float(ctx.additional_battery_charge_w or 0.0) > 0.0:
+            return None
+
+        status = str(getattr(plan, "status", "") or "")
+        mode = str(getattr(plan, "mode", "") or "")
+        decision_reason = str(getattr(plan, "decision_reason", "") or "")
+
+        if status not in ("ready", "active"):
+            return None
+
+        required_kwh = float(
+            getattr(plan, "required_charge_energy_kwh", 0.0) or 0.0
+        )
+        if required_kwh <= 0.0:
+            return None
+
+        if decision_reason == "learned_charge_window_no_charge_needed":
+            return None
+
+        if mode == "wait" or decision_reason == "learned_charge_window_wait":
+            return engine._with_thresholds(
+                ctx,
+                DecisionResult(
+                    action="idle",
+                    ac_mode="output",
+                    charge_w=0.0,
+                    discharge_w=0.0,
+                    reason="learned_charge_window_wait",
+                    target_soc=ctx.soc_max,
+                ),
+            )
+
+        if mode == "charge" or decision_reason in (
+            "learned_charge_window_active",
+            "learned_charge_window_latest_start_reached",
+            "learned_charge_window_deadline_too_close_start_now",
+        ):
+            planned_power_w = float(
+                getattr(plan, "effective_charge_power_w", 0.0) or 0.0
+            )
+
+            if planned_power_w <= 0.0:
+                planned_power_w = float(ctx.max_charge_w)
+
+            charge_w = min(
+                float(ctx.max_charge_w),
+                max(100.0, planned_power_w),
+            )
+
+            reason = (
+                decision_reason
+                if decision_reason
+                in (
+                    "learned_charge_window_active",
+                    "learned_charge_window_latest_start_reached",
+                    "learned_charge_window_deadline_too_close_start_now",
+                )
+                else "learned_charge_window_active"
+            )
+
+            return engine._with_thresholds(
+                ctx,
+                DecisionResult(
+                    action="charge",
+                    ac_mode="input",
+                    charge_w=charge_w,
+                    discharge_w=0.0,
+                    reason=reason,
+                    target_soc=ctx.soc_max,
+                ),
+            )
+
+        return None
 
 class PlanningRule(BaseRule):
     def evaluate(self, engine, ctx):
@@ -624,6 +735,7 @@ class DecisionEngine:
             PvRule(),
             PeakRule(),
             ArbitrageRule(),
+            LearnedPlanningRule(),
             PlanningRule(),
             ValleyBoostRule(),
             ValleyOpportunityRule(),
