@@ -605,11 +605,6 @@
           "cell_voltage_cutoff_block": "Entladung blockiert (Zellspannungs-Schutz aktiv)",
           "cell_voltage_emergency_charge": "Notladung aktiv (Zellspannung kritisch)",
           "pv_charge_blocked_by_discharge_protection": "PV-Ladung blockiert, da Entladung noch durch SoC-/Zellschutz gesperrt ist",
-		  "learned_charge_window_not_ready": "Lernplanung noch nicht bereit",
-          "learned_charge_window_wait": "Lernplanung wartet auf optimales Ladefenster",
-          "learned_charge_window_active": "Lernplanung: Ladefenster aktiv",
-          "learned_charge_window_latest_start_reached": "Lernplanung: spätester Start erreicht",
-          "learned_charge_window_no_charge_needed": "Lernplanung: keine Nachladung nötig",
           "learned_charge_window_deadline_too_close_start_now": "Lernplanung: Deadline zu nah, Start jetzt"
         }
       },

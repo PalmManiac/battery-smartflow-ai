@@ -60,6 +60,7 @@ from .const import (
     SETTING_CELL_VOLTAGE_RESUME,
     SETTING_PV_CHARGE_START_EXPORT_W,
     SETTING_FORECAST_BASE_LOAD,
+    SETTING_LEARNED_PLANNING_ENABLED,
     # defaults
     DEFAULT_SOC_MIN,
     DEFAULT_SOC_MAX,
@@ -82,6 +83,7 @@ from .const import (
     DEFAULT_CELL_VOLTAGE_RESUME,
     DEFAULT_PV_CHARGE_START_EXPORT_W,
     DEFAULT_FORECAST_BASE_LOAD,
+    DEFAULT_LEARNED_PLANNING_ENABLED,
     # modes
     AI_MODE_AUTOMATIC,
     AI_MODE_SUMMER,
@@ -1661,6 +1663,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 SETTING_FORECAST_BASE_LOAD,
                 DEFAULT_FORECAST_BASE_LOAD,
             )
+            learned_planning_enabled = bool(
+                self.entry.options.get(
+                    SETTING_LEARNED_PLANNING_ENABLED,
+                    DEFAULT_LEARNED_PLANNING_ENABLED,
+                )
+            )
 
             ai_mode = str(self.runtime_mode.get("ai_mode", AI_MODE_AUTOMATIC))
             manual_action = str(self.runtime_mode.get("manual_action", MANUAL_STANDBY))
@@ -1907,7 +1915,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_houseload_passthrough_target_w=float(pv_houseload_passthrough_target_w),
                 pv_houseload_passthrough_stop_reason=str(pv_houseload_passthrough_stop_reason),
                 learned_charge_plan=learned_charge_plan,
-                learned_planning_enabled=False,
+                learned_planning_enabled=bool(learned_planning_enabled),
             )
 
             base_required_kwh = (
@@ -2185,6 +2193,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_houseload_passthrough_active=bool(pv_houseload_passthrough_active),
                 pv_houseload_passthrough_target_w=float(pv_houseload_passthrough_target_w),
                 pv_houseload_passthrough_stop_reason=str(pv_houseload_passthrough_stop_reason),
+                learned_charge_plan=learned_charge_plan,
+                learned_planning_enabled=bool(learned_planning_enabled),
             )
 
             transparency_result = self._engine._with_thresholds(
@@ -2434,6 +2444,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     else None
                 ),
                 "learned_planning_window_score": learned_charge_plan.window_score,
+                "learned_planning_enabled": bool(learned_planning_enabled),
             }
 
             def _iso_or_none(val):
