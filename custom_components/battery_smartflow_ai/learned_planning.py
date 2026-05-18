@@ -152,6 +152,17 @@ class LearnedChargePlan:
     selected_prices: list[float] = field(default_factory=list)
 
 
+@dataclass
+class LearnedProfileDiagnostics:
+    """Transparency values derived from the learned 96-slot load profile."""
+
+    typical_daily_consumption_kwh: float = 0.0
+    average_house_load_w: float = 0.0
+    current_slot_consumption_kwh: float = 0.0
+    current_slot_average_w: float = 0.0
+    current_slot_index: int = 0
+    
+
 def _as_local(dt: datetime) -> datetime:
     return dt_util.as_local(dt)
 
@@ -222,6 +233,35 @@ def _triangle_weights(slot_count: int) -> list[float]:
 
     return [float(v) / total for v in raw]
 
+
+def build_profile_diagnostics(
+    model: LearnedSlotModel,
+    now: datetime,
+) -> LearnedProfileDiagnostics:
+    """Build simple transparency values from the learned daily load profile."""
+
+    if model is None or not model.slot_kwh:
+        return LearnedProfileDiagnostics()
+
+    typical_daily_kwh = max(0.0, float(sum(model.slot_kwh)))
+    average_house_load_w = (typical_daily_kwh / 24.0) * 1000.0
+
+    slot = _slot_index(now)
+    current_slot_kwh = 0.0
+
+    if 0 <= slot < len(model.slot_kwh):
+        current_slot_kwh = max(0.0, float(model.slot_kwh[slot] or 0.0))
+
+    current_slot_average_w = current_slot_kwh / (SLOT_MINUTES / 60.0)
+
+    return LearnedProfileDiagnostics(
+        typical_daily_consumption_kwh=round(typical_daily_kwh, 3),
+        average_house_load_w=round(average_house_load_w, 1),
+        current_slot_consumption_kwh=round(current_slot_kwh, 3),
+        current_slot_average_w=round(current_slot_average_w, 1),
+        current_slot_index=int(slot),
+    )
+    
 
 def _forecast_outlook(forecast: ForecastSummary | None) -> str:
     if forecast is None:

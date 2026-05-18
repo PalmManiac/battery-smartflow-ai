@@ -441,6 +441,18 @@
       "learned_planning_window_score": {
         "name": "Diagnose: Lernplanung Fensterscore"
       },
+	  "learned_profile_typical_daily_consumption_kwh": {
+        "name": "Diagnose: Lernplanung typischer Tagesverbrauch"
+      },
+      "learned_profile_average_house_load_w": {
+        "name": "Diagnose: Lernplanung Ø Hauslast gelernt"
+      },
+      "learned_profile_current_slot_consumption_kwh": {
+        "name": "Diagnose: Lernplanung aktueller Slot-Verbrauch"
+      },
+      "learned_profile_current_slot_average_w": {
+        "name": "Diagnose: Lernplanung aktueller Slot Ø Leistung"
+      },
       "forecast_remaining_today_kwh": {
         "name": "PV-Prognose heute"
       },

@@ -119,6 +119,7 @@ from .forecast import build_forecast_summary
 from .learned_planning import (
     LearningSample,
     build_learned_charge_plan,
+    build_profile_diagnostics,
     build_slot_model,
     evaluate_readiness,
 )
@@ -1787,6 +1788,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 samples=learned_samples,
                 now=now,
             )
+            learned_profile_diagnostics = build_profile_diagnostics(
+                model=learned_slot_model,
+                now=now,
+            )
 
             learned_readiness = evaluate_readiness(learned_slot_model)
 
@@ -2445,6 +2450,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "learned_planning_window_score": learned_charge_plan.window_score,
                 "learned_planning_enabled": bool(learned_planning_enabled),
+                "learned_profile_typical_daily_consumption_kwh": float(
+                    learned_profile_diagnostics.typical_daily_consumption_kwh
+                ),
+                "learned_profile_average_house_load_w": float(
+                    learned_profile_diagnostics.average_house_load_w
+                ),
+                "learned_profile_current_slot_consumption_kwh": float(
+                    learned_profile_diagnostics.current_slot_consumption_kwh
+                ),
+                "learned_profile_current_slot_average_w": float(
+                    learned_profile_diagnostics.current_slot_average_w
+                ),
+                "learned_profile_current_slot_index": int(
+                    learned_profile_diagnostics.current_slot_index
+                ),
             }
 
             def _iso_or_none(val):

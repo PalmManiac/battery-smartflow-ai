@@ -371,6 +371,34 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         icon="mdi:chart-bell-curve",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    ZendureSensorEntityDescription(
+        key="learned_profile_typical_daily_consumption_kwh",
+        translation_key="learned_profile_typical_daily_consumption_kwh",
+        runtime_key="learned_profile_typical_daily_consumption_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:home-lightning-bolt-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="learned_profile_average_house_load_w",
+        translation_key="learned_profile_average_house_load_w",
+        runtime_key="learned_profile_average_house_load_w",
+        native_unit_of_measurement="W",
+        icon="mdi:home-analytics",
+    ),
+    ZendureSensorEntityDescription(
+        key="learned_profile_current_slot_consumption_kwh",
+        translation_key="learned_profile_current_slot_consumption_kwh",
+        runtime_key="learned_profile_current_slot_consumption_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:clock-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="learned_profile_current_slot_average_w",
+        translation_key="learned_profile_current_slot_average_w",
+        runtime_key="learned_profile_current_slot_average_w",
+        native_unit_of_measurement="W",
+        icon="mdi:clock-fast",
+    ),
 
     # --------------------------------------------------
     # PRICE TRANSPARENCY
