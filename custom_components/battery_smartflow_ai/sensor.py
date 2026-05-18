@@ -377,6 +377,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="learned_profile_typical_daily_consumption_kwh",
         native_unit_of_measurement="kWh",
         icon="mdi:home-lightning-bolt-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ZendureSensorEntityDescription(
         key="learned_profile_average_house_load_w",
@@ -384,6 +385,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="learned_profile_average_house_load_w",
         native_unit_of_measurement="W",
         icon="mdi:home-analytics",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ZendureSensorEntityDescription(
         key="learned_profile_current_slot_consumption_kwh",
@@ -391,6 +393,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="learned_profile_current_slot_consumption_kwh",
         native_unit_of_measurement="kWh",
         icon="mdi:clock-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ZendureSensorEntityDescription(
         key="learned_profile_current_slot_average_w",
@@ -398,6 +401,7 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="learned_profile_current_slot_average_w",
         native_unit_of_measurement="W",
         icon="mdi:clock-fast",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 
     # --------------------------------------------------
