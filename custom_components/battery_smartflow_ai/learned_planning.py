@@ -53,7 +53,7 @@ MIN_USABLE_DAYS = 5
 MIN_CORE_WINDOW_DAYS = 4
 MIN_DATA_COVERAGE = 0.80
 
-DEFAULT_FALLBACK_CHARGE_POWER_W = 600.0
+DEFAULT_FALLBACK_CHARGE_POWER_W = 1200.0
 MIN_EFFECTIVE_CHARGE_POWER_W = 100.0
 
 
@@ -603,6 +603,9 @@ def compute_window_slots(
 
     safety_slots = 1 if base_window_minutes <= 60.0 else 2
     effective_slots = max(2, base_window_slots + safety_slots)
+
+    # Safety cap: prevent unrealistic all-night windows from conservative fallback power.
+    effective_slots = min(effective_slots, 20)
 
     return effective_slots, effective_slots * SLOT_MINUTES
 
