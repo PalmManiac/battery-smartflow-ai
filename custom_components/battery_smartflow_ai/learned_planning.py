@@ -252,7 +252,9 @@ def build_profile_diagnostics(
     if 0 <= slot < len(model.slot_kwh):
         current_slot_kwh = max(0.0, float(model.slot_kwh[slot] or 0.0))
 
-    current_slot_average_w = current_slot_kwh / (SLOT_MINUTES / 60.0)
+    current_slot_average_w = (
+        current_slot_kwh / (SLOT_MINUTES / 60.0)
+    ) * 1000.0
 
     return LearnedProfileDiagnostics(
         typical_daily_consumption_kwh=round(typical_daily_kwh, 3),
