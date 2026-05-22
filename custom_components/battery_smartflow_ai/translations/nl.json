@@ -8,16 +8,17 @@
           "device_profile": "Apparaatprofiel",
           "soc_entity": "Batterij-SoC-sensor",
           "soc_limit_entity": "SoC-limietstatus (optioneel)",
-          "pack_capacity_kwh": "Capaciteit per batterijpakket (kWh)",
-          "battery_ac_power_entity": "Batterijvermogenssensor (W)",
-          "additional_battery_charge_entity": "Laadvermogen extra batterij (optioneel)",
+          "pack_capacity_kwh": "Capaciteit per accupack (kWh)",
+          "battery_ac_power_entity": "Batterij-vermogenssensor (W)",
+          "additional_battery_charge_entity": "Extra batterij laadvermogen (optioneel)",
+          "additional_battery_discharge_entity": "Extra batterij ontlaadvermogen (optioneel)",
           "capacity_entity": "Capaciteitssensor (optioneel)",
           "installed_pv_wp": "Geïnstalleerd PV-vermogen (Wp)",
           "pv_entity": "PV-vermogenssensor",
-          "pv_forecast_today_entity": "PV-verwachting vandaag (optioneel)",
-          "pv_forecast_tomorrow_entity": "PV-verwachting morgen (optioneel)",
-          "price_now_entity": "Huidige elektriciteitsprijs",
-          "price_export_entity": "Prijsverloop (bijv. Tibber / EPEX)",
+          "pv_forecast_today_entity": "PV-voorspelling vandaag (optioneel)",
+          "pv_forecast_tomorrow_entity": "PV-voorspelling morgen (optioneel)",
+          "price_now_entity": "Actuele stroomprijs",
+          "price_export_entity": "Prijsprognose (bijv. Tibber / EPEX)",
           "grid_mode": "Netmeting",
           "grid_power_entity": "Netvermogen (single)",
           "grid_import_entity": "Netafname (split)",
@@ -27,54 +28,55 @@
           "output_limit_entity": "Zendure ontlaadvermogen"
         },
         "data_description": {
-          "device_profile": "Selecteer het juiste apparaatprofiel voor je Zendure-systeem. Het profiel bevat afgestemde regelparameters.",
-          "soc_entity": "Sensor met de huidige laadtoestand (State of Charge) van de batterij in procent. Centrale basis voor alle beslissingen.",
+          "device_profile": "Kies het passende apparaatprofiel voor je Zendure-systeem. Het profiel bevat afgestemde regelparameters.",
+          "soc_entity": "Sensor met de actuele laadstatus (State of Charge) van de batterij in procent. Centrale basis voor alle beslissingen.",
           "soc_limit_entity": "Optionele sensor uit de Zendure-integratie die actieve BMS-limieten meldt, zoals laad- of ontlaadblokkering.",
-          "pack_capacity_kwh": "Bruikbare capaciteit van één batterijpakket in kWh. Wordt vermenigvuldigd met het aantal geïnstalleerde pakketten om de totale capaciteit te berekenen.",
-          "battery_ac_power_entity": "Sensor voor het AC-vermogen van de batterij. De waarde moet positief zijn tijdens ontladen. Aanbevolen: sensor.solarflow_2400_ac_bat_in_out",
+          "pack_capacity_kwh": "Bruikbare capaciteit van één accupack in kWh. Wordt vermenigvuldigd met het aantal geïnstalleerde packs om de totale capaciteit te berekenen.",
+          "battery_ac_power_entity": "Sensor voor het AC-vermogen van de batterij. De waarde moet positief zijn bij ontladen. Aanbevolen: sensor.solarflow_2400_ac_bat_in_out",
           "additional_battery_charge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief laadvermogen meldt, blokkeert Battery SmartFlow AI het ontladen.",
-          "capacity_entity": "Optionele sensor met de automatisch berekende beschikbare batterijcapaciteit in kWh, bijvoorbeeld uit de Zendure-integratie. Indien ingesteld, overschrijft deze de handmatige berekening.",
-          "installed_pv_wp": "Geïnstalleerd theoretisch PV-modulevermogen van het systeem in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-gerelateerde logica.",
-          "pv_entity": "Sensor met het huidige PV-vermogen in watt. Wordt gebruikt om overschot te detecteren.",
-          "pv_forecast_today_entity": "Optionele sensor met de PV-dagverwachting voor vandaag, bijvoorbeeld uit Solcast PV Forecast. De verwachting is alleen een extra planningsinput en geen vereiste voor de integratie.",
-          "pv_forecast_tomorrow_entity": "Optionele sensor met de PV-dagverwachting voor morgen, bijvoorbeeld uit Solcast PV Forecast. De verwachting is alleen een extra planningsinput en geen vereiste voor de integratie.",
-          "price_now_entity": "Sensor met de huidige elektriciteitsprijs, bijvoorbeeld Tibber. Wordt gebruikt voor economische beslissingen.",
-          "price_export_entity": "Sensor met prijsverwachtingsgegevens, bijvoorbeeld Tibber / EPEX. Maakt prijsplanning vooraf mogelijk.",
-          "grid_mode": "Kies hoe je netverbruik wordt gemeten: één gecombineerde sensor of aparte sensoren voor afname en teruglevering.",
-          "grid_power_entity": "Een enkele sensor met positief vermogen bij netafname en negatief vermogen bij teruglevering.",
-          "grid_import_entity": "Sensor met het huidige netafnamevermogen, alleen positieve waarde.",
-          "grid_export_entity": "Sensor met het huidige terugleververmogen, alleen positieve waarde.",
+          "additional_battery_discharge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief ontlaadvermogen meldt, blokkeert Battery SmartFlow AI het laden, zodat er geen batterij-naar-batterij-laden ontstaat.",
+          "capacity_entity": "Optionele sensor met automatisch berekende beschikbare batterijcapaciteit in kWh, bijvoorbeeld uit de Zendure-integratie. Indien ingesteld, overschrijft deze de handmatige berekening.",
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica.",
+          "pv_entity": "Sensor met het actuele PV-vermogen in watt. Wordt gebruikt om overschot te herkennen.",
+          "pv_forecast_today_entity": "Optionele sensor met de PV-dagvoorspelling voor vandaag, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
+          "pv_forecast_tomorrow_entity": "Optionele sensor met de PV-dagvoorspelling voor morgen, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
+          "price_now_entity": "Sensor met de actuele stroomprijs, bijvoorbeeld Tibber. Wordt gebruikt voor economische beslissingen.",
+          "price_export_entity": "Sensor met prijsprognosegegevens, bijvoorbeeld Tibber / EPEX. Maakt prijsplanning mogelijk.",
+          "grid_mode": "Kies hoe je netverbruik wordt gemeten: één gecombineerde sensor of gescheiden sensoren voor afname en teruglevering.",
+          "grid_power_entity": "Eén sensor met positief vermogen bij netafname en negatief vermogen bij teruglevering.",
+          "grid_import_entity": "Sensor met actuele netafname in watt.",
+          "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
           "ac_mode_entity": "Select-entiteit uit de Zendure-integratie die schakelt tussen laden (INPUT) en ontladen (OUTPUT).",
-          "input_limit_entity": "Number-entiteit om het laadvermogen in watt in te stellen.",
-          "output_limit_entity": "Number-entiteit om het ontlaadvermogen in watt in te stellen."
+          "input_limit_entity": "Number-entiteit voor het instellen van het laadvermogen in watt.",
+          "output_limit_entity": "Number-entiteit voor het instellen van het ontlaadvermogen in watt."
         }
       },
       "reconfigure_grid": {
         "title": "Netmeting configureren",
-        "description": "Selecteer de netsensoren passend bij de modus",
+        "description": "Selecteer de net-sensoren passend bij de modus",
         "data": {
           "grid_power_entity": "Netvermogen (single)",
           "grid_import_entity": "Netafname (split)",
           "grid_export_entity": "Netteruglevering (split)"
         },
         "data_description": {
-          "grid_power_entity": "Een enkele sensor met positief vermogen bij afname en negatief vermogen bij teruglevering.",
-          "grid_import_entity": "Sensor met het huidige netafnamevermogen in watt.",
-          "grid_export_entity": "Sensor met het huidige terugleververmogen in watt."
+          "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
+          "grid_import_entity": "Sensor met actuele netafname in watt.",
+          "grid_export_entity": "Sensor met actuele netteruglevering in watt."
         }
       },
       "grid": {
         "title": "Netmeting configureren",
-        "description": "Selecteer de netsensoren passend bij de modus",
+        "description": "Selecteer de net-sensoren passend bij de modus",
         "data": {
           "grid_power_entity": "Netvermogen (single)",
           "grid_import_entity": "Netafname (split)",
           "grid_export_entity": "Netteruglevering (split)"
         },
         "data_description": {
-          "grid_power_entity": "Een enkele sensor met positief vermogen bij afname en negatief vermogen bij teruglevering.",
-          "grid_import_entity": "Sensor met het huidige netafnamevermogen in watt.",
-          "grid_export_entity": "Sensor met het huidige terugleververmogen in watt."
+          "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
+          "grid_import_entity": "Sensor met actuele netafname in watt.",
+          "grid_export_entity": "Sensor met actuele netteruglevering in watt."
         }
       },
       "user": {
@@ -84,16 +86,17 @@
           "device_profile": "Apparaatprofiel",
           "soc_entity": "Batterij-SoC-sensor",
           "soc_limit_entity": "SoC-limietstatus (optioneel)",
-          "pack_capacity_kwh": "Capaciteit per batterijpakket (kWh)",
-          "battery_ac_power_entity": "Batterijvermogenssensor (W)",
-          "additional_battery_charge_entity": "Laadvermogen extra batterij (optioneel)",
+          "pack_capacity_kwh": "Capaciteit per accupack (kWh)",
+          "battery_ac_power_entity": "Batterij-vermogenssensor (W)",
+          "additional_battery_charge_entity": "Extra batterij laadvermogen (optioneel)",
+          "additional_battery_discharge_entity": "Extra batterij ontlaadvermogen (optioneel)",
           "capacity_entity": "Capaciteitssensor (optioneel)",
           "installed_pv_wp": "Geïnstalleerd PV-vermogen (Wp)",
           "pv_entity": "PV-vermogenssensor",
-          "pv_forecast_today_entity": "PV-verwachting vandaag (optioneel)",
-          "pv_forecast_tomorrow_entity": "PV-verwachting morgen (optioneel)",
-          "price_now_entity": "Huidige elektriciteitsprijs",
-          "price_export_entity": "Prijsverloop (bijv. Tibber / EPEX)",
+          "pv_forecast_today_entity": "PV-voorspelling vandaag (optioneel)",
+          "pv_forecast_tomorrow_entity": "PV-voorspelling morgen (optioneel)",
+          "price_now_entity": "Actuele stroomprijs",
+          "price_export_entity": "Prijsprognose (bijv. Tibber / EPEX)",
           "grid_mode": "Netmeting",
           "grid_power_entity": "Netvermogen (single)",
           "grid_import_entity": "Netafname (split)",
@@ -103,24 +106,25 @@
           "output_limit_entity": "Zendure ontlaadvermogen"
         },
         "data_description": {
-          "device_profile": "Selecteer het juiste apparaatprofiel voor je Zendure-systeem. De regelparameters worden automatisch aangepast.",
-          "soc_entity": "Sensor met de huidige laadtoestand van de batterij in procent.",
-          "soc_limit_entity": "Optionele statussensor uit de Zendure-integratie voor het herkennen van actieve BMS-blokkeringen.",
-          "pack_capacity_kwh": "Bruikbare capaciteit van één batterijpakket in kWh. Wordt vermenigvuldigd met het aantal geïnstalleerde pakketten om de totale capaciteit te berekenen.",
-          "battery_ac_power_entity": "Sensor voor het AC-vermogen van de batterij. De waarde moet positief zijn tijdens ontladen. Aanbevolen: sensor.solarflow_2400_ac_bat_in_out",
+          "device_profile": "Kies het passende apparaatprofiel voor je Zendure-systeem. De regelparameters worden automatisch aangepast.",
+          "soc_entity": "Sensor met de actuele laadstatus van de batterij in procent.",
+          "soc_limit_entity": "Optionele statussensor uit de Zendure-integratie om actieve BMS-blokkeringen te herkennen.",
+          "pack_capacity_kwh": "Bruikbare capaciteit van één accupack in kWh. Wordt vermenigvuldigd met het aantal geïnstalleerde packs om de totale capaciteit te berekenen.",
+          "battery_ac_power_entity": "Sensor voor het AC-vermogen van de batterij. De waarde moet positief zijn bij ontladen. Aanbevolen: sensor.solarflow_2400_ac_bat_in_out",
           "additional_battery_charge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief laadvermogen meldt, blokkeert Battery SmartFlow AI het ontladen.",
-          "capacity_entity": "Optionele sensor met de automatisch berekende beschikbare batterijcapaciteit in kWh, bijvoorbeeld uit de Zendure-integratie. Indien ingesteld, overschrijft deze de handmatige berekening.",
-          "installed_pv_wp": "Geïnstalleerd theoretisch PV-modulevermogen van het systeem in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-gerelateerde logica.",
-          "pv_entity": "Sensor met het huidige PV-vermogen in watt.",
-          "pv_forecast_today_entity": "Optionele sensor met de PV-dagverwachting voor vandaag, bijvoorbeeld uit Solcast PV Forecast. De verwachting is alleen een extra planningsinput en geen vereiste voor de integratie.",
-          "pv_forecast_tomorrow_entity": "Optionele sensor met de PV-dagverwachting voor morgen, bijvoorbeeld uit Solcast PV Forecast. De verwachting is alleen een extra planningsinput en geen vereiste voor de integratie.",
-          "price_now_entity": "Huidige elektriciteitsprijs. Maakt prijsafhankelijk ontladen mogelijk.",
-          "price_export_entity": "Prijsverwachtingsgegevens voor de komende uren. Maakt intelligente laadplanning mogelijk.",
-          "grid_mode": "Bepaalt hoe netafname en teruglevering worden gemeten.",
-          "grid_power_entity": "Een gecombineerde netsensor (positief = afname, negatief = teruglevering).",
-          "grid_import_entity": "Sensor voor netafname (split-modus).",
-          "grid_export_entity": "Sensor voor netteruglevering (split-modus).",
-          "ac_mode_entity": "Zendure AC-modus (INPUT/OUTPUT). Wordt automatisch door de integratie aangestuurd.",
+          "additional_battery_discharge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief ontlaadvermogen meldt, blokkeert Battery SmartFlow AI het laden, zodat er geen batterij-naar-batterij-laden ontstaat.",
+          "capacity_entity": "Optionele sensor met automatisch berekende beschikbare batterijcapaciteit in kWh, bijvoorbeeld uit de Zendure-integratie. Indien ingesteld, overschrijft deze de handmatige berekening.",
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica.",
+          "pv_entity": "Sensor met het actuele PV-vermogen in watt.",
+          "pv_forecast_today_entity": "Optionele sensor met de PV-dagvoorspelling voor vandaag, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
+          "pv_forecast_tomorrow_entity": "Optionele sensor met de PV-dagvoorspelling voor morgen, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
+          "price_now_entity": "Actuele stroomprijs. Maakt prijsafhankelijk ontladen mogelijk.",
+          "price_export_entity": "Prijsprognosegegevens voor de komende uren. Maakt intelligente laadplanning mogelijk.",
+          "grid_mode": "Bepaalt hoe netafname en teruglevering worden geregistreerd.",
+          "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
+          "grid_import_entity": "Sensor met actuele netafname in watt.",
+          "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
+          "ac_mode_entity": "Zendure AC-modus (INPUT/OUTPUT). Wordt automatisch door de integratie gestuurd.",
           "input_limit_entity": "Instelbaar laadvermogen in watt.",
           "output_limit_entity": "Instelbaar ontlaadvermogen in watt."
         }
@@ -131,7 +135,7 @@
     "step": {
       "init": {
         "title": "Regelprofiel bewerken",
-        "description": "Selecteer het gebied dat je wilt bewerken. “Algemeen” bevat gedeelde profielparameters, “Laden” bevat de regelwaarden voor laadvermogen, “Ontladen” bevat de regelwaarden voor ontlaadvermogen en “Expertmodus” bevat extra beschermings- en diagnosefuncties.",
+        "description": "Kies welk onderdeel je wilt bewerken. “Algemeen” bevat gedeelde profielparameters, “Laden” de regelwaarden voor laadvermogen, “Ontladen” de regelwaarden voor ontlaadvermogen en “Expertmodus” aanvullende beschermings- en diagnosefuncties.",
         "menu_options": {
           "general": "Algemeen",
           "charge": "Laden",
@@ -145,18 +149,18 @@
         "data": {
           "installed_pv_wp": "Geïnstalleerd PV-vermogen (Wp)",
           "TARGET_IMPORT_W": "Doel-netafname",
-          "EXPORT_GUARD_W": "Exportbescherming",
+          "EXPORT_GUARD_W": "Exportbeveiliging",
           "KEEPALIVE_MIN_DEFICIT_W": "Keepalive minimumtekort",
           "KEEPALIVE_MIN_OUTPUT_W": "Keepalive minimumvermogen",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Ontlaad-hervatting boven SoC-minimum"
+          "SOC_DISCHARGE_RESUME_MARGIN": "Ontladen opnieuw vrijgeven boven SoC-minimum"
         },
         "data_description": {
-          "installed_pv_wp": "Geïnstalleerd theoretisch PV-modulevermogen van het systeem in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-gerelateerde logica.",
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica.",
           "TARGET_IMPORT_W": "Doelwaarde voor een kleine gewenste netafname. Een hogere waarde vermindert het risico op ongewenste teruglevering, maar verhoogt het netverbruik licht.",
           "EXPORT_GUARD_W": "Extra veiligheidsreserve tegen ongewenste teruglevering. Hogere waarden maken de regeling voorzichtiger.",
-          "KEEPALIVE_MIN_DEFICIT_W": "Minimumtekort vanaf waar ontladen actief wordt gehouden. Helpt tegen fladderen bij zeer kleine belastingen.",
-          "KEEPALIVE_MIN_OUTPUT_W": "Minimum ontlaadvermogen om ontladen stabiel actief te houden. Voorkomt onnodig in- en uitschakelen.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Extra SoC-afstand boven het ingestelde minimum-SoC die moet worden bereikt voordat ontladen na een SoC-blokkering weer wordt vrijgegeven. Voorkomt fladderen tussen laden en ontladen bij lage batterijlading, vooral ’s ochtends bij wisselend PV-vermogen."
+          "KEEPALIVE_MIN_DEFICIT_W": "Minimumtekort vanaf waar ontladen actief wordt gehouden. Helpt tegen flapperen bij zeer kleine lasten.",
+          "KEEPALIVE_MIN_OUTPUT_W": "Minimaal ontlaadvermogen om ontladen stabiel actief te houden. Voorkomt onnodig in- en uitschakelen.",
+          "SOC_DISCHARGE_RESUME_MARGIN": "Extra SoC-afstand boven het ingestelde minimum-SoC die bereikt moet worden voordat ontladen na een SoC-blokkering opnieuw wordt vrijgegeven. Voorkomt flapperen tussen laden en ontladen bij lage accustand, vooral ’s ochtends bij wisselende PV-opbrengst."
         }
       },
       "charge": {
@@ -170,11 +174,11 @@
           "CHARGE_MAX_STEP_DOWN": "Laden max. stap omlaag"
         },
         "data_description": {
-          "CHARGE_DEADBAND_W": "Tolerantiebereik voor de laadregeling waarin niet wordt bijgeregeld. Een hogere waarde maakt laden rustiger, een lagere waarde reageert sneller en nauwkeuriger.",
-          "CHARGE_KP_UP": "Versterking bij het verhogen van het laadvermogen. Hogere waarden verhogen het laadvermogen sneller, maar kunnen tot onrustiger gedrag leiden.",
-          "CHARGE_KP_DOWN": "Versterking bij het verlagen van het laadvermogen. Hogere waarden verlagen het laadvermogen sneller, maar kunnen grotere sprongen veroorzaken.",
-          "CHARGE_MAX_STEP_UP": "Maximale vermogensstap per regelcyclus bij het verhogen van het laadvermogen. Hogere waarden maken de laadregeling sneller, maar mogelijk agressiever.",
-          "CHARGE_MAX_STEP_DOWN": "Maximale vermogensstap per regelcyclus bij het verlagen van het laadvermogen. Hogere waarden remmen het laden sneller af, maar kunnen onrustiger werken."
+          "CHARGE_DEADBAND_W": "Tolerantiegebied voor de laadregeling waarin niet wordt bijgeregeld. Een hogere waarde maakt laden rustiger; een lagere waarde reageert sneller en nauwkeuriger.",
+          "CHARGE_KP_UP": "Versterking bij het verhogen van het laadvermogen. Hogere waarden verhogen sneller, maar kunnen onrustiger gedrag veroorzaken.",
+          "CHARGE_KP_DOWN": "Versterking bij het verlagen van het laadvermogen. Hogere waarden verlagen sneller, maar kunnen grotere sprongen veroorzaken.",
+          "CHARGE_MAX_STEP_UP": "Maximale vermogensstap per regelcyclus bij het verhogen van laadvermogen. Hogere waarden maken de laadregeling sneller maar mogelijk agressiever.",
+          "CHARGE_MAX_STEP_DOWN": "Maximale vermogensstap per regelcyclus bij het verlagen van laadvermogen. Hogere waarden remmen laden sneller af, maar kunnen onrustiger werken."
         }
       },
       "discharge": {
@@ -188,57 +192,59 @@
           "DISCHARGE_MAX_STEP_DOWN": "Ontladen max. stap omlaag"
         },
         "data_description": {
-          "DISCHARGE_DEADBAND_W": "Tolerantiebereik voor de ontlaadregeling waarin niet wordt bijgeregeld. Een hogere waarde maakt ontladen rustiger, een lagere waarde reageert sneller en nauwkeuriger.",
-          "DISCHARGE_KP_UP": "Versterking bij het verhogen van het ontlaadvermogen. Hogere waarden verhogen het ontlaadvermogen sneller, maar kunnen eerder overschieten.",
-          "DISCHARGE_KP_DOWN": "Versterking bij het verlagen van het ontlaadvermogen. Hogere waarden verlagen het ontlaadvermogen sneller, maar kunnen onrustiger werken.",
-          "DISCHARGE_MAX_STEP_UP": "Maximale vermogensstap per regelcyclus bij het verhogen van het ontlaadvermogen. Hogere waarden maken de ontlaadregeling sneller, maar mogelijk agressiever.",
-          "DISCHARGE_MAX_STEP_DOWN": "Maximale vermogensstap per regelcyclus bij het verlagen van het ontlaadvermogen. Hogere waarden remmen het ontladen sneller af, maar kunnen grotere sprongen veroorzaken."
+          "DISCHARGE_DEADBAND_W": "Tolerantiegebied voor de ontlaadregeling waarin niet wordt bijgeregeld. Een hogere waarde maakt ontladen rustiger; een lagere waarde reageert sneller en nauwkeuriger.",
+          "DISCHARGE_KP_UP": "Versterking bij het verhogen van het ontlaadvermogen. Hogere waarden verhogen sneller, maar kunnen sneller overschieten.",
+          "DISCHARGE_KP_DOWN": "Versterking bij het verlagen van het ontlaadvermogen. Hogere waarden verlagen sneller, maar kunnen onrustiger werken.",
+          "DISCHARGE_MAX_STEP_UP": "Maximale vermogensstap per regelcyclus bij het verhogen van ontlaadvermogen. Hogere waarden maken de ontlaadregeling sneller maar mogelijk agressiever.",
+          "DISCHARGE_MAX_STEP_DOWN": "Maximale vermogensstap per regelcyclus bij het verlagen van ontlaadvermogen. Hogere waarden remmen ontladen sneller af, maar kunnen sterker springen."
         }
       },
       "expert": {
         "title": "Regelprofiel bewerken – Expertmodus",
-        "description": "Geavanceerde beschermings- en diagnosefuncties. Activeer eerst de expertmodus. Daarna kan optioneel de celspanningsbescherming worden geactiveerd. Bij actieve celspanningsbescherming worden extra sensoren getoond passend bij het ingestelde aantal batterijpacks.",
+        "description": "Geavanceerde beschermings-, diagnose- en planningsfuncties. De lerende laadvensterplanning wordt automatisch gebruikt zodra voldoende leerdata beschikbaar is. Indien nodig kan deze hier worden uitgeschakeld. Voor celspanningsbescherming moet eerst de expertmodus worden geactiveerd.",
         "data": {
-          "expert_mode_enabled": "Expertmodus activeren"
+          "expert_mode_enabled": "Expertmodus inschakelen",
+          "learned_planning_enabled": "Lerende laadvensterplanning gebruiken"
         },
         "data_description": {
-          "expert_mode_enabled": "Activeert het uitgebreide expertgedeelte voor extra beschermings- en diagnosefuncties."
+          "expert_mode_enabled": "Activeert het uitgebreide expertgedeelte voor aanvullende beschermings- en diagnosefuncties.",
+          "learned_planning_enabled": "Indien ingeschakeld gebruikt Battery SmartFlow AI automatisch de lerende laadvensterplanning zodra voldoende leerdata beschikbaar is. Tot die tijd blijft de klassieke planning actief. Indien uitgeschakeld wordt altijd de klassieke planning gebruikt."
         }
       },
       "expert_cell_voltage": {
         "title": "Regelprofiel bewerken – Celspanningsbescherming",
-        "description": "Activeer optioneel de celspanningsbescherming. Als deze wordt geactiveerd, volgt in de volgende stap de configuratie van de celspanningssensoren en beschermingsdrempels.",
+        "description": "Activeer optioneel de celspanningsbescherming. Wanneer deze wordt geactiveerd, volgt in de volgende stap de configuratie van celspanningssensoren en beschermingsdrempels.",
         "data": {
-          "cell_voltage_protection_enabled": "Celspanningsbescherming activeren"
+          "cell_voltage_protection_enabled": "Celspanningsbescherming inschakelen"
         },
         "data_description": {
-          "cell_voltage_protection_enabled": "Activeert batterijbescherming op basis van celspanning. Daarna kunnen de sensoren voor de laagste celspanning per batterijpakket en de beschermingsdrempels worden geconfigureerd."
+          "cell_voltage_protection_enabled": "Activeert batterijbescherming op basis van celspanning. Daarna kunnen de sensoren voor de laagste celspanning per accupack en de beschermingsdrempels worden geconfigureerd."
         }
       },
       "expert_cell_voltage_config": {
         "title": "Regelprofiel bewerken – Celspanningsconfiguratie",
-        "description": "Configureer de sensoren voor de laagste celspanning per batterijpakket en de bijbehorende beschermingsdrempels.",
+        "description": "Configureer de sensoren voor de laagste celspanning per accupack en de bijbehorende beschermingsdrempels.",
         "data": {
-          "lowest_cell_voltage_pack_1": "Laagste celspanning batterijpack 1",
-          "lowest_cell_voltage_pack_2": "Laagste celspanning batterijpack 2",
-          "lowest_cell_voltage_pack_3": "Laagste celspanning batterijpack 3",
-          "lowest_cell_voltage_pack_4": "Laagste celspanning batterijpack 4",
-          "lowest_cell_voltage_pack_5": "Laagste celspanning batterijpack 5",
-          "lowest_cell_voltage_pack_6": "Laagste celspanning batterijpack 6",
-          "cell_voltage_warning": "Celspanning waarschuwings-/noodlaaddrempel",
+          "lowest_cell_voltage_pack_1": "Laagste celspanning accupack 1",
+          "lowest_cell_voltage_pack_2": "Laagste celspanning accupack 2",
+          "lowest_cell_voltage_pack_3": "Laagste celspanning accupack 3",
+          "lowest_cell_voltage_pack_4": "Laagste celspanning accupack 4",
+          "lowest_cell_voltage_pack_5": "Laagste celspanning accupack 5",
+          "lowest_cell_voltage_pack_6": "Laagste celspanning accupack 6",
+          "cell_voltage_warning": "Celspanning waarschuwing/noodlaaddrempel",
           "cell_voltage_cutoff": "Celspanning ontlaadblokkering",
-          "cell_voltage_resume": "Celspanning hervatting"
+          "cell_voltage_resume": "Celspanning vrijgave-drempel"
         },
         "data_description": {
-          "lowest_cell_voltage_pack_1": "Sensor voor de laagste celspanning van het eerste batterijpakket. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
-          "lowest_cell_voltage_pack_2": "Sensor voor de laagste celspanning van het tweede batterijpakket. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
-          "lowest_cell_voltage_pack_3": "Sensor voor de laagste celspanning van het derde batterijpakket. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
-          "lowest_cell_voltage_pack_4": "Sensor voor de laagste celspanning van het vierde batterijpakket. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
-          "lowest_cell_voltage_pack_5": "Sensor voor de laagste celspanning van het vijfde batterijpakket. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
-          "lowest_cell_voltage_pack_6": "Sensor voor de laagste celspanning van het zesde batterijpakket. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
+          "lowest_cell_voltage_pack_1": "Sensor voor de laagste celspanning van accupack 1. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
+          "lowest_cell_voltage_pack_2": "Sensor voor de laagste celspanning van accupack 2. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
+          "lowest_cell_voltage_pack_3": "Sensor voor de laagste celspanning van accupack 3. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
+          "lowest_cell_voltage_pack_4": "Sensor voor de laagste celspanning van accupack 4. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
+          "lowest_cell_voltage_pack_5": "Sensor voor de laagste celspanning van accupack 5. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
+          "lowest_cell_voltage_pack_6": "Sensor voor de laagste celspanning van accupack 6. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
           "cell_voltage_warning": "Drempelwaarde voor kritisch lage celspanning. Wordt gebruikt om vroegtijdig noodladen of beschermingsmaatregelen te starten.",
-          "cell_voltage_cutoff": "Harde ondergrens voor de celspanning. Als deze wordt bereikt of onderschreden, wordt ontladen geblokkeerd.",
-          "cell_voltage_resume": "Hervattingsdrempel boven de ontlaadblokkering. Pas vanaf deze spanningswaarde wordt ontladen na celspanningsbescherming weer vrijgegeven."
+          "cell_voltage_cutoff": "Harde ondergrens voor de celspanning. Wanneer deze wordt bereikt of onderschreden, wordt ontladen geblokkeerd.",
+          "cell_voltage_resume": "Vrijgave-drempel boven de ontlaadblokkering. Pas vanaf deze spanning wordt ontladen na celspanningsbescherming opnieuw toegestaan."
         }
       }
     }
@@ -266,10 +272,10 @@
     },
     "number": {
       "battery_packs": {
-        "name": "Aantal batterijpacks"
+        "name": "Aantal accupacks"
       },
       "pv_charge_start_export_w": {
-        "name": "PV-laden starten vanaf teruglevering"
+        "name": "PV-laadstart vanaf teruglevering"
       },
       "soc_min": {
         "name": "SoC minimum"
@@ -313,14 +319,14 @@
         "name": "Actief apparaatprofiel"
       },
       "adaptive_peak_active": {
-        "name": "Adaptieve piek gedetecteerd"
+        "name": "Adaptieve piek herkend"
       },
       "forecast_status": {
-        "name": "Verwachtingsstatus",
+        "name": "Prognosestatus",
         "state": {
           "not_configured": "Niet geconfigureerd",
-          "unavailable": "Geen verwachtingsgegevens beschikbaar",
-          "available": "Verwachtingsgegevens beschikbaar"
+          "unavailable": "Geen prognosegegevens beschikbaar",
+          "available": "Prognosegegevens beschikbaar"
         }
       },
       "pv_outlook": {
@@ -336,40 +342,137 @@
         "name": "Laadstrategie",
         "state": {
           "none": "Geen speciale laadstrategie actief",
-          "pv_surplus": "PV-overschotladen",
-          "planning_latest_start": "Prijsladen op laatste startmoment",
-          "planning_forecast_poor": "Prijsladen wegens zwakke PV-verwachting",
-          "planning_forecast_mixed": "Prijsladen bij gemengde PV-verwachting",
-          "planning_reality_override": "Prijsladen wegens zwakke live-PV ondanks goede verwachting",
+          "pv_surplus": "PV-overschot laden",
+          "planning_latest_start": "Prijslaadactie op laatste startmoment",
+          "planning_forecast_poor": "Prijslaadactie wegens zwakke PV-prognose",
+          "planning_forecast_mixed": "Prijslaadactie bij gemengde PV-prognose",
+          "planning_reality_override": "Prijslaadactie wegens zwakke live-PV ondanks goede prognose",
           "very_cheap": "Zeer-goedkoop-drempel: maximaal laden",
-          "valley_boost": "Prijsdal-laden",
-          "valley_boost_mixed": "Prijsdal-laden, afgezwakt wegens verwachting",
+          "valley_boost": "Prijsdal laden",
+          "valley_boost_mixed": "Prijsdal laden, verminderd wegens prognose",
           "emergency": "Noodladen",
           "manual": "Handmatige laadstrategie",
-          "valley_opportunity": "Opportunistisch dal-laden",
-          "valley_opportunity_mixed": "Opportunistisch dal-laden bij gemengde verwachting"
+          "valley_opportunity": "Opportunistisch dal laden",
+          "valley_opportunity_mixed": "Opportunistisch dal laden bij gemengde prognose",
+          "learned_planning": "Lerende laadvensterplanning"
         }
       },
+      "learned_planning_status": {
+        "name": "Laadplanning: leerstatus",
+        "state": {
+          "not_started": "Nog niet gestart",
+          "collecting": "Data wordt verzameld",
+          "insufficient_data": "Niet genoeg leerdata",
+          "ready": "Gereed",
+          "active": "Actief"
+        }
+      },
+      "learned_planning_mode": {
+        "name": "Laadplanning: modus",
+        "state": {
+          "classic": "Klassieke planning",
+          "learned_wait": "Lerende planning wacht op laadvenster",
+          "learned_active": "Lerende planning actief",
+          "disabled": "Uitgeschakeld"
+        }
+      },
+      "learned_planning_optimal_charge_start": {
+        "name": "Laadplanning: geplande laadstart"
+      },
+      "learned_planning_deadline": {
+        "name": "Laadplanning: deadline"
+      },
+      "learned_planning_required_charge_energy_kwh": {
+        "name": "Laadplanning: bijlaadenergie"
+      },
+      "learned_planning_effective_window_minutes": {
+        "name": "Laadplanning: venstergrootte"
+      },
+      "learned_planning_blocking_reason": {
+        "name": "Diagnose: blokkadereden lerende planning",
+        "state": {
+          "none": "Geen blokkade",
+          "not_started": "Nog niet gestart",
+          "not_ready": "Leermodel nog niet gereed",
+          "not_enough_days": "Niet genoeg historiedagen",
+          "not_enough_usable_days": "Niet genoeg bruikbare leerdagen",
+          "night_window_coverage_too_low": "Nachtvenster te weinig afgedekt",
+          "morning_window_coverage_too_low": "Ochtendvenster te weinig afgedekt",
+          "evening_window_coverage_too_low": "Avondvenster te weinig afgedekt",
+          "data_quality_too_low": "Datakwaliteit te laag",
+          "no_price_data": "Geen prijsgegevens beschikbaar",
+          "no_deadline": "Geen geldige deadline",
+          "no_charge_needed": "Geen bijlading nodig",
+          "invalid_search_space": "Geen geldige zoekruimte",
+          "deadline_too_close_start_now": "Deadline te dichtbij, nu starten",
+          "latest_start_reached": "Laatste startmoment bereikt"
+        }
+      },
+      "learned_planning_history_days": {
+        "name": "Diagnose: historiedagen lerende planning"
+      },
+      "learned_planning_usable_days": {
+        "name": "Diagnose: bruikbare dagen lerende planning"
+      },
+      "learned_planning_data_coverage": {
+        "name": "Diagnose: datadekking lerende planning"
+      },
+      "learned_planning_sample_count": {
+        "name": "Diagnose: samples lerende planning"
+      },
+      "learned_planning_expected_consumption_kwh": {
+        "name": "Diagnose: verwacht verbruik lerende planning"
+      },
+      "learned_planning_available_battery_energy_kwh": {
+        "name": "Diagnose: beschikbare batterijenergie lerende planning"
+      },
+      "learned_planning_reserve_margin_kwh": {
+        "name": "Diagnose: reserve lerende planning"
+      },
+      "learned_planning_forecast_adjustment_kwh": {
+        "name": "Diagnose: prognosetoeslag lerende planning"
+      },
+      "learned_planning_effective_charge_power_w": {
+        "name": "Diagnose: effectief laadvermogen lerende planning"
+      },
+      "learned_planning_effective_window_slots": {
+        "name": "Diagnose: vensterslots lerende planning"
+      },
+      "learned_planning_window_score": {
+        "name": "Diagnose: vensterscore lerende planning"
+      },
+      "learned_profile_typical_daily_consumption_kwh": {
+        "name": "Diagnose: typisch dagverbruik lerende planning"
+      },
+      "learned_profile_average_house_load_w": {
+        "name": "Diagnose: geleerde gemiddelde huislast"
+      },
+      "learned_profile_current_slot_consumption_kwh": {
+        "name": "Diagnose: verbruik huidig slot lerende planning"
+      },
+      "learned_profile_current_slot_average_w": {
+        "name": "Diagnose: gemiddeld vermogen huidig slot lerende planning"
+      },
       "forecast_remaining_today_kwh": {
-        "name": "PV-verwachting vandaag"
+        "name": "PV-prognose vandaag"
       },
       "forecast_tomorrow_kwh": {
-        "name": "PV-verwachting morgen"
+        "name": "PV-prognose morgen"
       },
       "forecast_next_3h_kwh": {
-        "name": "PV-verwachting komende 3 uur"
+        "name": "PV-prognose komende 3 uur"
       },
       "forecast_next_6h_kwh": {
-        "name": "PV-verwachting komende 6 uur"
+        "name": "PV-prognose komende 6 uur"
       },
       "price_daily_average": {
-        "name": "Dynamische daggemiddelde prijs"
+        "name": "Dynamische gemiddelde dagprijs"
       },
       "current_peak_threshold": {
-        "name": "Huidige piekdrempel"
+        "name": "Actuele piekdrempel"
       },
       "current_valley_threshold": {
-        "name": "Huidige daldrempel"
+        "name": "Actuele daldrempel"
       },
       "economic_discharge_threshold": {
         "name": "Economische ontlaaddrempel"
@@ -381,7 +484,7 @@
         "name": "Globale laagste celspanning"
       },
       "cell_voltage_emergency_active": {
-        "name": "Celspannings-noodladen actief"
+        "name": "Celspanning noodladen actief"
       },
       "cell_voltage_discharge_blocked": {
         "name": "Ontladen geblokkeerd door celspanningsbescherming"
@@ -402,7 +505,7 @@
           "normal": "Normaal",
           "warning": "Waarschuwingsgebied actief",
           "cutoff_active": "Ontlaadblokkering actief",
-          "sensor_invalid": "Sensorgegevens ongeldig"
+          "sensor_invalid": "Ongeldige sensorgegevens"
         }
       },
       "engine_health": {
@@ -410,12 +513,12 @@
         "state": {
           "ok": "Systeem normaal",
           "no_price_data": "Geen prijsgegevens beschikbaar",
-          "no_current_price": "Geen huidige elektriciteitsprijs",
+          "no_current_price": "Geen actuele stroomprijs",
           "sensor_invalid": "Ongeldige sensorgegevens"
         }
       },
       "season_mode": {
-        "name": "Gedetecteerde bedrijfsmodus",
+        "name": "Herkende bedrijfsmodus",
         "state": {
           "winter": "Winterbedrijf",
           "summer": "Zomerbedrijf",
@@ -435,7 +538,7 @@
         "name": "Foutstatus",
         "state": {
           "normal": "Geen fout / alles normaal",
-          "warning": "Waarschuwing (apparaat blijft actief)",
+          "warning": "Waarschuwing (apparaat blijft werken)",
           "error": "Fout / bescherming actief"
         }
       },
@@ -444,18 +547,18 @@
         "state": {
           "init": "Initialisatie",
           "ok": "OK",
-          "sensor_invalid": "Sensorgegevens ongeldig",
-          "price_invalid": "Prijsgegevens ongeldig"
+          "sensor_invalid": "Ongeldige sensorgegevens",
+          "price_invalid": "Ongeldige prijsgegevens"
         }
       },
       "ai_status": {
         "name": "AI-status",
         "state": {
-          "standby": "Stand-by",
+          "standby": "Gereed",
           "charge_surplus": "Laden (PV-overschot)",
           "price_charge": "Laden (prijsvoordeel)",
           "cover_deficit": "Ontladen (huislast dekken)",
-          "expensive_discharge": "Ontladen (hoge elektriciteitsprijs)",
+          "expensive_discharge": "Ontladen (hoge stroomprijs)",
           "very_expensive_force": "Geforceerd ontladen (extreme prijzen)",
           "emergency_charge": "Noodladen actief",
           "manual": "Handmatige modus"
@@ -473,13 +576,13 @@
       "decision_reason": {
         "name": "Beslissingsreden",
         "state": {
-          "standby": "Stand-by",
-          "state_idle": "Geen behoefte gedetecteerd",
-          "state_enter_discharge": "Ontladen gestart (behoefte gedetecteerd)",
+          "standby": "Gereed",
+          "state_idle": "Geen behoefte herkend",
+          "state_enter_discharge": "Ontladen gestart (behoefte herkend)",
           "state_discharging": "Ontladen actief (huislastdekking)",
-          "state_enter_charge": "Laden gestart (overschot gedetecteerd)",
+          "state_enter_charge": "Laden gestart (overschot herkend)",
           "state_charging": "Laden actief",
-          "expensive_discharge": "Ontladen wegens hoge elektriciteitsprijs",
+          "expensive_discharge": "Ontladen wegens hoge stroomprijs",
           "very_expensive_force_discharge": "Geforceerd ontladen wegens extreme prijspiek",
           "emergency_latched_charge": "Noodladen actief (vergrendeld)",
           "summer_cover_deficit": "Zomer: huislast dekken",
@@ -493,30 +596,37 @@
           "manual_charge": "Handmatig laden",
           "manual_discharge": "Handmatig ontladen",
           "manual_constant_discharge": "Constante ontlading actief",
-          "manual_idle": "Handmatige stand-by",
+          "manual_idle": "Handmatig gereed",
           "idle": "Gereed",
           "adaptive_peak_discharge": "Ontladen wegens prijspiek",
-          "price_based_discharge": "Prijsgebaseerde ontlading",
-          "valley_boost_charge": "Prijsdal gedetecteerd. Maximaal laden",
-          "planning_latest_start": "Prijsladen gestart (laatste zinvolle startmoment bereikt)",
-          "planning_forecast_poor": "Prijsladen wegens zwakke PV-verwachting",
-          "planning_forecast_mixed": "Prijsladen bij gemengde PV-verwachting",
-          "valley_opportunity_charge": "Prijsdal benut omdat er werkelijk nauwelijks PV beschikbaar is",
-          "valley_opportunity_charge_mixed_forecast": "Prijsdal benut bij gemengde verwachting en zwakke werkelijke PV",
-          "valley_boost_charge_mixed_forecast": "Prijsdal gedetecteerd, maar afgezwakt wegens gemengde PV-verwachting",
-          "planning_forecast_reality_override": "Prijsladen gestart: werkelijke PV te zwak ondanks goede verwachting",
+          "price_based_discharge": "Prijsgebaseerd ontladen",
+          "valley_boost_charge": "Prijsdal herkend. Maximaal laden",
+          "planning_latest_start": "Prijslaadactie gestart (laatste zinvolle startmoment bereikt)",
+          "planning_forecast_poor": "Prijslaadactie wegens zwakke PV-prognose",
+          "planning_forecast_mixed": "Prijslaadactie bij gemengde PV-prognose",
+          "learned_charge_window_not_ready": "Lerende laadplanning nog niet gereed",
+          "learned_charge_window_wait": "Lerende laadplanning wacht op optimaal laadvenster",
+          "learned_charge_window_active": "Lerend laadvenster actief",
+          "learned_charge_window_latest_start_reached": "Lerende planning: laatste startmoment bereikt",
+          "learned_charge_window_no_charge_needed": "Lerende planning: geen bijlading nodig",
+          "valley_opportunity_charge": "Prijsdal gebruikt omdat er praktisch geen echte PV beschikbaar is",
+          "valley_opportunity_charge_mixed_forecast": "Prijsdal gebruikt bij gemengde prognose en zwakke echte PV",
+          "valley_boost_charge_mixed_forecast": "Prijsdal herkend, maar verlaagd wegens gemengde PV-prognose",
+          "planning_forecast_reality_override": "Prijslaadactie gestart: echte PV te zwak ondanks goede prognose",
           "very_cheap_force_charge": "Zeer-goedkoop-drempel bereikt: maximaal laden actief",
           "additional_battery_charging_block": "Extra batterij laadt: ontladen geblokkeerd",
-          "soc_min_resume_block": "Ontladen geblokkeerd (hervattingsdrempel nog niet bereikt)",
+          "additional_battery_discharging_block": "Extra batterij ontlaadt: laden geblokkeerd",
+          "soc_min_resume_block": "Ontladen geblokkeerd (vrijgavedrempel nog niet bereikt)",
           "cell_voltage_cutoff_block": "Ontladen geblokkeerd (celspanningsbescherming actief)",
-          "cell_voltage_emergency_charge": "Noodladen actief (celspanning kritisch)",
-          "pv_charge_blocked_by_discharge_protection": "PV-laden geblokkeerd omdat ontladen nog door SoC-/celbescherming is vergrendeld"
+          "cell_voltage_emergency_charge": "Noodladen actief (celspanning kritiek)",
+          "pv_charge_blocked_by_discharge_protection": "PV-laden geblokkeerd omdat ontladen nog door SoC-/celbescherming is geblokkeerd",
+          "learned_charge_window_deadline_too_close_start_now": "Lerende planning: deadline te dichtbij, nu starten"
         }
       },
       "next_planned_action": {
         "name": "Geplande volgende actie",
         "state": {
-          "none": "Geen actie gepland",
+          "none": "Geen actie",
           "charge": "Gepland laden",
           "discharge": "Gepland ontladen",
           "wait": "Wachten",
@@ -526,7 +636,7 @@
       "next_action_state": {
         "name": "Volgende actie",
         "state": {
-          "none": "Geen actie gepland",
+          "none": "Geen actie",
           "planned_charge": "Gepland laden",
           "planned_discharge": "Gepland ontladen",
           "charging_active": "Laadproces actief",
@@ -534,7 +644,8 @@
           "manual_charge": "Handmatig laden",
           "manual_discharge": "Handmatig ontladen",
           "manual_constant_discharge": "Constante ontlading actief",
-          "emergency_charge": "Noodladen"
+          "emergency_charge": "Noodladen",
+          "pv_house_load_passthrough_active": "SF800Pro: PV-huislast-passthrough actief"
         }
       },
       "next_action_time": {
@@ -547,10 +658,10 @@
         "name": "Huislast"
       },
       "price_now": {
-        "name": "Huidige elektriciteitsprijs"
+        "name": "Actuele stroomprijs"
       },
       "avg_charge_price": {
-        "name": "Gemiddelde laadprijs batterij"
+        "name": "Gem. laadprijs batterij"
       },
       "profit_eur": {
         "name": "Besparing / winst (totaal)"
