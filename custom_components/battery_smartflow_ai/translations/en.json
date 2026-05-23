@@ -370,10 +370,15 @@
       "learned_planning_mode": {
         "name": "Charge planning: Mode",
         "state": {
+          "disabled": "Disabled",
+          "collecting": "Collecting data",
+          "classic_fallback": "Classic planning",
+          "ready": "Learned planning ready",
+          "wait": "Learned planning waiting for charge window",
+          "charge": "Learned planning active",
           "classic": "Classic planning",
-          "learned_wait": "Learned planning waits for charge window",
-          "learned_active": "Learned planning active",
-          "disabled": "Disabled"
+          "learned_wait": "Learned planning waiting for charge window",
+          "learned_active": "Learned planning active"
         }
       },
       "learned_planning_optimal_charge_start": {

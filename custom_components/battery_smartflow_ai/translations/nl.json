@@ -370,10 +370,15 @@
       "learned_planning_mode": {
         "name": "Laadplanning: modus",
         "state": {
+          "disabled": "Uitgeschakeld",
+          "collecting": "Gegevens worden verzameld",
+          "classic_fallback": "Klassieke planning",
+          "ready": "Geleerde planning gereed",
+          "wait": "Geleerde planning wacht op laadvenster",
+          "charge": "Geleerde planning actief",
           "classic": "Klassieke planning",
-          "learned_wait": "Lerende planning wacht op laadvenster",
-          "learned_active": "Lerende planning actief",
-          "disabled": "Uitgeschakeld"
+          "learned_wait": "Geleerde planning wacht op laadvenster",
+          "learned_active": "Geleerde planning actief"
         }
       },
       "learned_planning_optimal_charge_start": {

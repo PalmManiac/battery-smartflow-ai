@@ -370,10 +370,15 @@
       "learned_planning_mode": {
         "name": "Planification de charge : mode",
         "state": {
+          "disabled": "Désactivé",
+          "collecting": "Collecte des données",
+          "classic_fallback": "Planification classique",
+          "ready": "Planification apprise prête",
+          "wait": "Planification apprise en attente de la fenêtre de charge",
+          "charge": "Planification apprise active",
           "classic": "Planification classique",
-          "learned_wait": "La planification apprise attend la fenêtre de charge",
-          "learned_active": "Planification apprise active",
-          "disabled": "Désactivé"
+          "learned_wait": "Planification apprise en attente de la fenêtre de charge",
+          "learned_active": "Planification apprise active"
         }
       },
       "learned_planning_optimal_charge_start": {
