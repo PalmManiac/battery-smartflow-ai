@@ -370,10 +370,15 @@
       "learned_planning_mode": {
         "name": "Ladeplanung: Modus",
         "state": {
+          "disabled": "Deaktiviert",
+          "collecting": "Daten werden gesammelt",
+          "classic_fallback": "Klassische Planung",
+          "ready": "Lernplanung bereit",
+          "wait": "Lernplanung wartet auf Ladefenster",
+          "charge": "Lernplanung aktiv",
           "classic": "Klassische Planung",
           "learned_wait": "Lernplanung wartet auf Ladefenster",
-          "learned_active": "Lernplanung aktiv",
-          "disabled": "Deaktiviert"
+          "learned_active": "Lernplanung aktiv"
         }
       },
       "learned_planning_optimal_charge_start": {

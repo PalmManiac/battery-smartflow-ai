@@ -57,10 +57,15 @@ LEARNED_PLANNING_STATUS_ENUMS = [
 ]
 
 LEARNED_PLANNING_MODE_ENUMS = [
+    "disabled",
+    "collecting",
+    "classic_fallback",
+    "ready",
+    "wait",
+    "charge",
     "classic",
     "learned_wait",
     "learned_active",
-    "disabled",
 ]
 
 LEARNED_PLANNING_BLOCKING_REASON_ENUMS = [
