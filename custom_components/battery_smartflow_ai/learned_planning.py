@@ -322,12 +322,20 @@ def build_slot_model(
 
             cur = overlap_end if overlap_end > cur else cur + timedelta(minutes=1)
 
-    # Count only real history days that contain at least one learned sample.
-    # Do not count the theoretical 14-day rolling window itself.
+    # Count only real history days with meaningful sample coverage.
+    # This avoids a single learned slot at the beginning/end of the
+    # rolling window making the history jump to 14 days.
+    covered_slots_by_day = {
+        day: sum(1 for v in slots if v > 0)
+        for day, slots in day_slot_energy.items()
+    }
+
+    min_history_slots = max(1, int(math.ceil(SLOTS_PER_DAY * 0.10)))
+
     history_dates = {
         day
-        for day, slots in day_slot_energy.items()
-        if any(v > 0 for v in slots)
+        for day, covered_slots in covered_slots_by_day.items()
+        if covered_slots >= min_history_slots
     }
 
     history_days = len(history_dates)
@@ -348,7 +356,7 @@ def build_slot_model(
         if day not in history_dates:
             continue
 
-        covered_slots = sum(1 for v in slots if v > 0)
+        covered_slots = covered_slots_by_day.get(day, 0)
         day_coverage = covered_slots / SLOTS_PER_DAY
 
         if day_coverage >= 0.50:
