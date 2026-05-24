@@ -56,6 +56,55 @@ from .const import (
 
 from .device_profiles import DEVICE_PROFILES, PROFILE_OVERRIDE_FIELDS
 
+EMPTY_ENTITY_VALUES = {
+    "",
+    "none",
+    "null",
+    "unknown",
+    "unavailable",
+}
+
+
+OPTIONAL_ENTITY_KEYS = (
+    CONF_PRICE_EXPORT_ENTITY,
+    CONF_PRICE_NOW_ENTITY,
+    CONF_SOC_LIMIT_ENTITY,
+    CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
+    CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
+    CONF_PV_FORECAST_TODAY_ENTITY,
+    CONF_PV_FORECAST_TOMORROW_ENTITY,
+)
+
+
+def _normalize_optional_entity(value: Any) -> str | None:
+    """Normalize optional entity values stored by older config flows.
+
+    Older entries may contain string values like "None". Those are truthy,
+    but invalid as EntitySelector defaults.
+    """
+
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if cleaned.lower() in EMPTY_ENTITY_VALUES:
+            return None
+        return cleaned
+
+    return None
+
+
+def _cleanup_optional_entities(data: dict[str, Any]) -> None:
+    """Remove empty/invalid optional entity placeholders in-place."""
+
+    for key in OPTIONAL_ENTITY_KEYS:
+        value = _normalize_optional_entity(data.get(key))
+        if value is None:
+            data.pop(key, None)
+        else:
+            data[key] = value
+
 
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Battery SmartFlow AI."""
@@ -86,26 +135,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ):
                     errors["base"] = "grid_split_missing"
 
-            if not self._user_input.get(CONF_PRICE_EXPORT_ENTITY):
-                self._user_input.pop(CONF_PRICE_EXPORT_ENTITY, None)
-
-            if not self._user_input.get(CONF_PRICE_NOW_ENTITY):
-                self._user_input.pop(CONF_PRICE_NOW_ENTITY, None)
-
-            if not self._user_input.get(CONF_SOC_LIMIT_ENTITY):
-                self._user_input.pop(CONF_SOC_LIMIT_ENTITY, None)
-
-            if not self._user_input.get(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY):
-                self._user_input.pop(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY, None)
-
-            if not self._user_input.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY):
-                self._user_input.pop(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY, None)
-
-            if not self._user_input.get(CONF_PV_FORECAST_TODAY_ENTITY):
-                self._user_input.pop(CONF_PV_FORECAST_TODAY_ENTITY, None)
-
-            if not self._user_input.get(CONF_PV_FORECAST_TOMORROW_ENTITY):
-                self._user_input.pop(CONF_PV_FORECAST_TOMORROW_ENTITY, None)
+            _cleanup_optional_entities(self._user_input)
 
             if grid_mode != GRID_MODE_SINGLE:
                 self._user_input.pop(CONF_GRID_POWER_ENTITY, None)
@@ -166,26 +196,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 ):
                     errors["base"] = "grid_split_missing"
 
-            if not cleaned.get(CONF_PRICE_EXPORT_ENTITY):
-                cleaned.pop(CONF_PRICE_EXPORT_ENTITY, None)
-
-            if not cleaned.get(CONF_PRICE_NOW_ENTITY):
-                cleaned.pop(CONF_PRICE_NOW_ENTITY, None)
-
-            if not cleaned.get(CONF_SOC_LIMIT_ENTITY):
-                cleaned.pop(CONF_SOC_LIMIT_ENTITY, None)
-
-            if not cleaned.get(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY):
-                cleaned.pop(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY, None)
-
-            if not cleaned.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY):
-                cleaned.pop(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY, None)
-
-            if not cleaned.get(CONF_PV_FORECAST_TODAY_ENTITY):
-                cleaned.pop(CONF_PV_FORECAST_TODAY_ENTITY, None)
-
-            if not cleaned.get(CONF_PV_FORECAST_TOMORROW_ENTITY):
-                cleaned.pop(CONF_PV_FORECAST_TOMORROW_ENTITY, None)
+            _cleanup_optional_entities(cleaned)
 
             if not errors:
                 return self.async_update_reload_and_abort(
@@ -209,9 +220,15 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry: config_entries.ConfigEntry | None = None,
     ) -> vol.Schema:
         def _val(key: str):
-            if entry:
-                return entry.data.get(key)
-            return None
+            if not entry:
+                return None
+
+            value = entry.data.get(key)
+
+            if key in OPTIONAL_ENTITY_KEYS:
+                return _normalize_optional_entity(value)
+
+            return value
 
         schema: dict[Any, Any] = {}
 
@@ -443,9 +460,18 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry: config_entries.ConfigEntry | None = None,
     ) -> vol.Schema:
         def _val(key: str):
-            if entry:
-                return entry.data.get(key)
-            return None
+            if not entry:
+                return None
+
+            value = entry.data.get(key)
+
+            if isinstance(value, str):
+                cleaned = value.strip()
+                if cleaned.lower() in EMPTY_ENTITY_VALUES:
+                    return None
+                return cleaned
+
+            return value
 
         schema: dict[Any, Any] = {}
 
