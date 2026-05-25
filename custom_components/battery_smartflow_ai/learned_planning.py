@@ -56,6 +56,8 @@ MIN_DATA_COVERAGE = 0.80
 DEFAULT_FALLBACK_CHARGE_POWER_W = 1200.0
 MIN_EFFECTIVE_CHARGE_POWER_W = 100.0
 
+MIN_LEARNED_CHARGE_POWER_SAMPLE_W = 300.0
+MIN_LEARNED_CHARGE_POWER_SAMPLES = 4
 
 LearningStatus = Literal[
     "not_started",
@@ -624,15 +626,14 @@ def learned_typical_charge_power_w(
         power = float(sample.power_w or 0.0)
 
         # Ignore tiny keepalive / soft-start / noise values.
-        if power < MIN_EFFECTIVE_CHARGE_POWER_W:
+        if power < MIN_LEARNED_CHARGE_POWER_SAMPLE_W:
             continue
 
         values.append(power)
 
-    if len(values) < 4:
+    if len(values) < MIN_LEARNED_CHARGE_POWER_SAMPLES:
         return None
 
-    # Robust median: stable enough for planning, not distorted by short peaks.
     return round(float(statistics.median(values)), 1)
     
 
