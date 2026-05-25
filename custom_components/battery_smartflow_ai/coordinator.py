@@ -118,10 +118,14 @@ from .decision_engine import (
 from .forecast import build_forecast_summary
 from .learned_planning import (
     LearningSample,
+    LearningChargePowerSample,
+    MIN_LEARNED_CHARGE_POWER_SAMPLE_W,
+    ROLLING_DAYS,
     build_learned_charge_plan,
     build_profile_diagnostics,
     build_slot_model,
     evaluate_readiness,
+    learned_typical_charge_power_w,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -266,6 +270,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # V4.1.0 learned charge-window planning
             "learned_load_slots": {},
             "learned_load_last_ts": None,
+            "learned_charge_power_samples": [],
 
             # SF800Pro PV house-load passthrough hysteresis
             "pv_houseload_passthrough_active": False,
@@ -689,6 +694,116 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 continue
 
         samples.sort(key=lambda s: s.start)
+        return samples
+        
+    def _cleanup_learned_charge_power_samples(self, now: datetime) -> None:
+        """Keep only recent learned charge-power samples."""
+
+        cutoff = dt_util.as_utc(now) - timedelta(days=ROLLING_DAYS)
+
+        cleaned: list[dict[str, object]] = []
+
+        for item in self._persist.get("learned_charge_power_samples", []):
+            if not isinstance(item, dict):
+                continue
+
+            try:
+                ts_raw = item.get("ts")
+                ts = dt_util.parse_datetime(str(ts_raw)) if ts_raw else None
+                if ts is None:
+                    continue
+
+                ts_utc = dt_util.as_utc(ts)
+
+                if ts_utc < cutoff:
+                    continue
+
+                power_w = float(item.get("power_w") or 0.0)
+                if power_w < MIN_LEARNED_CHARGE_POWER_SAMPLE_W:
+                    continue
+
+                cleaned.append(
+                    {
+                        "ts": ts_utc.isoformat(),
+                        "power_w": round(power_w, 1),
+                    }
+                )
+            except Exception:
+                continue
+
+        self._persist["learned_charge_power_samples"] = cleaned
+
+    def _remember_learned_charge_power_sample(
+        self,
+        now: datetime,
+        *,
+        decision: DecisionResult,
+        battery_charge_w: float,
+    ) -> None:
+        """Store a charge-power sample from real charging phases.
+
+        Use the final decision after all blockers/limit checks, so only the
+        actually intended charging state is learned.
+        """
+
+        if decision.ac_mode != "input":
+            return
+
+        if float(decision.charge_w or 0.0) <= 0.0:
+            return
+
+        measured_charge_w = max(0.0, float(battery_charge_w or 0.0))
+        commanded_charge_w = max(0.0, float(decision.charge_w or 0.0))
+
+        # Prefer real measured AC charge power. If the battery power sensor does
+        # not provide a negative charging value, fall back to the command.
+        charge_power_w = measured_charge_w if measured_charge_w > 0.0 else commanded_charge_w
+
+        if charge_power_w < MIN_LEARNED_CHARGE_POWER_SAMPLE_W:
+            return
+
+        self._persist.setdefault("learned_charge_power_samples", []).append(
+            {
+                "ts": dt_util.as_utc(now).isoformat(),
+                "power_w": round(charge_power_w, 1),
+            }
+        )
+
+        self._cleanup_learned_charge_power_samples(now)
+
+    def _get_learned_charge_power_samples(self) -> list[LearningChargePowerSample]:
+        """Convert persisted charge-power samples into LearningChargePowerSample objects."""
+
+        raw = self._persist.get("learned_charge_power_samples", [])
+        if not isinstance(raw, list):
+            return []
+
+        samples: list[LearningChargePowerSample] = []
+
+        for item in raw:
+            if not isinstance(item, dict):
+                continue
+
+            try:
+                ts_raw = item.get("ts")
+                ts = dt_util.parse_datetime(str(ts_raw)) if ts_raw else None
+                if ts is None:
+                    continue
+
+                power_w = float(item.get("power_w") or 0.0)
+                if power_w < MIN_LEARNED_CHARGE_POWER_SAMPLE_W:
+                    continue
+
+                samples.append(
+                    LearningChargePowerSample(
+                        ts=dt_util.as_utc(ts),
+                        power_w=power_w,
+                    )
+                )
+            except Exception:
+                continue
+
+        samples.sort(key=lambda s: s.ts)
         return samples
 
     def _update_pv_charge_hysteresis(
@@ -1795,6 +1910,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             learned_readiness = evaluate_readiness(learned_slot_model)
 
+            learned_charge_power_samples = self._get_learned_charge_power_samples()
+            learned_charge_power = learned_typical_charge_power_w(
+                samples=learned_charge_power_samples,
+                now=now,
+            )
+
             learned_charge_plan = build_learned_charge_plan(
                 model=learned_slot_model,
                 readiness=learned_readiness,
@@ -1807,7 +1928,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 soc_max=float(soc_max),
                 profile_charge_limit_w=float(max_charge),
                 current_effective_charge_cap_w=float(max_charge),
-                learned_typical_charge_power_w=None,
+                learned_typical_charge_power_w=learned_charge_power,
                 force_active=False,
             )
 
@@ -2100,6 +2221,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
                 decision.reason = "cell_voltage_cutoff_block"
+
+            self._remember_learned_charge_power_sample(
+                now,
+                decision=decision,
+                battery_charge_w=float(battery_charge_w),
+            )
 
             ac_mode = (
                 ZENDURE_MODE_INPUT
@@ -2408,6 +2535,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "learned_planning_evening_window_days": int(learned_readiness.evening_window_days),
                 "learned_planning_data_coverage": round(float(learned_readiness.data_coverage), 3),
                 "learned_planning_sample_count": len(learned_samples),
+                "learned_planning_charge_power_sample_count": len(
+                    learned_charge_power_samples
+                ),
+                "learned_planning_learned_charge_power_w": (
+                    round(float(learned_charge_power), 1)
+                    if learned_charge_power is not None
+                    else None
+                ),
                 "learned_planning_expected_consumption_kwh": float(
                     learned_charge_plan.expected_consumption_kwh
                 ),
