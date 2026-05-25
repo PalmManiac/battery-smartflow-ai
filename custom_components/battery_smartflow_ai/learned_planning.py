@@ -87,6 +87,14 @@ class LearningSample:
 
 
 @dataclass
+class LearningChargePowerSample:
+    """One measured charging power sample used to estimate realistic charge speed."""
+
+    ts: datetime
+    power_w: float
+    
+
+@dataclass
 class LearnedSlotModel:
     """Median consumption model for one day with 96 15-minute slots."""
 
@@ -588,6 +596,45 @@ def compute_required_charge_energy_kwh(
     required = _clamp(raw, 0.0, float(max_chargeable_kwh))
     return float(raw), float(required)
 
+
+def learned_typical_charge_power_w(
+    samples: list[LearningChargePowerSample],
+    now: datetime,
+    rolling_days: int = ROLLING_DAYS,
+) -> float | None:
+    """Estimate a realistic learned AC charge power from recent charge samples.
+
+    Uses the median to avoid spikes and short unstable phases.
+    """
+
+    if not samples:
+        return None
+
+    now_local = _as_local(now)
+    window_start = now_local - timedelta(days=max(1, int(rolling_days)))
+
+    values: list[float] = []
+
+    for sample in samples:
+        ts = _as_local(sample.ts)
+
+        if ts < window_start or ts > now_local:
+            continue
+
+        power = float(sample.power_w or 0.0)
+
+        # Ignore tiny keepalive / soft-start / noise values.
+        if power < MIN_EFFECTIVE_CHARGE_POWER_W:
+            continue
+
+        values.append(power)
+
+    if len(values) < 4:
+        return None
+
+    # Robust median: stable enough for planning, not distorted by short peaks.
+    return round(float(statistics.median(values)), 1)
+    
 
 def effective_charge_power_w(
     profile_charge_limit_w: float,
