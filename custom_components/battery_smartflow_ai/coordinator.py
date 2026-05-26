@@ -1282,6 +1282,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "manual_charge",
             }
         )
+        
+        decision_is_manual_priority_discharge = (
+            decision.ac_mode == "output"
+            and float(decision.discharge_w or 0.0) > 0.0
+            and decision.reason
+            in {
+                "manual_discharge",
+                "manual_constant_discharge",
+            }
+        )
 
         if protection_active:
             self._persist["sf800_mode_arbiter_state"] = "protection"
@@ -1291,6 +1301,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if decision_is_true_priority_charge:
             self._persist["sf800_mode_arbiter_state"] = "priority_charge"
             self._persist["sf800_mode_arbiter_reason"] = decision.reason
+            return decision
+
+        if decision_is_manual_priority_discharge:
+            self._persist["sf800_mode_arbiter_state"] = "manual_priority_discharge"
+            self._persist["sf800_mode_arbiter_reason"] = decision.reason
+
+            # Clear SF800Pro latches that could otherwise override manual discharge.
+            self._persist["pv_houseload_passthrough_active"] = False
+            self._persist["pv_houseload_passthrough_started_ts"] = None
+            self._persist["pv_houseload_passthrough_export_counter"] = 0
+            self._persist["pv_houseload_passthrough_target_w"] = 0.0
+            self._persist["pv_houseload_passthrough_stop_reason"] = "manual_priority_discharge"
+
+            self._persist["sf800_pv_charge_latched"] = False
+            self._persist["sf800_pv_charge_started_ts"] = None
+            self._persist["sf800_pv_charge_stop_counter"] = 0
+
             return decision
 
         if pv_charge_latched:
@@ -1978,24 +2005,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             )
 
-            pv_houseload_passthrough_active, pv_houseload_passthrough_target_w, pv_houseload_passthrough_stop_reason = (
-                self._update_pv_houseload_passthrough(
-                    now=now,
-                    profile=profile,
-                    soc=float(soc),
-                    soc_min=float(soc_min),
-                    pv_w=float(pv_w),
-                    house_load_w=float(house_load),
-                    grid_import_w=float(grid_import or 0.0),
-                    grid_export_w=float(grid_export or 0.0),
-                    max_output_w=float(max_discharge),
-                    pv_charge_start_export_w=float(pv_charge_start_export_w),
-                    discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
-                    cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
-                    cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
-                    additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
+            manual_mode_active = ai_mode == AI_MODE_MANUAL
+
+            if manual_mode_active:
+                self._persist["pv_houseload_passthrough_active"] = False
+                self._persist["pv_houseload_passthrough_started_ts"] = None
+                self._persist["pv_houseload_passthrough_export_counter"] = 0
+                self._persist["pv_houseload_passthrough_target_w"] = 0.0
+                self._persist["pv_houseload_passthrough_stop_reason"] = "manual_mode"
+
+                self._persist["sf800_pv_charge_latched"] = False
+                self._persist["sf800_pv_charge_started_ts"] = None
+                self._persist["sf800_pv_charge_stop_counter"] = 0
+
+                pv_houseload_passthrough_active = False
+                pv_houseload_passthrough_target_w = 0.0
+                pv_houseload_passthrough_stop_reason = "manual_mode"
+            else:
+                pv_houseload_passthrough_active, pv_houseload_passthrough_target_w, pv_houseload_passthrough_stop_reason = (
+                    self._update_pv_houseload_passthrough(
+                        now=now,
+                        profile=profile,
+                        soc=float(soc),
+                        soc_min=float(soc_min),
+                        pv_w=float(pv_w),
+                        house_load_w=float(house_load),
+                        grid_import_w=float(grid_import or 0.0),
+                        grid_export_w=float(grid_export or 0.0),
+                        max_output_w=float(max_discharge),
+                        pv_charge_start_export_w=float(pv_charge_start_export_w),
+                        discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
+                        cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
+                        cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+                        additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
+                    )
                 )
-            )
 
             ctx = DecisionContext(
                 now=now,
