@@ -23,6 +23,8 @@
 
 - 🇬🇧 English
 - 🇩🇪 Deutsch
+- FR French
+- NL Dutch
 
 ---
 
@@ -121,12 +123,9 @@ Without an electricity price, PV- and load-based control still works.
 [![HACS Repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PalmManiac&repository=battery-smartflow-ai&category=integration)
 
 1. Open HACS  
-2. ⋮ → Custom repositories  
-3. Add repository:  
-   `https://github.com/PalmManiac/battery-smartflow-ai`  
-4. Type: Integration  
-5. Install  
-6. Restart Home Assistant
+2. search for 'Battery SmartFlow AI'
+3. download it
+4. restart Home Assistant
 
 ---
 
@@ -190,9 +189,12 @@ The integration uses model-dependent control parameters.
 
 Currently supported:
 
-- SF800Pro
-- SF1600AC+
-- SF2400AC
+- SolarFlow 800 Pro (SF800Pro)
+- SolarFlow 1600 AC+ (SF1600AC+)
+- SolarFlow 2400 AC (SF2400AC)
+- SolarFlow 2400 Pro (SF2400PRO)
+- Hyper 2000
+- Hub 2000
 
 The profile influences, among other things:
 
@@ -397,12 +399,9 @@ Ohne Strompreis funktioniert PV- und lastbasierte Steuerung weiterhin.
 [![HACS Repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PalmManiac&repository=battery-smartflow-ai&category=integration)
 
 1. HACS öffnen  
-2. ⋮ → Benutzerdefinierte Repositories  
-3. Repository hinzufügen:  
-   `https://github.com/PalmManiac/battery-smartflow-ai`  
-4. Typ: Integration  
-5. Installieren  
-6. Home Assistant neu starten
+2. suche nach 'Battery SmartFlow AI'  
+3. Herunterladen 
+4. Home Assistant neu starten
 
 ---
 
@@ -466,9 +465,12 @@ Die Integration nutzt modellabhängige Regelparameter.
 
 Aktuell unterstützt:
 
-- SF800Pro
-- SF1600AC+
-- SF2400AC
+- SolarFlow 800 Pro (SF800Pro)
+- SolarFlow 1600 AC+ (SF1600AC+)
+- SolarFlow 2400 AC (SF2400AC)
+- SolarFlow 2400 Pro (SF2400PRO)
+- Hyper 2000
+- Hub 2000
 
 Das Profil beeinflusst u. a.:
 
