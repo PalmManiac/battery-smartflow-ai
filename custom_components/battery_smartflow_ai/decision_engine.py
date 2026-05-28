@@ -150,11 +150,9 @@ class AdditionalBatteryBlockRule(BaseRule):
 
 class AdditionalBatteryDischargeBlockRule(BaseRule):
     def evaluate(self, engine, ctx):
-        if float(ctx.additional_battery_discharge_w or 0.0) > 50.0:
-            return engine._idle_result(
-                ctx,
-                reason="additional_battery_discharging_block",
-            )
+        # Zusatzakku-Entladung darf nur Ladeentscheidungen verhindern.
+        # Sie darf keine Entladung blockieren, insbesondere keine manuelle
+        # konstante Entladung.
         return None
 
 
@@ -259,9 +257,6 @@ class LearnedPlanningRule(BaseRule):
         if ctx.battery_capacity_kwh <= 0 or ctx.max_charge_w <= 0:
             return None
 
-        if float(ctx.additional_battery_discharge_w or 0.0) > 50.0:
-            return None
-
         if float(ctx.additional_battery_charge_w or 0.0) > 0.0:
             return None
 
@@ -322,6 +317,10 @@ class LearnedPlanningRule(BaseRule):
                 else "learned_charge_window_active"
             )
 
+            block = engine._charge_blocked_by_additional_battery_discharge(ctx)
+            if block is not None:
+                return block
+
             return engine._with_thresholds(
                 ctx,
                 DecisionResult(
@@ -356,6 +355,10 @@ class VeryCheapRule(BaseRule):
 
         if float(ctx.price_now) > float(ctx.very_cheap_price):
             return None
+
+        block = engine._charge_blocked_by_additional_battery_discharge(ctx)
+        if block is not None:
+            return block
 
         return engine._with_thresholds(
             ctx,
@@ -411,6 +414,10 @@ class ValleyBoostRule(BaseRule):
         if engine._forecast_available(ctx) and engine._forecast_outlook(ctx) == "mixed":
             charge_w = max(300.0, float(ctx.max_charge_w) * 0.75)
             reason = "valley_boost_charge_mixed_forecast"
+            
+        block = engine._charge_blocked_by_additional_battery_discharge(ctx)
+        if block is not None:
+            return block
 
         return engine._with_thresholds(
             ctx,
@@ -470,6 +477,10 @@ class ValleyOpportunityRule(BaseRule):
 
         charge_w = max(charge_w, 400.0)
 
+        block = engine._charge_blocked_by_additional_battery_discharge(ctx)
+        if block is not None:
+            return block
+
         return engine._with_thresholds(
             ctx,
             DecisionResult(
@@ -514,9 +525,6 @@ class PvRule(BaseRule):
             return None
 
         if ctx.soc >= ctx.soc_max:
-            return None
-
-        if float(ctx.additional_battery_discharge_w or 0.0) > 50.0:
             return None
 
         if (
@@ -629,6 +637,10 @@ class PvRule(BaseRule):
         charge_w = min(float(charge_w), float(ctx.max_charge_w))
 
         if charge_w > 0:
+            block = engine._charge_blocked_by_additional_battery_discharge(ctx)
+            if block is not None:
+                return block
+
             return engine._with_thresholds(
                 ctx,
                 DecisionResult(
@@ -681,6 +693,10 @@ class ManualRule(BaseRule):
             return None
 
         if ctx.manual_action == "charge":
+            block = engine._charge_blocked_by_additional_battery_discharge(ctx)
+            if block is not None:
+                return block
+
             return engine._with_thresholds(
                 ctx,
                 DecisionResult(
@@ -756,6 +772,29 @@ class DecisionEngine:
                 discharge_w=0.0,
                 reason=reason,
             ),
+        )
+        
+    def _additional_battery_discharge_blocks_charge(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return True when a second battery is discharging.
+
+        This must only block charging decisions. Discharging decisions,
+        especially manual constant discharge, must remain allowed.
+        """
+        return float(ctx.additional_battery_discharge_w or 0.0) > 50.0
+
+    def _charge_blocked_by_additional_battery_discharge(
+        self,
+        ctx: DecisionContext,
+    ) -> DecisionResult | None:
+        if not self._additional_battery_discharge_blocks_charge(ctx):
+            return None
+
+        return self._idle_result(
+            ctx,
+            reason="additional_battery_discharging_block",
         )
 
     def _profile_flag(self, ctx: DecisionContext, key: str, default: bool = False) -> bool:
@@ -1182,6 +1221,10 @@ class DecisionEngine:
                     and int(ctx.forecast_wait_block_counter or 0) >= 2
                 ):
                     reason = "planning_forecast_reality_override"
+                    
+            block = self._charge_blocked_by_additional_battery_discharge(ctx)
+            if block is not None:
+                return block
 
             return self._with_thresholds(
                 ctx,
