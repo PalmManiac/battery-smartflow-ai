@@ -312,6 +312,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # SF800Pro passthrough output smoothing
             "sf800_passthrough_prev_output_w": 0.0,
             "sf800_passthrough_smoothed_target_w": 0.0,
+            
+            # V4.2.0 regulation execution switch
+            "use_regulation_v42_command": False,
 
             # debug
             "debug": "init",
@@ -2396,13 +2399,47 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 last_output_limit_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
             )
 
-            ac_mode = (
+            legacy_ac_mode = (
                 ZENDURE_MODE_INPUT
                 if decision.ac_mode == "input"
                 else ZENDURE_MODE_OUTPUT
             )
-            in_w = float(decision.charge_w) if ac_mode == ZENDURE_MODE_INPUT else 0.0
-            out_w = float(decision.discharge_w) if ac_mode == ZENDURE_MODE_OUTPUT else 0.0
+            legacy_in_w = (
+                float(decision.charge_w)
+                if legacy_ac_mode == ZENDURE_MODE_INPUT
+                else 0.0
+            )
+            legacy_out_w = (
+                float(decision.discharge_w)
+                if legacy_ac_mode == ZENDURE_MODE_OUTPUT
+                else 0.0
+            )
+
+            use_regulation_v42_command = bool(
+                self._persist.get("use_regulation_v42_command", False)
+            )
+
+            if use_regulation_v42_command:
+                ac_mode = (
+                    ZENDURE_MODE_INPUT
+                    if regulation_device_command.ac_mode == "input"
+                    else ZENDURE_MODE_OUTPUT
+                )
+                in_w = (
+                    float(regulation_device_command.input_limit_w)
+                    if ac_mode == ZENDURE_MODE_INPUT
+                    else 0.0
+                )
+                out_w = (
+                    float(regulation_device_command.output_limit_w)
+                    if ac_mode == ZENDURE_MODE_OUTPUT
+                    else 0.0
+                )
+            else:
+                ac_mode = legacy_ac_mode
+                in_w = legacy_in_w
+                out_w = legacy_out_w
+
             is_passthrough = decision.reason == "pv_house_load_passthrough"
 
             if ac_mode == ZENDURE_MODE_INPUT:
@@ -2583,26 +2620,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "set_mode": ac_mode,
                 "set_input_w": int(round(in_w, 0)),
                 "set_output_w": int(round(out_w, 0)),
-                
-                # V4.2.0 regulation / old-vs-new comparison
-                "regulation_legacy_set_mode": ac_mode,
-                "regulation_legacy_set_input_w": int(round(in_w, 0)),
-                "regulation_legacy_set_output_w": int(round(out_w, 0)),
+
+                # V4.2.0 regulation execution switch / comparison
+                "regulation_v42_command_enabled": bool(use_regulation_v42_command),
+                "regulation_legacy_set_mode": legacy_ac_mode,
+                "regulation_legacy_set_input_w": int(round(legacy_in_w, 0)),
+                "regulation_legacy_set_output_w": int(round(legacy_out_w, 0)),
                 "regulation_command_diff_mode": (
-                    str(regulation_device_command.ac_mode) != str(ac_mode)
+                    str(regulation_device_command.ac_mode) != str(legacy_ac_mode)
                 ),
                 "regulation_command_diff_input_w": round(
-                    float(regulation_device_command.input_limit_w) - float(in_w),
+                    float(regulation_device_command.input_limit_w) - float(legacy_in_w),
                     2,
                 ),
                 "regulation_command_diff_output_w": round(
-                    float(regulation_device_command.output_limit_w) - float(out_w),
+                    float(regulation_device_command.output_limit_w) - float(legacy_out_w),
                     2,
                 ),
                 "regulation_command_matches_legacy": (
-                    str(regulation_device_command.ac_mode) == str(ac_mode)
-                    and abs(float(regulation_device_command.input_limit_w) - float(in_w)) < 1.0
-                    and abs(float(regulation_device_command.output_limit_w) - float(out_w)) < 1.0
+                    str(regulation_device_command.ac_mode) == str(legacy_ac_mode)
+                    and abs(
+                        float(regulation_device_command.input_limit_w) - float(legacy_in_w)
+                    ) < 1.0
+                    and abs(
+                        float(regulation_device_command.output_limit_w) - float(legacy_out_w)
+                    ) < 1.0
                 ),
                 
                 "ai_mode": ai_mode,
