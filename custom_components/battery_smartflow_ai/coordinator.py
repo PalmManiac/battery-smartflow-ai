@@ -131,6 +131,10 @@ from .grid_history import GridHistory, build_grid_history_config
 from .strategy_adapter import decision_to_strategy_intent
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
+from .regulation_power_controller import (
+    RegulationPowerController,
+    build_regulation_power_config,
+)
 
 _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
@@ -229,6 +233,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         
         self._mode_arbiter = ModeArbiter(
             build_mode_arbiter_config(self._get_active_profile())
+        )
+        
+        self._regulation_power_controller = RegulationPowerController(
+            build_regulation_power_config(self._get_active_profile())
         )
 
         self._store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -2367,6 +2375,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 current_ac_mode=self._state(self.entities.ac_mode),
                 additional_battery_discharge_w=float(additional_battery_discharge_w or 0.0),
             )
+            
+            regulation_power_result = self._regulation_power_controller.calculate(
+                intent=strategy_intent,
+                arbiter=mode_arbiter_result,
+                grid=grid_history_state,
+                previous_input_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
+                previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
+            )
 
             ac_mode = (
                 ZENDURE_MODE_INPUT
@@ -2586,6 +2602,30 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "regulation_cooldown_remaining_s": float(
                     mode_arbiter_result.cooldown_remaining_s
+                ),
+                
+                # V4.2.0 regulation / power controller diagnostics
+                "regulation_control_grid_w": round(
+                    float(grid_history_state.grid_now_w) * 0.6
+                    + float(grid_history_state.grid_avg_short_w) * 0.4,
+                    2,
+                ),
+                "regulation_raw_target_w": float(regulation_power_result.raw_target_w),
+                "regulation_limited_target_w": float(
+                    regulation_power_result.limited_target_w
+                ),
+                "regulation_applied_step_w": float(
+                    regulation_power_result.applied_step_w
+                ),
+                "regulation_final_power_w": float(
+                    regulation_power_result.final_power_w
+                ),
+                "regulation_power_reason": regulation_power_result.reason,
+                "regulation_profile_limited": bool(
+                    regulation_power_result.profile_limited
+                ),
+                "regulation_step_limited": bool(
+                    regulation_power_result.step_limited
                 ),
                 
                 "adaptive_peak_active": adaptive_peak_active,
