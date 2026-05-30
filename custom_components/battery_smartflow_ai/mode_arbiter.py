@@ -87,7 +87,19 @@ def _profile_int(profile: dict[str, Any], key: str, default: int) -> int:
 
 def _profile_bool(profile: dict[str, Any], key: str, default: bool) -> bool:
     try:
-        return bool(profile.get(key, default))
+        value = profile.get(key, default)
+
+        if isinstance(value, bool):
+            return value
+
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in ("true", "1", "yes", "on"):
+                return True
+            if normalized in ("false", "0", "no", "off", "none", ""):
+                return False
+
+        return bool(value)
     except Exception:
         return bool(default)
 
@@ -295,21 +307,17 @@ class ModeArbiter:
         if post_hold_result is not None:
             return post_hold_result
 
-        # Active latch minimum hold times.
-        active_hold_result = self._evaluate_active_min_hold(
-            now_utc=now_utc,
-            intent=intent,
-            runtime=runtime,
-            metadata=metadata,
-        )
-        if active_hold_result is not None:
-            return active_hold_result
-
         # External battery discharge blocks charging, but not discharging.
-        if (
-            requested_mode == "input"
-            and float(additional_battery_discharge_w or 0.0)
+        # It must also override an active PV/charge hold, otherwise a previous
+        # charge latch could keep INPUT alive while another battery is discharging.
+        additional_battery_discharge_active = (
+            float(additional_battery_discharge_w or 0.0)
             > float(self.config.external_battery_discharge_block_w)
+        )
+
+        if additional_battery_discharge_active and (
+            requested_mode == "input"
+            or runtime.active_regulation_state == "pv_charge_active"
         ):
             return ModeArbiterResult(
                 requested_mode=requested_mode,
@@ -319,8 +327,23 @@ class ModeArbiter:
                 active_regulation_state="neutral_hold",
                 active_hold_remaining_s=0.0,
                 cooldown_remaining_s=0.0,
-                metadata=metadata,
+                metadata={
+                    **metadata,
+                    "additional_battery_discharge_w": float(
+                        additional_battery_discharge_w or 0.0
+                    ),
+                },
             )
+
+        # Active latch minimum hold times.
+        active_hold_result = self._evaluate_active_min_hold(
+            now_utc=now_utc,
+            intent=intent,
+            runtime=runtime,
+            metadata=metadata,
+        )
+        if active_hold_result is not None:
+            return active_hold_result
 
         cooldown_remaining_s = self._mode_cooldown_remaining_s(
             now_utc=now_utc,
