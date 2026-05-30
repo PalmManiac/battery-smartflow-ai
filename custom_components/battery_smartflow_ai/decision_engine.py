@@ -498,6 +498,11 @@ class PvHouseLoadPassthroughRule(BaseRule):
     def evaluate(self, engine, ctx):
         if not engine._pv_houseload_passthrough_enabled(ctx):
             return None
+            
+        if ctx.ai_mode == "summer" or (
+            ctx.ai_mode == "automatic" and ctx.season == "summer"
+        ):
+            return None
 
         if not bool(ctx.pv_houseload_passthrough_active):
             return None
