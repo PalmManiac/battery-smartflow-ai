@@ -2413,8 +2413,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._set_input_limit(in_w)
             await self._set_output_limit(out_w)
 
-            self._persist["last_set_output_w"] = out_w
-
             is_charging = ac_mode == ZENDURE_MODE_INPUT and in_w > 0.0
             is_discharging = (
                 ac_mode == ZENDURE_MODE_OUTPUT
@@ -2585,6 +2583,28 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "set_mode": ac_mode,
                 "set_input_w": int(round(in_w, 0)),
                 "set_output_w": int(round(out_w, 0)),
+                
+                # V4.2.0 regulation / old-vs-new comparison
+                "regulation_legacy_set_mode": ac_mode,
+                "regulation_legacy_set_input_w": int(round(in_w, 0)),
+                "regulation_legacy_set_output_w": int(round(out_w, 0)),
+                "regulation_command_diff_mode": (
+                    str(regulation_device_command.ac_mode) != str(ac_mode)
+                ),
+                "regulation_command_diff_input_w": round(
+                    float(regulation_device_command.input_limit_w) - float(in_w),
+                    2,
+                ),
+                "regulation_command_diff_output_w": round(
+                    float(regulation_device_command.output_limit_w) - float(out_w),
+                    2,
+                ),
+                "regulation_command_matches_legacy": (
+                    str(regulation_device_command.ac_mode) == str(ac_mode)
+                    and abs(float(regulation_device_command.input_limit_w) - float(in_w)) < 1.0
+                    and abs(float(regulation_device_command.output_limit_w) - float(out_w)) < 1.0
+                ),
+                
                 "ai_mode": ai_mode,
                 "manual_action": manual_action,
                 "decision_reason": decision.reason,
