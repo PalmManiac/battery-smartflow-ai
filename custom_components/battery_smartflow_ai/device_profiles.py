@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+
+# V4.2.0:
+# Normal user-editable profile fields.
+#
+# Legacy controller values DEADBAND_W / KP_* / MAX_STEP_* are intentionally no
+# longer part of the normal override UI focus. They remain in the profiles as
+# fallback/migration values and are still accepted in merge_profile_with_overrides()
+# via PROFILE_MIGRATION_OVERRIDE_FIELDS.
 PROFILE_OVERRIDE_FIELDS = {
     "TARGET_IMPORT_W": {
         "label": "Ziel-Netzbezug",
@@ -9,14 +17,6 @@ PROFILE_OVERRIDE_FIELDS = {
         "unit": "W",
         "icon": "mdi:transmission-tower-import",
     },
-    "DEADBAND_W": {
-        "label": "Deadband (Legacy)",
-        "min": 0.0,
-        "max": 200.0,
-        "step": 5.0,
-        "unit": "W",
-        "icon": "mdi:arrow-expand-horizontal",
-    },
     "EXPORT_GUARD_W": {
         "label": "Export-Schutz",
         "min": 0.0,
@@ -24,38 +24,6 @@ PROFILE_OVERRIDE_FIELDS = {
         "step": 5.0,
         "unit": "W",
         "icon": "mdi:shield-outline",
-    },
-    "KP_UP": {
-        "label": "KP Hochregeln (Legacy)",
-        "min": 0.10,
-        "max": 2.00,
-        "step": 0.01,
-        "unit": "",
-        "icon": "mdi:chart-line-variant",
-    },
-    "KP_DOWN": {
-        "label": "KP Runterregeln (Legacy)",
-        "min": 0.10,
-        "max": 2.00,
-        "step": 0.01,
-        "unit": "",
-        "icon": "mdi:chart-line-variant",
-    },
-    "MAX_STEP_UP": {
-        "label": "Max. Schritt Hochregeln (Legacy)",
-        "min": 50.0,
-        "max": 2000.0,
-        "step": 10.0,
-        "unit": "W",
-        "icon": "mdi:arrow-up-bold",
-    },
-    "MAX_STEP_DOWN": {
-        "label": "Max. Schritt Runterregeln (Legacy)",
-        "min": 50.0,
-        "max": 2000.0,
-        "step": 10.0,
-        "unit": "W",
-        "icon": "mdi:arrow-down-bold",
     },
     "KEEPALIVE_MIN_DEFICIT_W": {
         "label": "Keepalive Mindestdefizit",
@@ -163,17 +131,148 @@ PROFILE_OVERRIDE_FIELDS = {
     },
 }
 
-# Optional: diese Felder sollen zwar sichtbar, aber nicht editierbar sein
+
+# V4.2.0:
+# Legacy fields are no longer part of the normal profile editor focus, but
+# old stored overrides should still be accepted for migration/backward
+# compatibility until the V4.3.0 cleanup.
+PROFILE_MIGRATION_OVERRIDE_FIELDS = {
+    "DEADBAND_W",
+    "KP_UP",
+    "KP_DOWN",
+    "MAX_STEP_UP",
+    "MAX_STEP_DOWN",
+}
+
+
+# Optional: diese Felder sollen zwar sichtbar, aber nicht editierbar sein.
 PROFILE_FIXED_FIELDS = {
     "MAX_INPUT_W",
     "MAX_OUTPUT_W",
 }
 
+
+# ---------------------------------------------------------------------------
+# Shared V4.2.0 regulation defaults
+# ---------------------------------------------------------------------------
+
+V42_GRID_HISTORY_DEFAULTS = {
+    "GRID_HISTORY_SHORT_SAMPLES": 3,
+    "GRID_HISTORY_MEDIUM_SAMPLES": 6,
+    "GRID_HISTORY_MAX_SAMPLES": 12,
+    "FAST_LOAD_CHANGE_W": 600.0,
+}
+
+
+V42_MODE_ARBITER_DEFAULTS = {
+    "MODE_SWITCH_COOLDOWN_S": 30.0,
+    "INPUT_AFTER_OUTPUT_BLOCK_S": 60.0,
+    "OUTPUT_AFTER_INPUT_BLOCK_S": 30.0,
+    "STABLE_EXPORT_CYCLES_FOR_PV_CHARGE": 3,
+    "STABLE_IMPORT_CYCLES_FOR_DISCHARGE": 2,
+    "EXTERNAL_BATTERY_DISCHARGE_BLOCK_W": 50.0,
+}
+
+
+V42_LATCH_HOLD_DEFAULTS = {
+    "PV_CHARGE_LATCH_MIN_HOLD_S": 120.0,
+    "PV_CHARGE_EXIT_IMPORT_CYCLES": 3,
+    "DISCHARGE_LATCH_MIN_HOLD_S": 60.0,
+    "DISCHARGE_EXIT_EXPORT_CYCLES": 3,
+    "PASSTHROUGH_LATCH_MIN_HOLD_S": 120.0,
+    "PASSTHROUGH_EXIT_CYCLES": 3,
+    "POST_LOAD_DROP_HOLD_S": 60.0,
+    "POST_OUTPUT_OVERSHOOT_HOLD_S": 60.0,
+}
+
+
+V42_DEFAULT_CAPABILITIES = {
+    "SUPPORTS_PASSTHROUGH": False,
+    "OUTPUT_ZERO_IS_NEUTRAL": True,
+    "INPUT_KEEPALIVE_SAFE": True,
+    "REQUIRES_STABLE_EXPORT_FOR_INPUT": False,
+    "SUPPORTS_FAST_MODE_SWITCH": True,
+}
+
+
+V42_SF800PRO_CAPABILITIES = {
+    "SUPPORTS_PASSTHROUGH": True,
+    "OUTPUT_ZERO_IS_NEUTRAL": True,
+    "INPUT_KEEPALIVE_SAFE": False,
+    "REQUIRES_STABLE_EXPORT_FOR_INPUT": True,
+    "SUPPORTS_FAST_MODE_SWITCH": False,
+}
+
+
+V42_COMMON_DEFAULTS = {
+    **V42_GRID_HISTORY_DEFAULTS,
+    **V42_MODE_ARBITER_DEFAULTS,
+    **V42_LATCH_HOLD_DEFAULTS,
+    **V42_DEFAULT_CAPABILITIES,
+}
+
+
+# ---------------------------------------------------------------------------
+# Legacy / transition passthrough defaults
+# ---------------------------------------------------------------------------
+
+PASSTHROUGH_DISABLED_DEFAULTS = {
+    # Legacy SF800Pro-specific keys, kept for V4.1.x/V4.2 transition code.
+    "PV_HOUSELOAD_PASSTHROUGH": False,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
+
+    # Legacy SF800Pro passthrough output smoothing, kept as transition fallback.
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 0.0,
+    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.0,
+
+    # Legacy PV charge latch keys, kept as transition fallback.
+    "PV_CHARGE_LATCH_HOLD_SECONDS": 0.0,
+    "PV_CHARGE_LATCH_STOP_CYCLES": 0,
+}
+
+
+SF800PRO_PASSTHROUGH_DEFAULTS = {
+    # Legacy SF800Pro-specific keys, kept until V4.2/V4.3 cleanup.
+    "PV_HOUSELOAD_PASSTHROUGH": True,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 300.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 120.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 120.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 18,
+
+    # Legacy SF800Pro passthrough output smoothing.
+    # Candidate for removal/deactivation once GridHistory + PowerController
+    # step limits fully replace this behavior.
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 80.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 100.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 150.0,
+    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.30,
+
+    # Legacy PV charge latch keys.
+    "PV_CHARGE_LATCH_HOLD_SECONDS": 300.0,
+    "PV_CHARGE_LATCH_STOP_CYCLES": 18,
+
+    # V4.2.0 generalized equivalents.
+    "PV_CHARGE_LATCH_MIN_HOLD_S": 300.0,
+    "PV_CHARGE_EXIT_IMPORT_CYCLES": 18,
+    "PASSTHROUGH_LATCH_MIN_HOLD_S": 300.0,
+    "PASSTHROUGH_EXIT_CYCLES": 18,
+}
+
+
+# ---------------------------------------------------------------------------
+# Device profiles
+# ---------------------------------------------------------------------------
+
 SF800PRO_PROFILE = {
     # --- UI ---
     "label": "Zendure SF800Pro",
 
-    # --- Legacy controller tuning ---
+    # --- Legacy controller tuning / fallback ---
     "TARGET_IMPORT_W": 30.0,
     "DEADBAND_W": 35.0,
     "EXPORT_GUARD_W": 40.0,
@@ -194,23 +293,11 @@ SF800PRO_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": True,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": True,
 
-    # --- SF800Pro-specific PV routing behavior ---
-    "PV_HOUSELOAD_PASSTHROUGH": True,
-    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 300.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 120.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 120.0,
-    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 18,
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **V42_SF800PRO_CAPABILITIES,
+    **SF800PRO_PASSTHROUGH_DEFAULTS,
 
-    # --- SF800Pro-specific passthrough output smoothing ---
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 80.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 100.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 150.0,
-    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.30,
-
-    # --- SF800Pro-specific PV charge latch ---
-    "PV_CHARGE_LATCH_HOLD_SECONDS": 300.0,
-    "PV_CHARGE_LATCH_STOP_CYCLES": 18,
-    
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 35.0,
     "CHARGE_KP_UP": 0.40,
@@ -230,11 +317,12 @@ SF800PRO_PROFILE = {
     "MAX_OUTPUT_W": 800.0,
 }
 
+
 SF2400AC_PROFILE = {
     # --- UI ---
     "label": "Zendure SF2400AC",
 
-    # --- Legacy controller tuning ---
+    # --- Legacy controller tuning / fallback ---
     "TARGET_IMPORT_W": 10.0,
     "DEADBAND_W": 30.0,
     "EXPORT_GUARD_W": 80.0,
@@ -253,22 +341,9 @@ SF2400AC_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
 
-    # --- SF800Pro-specific PV routing behavior ---
-    "PV_HOUSELOAD_PASSTHROUGH": False,
-    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
-
-    # --- SF800Pro-specific passthrough output smoothing ---
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.0,
-
-    # --- SF800Pro-specific PV charge latch ---
-    "PV_CHARGE_LATCH_HOLD_SECONDS": 0.0,
-    "PV_CHARGE_LATCH_STOP_CYCLES": 0,
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **PASSTHROUGH_DISABLED_DEFAULTS,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -288,12 +363,13 @@ SF2400AC_PROFILE = {
     "MAX_INPUT_W": 2400.0,
     "MAX_OUTPUT_W": 2400.0,
 }
+
 
 SF2400PRO_PROFILE = {
     # --- UI ---
     "label": "Zendure SF2400Pro",
 
-    # --- Legacy controller tuning ---
+    # --- Legacy controller tuning / fallback ---
     "TARGET_IMPORT_W": 10.0,
     "DEADBAND_W": 30.0,
     "EXPORT_GUARD_W": 80.0,
@@ -312,22 +388,9 @@ SF2400PRO_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
 
-    # --- SF800Pro-specific PV routing behavior ---
-    "PV_HOUSELOAD_PASSTHROUGH": False,
-    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
-
-    # --- SF800Pro-specific passthrough output smoothing ---
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.0,
-
-    # --- SF800Pro-specific PV charge latch ---
-    "PV_CHARGE_LATCH_HOLD_SECONDS": 0.0,
-    "PV_CHARGE_LATCH_STOP_CYCLES": 0,
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **PASSTHROUGH_DISABLED_DEFAULTS,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -348,11 +411,12 @@ SF2400PRO_PROFILE = {
     "MAX_OUTPUT_W": 2400.0,
 }
 
+
 SF1600AC_PROFILE = {
     # --- UI ---
     "label": "Zendure SF1600AC+",
 
-    # --- Legacy controller tuning ---
+    # --- Legacy controller tuning / fallback ---
     "TARGET_IMPORT_W": 35.0,
     "DEADBAND_W": 40.0,
     "EXPORT_GUARD_W": 45.0,
@@ -371,22 +435,9 @@ SF1600AC_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
 
-    # --- SF800Pro-specific PV routing behavior ---
-    "PV_HOUSELOAD_PASSTHROUGH": False,
-    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
-
-    # --- SF800Pro-specific passthrough output smoothing ---
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.0,
-
-    # --- SF800Pro-specific PV charge latch ---
-    "PV_CHARGE_LATCH_HOLD_SECONDS": 0.0,
-    "PV_CHARGE_LATCH_STOP_CYCLES": 0,
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **PASSTHROUGH_DISABLED_DEFAULTS,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 40.0,
@@ -407,11 +458,12 @@ SF1600AC_PROFILE = {
     "MAX_OUTPUT_W": 1600.0,
 }
 
+
 HYPER2000_PROFILE = {
     # --- UI ---
     "label": "Zendure Hyper 2000",
 
-    # --- Legacy controller tuning ---
+    # --- Legacy controller tuning / fallback ---
     "TARGET_IMPORT_W": 10.0,
     "DEADBAND_W": 30.0,
     "EXPORT_GUARD_W": 80.0,
@@ -430,22 +482,9 @@ HYPER2000_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
 
-    # --- SF800Pro-specific PV routing behavior ---
-    "PV_HOUSELOAD_PASSTHROUGH": False,
-    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
-
-    # --- SF800Pro-specific passthrough output smoothing ---
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.0,
-
-    # --- SF800Pro-specific PV charge latch ---
-    "PV_CHARGE_LATCH_HOLD_SECONDS": 0.0,
-    "PV_CHARGE_LATCH_STOP_CYCLES": 0,
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **PASSTHROUGH_DISABLED_DEFAULTS,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -466,11 +505,12 @@ HYPER2000_PROFILE = {
     "MAX_OUTPUT_W": 1200.0,
 }
 
+
 HUB2000_PROFILE = {
     # --- UI ---
     "label": "Zendure HUB2000",
 
-    # --- Legacy controller tuning ---
+    # --- Legacy controller tuning / fallback ---
     "TARGET_IMPORT_W": 10.0,
     "DEADBAND_W": 30.0,
     "EXPORT_GUARD_W": 80.0,
@@ -489,22 +529,9 @@ HUB2000_PROFILE = {
     "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
     "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
 
-    # --- SF800Pro-specific PV routing behavior ---
-    "PV_HOUSELOAD_PASSTHROUGH": False,
-    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 0,
-
-    # --- SF800Pro-specific passthrough output smoothing ---
-    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 0.0,
-    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.0,
-
-    # --- SF800Pro-specific PV charge latch ---
-    "PV_CHARGE_LATCH_HOLD_SECONDS": 0.0,
-    "PV_CHARGE_LATCH_STOP_CYCLES": 0,
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **PASSTHROUGH_DISABLED_DEFAULTS,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,
@@ -524,6 +551,7 @@ HUB2000_PROFILE = {
     "MAX_INPUT_W": 1800.0,
     "MAX_OUTPUT_W": 1200.0,
 }
+
 
 DEVICE_PROFILES = {
     "SF800Pro": SF800PRO_PROFILE,
@@ -553,7 +581,9 @@ def merge_profile_with_overrides(profile_key: str, overrides: dict | None) -> di
     if not overrides:
         return profile
 
-    for key in PROFILE_OVERRIDE_FIELDS:
+    allowed_override_keys = set(PROFILE_OVERRIDE_FIELDS) | PROFILE_MIGRATION_OVERRIDE_FIELDS
+
+    for key in allowed_override_keys:
         if key in overrides and overrides[key] is not None:
             try:
                 profile[key] = float(overrides[key])
