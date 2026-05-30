@@ -283,6 +283,27 @@ class ModeArbiter:
                 cooldown_remaining_s=0.0,
                 metadata=metadata,
             )
+            
+        # Post-load-drop / post-overshoot holds should react before normal mode checks.
+        post_hold_result = self._evaluate_post_holds(
+            now_utc=now_utc,
+            intent=intent,
+            grid=grid,
+            runtime=runtime,
+            metadata=metadata,
+        )
+        if post_hold_result is not None:
+            return post_hold_result
+
+        # Active latch minimum hold times.
+        active_hold_result = self._evaluate_active_min_hold(
+            now_utc=now_utc,
+            intent=intent,
+            runtime=runtime,
+            metadata=metadata,
+        )
+        if active_hold_result is not None:
+            return active_hold_result
 
         # External battery discharge blocks charging, but not discharging.
         if (
@@ -324,6 +345,7 @@ class ModeArbiter:
         # INPUT checks.
         if requested_mode == "input":
             return self._evaluate_input(
+                now_utc=now_utc,
                 intent=intent,
                 grid=grid,
                 runtime=runtime,
@@ -333,6 +355,7 @@ class ModeArbiter:
         # OUTPUT checks.
         if requested_mode == "output":
             return self._evaluate_output(
+                now_utc=now_utc,
                 intent=intent,
                 grid=grid,
                 runtime=runtime,
@@ -349,10 +372,217 @@ class ModeArbiter:
             cooldown_remaining_s=0.0,
             metadata=metadata,
         )
+        
+    def _evaluate_post_holds(
+        self,
+        *,
+        now_utc: datetime,
+        intent: StrategyIntent,
+        grid: GridHistoryState,
+        runtime: RegulationRuntimeState,
+        metadata: dict[str, Any],
+    ) -> ModeArbiterResult | None:
+        """Evaluate short post-event holds.
+
+        These holds prevent immediate INPUT switching after a large load drop or
+        after output overshoot. Instead, the PowerController can ramp output down.
+        """
+
+        requested_mode = intent.requested_mode
+
+        post_load_drop_remaining_s = self._remaining_until_s(
+            now_utc,
+            runtime.post_load_drop_hold_until,
+        )
+
+        if (
+            requested_mode == "input"
+            and post_load_drop_remaining_s > 0.0
+            and intent.intent == "pv_charge"
+        ):
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="ramp_down_output",
+                allowed=True,
+                reason="post_load_drop_ramp_down_output",
+                active_regulation_state="discharge_active",
+                active_hold_remaining_s=post_load_drop_remaining_s,
+                cooldown_remaining_s=0.0,
+                metadata={
+                    **metadata,
+                    "post_load_drop_remaining_s": round(
+                        post_load_drop_remaining_s,
+                        1,
+                    ),
+                },
+            )
+
+        post_output_overshoot_remaining_s = self._remaining_until_s(
+            now_utc,
+            runtime.post_output_overshoot_hold_until,
+        )
+
+        if (
+            requested_mode == "input"
+            and post_output_overshoot_remaining_s > 0.0
+            and intent.intent == "pv_charge"
+        ):
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="ramp_down_output",
+                allowed=True,
+                reason="post_output_overshoot_ramp_down_output",
+                active_regulation_state="discharge_active",
+                active_hold_remaining_s=post_output_overshoot_remaining_s,
+                cooldown_remaining_s=0.0,
+                metadata={
+                    **metadata,
+                    "post_output_overshoot_remaining_s": round(
+                        post_output_overshoot_remaining_s,
+                        1,
+                    ),
+                },
+            )
+
+        # Immediate one-cycle reaction before the persisted hold is visible on the
+        # next update cycle.
+        if (
+            requested_mode == "input"
+            and intent.intent == "pv_charge"
+            and bool(grid.fast_load_drop_detected)
+            and runtime.active_regulation_state == "discharge_active"
+        ):
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="ramp_down_output",
+                allowed=True,
+                reason="fast_load_drop_ramp_down_output",
+                active_regulation_state="discharge_active",
+                active_hold_remaining_s=float(self.config.post_load_drop_hold_s),
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        return None
+
+
+    def _evaluate_active_min_hold(
+        self,
+        *,
+        now_utc: datetime,
+        intent: StrategyIntent,
+        runtime: RegulationRuntimeState,
+        metadata: dict[str, Any],
+    ) -> ModeArbiterResult | None:
+        """Keep active regulation states alive for their minimum hold time."""
+
+        requested_mode = intent.requested_mode
+
+        if runtime.active_regulation_state == "pv_charge_active":
+            remaining_s = self._latch_remaining_s(
+                now_utc=now_utc,
+                started_ts=runtime.pv_charge_latch_started_ts,
+                hold_s=self.config.pv_charge_latch_min_hold_s,
+            )
+
+            if remaining_s > 0.0 and requested_mode != "input":
+                return ModeArbiterResult(
+                    requested_mode=requested_mode,
+                    resolved_mode="input",
+                    allowed=True,
+                    reason="pv_charge_min_hold_active",
+                    active_regulation_state="pv_charge_active",
+                    active_hold_remaining_s=remaining_s,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "pv_charge_hold_remaining_s": round(remaining_s, 1),
+                    },
+                )
+
+        if runtime.active_regulation_state == "discharge_active":
+            remaining_s = self._latch_remaining_s(
+                now_utc=now_utc,
+                started_ts=runtime.discharge_latch_started_ts,
+                hold_s=self.config.discharge_latch_min_hold_s,
+            )
+
+            if remaining_s > 0.0 and requested_mode != "output":
+                return ModeArbiterResult(
+                    requested_mode=requested_mode,
+                    resolved_mode="ramp_down_output",
+                    allowed=True,
+                    reason="discharge_min_hold_ramp_down_output",
+                    active_regulation_state="discharge_active",
+                    active_hold_remaining_s=remaining_s,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "discharge_hold_remaining_s": round(remaining_s, 1),
+                    },
+                )
+
+        if runtime.active_regulation_state == "passthrough_active":
+            remaining_s = self._latch_remaining_s(
+                now_utc=now_utc,
+                started_ts=runtime.passthrough_latch_started_ts,
+                hold_s=self.config.passthrough_latch_min_hold_s,
+            )
+
+            if remaining_s > 0.0 and requested_mode != "output":
+                return ModeArbiterResult(
+                    requested_mode=requested_mode,
+                    resolved_mode="output",
+                    allowed=True,
+                    reason="passthrough_min_hold_active",
+                    active_regulation_state="passthrough_active",
+                    active_hold_remaining_s=remaining_s,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "passthrough_hold_remaining_s": round(remaining_s, 1),
+                    },
+                )
+
+        return None
+
+
+    def _remaining_until_s(
+        self,
+        now_utc: datetime,
+        until_ts: datetime | None,
+    ) -> float:
+        if until_ts is None:
+            return 0.0
+
+        try:
+            until_utc = dt_util.as_utc(until_ts)
+            return max(0.0, (until_utc - now_utc).total_seconds())
+        except Exception:
+            return 0.0
+
+
+    def _latch_remaining_s(
+        self,
+        *,
+        now_utc: datetime,
+        started_ts: datetime | None,
+        hold_s: float,
+    ) -> float:
+        if started_ts is None:
+            return 0.0
+
+        try:
+            started_utc = dt_util.as_utc(started_ts)
+            elapsed_s = (now_utc - started_utc).total_seconds()
+            return max(0.0, float(hold_s) - elapsed_s)
+        except Exception:
+            return 0.0
 
     def _evaluate_input(
         self,
         *,
+        now_utc: datetime,
         intent: StrategyIntent,
         grid: GridHistoryState,
         runtime: RegulationRuntimeState,
@@ -423,6 +653,7 @@ class ModeArbiter:
     def _evaluate_output(
         self,
         *,
+        now_utc: datetime,
         intent: StrategyIntent,
         grid: GridHistoryState,
         runtime: RegulationRuntimeState,

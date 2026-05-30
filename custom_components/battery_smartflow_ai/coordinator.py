@@ -923,6 +923,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         command_skip_reason: str,
         current_ac_mode: str | None,
         command_ac_mode: str,
+        profile: dict[str, Any],
+        grid: Any,
     ) -> None:
         """Persist V4.2.0 regulation runtime diagnostics.
 
@@ -932,6 +934,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
 
         now_utc = dt_util.as_utc(now)
+        
+        post_load_drop_hold_s = float(profile.get("POST_LOAD_DROP_HOLD_S", 60.0) or 60.0)
+        post_output_overshoot_hold_s = float(
+            profile.get("POST_OUTPUT_OVERSHOOT_HOLD_S", 60.0) or 60.0
+        )
+        export_guard_w = float(profile.get("EXPORT_GUARD_W", 80.0) or 80.0)
+        last_output_w = float(self._persist.get("last_set_output_w", 0.0) or 0.0)
 
         previous_resolved_mode = str(
             self._persist.get("regulation_last_resolved_mode", "idle") or "idle"
@@ -992,6 +1001,45 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
         else:
             self._persist["regulation_passthrough_latch_started_ts"] = None
+            
+        # Post-load-drop hold:
+        # If a large load drop happens while output was active, avoid switching
+        # directly into INPUT/PV charge. Let the new controller ramp output down first.
+        if bool(getattr(grid, "fast_load_drop_detected", False)) and (
+            last_output_w > 0.0
+            or previous_active_state == "discharge_active"
+            or active_state == "discharge_active"
+        ):
+            self._persist["regulation_post_load_drop_hold_until"] = (
+                now_utc + timedelta(seconds=post_load_drop_hold_s)
+            ).isoformat()
+
+        # Post-output-overshoot hold:
+        # If output causes/keeps export beyond guard, block immediate INPUT handover.
+        grid_now_w = float(getattr(grid, "grid_now_w", 0.0) or 0.0)
+        if grid_now_w <= -abs(export_guard_w) and (
+            last_output_w > 0.0
+            or previous_active_state == "discharge_active"
+            or active_state == "discharge_active"
+        ):
+            self._persist["regulation_post_output_overshoot_hold_until"] = (
+                now_utc + timedelta(seconds=post_output_overshoot_hold_s)
+            ).isoformat()
+
+        # Cleanup expired post holds.
+        for key in (
+            "regulation_post_load_drop_hold_until",
+            "regulation_post_output_overshoot_hold_until",
+        ):
+            raw = self._persist.get(key)
+            if not raw:
+                continue
+            try:
+                dt = dt_util.parse_datetime(str(raw))
+                if dt is None or dt_util.as_utc(dt) <= now_utc:
+                    self._persist[key] = None
+            except Exception:
+                self._persist[key] = None
 
     def _update_pv_charge_hysteresis(
         self,
@@ -2493,17 +2541,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 last_input_limit_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 last_output_limit_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
             )
-            
-            self._update_regulation_runtime_state(
-                now=now,
-                requested_mode=str(mode_arbiter_result.requested_mode),
-                resolved_mode=str(mode_arbiter_result.resolved_mode),
-                active_state=str(mode_arbiter_result.active_regulation_state),
-                command_skipped=bool(regulation_device_command.skipped),
-                command_skip_reason=str(regulation_device_command.skip_reason),
-                current_ac_mode=self._state(self.entities.ac_mode),
-                command_ac_mode=str(regulation_device_command.ac_mode),
-            )
 
             legacy_ac_mode = (
                 ZENDURE_MODE_INPUT
@@ -2545,6 +2582,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ac_mode = legacy_ac_mode
                 in_w = legacy_in_w
                 out_w = legacy_out_w
+                
+            self._update_regulation_runtime_state(
+                now=now,
+                requested_mode=str(mode_arbiter_result.requested_mode),
+                resolved_mode=str(mode_arbiter_result.resolved_mode),
+                active_state=str(mode_arbiter_result.active_regulation_state),
+                command_skipped=bool(regulation_device_command.skipped) if use_regulation_v42_command else False,
+                command_skip_reason=(
+                    str(regulation_device_command.skip_reason)
+                    if use_regulation_v42_command
+                    else "legacy_active"
+                ),
+                current_ac_mode=self._state(self.entities.ac_mode),
+                command_ac_mode=str(regulation_device_command.ac_mode),
+                profile=profile,
+                grid=grid_history_state,
+            )
 
             is_passthrough = decision.reason == "pv_house_load_passthrough"
 
@@ -2859,6 +2913,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "regulation_runtime_skipped_write_reason": str(
                     self._persist.get("regulation_skipped_write_reason", "none")
+                ),
+                
+                "regulation_runtime_post_load_drop_hold_until": self._persist.get(
+                    "regulation_post_load_drop_hold_until"
+                ),
+                "regulation_runtime_post_output_overshoot_hold_until": self._persist.get(
+                    "regulation_post_output_overshoot_hold_until"
                 ),
                 
                 "adaptive_peak_active": adaptive_peak_active,
