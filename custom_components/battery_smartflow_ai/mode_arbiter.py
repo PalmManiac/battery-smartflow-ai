@@ -1,0 +1,527 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any
+
+from homeassistant.util import dt as dt_util
+
+from .regulation_models import (
+    GridHistoryState,
+    ModeArbiterResult,
+    RegulationRuntimeState,
+    StrategyIntent,
+)
+
+
+DEFAULT_MODE_SWITCH_COOLDOWN_S = 30.0
+DEFAULT_INPUT_AFTER_OUTPUT_BLOCK_S = 60.0
+DEFAULT_OUTPUT_AFTER_INPUT_BLOCK_S = 30.0
+
+DEFAULT_STABLE_EXPORT_CYCLES_FOR_PV_CHARGE = 3
+DEFAULT_STABLE_IMPORT_CYCLES_FOR_DISCHARGE = 2
+
+DEFAULT_PV_CHARGE_LATCH_MIN_HOLD_S = 120.0
+DEFAULT_PV_CHARGE_EXIT_IMPORT_CYCLES = 3
+
+DEFAULT_DISCHARGE_LATCH_MIN_HOLD_S = 60.0
+DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
+
+DEFAULT_PASSTHROUGH_LATCH_MIN_HOLD_S = 120.0
+DEFAULT_PASSTHROUGH_EXIT_CYCLES = 3
+
+DEFAULT_POST_LOAD_DROP_HOLD_S = 60.0
+DEFAULT_POST_OUTPUT_OVERSHOOT_HOLD_S = 60.0
+
+DEFAULT_EXTERNAL_BATTERY_DISCHARGE_BLOCK_W = 50.0
+
+
+@dataclass
+class ModeArbiterConfig:
+    mode_switch_cooldown_s: float = DEFAULT_MODE_SWITCH_COOLDOWN_S
+    input_after_output_block_s: float = DEFAULT_INPUT_AFTER_OUTPUT_BLOCK_S
+    output_after_input_block_s: float = DEFAULT_OUTPUT_AFTER_INPUT_BLOCK_S
+
+    stable_export_cycles_for_pv_charge: int = (
+        DEFAULT_STABLE_EXPORT_CYCLES_FOR_PV_CHARGE
+    )
+    stable_import_cycles_for_discharge: int = (
+        DEFAULT_STABLE_IMPORT_CYCLES_FOR_DISCHARGE
+    )
+
+    pv_charge_latch_min_hold_s: float = DEFAULT_PV_CHARGE_LATCH_MIN_HOLD_S
+    pv_charge_exit_import_cycles: int = DEFAULT_PV_CHARGE_EXIT_IMPORT_CYCLES
+
+    discharge_latch_min_hold_s: float = DEFAULT_DISCHARGE_LATCH_MIN_HOLD_S
+    discharge_exit_export_cycles: int = DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES
+
+    passthrough_latch_min_hold_s: float = DEFAULT_PASSTHROUGH_LATCH_MIN_HOLD_S
+    passthrough_exit_cycles: int = DEFAULT_PASSTHROUGH_EXIT_CYCLES
+
+    post_load_drop_hold_s: float = DEFAULT_POST_LOAD_DROP_HOLD_S
+    post_output_overshoot_hold_s: float = DEFAULT_POST_OUTPUT_OVERSHOOT_HOLD_S
+
+    external_battery_discharge_block_w: float = (
+        DEFAULT_EXTERNAL_BATTERY_DISCHARGE_BLOCK_W
+    )
+
+    supports_passthrough: bool = False
+    input_keepalive_safe: bool = True
+    requires_stable_export_for_input: bool = False
+    supports_fast_mode_switch: bool = True
+
+
+def _profile_float(profile: dict[str, Any], key: str, default: float) -> float:
+    try:
+        return float(profile.get(key, default))
+    except Exception:
+        return float(default)
+
+
+def _profile_int(profile: dict[str, Any], key: str, default: int) -> int:
+    try:
+        return int(profile.get(key, default))
+    except Exception:
+        return int(default)
+
+
+def _profile_bool(profile: dict[str, Any], key: str, default: bool) -> bool:
+    try:
+        return bool(profile.get(key, default))
+    except Exception:
+        return bool(default)
+
+
+def build_mode_arbiter_config(profile: dict[str, Any]) -> ModeArbiterConfig:
+    """Build ModeArbiterConfig from device profile/capabilities."""
+
+    return ModeArbiterConfig(
+        mode_switch_cooldown_s=_profile_float(
+            profile,
+            "MODE_SWITCH_COOLDOWN_S",
+            DEFAULT_MODE_SWITCH_COOLDOWN_S,
+        ),
+        input_after_output_block_s=_profile_float(
+            profile,
+            "INPUT_AFTER_OUTPUT_BLOCK_S",
+            DEFAULT_INPUT_AFTER_OUTPUT_BLOCK_S,
+        ),
+        output_after_input_block_s=_profile_float(
+            profile,
+            "OUTPUT_AFTER_INPUT_BLOCK_S",
+            DEFAULT_OUTPUT_AFTER_INPUT_BLOCK_S,
+        ),
+        stable_export_cycles_for_pv_charge=_profile_int(
+            profile,
+            "STABLE_EXPORT_CYCLES_FOR_PV_CHARGE",
+            DEFAULT_STABLE_EXPORT_CYCLES_FOR_PV_CHARGE,
+        ),
+        stable_import_cycles_for_discharge=_profile_int(
+            profile,
+            "STABLE_IMPORT_CYCLES_FOR_DISCHARGE",
+            DEFAULT_STABLE_IMPORT_CYCLES_FOR_DISCHARGE,
+        ),
+        pv_charge_latch_min_hold_s=_profile_float(
+            profile,
+            "PV_CHARGE_LATCH_MIN_HOLD_S",
+            _profile_float(
+                profile,
+                "PV_CHARGE_LATCH_HOLD_SECONDS",
+                DEFAULT_PV_CHARGE_LATCH_MIN_HOLD_S,
+            ),
+        ),
+        pv_charge_exit_import_cycles=_profile_int(
+            profile,
+            "PV_CHARGE_EXIT_IMPORT_CYCLES",
+            _profile_int(
+                profile,
+                "PV_CHARGE_LATCH_STOP_CYCLES",
+                DEFAULT_PV_CHARGE_EXIT_IMPORT_CYCLES,
+            ),
+        ),
+        discharge_latch_min_hold_s=_profile_float(
+            profile,
+            "DISCHARGE_LATCH_MIN_HOLD_S",
+            DEFAULT_DISCHARGE_LATCH_MIN_HOLD_S,
+        ),
+        discharge_exit_export_cycles=_profile_int(
+            profile,
+            "DISCHARGE_EXIT_EXPORT_CYCLES",
+            DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES,
+        ),
+        passthrough_latch_min_hold_s=_profile_float(
+            profile,
+            "PASSTHROUGH_LATCH_MIN_HOLD_S",
+            _profile_float(
+                profile,
+                "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS",
+                DEFAULT_PASSTHROUGH_LATCH_MIN_HOLD_S,
+            ),
+        ),
+        passthrough_exit_cycles=_profile_int(
+            profile,
+            "PASSTHROUGH_EXIT_CYCLES",
+            _profile_int(
+                profile,
+                "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES",
+                DEFAULT_PASSTHROUGH_EXIT_CYCLES,
+            ),
+        ),
+        post_load_drop_hold_s=_profile_float(
+            profile,
+            "POST_LOAD_DROP_HOLD_S",
+            DEFAULT_POST_LOAD_DROP_HOLD_S,
+        ),
+        post_output_overshoot_hold_s=_profile_float(
+            profile,
+            "POST_OUTPUT_OVERSHOOT_HOLD_S",
+            DEFAULT_POST_OUTPUT_OVERSHOOT_HOLD_S,
+        ),
+        external_battery_discharge_block_w=_profile_float(
+            profile,
+            "EXTERNAL_BATTERY_DISCHARGE_BLOCK_W",
+            DEFAULT_EXTERNAL_BATTERY_DISCHARGE_BLOCK_W,
+        ),
+        supports_passthrough=_profile_bool(
+            profile,
+            "SUPPORTS_PASSTHROUGH",
+            _profile_bool(profile, "PV_HOUSELOAD_PASSTHROUGH", False),
+        ),
+        input_keepalive_safe=_profile_bool(
+            profile,
+            "INPUT_KEEPALIVE_SAFE",
+            True,
+        ),
+        requires_stable_export_for_input=_profile_bool(
+            profile,
+            "REQUIRES_STABLE_EXPORT_FOR_INPUT",
+            False,
+        ),
+        supports_fast_mode_switch=_profile_bool(
+            profile,
+            "SUPPORTS_FAST_MODE_SWITCH",
+            True,
+        ),
+    )
+
+
+class ModeArbiter:
+    """Technical mode permission layer.
+
+    The Decision Engine says what should happen.
+    The ModeArbiter decides whether the requested mode may technically happen now.
+    """
+
+    def __init__(self, config: ModeArbiterConfig | None = None) -> None:
+        self.config = config or ModeArbiterConfig()
+
+    def evaluate(
+        self,
+        *,
+        now: datetime,
+        intent: StrategyIntent,
+        grid: GridHistoryState,
+        runtime: RegulationRuntimeState,
+        current_ac_mode: str | None,
+        additional_battery_discharge_w: float = 0.0,
+    ) -> ModeArbiterResult:
+        now_utc = dt_util.as_utc(now)
+
+        requested_mode = intent.requested_mode
+
+        metadata: dict[str, Any] = {
+            "intent": intent.intent,
+            "requested_power_w": intent.requested_power_w,
+            "grid_now_w": grid.grid_now_w,
+            "grid_avg_short_w": grid.grid_avg_short_w,
+            "stable_import_cycles": grid.stable_import_cycles,
+            "stable_export_cycles": grid.stable_export_cycles,
+            "current_ac_mode": current_ac_mode,
+            "last_resolved_mode": runtime.last_resolved_mode,
+            "last_ac_mode": runtime.last_ac_mode,
+        }
+
+        # Emergency/manual force may switch modes immediately.
+        if intent.force:
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode=(
+                    requested_mode
+                    if requested_mode in ("input", "output")
+                    else "idle"
+                ),
+                allowed=True,
+                reason="force_intent",
+                active_regulation_state=self._state_for_intent(intent.intent),
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        # Idle is always allowed.
+        if requested_mode == "idle":
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="idle",
+                allowed=True,
+                reason=intent.reason or "idle",
+                active_regulation_state="neutral_hold",
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        # If the strategy explicitly does not allow switching, hold.
+        if not intent.allow_mode_switch:
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="hold",
+                allowed=False,
+                reason="mode_switch_not_allowed_by_strategy",
+                active_regulation_state=runtime.active_regulation_state,
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        # External battery discharge blocks charging, but not discharging.
+        if (
+            requested_mode == "input"
+            and float(additional_battery_discharge_w or 0.0)
+            > float(self.config.external_battery_discharge_block_w)
+        ):
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="idle",
+                allowed=False,
+                reason="external_battery_discharge_blocks_input",
+                active_regulation_state="neutral_hold",
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        cooldown_remaining_s = self._mode_cooldown_remaining_s(
+            now_utc=now_utc,
+            runtime=runtime,
+        )
+
+        if cooldown_remaining_s > 0.0 and self._is_real_mode_switch(
+            current_ac_mode=current_ac_mode,
+            requested_mode=requested_mode,
+        ):
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="hold",
+                allowed=False,
+                reason="mode_switch_cooldown_active",
+                active_regulation_state=runtime.active_regulation_state,
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=cooldown_remaining_s,
+                metadata=metadata,
+            )
+
+        # INPUT checks.
+        if requested_mode == "input":
+            return self._evaluate_input(
+                intent=intent,
+                grid=grid,
+                runtime=runtime,
+                metadata=metadata,
+            )
+
+        # OUTPUT checks.
+        if requested_mode == "output":
+            return self._evaluate_output(
+                intent=intent,
+                grid=grid,
+                runtime=runtime,
+                metadata=metadata,
+            )
+
+        return ModeArbiterResult(
+            requested_mode=requested_mode,
+            resolved_mode="idle",
+            allowed=True,
+            reason="fallback_idle",
+            active_regulation_state="neutral_hold",
+            active_hold_remaining_s=0.0,
+            cooldown_remaining_s=0.0,
+            metadata=metadata,
+        )
+
+    def _evaluate_input(
+        self,
+        *,
+        intent: StrategyIntent,
+        grid: GridHistoryState,
+        runtime: RegulationRuntimeState,
+        metadata: dict[str, Any],
+    ) -> ModeArbiterResult:
+        # PV charging needs stable export unless forced.
+        if intent.intent == "pv_charge":
+            if (
+                grid.stable_export_cycles
+                < self.config.stable_export_cycles_for_pv_charge
+            ):
+                return ModeArbiterResult(
+                    requested_mode="input",
+                    resolved_mode="hold",
+                    allowed=False,
+                    reason="pv_charge_wait_stable_export",
+                    active_regulation_state=runtime.active_regulation_state,
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata=metadata,
+                )
+
+            return ModeArbiterResult(
+                requested_mode="input",
+                resolved_mode="input",
+                allowed=True,
+                reason="pv_charge_stable_export",
+                active_regulation_state="pv_charge_active",
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        # Some devices should not enter INPUT without stable export unless it is
+        # a planned/grid charge.
+        if (
+            self.config.requires_stable_export_for_input
+            and intent.intent not in (
+                "planned_charge",
+                "manual_charge",
+                "emergency_charge",
+            )
+            and grid.stable_export_cycles
+            < self.config.stable_export_cycles_for_pv_charge
+        ):
+            return ModeArbiterResult(
+                requested_mode="input",
+                resolved_mode="hold",
+                allowed=False,
+                reason="input_requires_stable_export",
+                active_regulation_state=runtime.active_regulation_state,
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        return ModeArbiterResult(
+            requested_mode="input",
+            resolved_mode="input",
+            allowed=True,
+            reason=f"{intent.intent}_input_allowed",
+            active_regulation_state=self._state_for_intent(intent.intent),
+            active_hold_remaining_s=0.0,
+            cooldown_remaining_s=0.0,
+            metadata=metadata,
+        )
+
+    def _evaluate_output(
+        self,
+        *,
+        intent: StrategyIntent,
+        grid: GridHistoryState,
+        runtime: RegulationRuntimeState,
+        metadata: dict[str, Any],
+    ) -> ModeArbiterResult:
+        # Discharge should generally wait for stable import, but passthrough has
+        # its own semantics and manual/forced intents are handled earlier.
+        if intent.intent in (
+            "cover_deficit",
+            "peak_discharge",
+            "arbitrage_discharge",
+        ):
+            if (
+                grid.stable_import_cycles
+                < self.config.stable_import_cycles_for_discharge
+            ):
+                return ModeArbiterResult(
+                    requested_mode="output",
+                    resolved_mode="hold",
+                    allowed=False,
+                    reason="discharge_wait_stable_import",
+                    active_regulation_state=runtime.active_regulation_state,
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata=metadata,
+                )
+
+        if intent.intent == "passthrough" and not self.config.supports_passthrough:
+            return ModeArbiterResult(
+                requested_mode="output",
+                resolved_mode="idle",
+                allowed=False,
+                reason="passthrough_not_supported",
+                active_regulation_state="neutral_hold",
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        return ModeArbiterResult(
+            requested_mode="output",
+            resolved_mode="output",
+            allowed=True,
+            reason=f"{intent.intent}_output_allowed",
+            active_regulation_state=self._state_for_intent(intent.intent),
+            active_hold_remaining_s=0.0,
+            cooldown_remaining_s=0.0,
+            metadata=metadata,
+        )
+
+    def _mode_cooldown_remaining_s(
+        self,
+        *,
+        now_utc: datetime,
+        runtime: RegulationRuntimeState,
+    ) -> float:
+        if self.config.supports_fast_mode_switch:
+            return 0.0
+
+        if runtime.last_mode_change_ts is None:
+            return 0.0
+
+        last_change = dt_util.as_utc(runtime.last_mode_change_ts)
+        elapsed_s = (now_utc - last_change).total_seconds()
+
+        remaining = float(self.config.mode_switch_cooldown_s) - elapsed_s
+        return max(0.0, remaining)
+
+    def _is_real_mode_switch(
+        self,
+        *,
+        current_ac_mode: str | None,
+        requested_mode: str,
+    ) -> bool:
+        if requested_mode not in ("input", "output"):
+            return False
+
+        if current_ac_mode not in ("input", "output"):
+            return True
+
+        return str(current_ac_mode) != str(requested_mode)
+
+    def _state_for_intent(self, intent: str):
+        if intent == "pv_charge":
+            return "pv_charge_active"
+        if intent in (
+            "cover_deficit",
+            "peak_discharge",
+            "arbitrage_discharge",
+            "manual_discharge",
+            "manual_constant_discharge",
+        ):
+            return "discharge_active"
+        if intent == "passthrough":
+            return "passthrough_active"
+        if intent in (
+            "planned_charge",
+            "manual_charge",
+            "emergency_charge",
+        ):
+            return "pv_charge_active"
+        return "none"
