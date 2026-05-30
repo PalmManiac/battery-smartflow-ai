@@ -316,6 +316,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # V4.2.0 regulation execution switch
             "use_regulation_v42_command": False,
 
+            # V4.2.0 regulation runtime state
+            "regulation_last_resolved_mode": "idle",
+            "regulation_last_requested_mode": "idle",
+            "regulation_last_mode_change_ts": None,
+            "regulation_last_command_ts": None,
+            "regulation_active_state": "none",
+            "regulation_active_state_started_ts": None,
+            "regulation_post_load_drop_hold_until": None,
+            "regulation_post_output_overshoot_hold_until": None,
+            "regulation_pv_charge_latch_started_ts": None,
+            "regulation_discharge_latch_started_ts": None,
+            "regulation_passthrough_latch_started_ts": None,
+            "regulation_skipped_write_reason": "none",
+
             # debug
             "debug": "init",
         }
@@ -897,6 +911,87 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or "none"
             ),
         )
+        
+    def _update_regulation_runtime_state(
+        self,
+        *,
+        now: datetime,
+        requested_mode: str,
+        resolved_mode: str,
+        active_state: str,
+        command_skipped: bool,
+        command_skip_reason: str,
+        current_ac_mode: str | None,
+        command_ac_mode: str,
+    ) -> None:
+        """Persist V4.2.0 regulation runtime diagnostics.
+
+        During the transition this state is mostly diagnostic. Once the V4.2
+        command path is enabled, the same state is used for cooldowns, holds and
+        cleaner command decisions.
+        """
+
+        now_utc = dt_util.as_utc(now)
+
+        previous_resolved_mode = str(
+            self._persist.get("regulation_last_resolved_mode", "idle") or "idle"
+        )
+
+        previous_ac_mode = str(self._persist.get("last_set_mode") or current_ac_mode or "")
+
+        real_mode_changed = (
+            command_ac_mode in ("input", "output")
+            and previous_ac_mode in ("input", "output")
+            and command_ac_mode != previous_ac_mode
+        )
+
+        resolved_mode_changed = (
+            resolved_mode in ("input", "output")
+            and previous_resolved_mode in ("input", "output")
+            and resolved_mode != previous_resolved_mode
+        )
+
+        if real_mode_changed or resolved_mode_changed:
+            self._persist["regulation_last_mode_change_ts"] = now_utc.isoformat()
+
+        previous_active_state = str(
+            self._persist.get("regulation_active_state", "none") or "none"
+        )
+
+        if active_state != previous_active_state:
+            self._persist["regulation_active_state_started_ts"] = now_utc.isoformat()
+
+        self._persist["regulation_last_requested_mode"] = str(requested_mode)
+        self._persist["regulation_last_resolved_mode"] = str(resolved_mode)
+        self._persist["regulation_active_state"] = str(active_state)
+        self._persist["regulation_last_command_ts"] = now_utc.isoformat()
+        self._persist["regulation_skipped_write_reason"] = (
+            str(command_skip_reason) if command_skipped else "none"
+        )
+
+        if active_state == "pv_charge_active":
+            if not self._persist.get("regulation_pv_charge_latch_started_ts"):
+                self._persist["regulation_pv_charge_latch_started_ts"] = (
+                    now_utc.isoformat()
+                )
+        else:
+            self._persist["regulation_pv_charge_latch_started_ts"] = None
+
+        if active_state == "discharge_active":
+            if not self._persist.get("regulation_discharge_latch_started_ts"):
+                self._persist["regulation_discharge_latch_started_ts"] = (
+                    now_utc.isoformat()
+                )
+        else:
+            self._persist["regulation_discharge_latch_started_ts"] = None
+
+        if active_state == "passthrough_active":
+            if not self._persist.get("regulation_passthrough_latch_started_ts"):
+                self._persist["regulation_passthrough_latch_started_ts"] = (
+                    now_utc.isoformat()
+                )
+        else:
+            self._persist["regulation_passthrough_latch_started_ts"] = None
 
     def _update_pv_charge_hysteresis(
         self,
@@ -2398,6 +2493,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 last_input_limit_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 last_output_limit_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
             )
+            
+            self._update_regulation_runtime_state(
+                now=now,
+                requested_mode=str(mode_arbiter_result.requested_mode),
+                resolved_mode=str(mode_arbiter_result.resolved_mode),
+                active_state=str(mode_arbiter_result.active_regulation_state),
+                command_skipped=bool(regulation_device_command.skipped),
+                command_skip_reason=str(regulation_device_command.skip_reason),
+                current_ac_mode=self._state(self.entities.ac_mode),
+                command_ac_mode=str(regulation_device_command.ac_mode),
+            )
 
             legacy_ac_mode = (
                 ZENDURE_MODE_INPUT
@@ -2722,6 +2828,38 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "regulation_command_skipped": bool(regulation_device_command.skipped),
                 "regulation_command_skip_reason": regulation_device_command.skip_reason,
+                
+                # V4.2.0 regulation / runtime diagnostics
+                "regulation_runtime_last_requested_mode": str(
+                    self._persist.get("regulation_last_requested_mode", "idle")
+                ),
+                "regulation_runtime_last_resolved_mode": str(
+                    self._persist.get("regulation_last_resolved_mode", "idle")
+                ),
+                "regulation_runtime_last_mode_change_ts": self._persist.get(
+                    "regulation_last_mode_change_ts"
+                ),
+                "regulation_runtime_last_command_ts": self._persist.get(
+                    "regulation_last_command_ts"
+                ),
+                "regulation_runtime_active_state": str(
+                    self._persist.get("regulation_active_state", "none")
+                ),
+                "regulation_runtime_active_state_started_ts": self._persist.get(
+                    "regulation_active_state_started_ts"
+                ),
+                "regulation_runtime_pv_charge_latch_started_ts": self._persist.get(
+                    "regulation_pv_charge_latch_started_ts"
+                ),
+                "regulation_runtime_discharge_latch_started_ts": self._persist.get(
+                    "regulation_discharge_latch_started_ts"
+                ),
+                "regulation_runtime_passthrough_latch_started_ts": self._persist.get(
+                    "regulation_passthrough_latch_started_ts"
+                ),
+                "regulation_runtime_skipped_write_reason": str(
+                    self._persist.get("regulation_skipped_write_reason", "none")
+                ),
                 
                 "adaptive_peak_active": adaptive_peak_active,
                 "device_profile": self.device_profile_key,
