@@ -135,6 +135,7 @@ from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
 )
+from .device_command import DeviceCommandBuilder
 
 _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
@@ -238,6 +239,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._regulation_power_controller = RegulationPowerController(
             build_regulation_power_config(self._get_active_profile())
         )
+        
+        self._device_command_builder = DeviceCommandBuilder()
 
         self._store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._persist: dict[str, Any] = {
@@ -2383,6 +2386,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 previous_input_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
             )
+            
+            regulation_device_command = self._device_command_builder.build(
+                intent=strategy_intent,
+                arbiter=mode_arbiter_result,
+                power=regulation_power_result,
+                current_ac_mode=self._state(self.entities.ac_mode),
+                last_input_limit_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
+                last_output_limit_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
+            )
 
             ac_mode = (
                 ZENDURE_MODE_INPUT
@@ -2627,6 +2639,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "regulation_step_limited": bool(
                     regulation_power_result.step_limited
                 ),
+                
+                # V4.2.0 regulation / device command diagnostics
+                "regulation_command_ac_mode": regulation_device_command.ac_mode,
+                "regulation_command_input_limit_w": float(
+                    regulation_device_command.input_limit_w
+                ),
+                "regulation_command_output_limit_w": float(
+                    regulation_device_command.output_limit_w
+                ),
+                "regulation_command_reason": regulation_device_command.reason,
+                "regulation_command_should_write_mode": bool(
+                    regulation_device_command.should_write_mode
+                ),
+                "regulation_command_should_write_input": bool(
+                    regulation_device_command.should_write_input
+                ),
+                "regulation_command_should_write_output": bool(
+                    regulation_device_command.should_write_output
+                ),
+                "regulation_command_skipped": bool(regulation_device_command.skipped),
+                "regulation_command_skip_reason": regulation_device_command.skip_reason,
                 
                 "adaptive_peak_active": adaptive_peak_active,
                 "device_profile": self.device_profile_key,
