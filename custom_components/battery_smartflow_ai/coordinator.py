@@ -129,6 +129,8 @@ from .learned_planning import (
 )
 from .grid_history import GridHistory, build_grid_history_config
 from .strategy_adapter import decision_to_strategy_intent
+from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
+from .regulation_models import RegulationRuntimeState
 
 _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
@@ -223,6 +225,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         
         self._grid_history = GridHistory(
             build_grid_history_config(self._get_active_profile())
+        )
+        
+        self._mode_arbiter = ModeArbiter(
+            build_mode_arbiter_config(self._get_active_profile())
         )
 
         self._store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -811,6 +817,72 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         samples.sort(key=lambda s: s.ts)
         return samples
+        
+    def _get_regulation_runtime_state(self) -> RegulationRuntimeState:
+        """Build transient regulation runtime state from persisted values.
+
+        V4.2.0 transition:
+        This is diagnostic-only for now. Later this state will become the
+        authoritative runtime state for ModeArbiter/PowerController/Command.
+        """
+
+        def _parse_dt(value):
+            if not value:
+                return None
+            try:
+                return dt_util.parse_datetime(str(value))
+            except Exception:
+                return None
+
+        return RegulationRuntimeState(
+            last_resolved_mode=str(
+                self._persist.get("regulation_last_resolved_mode", "idle")
+                or "idle"
+            ),
+            last_requested_mode=str(
+                self._persist.get("regulation_last_requested_mode", "idle")
+                or "idle"
+            ),
+            last_ac_mode=self._persist.get("last_set_mode"),
+            last_input_limit_w=float(
+                self._persist.get("last_set_input_w", 0.0) or 0.0
+            ),
+            last_output_limit_w=float(
+                self._persist.get("last_set_output_w", 0.0) or 0.0
+            ),
+            last_mode_change_ts=_parse_dt(
+                self._persist.get("regulation_last_mode_change_ts")
+            ),
+            last_command_ts=_parse_dt(
+                self._persist.get("regulation_last_command_ts")
+            ),
+            active_regulation_state=str(
+                self._persist.get("regulation_active_state", "none")
+                or "none"
+            ),
+            active_state_started_ts=_parse_dt(
+                self._persist.get("regulation_active_state_started_ts")
+            ),
+            post_load_drop_hold_until=_parse_dt(
+                self._persist.get("regulation_post_load_drop_hold_until")
+            ),
+            post_output_overshoot_hold_until=_parse_dt(
+                self._persist.get("regulation_post_output_overshoot_hold_until")
+            ),
+            pv_charge_latch_started_ts=_parse_dt(
+                self._persist.get("regulation_pv_charge_latch_started_ts")
+            ),
+            discharge_latch_started_ts=_parse_dt(
+                self._persist.get("regulation_discharge_latch_started_ts")
+            ),
+            passthrough_latch_started_ts=_parse_dt(
+                self._persist.get("regulation_passthrough_latch_started_ts")
+            ),
+            skipped_write_reason=str(
+                self._persist.get("regulation_skipped_write_reason", "none")
+                or "none"
+            ),
+        )
 
     def _update_pv_charge_hysteresis(
         self,
@@ -2284,6 +2356,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             
             strategy_intent = decision_to_strategy_intent(decision)
+            
+            regulation_runtime = self._get_regulation_runtime_state()
+
+            mode_arbiter_result = self._mode_arbiter.evaluate(
+                now=now,
+                intent=strategy_intent,
+                grid=grid_history_state,
+                runtime=regulation_runtime,
+                current_ac_mode=self._state(self.entities.ac_mode),
+                additional_battery_discharge_w=float(additional_battery_discharge_w or 0.0),
+            )
 
             ac_mode = (
                 ZENDURE_MODE_INPUT
@@ -2493,6 +2576,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     strategy_intent.allow_mode_switch
                 ),
                 "regulation_strategy_force": bool(strategy_intent.force),
+                
+                "regulation_resolved_mode": mode_arbiter_result.resolved_mode,
+                "regulation_mode_allowed": bool(mode_arbiter_result.allowed),
+                "regulation_mode_arbiter_reason": mode_arbiter_result.reason,
+                "regulation_active_state": mode_arbiter_result.active_regulation_state,
+                "regulation_active_hold_remaining_s": float(
+                    mode_arbiter_result.active_hold_remaining_s
+                ),
+                "regulation_cooldown_remaining_s": float(
+                    mode_arbiter_result.cooldown_remaining_s
+                ),
                 
                 "adaptive_peak_active": adaptive_peak_active,
                 "device_profile": self.device_profile_key,
