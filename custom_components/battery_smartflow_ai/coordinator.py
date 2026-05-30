@@ -128,6 +128,7 @@ from .learned_planning import (
     learned_typical_charge_power_w,
 )
 from .grid_history import GridHistory, build_grid_history_config
+from .strategy_adapter import decision_to_strategy_intent
 
 _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
@@ -2281,6 +2282,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision=decision,
                 battery_charge_w=float(battery_charge_w),
             )
+            
+            strategy_intent = decision_to_strategy_intent(decision)
 
             ac_mode = (
                 ZENDURE_MODE_INPUT
@@ -2475,6 +2478,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "manual_action": manual_action,
                 "decision_reason": decision.reason,
                 "charge_strategy": charge_strategy,
+                
+                # V4.2.0 regulation / strategy intent diagnostics
+                "regulation_strategy_intent": strategy_intent.intent,
+                "regulation_requested_mode": strategy_intent.requested_mode,
+                "regulation_requested_power_w": (
+                    float(strategy_intent.requested_power_w)
+                    if strategy_intent.requested_power_w is not None
+                    else None
+                ),
+                "regulation_strategy_reason": strategy_intent.reason,
+                "regulation_strategy_priority": int(strategy_intent.priority),
+                "regulation_strategy_allow_mode_switch": bool(
+                    strategy_intent.allow_mode_switch
+                ),
+                "regulation_strategy_force": bool(strategy_intent.force),
+                
                 "adaptive_peak_active": adaptive_peak_active,
                 "device_profile": self.device_profile_key,
                 "profile_max_input_w": profile_max_in,
