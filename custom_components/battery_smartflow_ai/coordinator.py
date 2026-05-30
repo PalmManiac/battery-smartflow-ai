@@ -127,6 +127,7 @@ from .learned_planning import (
     evaluate_readiness,
     learned_typical_charge_power_w,
 )
+from .grid_history import GridHistory, build_grid_history_config
 
 _LOGGER = logging.getLogger(__name__)
 STORE_VERSION = 1
@@ -218,6 +219,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         self._engine = DecisionEngine()
+        
+        self._grid_history = GridHistory(
+            build_grid_history_config(self._get_active_profile())
+        )
 
         self._store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._persist: dict[str, Any] = {
@@ -1820,6 +1825,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if grid_import is None or grid_export is None:
                 grid_import = 0.0
                 grid_export = 0.0
+                
+            grid_history_state = self._grid_history.update(
+                grid_import_w=float(grid_import or 0.0),
+                grid_export_w=float(grid_export or 0.0),
+            )
 
             price_now = self._get_price_now()
             price_points = self._parse_price_points(now)
@@ -2401,6 +2411,34 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "deficit": float(grid_import),
                 "surplus": float(grid_export),
                 "house_load": int(round(house_load, 0)),
+                
+                # V4.2.0 regulation / grid history diagnostics
+                "regulation_grid_now_w": float(grid_history_state.grid_now_w),
+                "regulation_grid_avg_short_w": float(grid_history_state.grid_avg_short_w),
+                "regulation_grid_avg_medium_w": float(grid_history_state.grid_avg_medium_w),
+                "regulation_grid_delta_w": float(grid_history_state.grid_delta_w),
+                "regulation_stable_import_cycles": int(
+                    grid_history_state.stable_import_cycles
+                ),
+                "regulation_stable_export_cycles": int(
+                    grid_history_state.stable_export_cycles
+                ),
+                "regulation_near_target_cycles": int(
+                    grid_history_state.near_target_cycles
+                ),
+                "regulation_fast_load_rise_detected": bool(
+                    grid_history_state.fast_load_rise_detected
+                ),
+                "regulation_fast_load_drop_detected": bool(
+                    grid_history_state.fast_load_drop_detected
+                ),
+                "regulation_post_load_drop_hold_active": bool(
+                    grid_history_state.post_load_drop_hold_active
+                ),
+                "regulation_post_output_overshoot_hold_active": bool(
+                    grid_history_state.post_output_overshoot_hold_active
+                ),
+                
                 "price_now": price_now,
                 "avg_charge_price": self._persist.get("trade_avg_charge_price"),
                 "economic_discharge_threshold": economic_discharge_threshold,
