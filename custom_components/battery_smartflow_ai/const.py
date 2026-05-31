@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.1.6"
+INTEGRATION_VERSION = "4.2.0-Test1"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
