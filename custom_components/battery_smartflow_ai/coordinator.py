@@ -2419,6 +2419,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist["pv_charge_start_counter"] = 0
                     self._persist["pv_charge_stop_counter"] = 0
 
+                    # Keep local diagnostic variables in sync for this same update cycle.
+                    pv_charge_latched = False
+                    pv_charge_start_counter = 0
+                    pv_charge_stop_counter = 0
+
             charge_price_applied = None
             charge_source = "no_charge_delta"
             is_grid_charge = False
