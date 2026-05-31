@@ -2392,6 +2392,32 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     decision.action = "idle"
                     decision.ac_mode = "output"
                     decision.reason = "pv_charge_blocked_by_discharge_protection"
+                    
+            # V4.2.0 carryover safety for legacy execution:
+            # Do not keep PV charge/keepalive active when there is no real export and
+            # the house is importing from grid. This prevents INPUT 80 W from being held
+            # by the old PV charge latch during weak/cloudy PV or low-SoC situations.
+            if (
+                decision.ac_mode == "input"
+                and float(decision.charge_w or 0.0) > 0.0
+                and decision.reason == "pv_surplus_charge"
+            ):
+                export_w = max(0.0, float(grid_export or 0.0))
+                import_w = max(0.0, float(grid_import or 0.0))
+
+                weak_export_threshold_w = max(10.0, float(pv_charge_start_export_w) * 0.25)
+                real_import_threshold_w = max(80.0, float(profile.get("TARGET_IMPORT_W", 10.0)) * 4.0)
+
+                if export_w < weak_export_threshold_w and import_w > real_import_threshold_w:
+                    decision.charge_w = 0.0
+                    decision.discharge_w = 0.0
+                    decision.action = "idle"
+                    decision.ac_mode = "output"
+                    decision.reason = "pv_charge_blocked_no_stable_export"
+
+                    self._persist["pv_charge_latched"] = False
+                    self._persist["pv_charge_start_counter"] = 0
+                    self._persist["pv_charge_stop_counter"] = 0
 
             charge_price_applied = None
             charge_source = "no_charge_delta"
