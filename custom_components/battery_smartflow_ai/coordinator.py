@@ -138,6 +138,12 @@ from .regulation_power_controller import (
 from .device_command import DeviceCommandBuilder
 
 _LOGGER = logging.getLogger(__name__)
+
+# V4.2.0 development switch:
+# False = legacy command path is used, V4.2 chain only diagnostic
+# True  = V4.2 regulation command path actively controls mode/input/output
+USE_REGULATION_V42_COMMAND_DEV = False
+
 STORE_VERSION = 1
 
 
@@ -2594,8 +2600,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             use_regulation_v42_command = bool(
-                self._persist.get("use_regulation_v42_command", False)
+                USE_REGULATION_V42_COMMAND_DEV
+                or self._persist.get("use_regulation_v42_command", False)
             )
+            
+            # Safety fallback: never use V4.2 command path if command generation failed
+            # or produced an unexpected mode.
+            if use_regulation_v42_command and regulation_device_command.ac_mode not in (
+                "input",
+                "output",
+            ):
+                use_regulation_v42_command = False
 
             if use_regulation_v42_command:
                 ac_mode = (
@@ -2818,6 +2833,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # V4.2.0 regulation execution switch / comparison
                 "regulation_v42_command_enabled": bool(use_regulation_v42_command),
+                "regulation_v42_command_dev_switch": bool(USE_REGULATION_V42_COMMAND_DEV),
+                "regulation_v42_command_persist_switch": bool(
+                    self._persist.get("use_regulation_v42_command", False)
+                ),
                 "regulation_legacy_set_mode": legacy_ac_mode,
                 "regulation_legacy_set_input_w": int(round(legacy_in_w, 0)),
                 "regulation_legacy_set_output_w": int(round(legacy_out_w, 0)),
