@@ -161,9 +161,6 @@ class PeakRule(BaseRule):
         export_active = float(ctx.grid_export_w or 0.0) > 80.0
         discharge_active = float(ctx.prev_discharge_w or 0.0) > 0.0
 
-        if export_active and not discharge_active:
-            return None
-
         if ctx.soc > ctx.soc_min and ctx.ai_mode in ("automatic", "winter"):
             if (
                 engine._detect_adaptive_peak(ctx)
@@ -203,9 +200,6 @@ class ArbitrageRule(BaseRule):
     def evaluate(self, engine, ctx):
         export_active = float(ctx.grid_export_w or 0.0) > 80.0
         discharge_active = float(ctx.prev_discharge_w or 0.0) > 0.0
-
-        if export_active and not discharge_active:
-            return None
 
         if (
             ctx.price_now is not None
