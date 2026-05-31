@@ -2926,6 +2926,83 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "device_profile": self.device_profile_key,
                 "profile_max_input_w": profile_max_in,
                 "profile_max_output_w": profile_max_out,
+                
+                # V4.2.0 regulation / active profile values
+                "regulation_profile_target_import_w": float(
+                    profile.get("TARGET_IMPORT_W", 0.0) or 0.0
+                ),
+                "regulation_profile_export_guard_w": float(
+                    profile.get("EXPORT_GUARD_W", 0.0) or 0.0
+                ),
+                "regulation_profile_grid_history_short_samples": int(
+                    profile.get("GRID_HISTORY_SHORT_SAMPLES", 0) or 0
+                ),
+                "regulation_profile_grid_history_medium_samples": int(
+                    profile.get("GRID_HISTORY_MEDIUM_SAMPLES", 0) or 0
+                ),
+                "regulation_profile_grid_history_max_samples": int(
+                    profile.get("GRID_HISTORY_MAX_SAMPLES", 0) or 0
+                ),
+                "regulation_profile_fast_load_change_w": float(
+                    profile.get("FAST_LOAD_CHANGE_W", 0.0) or 0.0
+                ),
+                "regulation_profile_supports_fast_mode_switch": bool(
+                    profile.get("SUPPORTS_FAST_MODE_SWITCH", True)
+                ),
+                "regulation_profile_mode_switch_cooldown_s": float(
+                    profile.get("MODE_SWITCH_COOLDOWN_S", 0.0) or 0.0
+                ),
+                "regulation_profile_input_after_output_block_s": float(
+                    profile.get("INPUT_AFTER_OUTPUT_BLOCK_S", 0.0) or 0.0
+                ),
+                "regulation_profile_output_after_input_block_s": float(
+                    profile.get("OUTPUT_AFTER_INPUT_BLOCK_S", 0.0) or 0.0
+                ),
+                "regulation_profile_stable_export_cycles_for_pv_charge": int(
+                    profile.get("STABLE_EXPORT_CYCLES_FOR_PV_CHARGE", 0) or 0
+                ),
+                "regulation_profile_stable_import_cycles_for_discharge": int(
+                    profile.get("STABLE_IMPORT_CYCLES_FOR_DISCHARGE", 0) or 0
+                ),
+                "regulation_profile_pv_charge_latch_min_hold_s": float(
+                    profile.get("PV_CHARGE_LATCH_MIN_HOLD_S", 0.0) or 0.0
+                ),
+                "regulation_profile_pv_charge_exit_import_cycles": int(
+                    profile.get("PV_CHARGE_EXIT_IMPORT_CYCLES", 0) or 0
+                ),
+                "regulation_profile_discharge_latch_min_hold_s": float(
+                    profile.get("DISCHARGE_LATCH_MIN_HOLD_S", 0.0) or 0.0
+                ),
+                "regulation_profile_discharge_exit_export_cycles": int(
+                    profile.get("DISCHARGE_EXIT_EXPORT_CYCLES", 0) or 0
+                ),
+                "regulation_profile_passthrough_latch_min_hold_s": float(
+                    profile.get("PASSTHROUGH_LATCH_MIN_HOLD_S", 0.0) or 0.0
+                ),
+                "regulation_profile_passthrough_exit_cycles": int(
+                    profile.get("PASSTHROUGH_EXIT_CYCLES", 0) or 0
+                ),
+                "regulation_profile_post_load_drop_hold_s": float(
+                    profile.get("POST_LOAD_DROP_HOLD_S", 0.0) or 0.0
+                ),
+                "regulation_profile_post_output_overshoot_hold_s": float(
+                    profile.get("POST_OUTPUT_OVERSHOOT_HOLD_S", 0.0) or 0.0
+                ),
+                "regulation_profile_external_battery_discharge_block_w": float(
+                    profile.get("EXTERNAL_BATTERY_DISCHARGE_BLOCK_W", 0.0) or 0.0
+                ),
+                "regulation_profile_supports_passthrough": bool(
+                    profile.get("SUPPORTS_PASSTHROUGH", False)
+                ),
+                "regulation_profile_output_zero_is_neutral": bool(
+                    profile.get("OUTPUT_ZERO_IS_NEUTRAL", True)
+                ),
+                "regulation_profile_input_keepalive_safe": bool(
+                    profile.get("INPUT_KEEPALIVE_SAFE", True)
+                ),
+                "regulation_profile_requires_stable_export_for_input": bool(
+                    profile.get("REQUIRES_STABLE_EXPORT_FOR_INPUT", False)
+),
 
                 # SF800Pro passthrough / arbiter debug
                 "pv_houseload_passthrough_enabled": bool(
@@ -3008,6 +3085,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "effective_kp_down": profile.get("KP_DOWN"),
                 "effective_max_step_up": profile.get("MAX_STEP_UP"),
                 "effective_max_step_down": profile.get("MAX_STEP_DOWN"),
+                
+                "effective_discharge_deadband_w": profile.get("DISCHARGE_DEADBAND_W"),
+                "effective_discharge_kp_up": profile.get("DISCHARGE_KP_UP"),
+                "effective_discharge_kp_down": profile.get("DISCHARGE_KP_DOWN"),
+                "effective_discharge_max_step_up": profile.get("DISCHARGE_MAX_STEP_UP"),
+                "effective_discharge_max_step_down": profile.get("DISCHARGE_MAX_STEP_DOWN"),
+                "effective_charge_deadband_w": profile.get("CHARGE_DEADBAND_W"),
+                "effective_charge_kp_up": profile.get("CHARGE_KP_UP"),
+                "effective_charge_kp_down": profile.get("CHARGE_KP_DOWN"),
+                "effective_charge_max_step_up": profile.get("CHARGE_MAX_STEP_UP"),
+                "effective_charge_max_step_down": profile.get("CHARGE_MAX_STEP_DOWN"),
+                
                 "effective_keepalive_min_deficit_w": profile.get("KEEPALIVE_MIN_DEFICIT_W"),
                 "effective_keepalive_min_output_w": profile.get("KEEPALIVE_MIN_OUTPUT_W"),
                 "effective_soc_discharge_resume_margin": profile.get("SOC_DISCHARGE_RESUME_MARGIN"),
