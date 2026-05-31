@@ -2406,7 +2406,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 import_w = max(0.0, float(grid_import or 0.0))
 
                 weak_export_threshold_w = max(10.0, float(pv_charge_start_export_w) * 0.25)
-                real_import_threshold_w = max(80.0, float(profile.get("TARGET_IMPORT_W", 10.0)) * 4.0)
+                real_import_threshold_w = max(
+                    40.0,
+                    float(profile.get("TARGET_IMPORT_W", 10.0) or 10.0)
+                    + float(profile.get("CHARGE_DEADBAND_W", profile.get("DEADBAND_W", 30.0)) or 30.0),
+                )
 
                 if export_w < weak_export_threshold_w and import_w > real_import_threshold_w:
                     decision.charge_w = 0.0
