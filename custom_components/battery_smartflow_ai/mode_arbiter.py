@@ -251,6 +251,15 @@ class ModeArbiter:
             "current_ac_mode": current_ac_mode,
             "last_resolved_mode": runtime.last_resolved_mode,
             "last_ac_mode": runtime.last_ac_mode,
+            "last_mode_change_ts": (
+                runtime.last_mode_change_ts.isoformat()
+                if runtime.last_mode_change_ts
+                else None
+            ),
+            "supports_fast_mode_switch": bool(self.config.supports_fast_mode_switch),
+            "input_after_output_block_s": float(self.config.input_after_output_block_s),
+            "output_after_input_block_s": float(self.config.output_after_input_block_s),
+            "mode_switch_cooldown_s": float(self.config.mode_switch_cooldown_s),
         }
 
         # Emergency/manual force may switch modes immediately.
@@ -348,6 +357,8 @@ class ModeArbiter:
         cooldown_remaining_s = self._mode_cooldown_remaining_s(
             now_utc=now_utc,
             runtime=runtime,
+            requested_mode=requested_mode,
+            current_ac_mode=current_ac_mode,
         )
 
         if cooldown_remaining_s > 0.0 and self._is_real_mode_switch(
@@ -358,7 +369,13 @@ class ModeArbiter:
                 requested_mode=requested_mode,
                 resolved_mode="hold",
                 allowed=False,
-                reason="mode_switch_cooldown_active",
+                reason=(
+                    "input_after_output_block_active"
+                    if current_ac_mode == "output" and requested_mode == "input"
+                    else "output_after_input_block_active"
+                    if current_ac_mode == "input" and requested_mode == "output"
+                    else "mode_switch_cooldown_active"
+                ),
                 active_regulation_state=runtime.active_regulation_state,
                 active_hold_remaining_s=0.0,
                 cooldown_remaining_s=cooldown_remaining_s,
@@ -732,8 +749,34 @@ class ModeArbiter:
         *,
         now_utc: datetime,
         runtime: RegulationRuntimeState,
+        requested_mode: str,
+        current_ac_mode: str | None,
     ) -> float:
+        """Return remaining mode-switch cooldown.
+
+        Uses direction-specific cooldowns first:
+        - INPUT after OUTPUT
+        - OUTPUT after INPUT
+
+        Falls back to the generic MODE_SWITCH_COOLDOWN_S.
+        """
+
         if self.config.supports_fast_mode_switch:
+            return 0.0
+
+        if requested_mode not in ("input", "output"):
+            return 0.0
+
+        previous_mode = (
+            str(runtime.last_ac_mode or "")
+            if runtime.last_ac_mode
+            else str(current_ac_mode or "")
+        )
+
+        if previous_mode not in ("input", "output"):
+            return 0.0
+
+        if previous_mode == requested_mode:
             return 0.0
 
         if runtime.last_mode_change_ts is None:
@@ -742,7 +785,14 @@ class ModeArbiter:
         last_change = dt_util.as_utc(runtime.last_mode_change_ts)
         elapsed_s = (now_utc - last_change).total_seconds()
 
-        remaining = float(self.config.mode_switch_cooldown_s) - elapsed_s
+        if previous_mode == "output" and requested_mode == "input":
+            block_s = float(self.config.input_after_output_block_s)
+        elif previous_mode == "input" and requested_mode == "output":
+            block_s = float(self.config.output_after_input_block_s)
+        else:
+            block_s = float(self.config.mode_switch_cooldown_s)
+
+        remaining = block_s - elapsed_s
         return max(0.0, remaining)
 
     def _is_real_mode_switch(
