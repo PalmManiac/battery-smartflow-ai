@@ -277,17 +277,10 @@ class LearnedPlanningRule(BaseRule):
             return None
 
         if mode == "wait" or decision_reason == "learned_charge_window_wait":
-            return engine._with_thresholds(
-                ctx,
-                DecisionResult(
-                    action="idle",
-                    ac_mode="output",
-                    charge_w=0.0,
-                    discharge_w=0.0,
-                    reason="learned_charge_window_wait",
-                    target_soc=ctx.soc_max,
-                ),
-            )
+            # Learned waiting must not suppress classic immediate charging rules.
+            # If the learned planner only wants to wait, continue with the normal
+            # planning / valley / forecast rules below.
+            return None
 
         if mode == "charge" or decision_reason in (
             "learned_charge_window_active",
