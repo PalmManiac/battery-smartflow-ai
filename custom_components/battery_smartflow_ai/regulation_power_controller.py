@@ -232,9 +232,35 @@ class RegulationPowerController:
         return self._idle_result(intent=intent, arbiter=arbiter)
 
     def _control_grid_w(self, grid: GridHistoryState) -> float:
-        """Weighted grid value for fast but smoother regulation."""
+        """Weighted grid value for fast but smooth regulation.
 
-        return float(grid.grid_now_w) * 0.6 + float(grid.grid_avg_short_w) * 0.4
+        V4.2.0:
+        - fast load changes react mostly to the current grid value
+        - calm near-target operation uses more averaging
+        - normal operation stays balanced
+        """
+
+        grid_now_w = float(grid.grid_now_w or 0.0)
+        grid_avg_short_w = float(grid.grid_avg_short_w or 0.0)
+        grid_avg_medium_w = float(grid.grid_avg_medium_w or 0.0)
+
+        if bool(grid.fast_load_rise_detected) or bool(grid.fast_load_drop_detected):
+            # ZHA-inspired fast reaction path:
+            # On large load changes, the current P1/grid value must dominate.
+            return (grid_now_w * 0.85) + (grid_avg_short_w * 0.15)
+
+        if int(grid.near_target_cycles or 0) >= 2:
+            # Calm near-target path:
+            # Avoid nervous corrections around the target import value.
+            return (
+                (grid_now_w * 0.50)
+                + (grid_avg_short_w * 0.30)
+                + (grid_avg_medium_w * 0.20)
+            )
+
+        # Normal path:
+        # Slightly more direct than before, but still smoothed.
+        return (grid_now_w * 0.65) + (grid_avg_short_w * 0.35)
 
     def _discharge_keepalive_w(self) -> float:
         """Minimum output while a discharge intent is active."""
@@ -305,13 +331,29 @@ class RegulationPowerController:
             reason = "output_inside_deadband"
         elif error_w > 0.0:
             delta = error_w * float(self.config.discharge_kp_up)
+
+            if bool(grid.fast_load_rise_detected):
+                # Large new load: react faster, but still respect step limits later.
+                delta *= 1.25
+                reason = "output_fast_increase_to_reduce_import"
+            else:
+                reason = "output_increase_to_reduce_import"
+
             raw_target = prev + delta
-            reason = "output_increase_to_reduce_import"
+
         else:
             # Export / too much output.
             delta = abs(error_w) * float(self.config.discharge_kp_down)
+
+            if bool(grid.fast_load_drop_detected):
+                # Load dropped: reduce faster, but do not switch mode here.
+                # ModeArbiter keeps OUTPUT stable and the step limiter prevents a hard jump.
+                delta *= 1.15
+                reason = "output_fast_decrease_to_avoid_export"
+            else:
+                reason = "output_decrease_to_avoid_export"
+
             raw_target = prev - delta
-            reason = "output_decrease_to_avoid_export"
 
         # For strategic discharge decisions, never exceed the strategy request.
         if requested > 0.0:
