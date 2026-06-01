@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections import deque
 from dataclasses import dataclass
 from typing import Iterable
@@ -10,7 +11,15 @@ from .regulation_models import GridHistoryState
 DEFAULT_GRID_HISTORY_SHORT_SAMPLES = 3
 DEFAULT_GRID_HISTORY_MEDIUM_SAMPLES = 6
 DEFAULT_GRID_HISTORY_MAX_SAMPLES = 12
+
+# Fallback / hard limit for large changes.
 DEFAULT_FAST_LOAD_CHANGE_W = 600.0
+
+# ZHA-inspired statistical fast-change detection.
+# A change is considered "fast" when it clearly deviates from the recent
+# medium history. The hard watt limit remains active as a safe fallback.
+DEFAULT_FAST_LOAD_STDDEV_FACTOR = 3.5
+DEFAULT_FAST_LOAD_STDDEV_MIN_W = 15.0
 
 DEFAULT_TARGET_IMPORT_W = 10.0
 DEFAULT_NEAR_TARGET_BAND_W = 40.0
@@ -25,6 +34,8 @@ class GridHistoryConfig:
     max_samples: int = DEFAULT_GRID_HISTORY_MAX_SAMPLES
 
     fast_load_change_w: float = DEFAULT_FAST_LOAD_CHANGE_W
+    fast_load_stddev_factor: float = DEFAULT_FAST_LOAD_STDDEV_FACTOR
+    fast_load_stddev_min_w: float = DEFAULT_FAST_LOAD_STDDEV_MIN_W
 
     target_import_w: float = DEFAULT_TARGET_IMPORT_W
     near_target_band_w: float = DEFAULT_NEAR_TARGET_BAND_W
@@ -43,6 +54,10 @@ class GridHistory:
     The history is intentionally short. It is not meant to slow down power
     regulation. It gives the ModeArbiter context for stable mode changes and
     gives the PowerController a short average for smoother target calculation.
+
+    V4.2.0:
+    Fast load changes are detected using both a hard watt threshold and a
+    ZHA-inspired statistical deviation from the recent medium history.
     """
 
     def __init__(self, config: GridHistoryConfig | None = None) -> None:
@@ -89,6 +104,13 @@ class GridHistory:
         grid_now_w = import_w - export_w
 
         previous = self._samples[-1] if self._samples else grid_now_w
+
+        # Use the history before appending the new sample for deviation checks.
+        # That way a sudden jump is compared against the recent calm baseline.
+        previous_medium_values = self._last_values(self.config.medium_samples)
+        previous_medium_avg = self._avg_values(previous_medium_values)
+        previous_medium_stddev = self._stddev_values(previous_medium_values)
+
         self._samples.append(grid_now_w)
 
         short_avg = self._avg_last(self.config.short_samples)
@@ -117,9 +139,15 @@ class GridHistory:
         else:
             self._near_target_cycles = 0
 
-        fast_limit = max(0.0, float(self.config.fast_load_change_w))
-        fast_load_rise_detected = grid_delta_w >= fast_limit
-        fast_load_drop_detected = grid_delta_w <= -fast_limit
+        fast_load_rise_detected, fast_load_drop_detected = (
+            self._detect_fast_load_change(
+                grid_now_w=grid_now_w,
+                grid_delta_w=grid_delta_w,
+                previous_medium_avg=previous_medium_avg,
+                previous_medium_stddev=previous_medium_stddev,
+                previous_sample_count=len(previous_medium_values),
+            )
+        )
 
         return GridHistoryState(
             grid_now_w=round(float(grid_now_w), 2),
@@ -135,14 +163,79 @@ class GridHistory:
             post_output_overshoot_hold_active=False,
         )
 
-    def _avg_last(self, count: int) -> float:
-        count = max(1, int(count or 1))
+    def _detect_fast_load_change(
+        self,
+        *,
+        grid_now_w: float,
+        grid_delta_w: float,
+        previous_medium_avg: float,
+        previous_medium_stddev: float,
+        previous_sample_count: int,
+    ) -> tuple[bool, bool]:
+        """Detect sudden load changes.
 
-        values = list(self._samples)[-count:]
-        if not values:
+        Uses two mechanisms:
+        1. Hard watt threshold for very large jumps.
+        2. Statistical deviation from recent medium history, inspired by the
+           Zendure-HA/ZHA P1-style approach.
+
+        Rise:
+            grid value moves strongly upward, e.g. more import or less export.
+
+        Drop:
+            grid value moves strongly downward, e.g. less import or more export.
+        """
+
+        hard_limit = max(0.0, float(self.config.fast_load_change_w))
+
+        hard_rise = grid_delta_w >= hard_limit
+        hard_drop = grid_delta_w <= -hard_limit
+
+        # Statistical detection only makes sense with at least a few previous
+        # samples. Otherwise the hard threshold is enough.
+        if previous_sample_count < 3:
+            return bool(hard_rise), bool(hard_drop)
+
+        stddev_min = max(0.0, float(self.config.fast_load_stddev_min_w))
+        stddev_factor = max(0.1, float(self.config.fast_load_stddev_factor))
+
+        dynamic_limit = max(
+            stddev_min,
+            previous_medium_stddev * stddev_factor,
+        )
+
+        deviation_from_recent_avg = grid_now_w - previous_medium_avg
+
+        statistical_rise = deviation_from_recent_avg >= dynamic_limit
+        statistical_drop = deviation_from_recent_avg <= -dynamic_limit
+
+        return (
+            bool(hard_rise or statistical_rise),
+            bool(hard_drop or statistical_drop),
+        )
+
+    def _avg_last(self, count: int) -> float:
+        return self._avg_values(self._last_values(count))
+
+    def _last_values(self, count: int) -> list[float]:
+        count = max(1, int(count or 1))
+        return list(self._samples)[-count:]
+
+    def _avg_values(self, values: Iterable[float]) -> float:
+        values_list = list(values)
+        if not values_list:
             return 0.0
 
-        return sum(values) / len(values)
+        return sum(values_list) / len(values_list)
+
+    def _stddev_values(self, values: Iterable[float]) -> float:
+        values_list = list(values)
+        if len(values_list) < 2:
+            return 0.0
+
+        avg = self._avg_values(values_list)
+        variance = sum((value - avg) ** 2 for value in values_list) / len(values_list)
+        return math.sqrt(max(0.0, variance))
 
     @property
     def samples(self) -> tuple[float, ...]:
@@ -192,6 +285,14 @@ def build_grid_history_config(profile: dict) -> GridHistoryConfig:
         fast_load_change_w=_profile_float(
             "FAST_LOAD_CHANGE_W",
             DEFAULT_FAST_LOAD_CHANGE_W,
+        ),
+        fast_load_stddev_factor=_profile_float(
+            "FAST_LOAD_STDDEV_FACTOR",
+            DEFAULT_FAST_LOAD_STDDEV_FACTOR,
+        ),
+        fast_load_stddev_min_w=_profile_float(
+            "FAST_LOAD_STDDEV_MIN_W",
+            DEFAULT_FAST_LOAD_STDDEV_MIN_W,
         ),
         target_import_w=target_import_w,
         near_target_band_w=max(20.0, near_target_band_w),
