@@ -26,11 +26,16 @@ DEFAULT_CHARGE_KP_DOWN = 0.90
 DEFAULT_CHARGE_MAX_STEP_UP = 550.0
 DEFAULT_CHARGE_MAX_STEP_DOWN = 800.0
 
+DEFAULT_KEEPALIVE_MIN_OUTPUT_W = 60.0
+DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
+
 
 @dataclass
 class RegulationPowerConfig:
     target_import_w: float = DEFAULT_TARGET_IMPORT_W
     export_guard_w: float = DEFAULT_EXPORT_GUARD_W
+    keepalive_min_output_w: float = DEFAULT_KEEPALIVE_MIN_OUTPUT_W
+    discharge_exit_export_cycles: int = DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES
 
     discharge_deadband_w: float = DEFAULT_DISCHARGE_DEADBAND_W
     discharge_kp_up: float = DEFAULT_DISCHARGE_KP_UP
@@ -55,6 +60,13 @@ def _profile_float(profile: dict[str, Any], key: str, default: float) -> float:
         return float(default)
 
 
+def _profile_int(profile: dict[str, Any], key: str, default: int) -> int:
+    try:
+        return int(profile.get(key, default))
+    except Exception:
+        return int(default)
+
+
 def build_regulation_power_config(profile: dict[str, Any]) -> RegulationPowerConfig:
     """Build technical power-controller config from device profile."""
 
@@ -68,6 +80,16 @@ def build_regulation_power_config(profile: dict[str, Any]) -> RegulationPowerCon
             profile,
             "EXPORT_GUARD_W",
             DEFAULT_EXPORT_GUARD_W,
+        ),
+        keepalive_min_output_w=_profile_float(
+            profile,
+            "KEEPALIVE_MIN_OUTPUT_W",
+            DEFAULT_KEEPALIVE_MIN_OUTPUT_W,
+        ),
+        discharge_exit_export_cycles=_profile_int(
+            profile,
+            "DISCHARGE_EXIT_EXPORT_CYCLES",
+            DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES,
         ),
         discharge_deadband_w=_profile_float(
             profile,
@@ -214,6 +236,17 @@ class RegulationPowerController:
 
         return float(grid.grid_now_w) * 0.6 + float(grid.grid_avg_short_w) * 0.4
 
+    def _discharge_keepalive_w(self) -> float:
+        """Minimum output while a discharge intent is active."""
+
+        return max(
+            0.0,
+            min(
+                float(self.config.max_output_w),
+                float(self.config.keepalive_min_output_w),
+            ),
+        )
+
     def _calculate_output(
         self,
         *,
@@ -283,6 +316,33 @@ class RegulationPowerController:
         # For strategic discharge decisions, never exceed the strategy request.
         if requested > 0.0:
             raw_target = min(raw_target, requested)
+
+        # Keep economic/automatic discharge alive while the strategy still requests
+        # OUTPUT. Without this, small target overshoots can collapse output to 0 W
+        # and cause a discharge/idle sawtooth.
+        if (
+            intent.intent
+            in (
+                "cover_deficit",
+                "peak_discharge",
+                "arbitrage_discharge",
+                "manual_discharge",
+            )
+            and arbiter.resolved_mode == "output"
+            and arbiter.allowed
+        ):
+            keepalive_w = self._discharge_keepalive_w()
+
+            exit_export_cycles = max(
+                1,
+                int(self.config.discharge_exit_export_cycles),
+            )
+
+            # Keep discharge alive until export is stable enough to really exit.
+            # A single short export cycle must not collapse the output to 0 W.
+            if grid.stable_export_cycles < exit_export_cycles and raw_target <= keepalive_w:
+                raw_target = keepalive_w
+                reason = f"{reason}_discharge_keepalive"
 
         return self._limit_output_step(
             raw_target_w=raw_target,

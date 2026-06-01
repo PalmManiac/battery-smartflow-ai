@@ -71,7 +71,7 @@ class DecisionContext:
 
     # V4.0.0 optional forecast input
     forecast: Optional[ForecastSummary] = None
-    
+
     # V4.1.0 learned charge-window planning
     # Passed in from coordinator as an object from learned_planning.py.
     # Keep this typed as Any to avoid circular imports.
@@ -158,18 +158,17 @@ class AdditionalBatteryDischargeBlockRule(BaseRule):
 
 class PeakRule(BaseRule):
     def evaluate(self, engine, ctx):
-        export_active = float(ctx.grid_export_w or 0.0) > 80.0
-        discharge_active = float(ctx.prev_discharge_w or 0.0) > 0.0
-
-        if export_active and not discharge_active:
-            return None
-
         if ctx.soc > ctx.soc_min and ctx.ai_mode in ("automatic", "winter"):
             if (
                 engine._detect_adaptive_peak(ctx)
                 and engine._is_effective_discharge_price_reached(ctx)
             ):
                 discharge_w = engine._delta_discharge(ctx)
+                discharge_w = max(
+                    float(discharge_w or 0.0),
+                    engine._discharge_keepalive_w(ctx),
+                )
+
                 return engine._with_thresholds(
                     ctx,
                     DecisionResult(
@@ -186,6 +185,11 @@ class PeakRule(BaseRule):
                 and ctx.price_now >= ctx.very_expensive_threshold
             ):
                 discharge_w = engine._delta_discharge(ctx)
+                discharge_w = max(
+                    float(discharge_w or 0.0),
+                    engine._discharge_keepalive_w(ctx),
+                )
+
                 return engine._with_thresholds(
                     ctx,
                     DecisionResult(
@@ -201,21 +205,19 @@ class PeakRule(BaseRule):
 
 class ArbitrageRule(BaseRule):
     def evaluate(self, engine, ctx):
-        export_active = float(ctx.grid_export_w or 0.0) > 80.0
-        discharge_active = float(ctx.prev_discharge_w or 0.0) > 0.0
-
-        if export_active and not discharge_active:
-            return None
-
         if (
             ctx.price_now is not None
             and ctx.avg_charge_price is not None
             and ctx.soc > ctx.soc_min
             and ctx.ai_mode in ("automatic", "winter")
-            and engine._is_market_discharge_window(ctx)
             and engine._is_effective_discharge_price_reached(ctx)
         ):
             discharge_w = engine._delta_discharge(ctx)
+            discharge_w = max(
+                float(discharge_w or 0.0),
+                engine._discharge_keepalive_w(ctx),
+            )
+
             return engine._with_thresholds(
                 ctx,
                 DecisionResult(
@@ -227,6 +229,7 @@ class ArbitrageRule(BaseRule):
                 ),
             )
         return None
+
 
 class LearnedPlanningRule(BaseRule):
     def evaluate(self, engine, ctx):
@@ -328,6 +331,7 @@ class LearnedPlanningRule(BaseRule):
 
         return None
 
+
 class PlanningRule(BaseRule):
     def evaluate(self, engine, ctx):
         if engine._pv_morning_transition_active(ctx):
@@ -407,7 +411,7 @@ class ValleyBoostRule(BaseRule):
         if engine._forecast_available(ctx) and engine._forecast_outlook(ctx) == "mixed":
             charge_w = max(300.0, float(ctx.max_charge_w) * 0.75)
             reason = "valley_boost_charge_mixed_forecast"
-            
+
         block = engine._charge_blocked_by_additional_battery_discharge(ctx)
         if block is not None:
             return block
@@ -491,7 +495,7 @@ class PvHouseLoadPassthroughRule(BaseRule):
     def evaluate(self, engine, ctx):
         if not engine._pv_houseload_passthrough_enabled(ctx):
             return None
-            
+
         if ctx.ai_mode == "summer" or (
             ctx.ai_mode == "automatic" and ctx.season == "summer"
         ):
@@ -514,7 +518,7 @@ class PvHouseLoadPassthroughRule(BaseRule):
                 reason="pv_house_load_passthrough",
             ),
         )
-        
+
 
 class PvRule(BaseRule):
     def evaluate(self, engine, ctx):
@@ -547,7 +551,7 @@ class PvRule(BaseRule):
         discharge_active = prev_discharge_w > 0.0
         if discharge_active:
             return None
-            
+
         prices = [p.price for p in ctx.price_points] if ctx.price_points else []
         valley_active = (
             ctx.ai_mode in ("automatic", "winter")
@@ -771,7 +775,7 @@ class DecisionEngine:
                 reason=reason,
             ),
         )
-        
+
     def _additional_battery_discharge_blocks_charge(
         self,
         ctx: DecisionContext,
@@ -1007,6 +1011,20 @@ class DecisionEngine:
     def _charge_keepalive_w(self, ctx: DecisionContext) -> float:
         return min(float(ctx.max_charge_w), 80.0)
 
+    def _discharge_keepalive_w(self, ctx: DecisionContext) -> float:
+        try:
+            keepalive = float(ctx.profile.get("KEEPALIVE_MIN_OUTPUT_W", 60.0) or 60.0)
+        except Exception:
+            keepalive = 60.0
+
+        return max(
+            0.0,
+            min(
+                float(ctx.max_discharge_w),
+                keepalive,
+            ),
+        )
+
     def _pv_morning_transition_active(self, ctx: DecisionContext) -> bool:
         if ctx.ai_mode == "manual":
             return False
@@ -1219,7 +1237,7 @@ class DecisionEngine:
                     and int(ctx.forecast_wait_block_counter or 0) >= 2
                 ):
                     reason = "planning_forecast_reality_override"
-                    
+
             block = self._charge_blocked_by_additional_battery_discharge(ctx)
             if block is not None:
                 return block

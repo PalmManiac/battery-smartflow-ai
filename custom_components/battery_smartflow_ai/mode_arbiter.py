@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any
 
 from homeassistant.util import dt as dt_util
@@ -238,7 +238,6 @@ class ModeArbiter:
         additional_battery_discharge_w: float = 0.0,
     ) -> ModeArbiterResult:
         now_utc = dt_util.as_utc(now)
-
         requested_mode = intent.requested_mode
 
         metadata: dict[str, Any] = {
@@ -256,10 +255,20 @@ class ModeArbiter:
                 if runtime.last_mode_change_ts
                 else None
             ),
+            "active_regulation_state": runtime.active_regulation_state,
             "supports_fast_mode_switch": bool(self.config.supports_fast_mode_switch),
             "input_after_output_block_s": float(self.config.input_after_output_block_s),
             "output_after_input_block_s": float(self.config.output_after_input_block_s),
             "mode_switch_cooldown_s": float(self.config.mode_switch_cooldown_s),
+            "stable_import_cycles_for_discharge": int(
+                self.config.stable_import_cycles_for_discharge
+            ),
+            "stable_export_cycles_for_pv_charge": int(
+                self.config.stable_export_cycles_for_pv_charge
+            ),
+            "discharge_exit_export_cycles": int(
+                self.config.discharge_exit_export_cycles
+            ),
         }
 
         # Emergency/manual force may switch modes immediately.
@@ -278,43 +287,6 @@ class ModeArbiter:
                 cooldown_remaining_s=0.0,
                 metadata=metadata,
             )
-
-        # Idle is always allowed.
-        if requested_mode == "idle":
-            return ModeArbiterResult(
-                requested_mode=requested_mode,
-                resolved_mode="idle",
-                allowed=True,
-                reason=intent.reason or "idle",
-                active_regulation_state="neutral_hold",
-                active_hold_remaining_s=0.0,
-                cooldown_remaining_s=0.0,
-                metadata=metadata,
-            )
-
-        # If the strategy explicitly does not allow switching, hold.
-        if not intent.allow_mode_switch:
-            return ModeArbiterResult(
-                requested_mode=requested_mode,
-                resolved_mode="hold",
-                allowed=False,
-                reason="mode_switch_not_allowed_by_strategy",
-                active_regulation_state=runtime.active_regulation_state,
-                active_hold_remaining_s=0.0,
-                cooldown_remaining_s=0.0,
-                metadata=metadata,
-            )
-            
-        # Post-load-drop / post-overshoot holds should react before normal mode checks.
-        post_hold_result = self._evaluate_post_holds(
-            now_utc=now_utc,
-            intent=intent,
-            grid=grid,
-            runtime=runtime,
-            metadata=metadata,
-        )
-        if post_hold_result is not None:
-            return post_hold_result
 
         # External battery discharge blocks charging, but not discharging.
         # It must also override an active PV/charge hold, otherwise a previous
@@ -344,7 +316,20 @@ class ModeArbiter:
                 },
             )
 
-        # Active latch minimum hold times.
+        # Post-load-drop / post-overshoot holds should react before normal mode checks.
+        post_hold_result = self._evaluate_post_holds(
+            now_utc=now_utc,
+            intent=intent,
+            grid=grid,
+            runtime=runtime,
+            metadata=metadata,
+        )
+        if post_hold_result is not None:
+            return post_hold_result
+
+        # Active latch minimum hold times must be evaluated before normal idle.
+        # Otherwise an active discharge can collapse to idle for one cycle and
+        # cause sawtooth behaviour.
         active_hold_result = self._evaluate_active_min_hold(
             now_utc=now_utc,
             intent=intent,
@@ -353,6 +338,33 @@ class ModeArbiter:
         )
         if active_hold_result is not None:
             return active_hold_result
+
+        # Idle is allowed only after active holds had a chance to keep/ramp a
+        # previous regulation state.
+        if requested_mode == "idle":
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="idle",
+                allowed=True,
+                reason=intent.reason or "idle",
+                active_regulation_state="neutral_hold",
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        # If the strategy explicitly does not allow switching, hold.
+        if not intent.allow_mode_switch:
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="hold",
+                allowed=False,
+                reason="mode_switch_not_allowed_by_strategy",
+                active_regulation_state=runtime.active_regulation_state,
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
 
         cooldown_remaining_s = self._mode_cooldown_remaining_s(
             now_utc=now_utc,
@@ -382,7 +394,6 @@ class ModeArbiter:
                 metadata=metadata,
             )
 
-        # INPUT checks.
         if requested_mode == "input":
             return self._evaluate_input(
                 now_utc=now_utc,
@@ -392,7 +403,6 @@ class ModeArbiter:
                 metadata=metadata,
             )
 
-        # OUTPUT checks.
         if requested_mode == "output":
             return self._evaluate_output(
                 now_utc=now_utc,
@@ -412,7 +422,7 @@ class ModeArbiter:
             cooldown_remaining_s=0.0,
             metadata=metadata,
         )
-        
+
     def _evaluate_post_holds(
         self,
         *,
@@ -484,8 +494,6 @@ class ModeArbiter:
                 },
             )
 
-        # Immediate one-cycle reaction before the persisted hold is visible on the
-        # next update cycle.
         if (
             requested_mode == "input"
             and intent.intent == "pv_charge"
@@ -504,7 +512,6 @@ class ModeArbiter:
             )
 
         return None
-
 
     def _evaluate_active_min_hold(
         self,
@@ -586,7 +593,6 @@ class ModeArbiter:
 
         return None
 
-
     def _remaining_until_s(
         self,
         now_utc: datetime,
@@ -600,7 +606,6 @@ class ModeArbiter:
             return max(0.0, (until_utc - now_utc).total_seconds())
         except Exception:
             return 0.0
-
 
     def _latch_remaining_s(
         self,
@@ -628,7 +633,6 @@ class ModeArbiter:
         runtime: RegulationRuntimeState,
         metadata: dict[str, Any],
     ) -> ModeArbiterResult:
-        # PV charging needs stable export unless forced.
         if intent.intent == "pv_charge":
             if (
                 grid.stable_export_cycles
@@ -656,8 +660,6 @@ class ModeArbiter:
                 metadata=metadata,
             )
 
-        # Some devices should not enter INPUT without stable export unless it is
-        # a planned/grid charge.
         if (
             self.config.requires_stable_export_for_input
             and intent.intent not in (
@@ -699,13 +701,52 @@ class ModeArbiter:
         runtime: RegulationRuntimeState,
         metadata: dict[str, Any],
     ) -> ModeArbiterResult:
-        # Discharge should generally wait for stable import, but passthrough has
-        # its own semantics and manual/forced intents are handled earlier.
         if intent.intent in (
             "cover_deficit",
             "peak_discharge",
             "arbitrage_discharge",
         ):
+            exit_cycles = max(
+                1,
+                int(self.config.discharge_exit_export_cycles),
+            )
+
+            if runtime.active_regulation_state == "discharge_active":
+                if int(grid.stable_export_cycles or 0) < exit_cycles:
+                    return ModeArbiterResult(
+                        requested_mode="output",
+                        resolved_mode="output",
+                        allowed=True,
+                        reason="discharge_latch_keep_active",
+                        active_regulation_state="discharge_active",
+                        active_hold_remaining_s=0.0,
+                        cooldown_remaining_s=0.0,
+                        metadata={
+                            **metadata,
+                            "stable_export_cycles": int(
+                                grid.stable_export_cycles or 0
+                            ),
+                            "discharge_exit_export_cycles": exit_cycles,
+                        },
+                    )
+
+                return ModeArbiterResult(
+                    requested_mode="output",
+                    resolved_mode="output",
+                    allowed=True,
+                    reason="discharge_latch_exit_export_stable",
+                    active_regulation_state="discharge_active",
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "stable_export_cycles": int(
+                            grid.stable_export_cycles or 0
+                        ),
+                        "discharge_exit_export_cycles": exit_cycles,
+                    },
+                )
+
             if (
                 grid.stable_import_cycles
                 < self.config.stable_import_cycles_for_discharge
@@ -752,15 +793,6 @@ class ModeArbiter:
         requested_mode: str,
         current_ac_mode: str | None,
     ) -> float:
-        """Return remaining mode-switch cooldown.
-
-        Uses direction-specific cooldowns first:
-        - INPUT after OUTPUT
-        - OUTPUT after INPUT
-
-        Falls back to the generic MODE_SWITCH_COOLDOWN_S.
-        """
-
         if self.config.supports_fast_mode_switch:
             return 0.0
 
@@ -812,6 +844,7 @@ class ModeArbiter:
     def _state_for_intent(self, intent: str):
         if intent == "pv_charge":
             return "pv_charge_active"
+
         if intent in (
             "cover_deficit",
             "peak_discharge",
@@ -820,12 +853,15 @@ class ModeArbiter:
             "manual_constant_discharge",
         ):
             return "discharge_active"
+
         if intent == "passthrough":
             return "passthrough_active"
+
         if intent in (
             "planned_charge",
             "manual_charge",
             "emergency_charge",
         ):
             return "pv_charge_active"
+
         return "none"
