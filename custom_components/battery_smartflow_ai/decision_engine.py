@@ -833,20 +833,41 @@ class DecisionEngine:
         )
         
     def _pv_surplus_blocks_discharge(self, ctx: DecisionContext) -> bool:
-        """Return True when PV surplus should prevent price/peak discharge.
+        """Return True when real PV surplus should prevent price/peak discharge.
 
-        If the grid already sees real export and there is no relevant import,
-        normal economic discharge must not start or keep itself alive just
-        because a small discharge keepalive was stored as prev_discharge_w.
+        This must block a new economic discharge when there is real PV export,
+        but it must not kill an already active discharge just because the
+        output regulation briefly overshoots into small export.
+
+        A small previous discharge keepalive, e.g. 60 W, is not treated as a
+        real active discharge.
         """
 
         export_w = float(ctx.grid_export_w or 0.0)
         import_w = float(ctx.grid_import_w or 0.0)
+        prev_discharge_w = float(ctx.prev_discharge_w or 0.0)
         start_export_threshold = float(ctx.pv_charge_start_export_w or 80.0)
 
         surplus_threshold_w = max(40.0, start_export_threshold * 0.50)
 
-        return export_w > surplus_threshold_w and import_w <= 30.0
+        if export_w <= surplus_threshold_w:
+            return False
+
+        if import_w > 30.0:
+            return False
+
+        keepalive_w = float(self._discharge_keepalive_w(ctx) or 60.0)
+        real_active_discharge_threshold_w = max(120.0, keepalive_w * 1.5)
+
+        # If a real discharge is already active, do not let the DecisionEngine
+        # collapse to idle because of short export. The V4.2 ModeArbiter and
+        # PowerController handle the ramp-down / exit stability.
+        if prev_discharge_w >= real_active_discharge_threshold_w:
+            return False
+
+        # No real active discharge, only idle/old keepalive:
+        # PV surplus should block starting or keeping economic discharge.
+        return True
 
     def _compute_base_price(self, prices: List[float]) -> float:
         return sum(prices) / len(prices)
