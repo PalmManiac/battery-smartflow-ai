@@ -11,7 +11,9 @@ from .regulation_models import (
 )
 
 
-DEFAULT_MIN_POWER_WRITE_DELTA_W = 5.0
+# ZHA uses very small tolerances. For BSFAI we start slightly more conservative
+# to reduce Home Assistant service calls and device stress.
+DEFAULT_MIN_POWER_WRITE_DELTA_W = 15.0
 
 
 @dataclass
@@ -26,9 +28,11 @@ class DeviceCommandBuilder:
     It only translates the resolved technical mode and final power into the
     command shape needed by the Home Assistant/Zendure entities.
 
-    V4.2.0 transition:
-    First used for diagnostics only. Later this becomes the authoritative
-    command path.
+    V4.2.0:
+    - Mode changes are always written.
+    - Relevant power changes are written.
+    - Small power changes are skipped.
+    - The opposite limit is only zeroed when necessary.
     """
 
     def __init__(self, config: DeviceCommandConfig | None = None) -> None:
@@ -53,6 +57,7 @@ class DeviceCommandBuilder:
                 power=power,
                 current_ac_mode=current_ac_mode,
                 last_input_limit_w=last_input_limit_w,
+                last_output_limit_w=last_output_limit_w,
             )
 
         if resolved_mode in ("output", "ramp_down_output"):
@@ -61,6 +66,7 @@ class DeviceCommandBuilder:
                 arbiter=arbiter,
                 power=power,
                 current_ac_mode=current_ac_mode,
+                last_input_limit_w=last_input_limit_w,
                 last_output_limit_w=last_output_limit_w,
             )
 
@@ -71,6 +77,7 @@ class DeviceCommandBuilder:
                 power=power,
                 current_ac_mode=current_ac_mode,
                 last_input_limit_w=last_input_limit_w,
+                last_output_limit_w=last_output_limit_w,
             )
 
         # hold/idle fallback: keep output mode with 0 W as neutral command.
@@ -93,16 +100,31 @@ class DeviceCommandBuilder:
         power: PowerControllerResult,
         current_ac_mode: str | None,
         last_input_limit_w: float,
+        last_output_limit_w: float,
     ) -> DeviceCommand:
         input_limit_w = max(0.0, float(power.final_power_w or 0.0))
 
         should_write_mode = current_ac_mode != "input"
-        should_write_input = self._power_changed_enough(
+
+        # On mode switch, write the active side even if the watt value is close.
+        # Otherwise use the normal write tolerance.
+        should_write_input = should_write_mode or self._power_changed_enough(
             new_value=input_limit_w,
             old_value=last_input_limit_w,
         )
 
-        # In INPUT mode output limit should be zeroed once the command path is active.
+        # In INPUT mode the output side must be zero. Write it only if needed,
+        # except on a real mode switch where we zero it proactively.
+        should_write_output = should_write_mode or self._zero_write_needed(
+            old_value=last_output_limit_w,
+        )
+
+        skipped = (
+            not should_write_mode
+            and not should_write_input
+            and not should_write_output
+        )
+
         return DeviceCommand(
             ac_mode="input",
             input_limit_w=round(input_limit_w, 2),
@@ -110,9 +132,9 @@ class DeviceCommandBuilder:
             reason=power.reason or arbiter.reason or intent.reason,
             should_write_mode=bool(should_write_mode),
             should_write_input=bool(should_write_input),
-            should_write_output=True,
-            skipped=False,
-            skip_reason="none",
+            should_write_output=bool(should_write_output),
+            skipped=bool(skipped),
+            skip_reason="unchanged_within_tolerance" if skipped else "none",
             metadata={
                 "intent": intent.intent,
                 "requested_mode": intent.requested_mode,
@@ -120,6 +142,12 @@ class DeviceCommandBuilder:
                 "mode_allowed": arbiter.allowed,
                 "arbiter_reason": arbiter.reason,
                 "power_reason": power.reason,
+                "current_ac_mode": current_ac_mode,
+                "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
+                "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "min_power_write_delta_w": float(
+                    self.config.min_power_write_delta_w
+                ),
             },
         )
 
@@ -130,27 +158,42 @@ class DeviceCommandBuilder:
         arbiter: ModeArbiterResult,
         power: PowerControllerResult,
         current_ac_mode: str | None,
+        last_input_limit_w: float,
         last_output_limit_w: float,
     ) -> DeviceCommand:
         output_limit_w = max(0.0, float(power.final_power_w or 0.0))
 
         should_write_mode = current_ac_mode != "output"
-        should_write_output = self._power_changed_enough(
+
+        # On mode switch, write the active side even if the watt value is close.
+        # Otherwise use the normal write tolerance.
+        should_write_output = should_write_mode or self._power_changed_enough(
             new_value=output_limit_w,
             old_value=last_output_limit_w,
         )
 
-        # In OUTPUT mode input limit should be zeroed once the command path is active.
+        # In OUTPUT mode the input side must be zero. Write it only if needed,
+        # except on a real mode switch where we zero it proactively.
+        should_write_input = should_write_mode or self._zero_write_needed(
+            old_value=last_input_limit_w,
+        )
+
+        skipped = (
+            not should_write_mode
+            and not should_write_input
+            and not should_write_output
+        )
+
         return DeviceCommand(
             ac_mode="output",
             input_limit_w=0.0,
             output_limit_w=round(output_limit_w, 2),
             reason=power.reason or arbiter.reason or intent.reason,
             should_write_mode=bool(should_write_mode),
-            should_write_input=True,
+            should_write_input=bool(should_write_input),
             should_write_output=bool(should_write_output),
-            skipped=False,
-            skip_reason="none",
+            skipped=bool(skipped),
+            skip_reason="unchanged_within_tolerance" if skipped else "none",
             metadata={
                 "intent": intent.intent,
                 "requested_mode": intent.requested_mode,
@@ -158,6 +201,12 @@ class DeviceCommandBuilder:
                 "mode_allowed": arbiter.allowed,
                 "arbiter_reason": arbiter.reason,
                 "power_reason": power.reason,
+                "current_ac_mode": current_ac_mode,
+                "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
+                "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "min_power_write_delta_w": float(
+                    self.config.min_power_write_delta_w
+                ),
             },
         )
 
@@ -174,14 +223,19 @@ class DeviceCommandBuilder:
         ac_mode: Literal["input", "output"] = "output"
 
         should_write_mode = current_ac_mode != ac_mode
-        should_write_input = self._power_changed_enough(
-            new_value=0.0,
+
+        # Idle must reliably zero both sides if there is still a relevant limit.
+        should_write_input = self._zero_write_needed(
             old_value=last_input_limit_w,
         )
-        should_write_output = self._power_changed_enough(
-            new_value=0.0,
+        should_write_output = self._zero_write_needed(
             old_value=last_output_limit_w,
         )
+
+        # If switching to neutral OUTPUT, write the mode and zero both sides.
+        if should_write_mode:
+            should_write_input = True
+            should_write_output = True
 
         skipped = (
             not should_write_mode
@@ -198,7 +252,7 @@ class DeviceCommandBuilder:
             should_write_input=bool(should_write_input),
             should_write_output=bool(should_write_output),
             skipped=bool(skipped),
-            skip_reason="unchanged" if skipped else "none",
+            skip_reason="unchanged_within_tolerance" if skipped else "none",
             metadata={
                 "intent": intent.intent,
                 "requested_mode": intent.requested_mode,
@@ -206,6 +260,12 @@ class DeviceCommandBuilder:
                 "mode_allowed": arbiter.allowed,
                 "arbiter_reason": arbiter.reason,
                 "power_reason": power.reason,
+                "current_ac_mode": current_ac_mode,
+                "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
+                "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "min_power_write_delta_w": float(
+                    self.config.min_power_write_delta_w
+                ),
             },
         )
 
@@ -216,5 +276,14 @@ class DeviceCommandBuilder:
         old_value: float,
     ) -> bool:
         return abs(float(new_value) - float(old_value)) >= float(
+            self.config.min_power_write_delta_w
+        )
+
+    def _zero_write_needed(
+        self,
+        *,
+        old_value: float,
+    ) -> bool:
+        return abs(float(old_value or 0.0)) >= float(
             self.config.min_power_write_delta_w
         )
