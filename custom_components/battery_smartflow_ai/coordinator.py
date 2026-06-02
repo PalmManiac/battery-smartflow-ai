@@ -2507,17 +2507,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             adaptive_peak_active = decision.reason == "adaptive_peak_discharge"
 
-            if decision.reason == "pv_house_load_passthrough":
-                self._persist["prev_discharge_w"] = 0.0
-            else:
-                self._persist["prev_discharge_w"] = float(decision.discharge_w or 0.0)
-
-            if decision.ac_mode == "input" and float(decision.charge_w or 0.0) > 0.0:
-                self._persist["prev_charge_w"] = float(decision.charge_w)
-            else:
-                self._persist["prev_charge_w"] = 0.0
-
             soc_limit = self._get_soc_limit()
+            
             if soc_limit == 1 and decision.ac_mode == "input" and float(decision.charge_w or 0.0) > 0:
                 decision.charge_w = 0.0
                 decision.action = "idle"
@@ -2546,6 +2537,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
                 decision.reason = "cell_voltage_cutoff_block"
+                
+            # Store final effective previous power only after all protection and limit
+            # blockers have modified the decision. Otherwise a blocked discharge can leave
+            # a stale prev_discharge_w > 0 and suppress PV charging in the next cycle.
+            if decision.reason == "pv_house_load_passthrough":
+                self._persist["prev_discharge_w"] = 0.0
+            else:
+                self._persist["prev_discharge_w"] = float(decision.discharge_w or 0.0)
+
+            if decision.ac_mode == "input" and float(decision.charge_w or 0.0) > 0.0:
+                self._persist["prev_charge_w"] = float(decision.charge_w)
+            else:
+                self._persist["prev_charge_w"] = 0.0
 
             self._remember_learned_charge_power_sample(
                 now,
