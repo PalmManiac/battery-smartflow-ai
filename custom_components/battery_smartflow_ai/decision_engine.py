@@ -158,6 +158,9 @@ class AdditionalBatteryDischargeBlockRule(BaseRule):
 
 class PeakRule(BaseRule):
     def evaluate(self, engine, ctx):
+        if engine._pv_surplus_blocks_discharge(ctx):
+            return None
+
         if ctx.soc > ctx.soc_min and ctx.ai_mode in ("automatic", "winter"):
             if (
                 engine._detect_adaptive_peak(ctx)
@@ -205,6 +208,9 @@ class PeakRule(BaseRule):
 
 class ArbitrageRule(BaseRule):
     def evaluate(self, engine, ctx):
+        if engine._pv_surplus_blocks_discharge(ctx):
+            return None
+
         if (
             ctx.price_now is not None
             and ctx.avg_charge_price is not None
@@ -548,8 +554,11 @@ class PvRule(BaseRule):
             and engine._discharge_protection_active(ctx)
         )
 
+        # A previous 60 W discharge keepalive must not suppress PV surplus charge.
+        # If there is real PV surplus, PV charging may take over even when
+        # prev_discharge_w is still > 0 from the previous cycle.
         discharge_active = prev_discharge_w > 0.0
-        if discharge_active:
+        if discharge_active and not engine._pv_surplus_blocks_discharge(ctx):
             return None
 
         prices = [p.price for p in ctx.price_points] if ctx.price_points else []
@@ -822,6 +831,22 @@ class DecisionEngine:
             ctx.discharge_blocked_by_soc_min
             or ctx.cell_voltage_discharge_blocked
         )
+        
+    def _pv_surplus_blocks_discharge(self, ctx: DecisionContext) -> bool:
+        """Return True when PV surplus should prevent price/peak discharge.
+
+        If the grid already sees real export and there is no relevant import,
+        normal economic discharge must not start or keep itself alive just
+        because a small discharge keepalive was stored as prev_discharge_w.
+        """
+
+        export_w = float(ctx.grid_export_w or 0.0)
+        import_w = float(ctx.grid_import_w or 0.0)
+        start_export_threshold = float(ctx.pv_charge_start_export_w or 80.0)
+
+        surplus_threshold_w = max(40.0, start_export_threshold * 0.50)
+
+        return export_w > surplus_threshold_w and import_w <= 30.0
 
     def _compute_base_price(self, prices: List[float]) -> float:
         return sum(prices) / len(prices)
