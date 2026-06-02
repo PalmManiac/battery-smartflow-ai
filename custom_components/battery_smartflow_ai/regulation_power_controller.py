@@ -411,12 +411,42 @@ class RegulationPowerController:
         control_grid_w = self._control_grid_w(grid)
 
         if intent.intent == "pv_charge":
-            # For PV charge use export amount as the energy source.
-            # Signed grid: export is negative, so export_w = -control_grid_w.
-            export_w = max(0.0, -float(control_grid_w))
+            # PV charge is a delta controller:
+            # The current grid value is measured AFTER the current battery charge.
+            # Therefore remaining export must increase the existing input limit,
+            # while real import must reduce it.
+            target_import_w = float(self.config.target_import_w)
+            error_w = target_import_w - float(control_grid_w)
 
-            raw_target = export_w
-            reason = "pv_input_from_stable_export"
+            if abs(error_w) <= float(self.config.charge_deadband_w):
+                raw_target = prev
+                reason = "pv_input_inside_deadband"
+
+            elif error_w > 0.0:
+                # Export / below target import:
+                # increase charging, but keep step limits active later.
+                delta = error_w * float(self.config.charge_kp_up)
+
+                if bool(grid.fast_load_drop_detected):
+                    delta *= 1.15
+                    reason = "pv_input_fast_increase_from_export"
+                else:
+                    reason = "pv_input_increase_from_export"
+
+                raw_target = prev + delta
+
+            else:
+                # Import / too much charging:
+                # reduce charging, but do not switch mode here.
+                delta = abs(error_w) * float(self.config.charge_kp_down)
+
+                if bool(grid.fast_load_rise_detected):
+                    delta *= 1.25
+                    reason = "pv_input_fast_decrease_to_avoid_import"
+                else:
+                    reason = "pv_input_decrease_to_avoid_import"
+
+                raw_target = prev - delta
 
             return self._limit_input_step(
                 raw_target_w=raw_target,
@@ -426,7 +456,10 @@ class RegulationPowerController:
                     "intent": intent.intent,
                     "resolved_mode": arbiter.resolved_mode,
                     "control_grid_w": round(control_grid_w, 2),
-                    "export_w": round(export_w, 2),
+                    "target_import_w": round(target_import_w, 2),
+                    "requested_power_w": None,
+                    "error_w": round(error_w, 2),
+                    "previous_input_w": round(prev, 2),
                 },
             )
 
