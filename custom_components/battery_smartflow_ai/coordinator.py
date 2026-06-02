@@ -142,7 +142,7 @@ _LOGGER = logging.getLogger(__name__)
 # V4.2.0 development switch:
 # False = legacy command path is used, V4.2 chain only diagnostic
 # True  = V4.2 regulation command path actively controls mode/input/output
-USE_REGULATION_V42_COMMAND_DEV = False
+USE_REGULATION_V42_COMMAND_DEV = True
 
 STORE_VERSION = 1
 
