@@ -266,6 +266,9 @@ class ModeArbiter:
             "stable_export_cycles_for_pv_charge": int(
                 self.config.stable_export_cycles_for_pv_charge
             ),
+            "pv_charge_exit_import_cycles": int(
+                self.config.pv_charge_exit_import_cycles
+            ),
             "discharge_exit_export_cycles": int(
                 self.config.discharge_exit_export_cycles
             ),
@@ -633,78 +636,80 @@ class ModeArbiter:
         runtime: RegulationRuntimeState,
         metadata: dict[str, Any],
     ) -> ModeArbiterResult:
-                if intent.intent == "pv_charge":
-                    exit_import_cycles = max(
-                        1,
-                        int(self.config.pv_charge_exit_import_cycles),
-                    )
+        if intent.intent == "pv_charge":
+            exit_import_cycles = max(
+                1,
+                int(self.config.pv_charge_exit_import_cycles),
+            )
 
-                    # Keep an already active PV charge alive until import is stable
-                    # enough to really exit. Stable export is required for starting PV
-                    # charge, not for keeping an already active PV charge alive.
-                    if runtime.active_regulation_state == "pv_charge_active":
-                        if int(grid.stable_import_cycles or 0) < exit_import_cycles:
-                            return ModeArbiterResult(
-                                requested_mode="input",
-                                resolved_mode="input",
-                                allowed=True,
-                                reason="pv_charge_latch_keep_active",
-                                active_regulation_state="pv_charge_active",
-                                active_hold_remaining_s=0.0,
-                                cooldown_remaining_s=0.0,
-                                metadata={
-                                    **metadata,
-                                    "stable_import_cycles": int(
-                                        grid.stable_import_cycles or 0
-                                    ),
-                                    "pv_charge_exit_import_cycles": exit_import_cycles,
-                                },
-                            )
-
-                        return ModeArbiterResult(
-                            requested_mode="input",
-                            resolved_mode="input",
-                            allowed=True,
-                            reason="pv_charge_latch_exit_import_stable",
-                            active_regulation_state="pv_charge_active",
-                            active_hold_remaining_s=0.0,
-                            cooldown_remaining_s=0.0,
-                            metadata={
-                                **metadata,
-                                "stable_import_cycles": int(
-                                    grid.stable_import_cycles or 0
-                                ),
-                                "pv_charge_exit_import_cycles": exit_import_cycles,
-                            },
-                        )
-
-                    # Starting PV charge needs stable export.
-                    if (
-                        grid.stable_export_cycles
-                        < self.config.stable_export_cycles_for_pv_charge
-                    ):
-                        return ModeArbiterResult(
-                            requested_mode="input",
-                            resolved_mode="hold",
-                            allowed=False,
-                            reason="pv_charge_wait_stable_export",
-                            active_regulation_state=runtime.active_regulation_state,
-                            active_hold_remaining_s=0.0,
-                            cooldown_remaining_s=0.0,
-                            metadata=metadata,
-                        )
-
+            # Keep an already active PV charge alive until import is stable
+            # enough to really exit. Stable export is required for starting PV
+            # charge, not for keeping an already active PV charge alive.
+            if runtime.active_regulation_state == "pv_charge_active":
+                if int(grid.stable_import_cycles or 0) < exit_import_cycles:
                     return ModeArbiterResult(
                         requested_mode="input",
                         resolved_mode="input",
                         allowed=True,
-                        reason="pv_charge_stable_export",
+                        reason="pv_charge_latch_keep_active",
                         active_regulation_state="pv_charge_active",
                         active_hold_remaining_s=0.0,
                         cooldown_remaining_s=0.0,
-                        metadata=metadata,
+                        metadata={
+                            **metadata,
+                            "stable_import_cycles": int(
+                                grid.stable_import_cycles or 0
+                            ),
+                            "pv_charge_exit_import_cycles": exit_import_cycles,
+                        },
                     )
 
+                return ModeArbiterResult(
+                    requested_mode="input",
+                    resolved_mode="input",
+                    allowed=True,
+                    reason="pv_charge_latch_exit_import_stable",
+                    active_regulation_state="pv_charge_active",
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "stable_import_cycles": int(
+                            grid.stable_import_cycles or 0
+                        ),
+                        "pv_charge_exit_import_cycles": exit_import_cycles,
+                    },
+                )
+
+            # Starting PV charge needs stable export.
+            if (
+                grid.stable_export_cycles
+                < self.config.stable_export_cycles_for_pv_charge
+            ):
+                return ModeArbiterResult(
+                    requested_mode="input",
+                    resolved_mode="hold",
+                    allowed=False,
+                    reason="pv_charge_wait_stable_export",
+                    active_regulation_state=runtime.active_regulation_state,
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata=metadata,
+                )
+
+            return ModeArbiterResult(
+                requested_mode="input",
+                resolved_mode="input",
+                allowed=True,
+                reason="pv_charge_stable_export",
+                active_regulation_state="pv_charge_active",
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
+
+        # Some devices should not enter INPUT without stable export unless it is
+        # a planned/grid charge.
         if (
             self.config.requires_stable_export_for_input
             and intent.intent not in (
