@@ -1008,16 +1008,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         else:
             self._persist["regulation_passthrough_latch_started_ts"] = None
             
-        # Post-load-drop hold:
-        # If a large load drop happens while output was active, avoid switching
-        # directly into INPUT/PV charge. Let the new controller ramp output down first.
-        if bool(getattr(grid, "fast_load_drop_detected", False)) and (
+        # Post-output-overshoot hold:
+        # If OUTPUT is really active and causes/keeps export beyond guard, block an
+        # immediate INPUT handover. Do not extend this hold when output is already 0 W,
+        # otherwise PV surplus charging can be blocked forever while stable export exists.
+        grid_now_w = float(getattr(grid, "grid_now_w", 0.0) or 0.0)
+
+        output_really_active = (
             last_output_w > 0.0
-            or previous_active_state == "discharge_active"
-            or active_state == "discharge_active"
-        ):
-            self._persist["regulation_post_load_drop_hold_until"] = (
-                now_utc + timedelta(seconds=post_load_drop_hold_s)
+            and (
+                previous_active_state == "discharge_active"
+                or active_state == "discharge_active"
+            )
+        )
+
+        if grid_now_w <= -abs(export_guard_w) and output_really_active:
+            self._persist["regulation_post_output_overshoot_hold_until"] = (
+                now_utc + timedelta(seconds=post_output_overshoot_hold_s)
             ).isoformat()
 
         # Post-output-overshoot hold:
