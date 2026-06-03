@@ -295,6 +295,36 @@ class RegulationPowerController:
             return (grid_now_w * 0.85) + (grid_avg_short_w * 0.15)
 
         return base_control_w
+        
+    def _control_grid_w_for_input(self, grid: GridHistoryState) -> float:
+        """Weighted grid value for charge/input regulation.
+
+        INPUT should use smoothing near the target, increase charging carefully
+        on export, but reduce charging quickly on real import.
+        """
+
+        base_control_w = self._control_grid_w(grid)
+
+        grid_now_w = float(grid.grid_now_w or 0.0)
+        grid_avg_short_w = float(grid.grid_avg_short_w or 0.0)
+
+        target_import_w = float(self.config.target_import_w)
+        deadband_w = float(self.config.charge_deadband_w)
+
+        # Fast import protection:
+        # If charging causes real import, react quickly and reduce input.
+        fast_import_threshold_w = target_import_w + max(50.0, deadband_w * 1.5)
+        if grid_now_w > fast_import_threshold_w:
+            return (grid_now_w * 0.90) + (grid_avg_short_w * 0.10)
+
+        # Moderate export pickup:
+        # If there is clear real export, increase charging a bit faster,
+        # but less aggressively than import reduction.
+        fast_export_threshold_w = -max(80.0, deadband_w * 2.5)
+        if grid_now_w < fast_export_threshold_w:
+            return (grid_now_w * 0.75) + (grid_avg_short_w * 0.25)
+
+        return base_control_w
 
     def _discharge_keepalive_w(self) -> float:
         """Minimum output while a discharge intent is active."""
@@ -446,7 +476,7 @@ class RegulationPowerController:
         previous_input_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_input_w or 0.0))
-        control_grid_w = self._control_grid_w(grid)
+        control_grid_w = self._control_grid_w_for_input(grid)
 
         if intent.intent == "pv_charge":
             # PV charge is a delta controller:
