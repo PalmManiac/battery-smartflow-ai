@@ -261,6 +261,40 @@ class RegulationPowerController:
         # Normal path:
         # Slightly more direct than before, but still smoothed.
         return (grid_now_w * 0.65) + (grid_avg_short_w * 0.35)
+        
+    def _control_grid_w_for_output(self, grid: GridHistoryState) -> float:
+        """Weighted grid value for discharge/output regulation.
+
+        OUTPUT must stay calm near the target, but real momentary import or
+        export should dominate faster than the generic smoothed value.
+        """
+
+        base_control_w = self._control_grid_w(grid)
+
+        grid_now_w = float(grid.grid_now_w or 0.0)
+        grid_avg_short_w = float(grid.grid_avg_short_w or 0.0)
+
+        target_import_w = float(self.config.target_import_w)
+        deadband_w = float(self.config.discharge_deadband_w)
+        export_guard_w = float(self.config.export_guard_w)
+
+        # Fast import correction:
+        # If the real current grid value is clearly importing, react mostly to
+        # the current value. This prevents visible >100 W import before the
+        # smoothed controller catches up.
+        fast_import_threshold_w = target_import_w + max(60.0, deadband_w * 2.0)
+        if grid_now_w > fast_import_threshold_w:
+            return (grid_now_w * 0.85) + (grid_avg_short_w * 0.15)
+
+        # Fast export correction:
+        # If the real current value is clearly exporting, reduce output faster.
+        # This still remains step-limited later and therefore avoids hard 0 W
+        # collapses.
+        fast_export_threshold_w = -max(60.0, export_guard_w * 0.75)
+        if grid_now_w < fast_export_threshold_w:
+            return (grid_now_w * 0.85) + (grid_avg_short_w * 0.15)
+
+        return base_control_w
 
     def _discharge_keepalive_w(self) -> float:
         """Minimum output while a discharge intent is active."""
@@ -282,7 +316,7 @@ class RegulationPowerController:
         previous_output_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_output_w or 0.0))
-        control_grid_w = self._control_grid_w(grid)
+        control_grid_w = self._control_grid_w_for_output(grid)
 
         if intent.intent == "manual_constant_discharge":
             raw_target = (
@@ -393,7 +427,11 @@ class RegulationPowerController:
             metadata={
                 "intent": intent.intent,
                 "resolved_mode": arbiter.resolved_mode,
+                "grid_now_w": round(float(grid.grid_now_w or 0.0), 2),
+                "grid_avg_short_w": round(float(grid.grid_avg_short_w or 0.0), 2),
+                "grid_avg_medium_w": round(float(grid.grid_avg_medium_w or 0.0), 2),
                 "control_grid_w": round(control_grid_w, 2),
+                "target_import_w": round(float(self.config.target_import_w), 2),
                 "requested_power_w": requested,
                 "error_w": round(error_w, 2),
             },
