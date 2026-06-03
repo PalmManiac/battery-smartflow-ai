@@ -2372,6 +2372,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
                 additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
             )
+            
+            use_regulation_v42_command = bool(
+                USE_REGULATION_V42_COMMAND_DEV
+                or self._persist.get("use_regulation_v42_command", False)
+            )
 
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
             low_soc_pv_charge_requires_export = bool(
@@ -2399,12 +2404,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     decision.ac_mode = "output"
                     decision.reason = "pv_charge_blocked_by_discharge_protection"
                     
-            # V4.2.0 carryover safety for legacy execution:
-            # Do not keep PV charge/keepalive active when there is no real export and
-            # the house is importing from grid. This prevents INPUT 80 W from being held
-            # by the old PV charge latch during weak/cloudy PV or low-SoC situations.
+            # Legacy safety only:
+            # In the V4.2 command path, PV charge must remain a pv_charge intent so the
+            # ModeArbiter and PowerController can reduce INPUT smoothly instead of forcing
+            # idle/input 0 W and creating a charge sawtooth.
             if (
-                decision.ac_mode == "input"
+                not use_regulation_v42_command
+                and decision.ac_mode == "input"
                 and float(decision.charge_w or 0.0) > 0.0
                 and decision.reason == "pv_surplus_charge"
             ):
@@ -2602,11 +2608,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if legacy_ac_mode == ZENDURE_MODE_OUTPUT
                 else 0.0
             )
-
-            use_regulation_v42_command = bool(
-                USE_REGULATION_V42_COMMAND_DEV
-                or self._persist.get("use_regulation_v42_command", False)
-            )
             
             # Safety fallback: never use V4.2 command path if command generation failed
             # or produced an unexpected mode.
@@ -2649,7 +2650,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     else "legacy_active"
                 ),
                 current_ac_mode=self._state(self.entities.ac_mode),
-                command_ac_mode=str(regulation_device_command.ac_mode),
+                command_ac_mode=str(ac_mode),
                 profile=profile,
                 grid=grid_history_state,
             )
