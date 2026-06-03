@@ -480,6 +480,39 @@ class ModeArbiter:
             and post_output_overshoot_remaining_s > 0.0
             and intent.intent == "pv_charge"
         ):
+            last_output_w = float(runtime.last_output_limit_w or 0.0)
+            stable_export_cycles = int(grid.stable_export_cycles or 0)
+            required_export_cycles = int(
+                self.config.stable_export_cycles_for_pv_charge
+            )
+
+            # If OUTPUT is already fully ramped down and PV surplus is stable,
+            # do not keep blocking PV charge just because an old post-output
+            # overshoot hold is still stored.
+            if (
+                last_output_w <= 0.0
+                and stable_export_cycles >= required_export_cycles
+            ):
+                return ModeArbiterResult(
+                    requested_mode=requested_mode,
+                    resolved_mode="input",
+                    allowed=True,
+                    reason="post_output_overshoot_cleared_for_stable_pv_charge",
+                    active_regulation_state="pv_charge_active",
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "post_output_overshoot_remaining_s": round(
+                            post_output_overshoot_remaining_s,
+                            1,
+                        ),
+                        "last_output_limit_w": last_output_w,
+                        "stable_export_cycles": stable_export_cycles,
+                        "required_export_cycles": required_export_cycles,
+                    },
+                )
+
             return ModeArbiterResult(
                 requested_mode=requested_mode,
                 resolved_mode="ramp_down_output",
@@ -494,6 +527,9 @@ class ModeArbiter:
                         post_output_overshoot_remaining_s,
                         1,
                     ),
+                    "last_output_limit_w": last_output_w,
+                    "stable_export_cycles": stable_export_cycles,
+                    "required_export_cycles": required_export_cycles,
                 },
             )
 
