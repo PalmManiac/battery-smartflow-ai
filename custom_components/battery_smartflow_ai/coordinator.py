@@ -2906,8 +2906,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 
                 # V4.2.0 regulation / power controller diagnostics
                 "regulation_control_grid_w": round(
-                    float(grid_history_state.grid_now_w) * 0.6
-                    + float(grid_history_state.grid_avg_short_w) * 0.4,
+                    float(
+                        regulation_power_result.metadata.get(
+                            "control_grid_w",
+                            float(grid_history_state.grid_now_w) * 0.6
+                            + float(grid_history_state.grid_avg_short_w) * 0.4,
+                        )
+                        if isinstance(regulation_power_result.metadata, dict)
+                        else float(grid_history_state.grid_now_w) * 0.6
+                        + float(grid_history_state.grid_avg_short_w) * 0.4
+                    ),
                     2,
                 ),
                 "regulation_raw_target_w": float(regulation_power_result.raw_target_w),

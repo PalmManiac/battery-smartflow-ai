@@ -19,7 +19,7 @@ DEFAULT_FAST_LOAD_CHANGE_W = 600.0
 # A change is considered "fast" when it clearly deviates from the recent
 # medium history. The hard watt limit remains active as a safe fallback.
 DEFAULT_FAST_LOAD_STDDEV_FACTOR = 3.5
-DEFAULT_FAST_LOAD_STDDEV_MIN_W = 15.0
+DEFAULT_FAST_LOAD_STDDEV_MIN_W = 80.0
 
 DEFAULT_TARGET_IMPORT_W = 10.0
 DEFAULT_NEAR_TARGET_BAND_W = 40.0
@@ -209,9 +209,25 @@ class GridHistory:
         statistical_rise = deviation_from_recent_avg >= dynamic_limit
         statistical_drop = deviation_from_recent_avg <= -dynamic_limit
 
+        # Do not report fast changes for tiny movements around the target area.
+        # A fast rise should mean relevant import pressure or a clearly large upward jump.
+        # A fast drop should mean relevant export pressure or a clearly large downward jump.
+        target_import_w = float(self.config.target_import_w)
+        near_target_band_w = max(20.0, float(self.config.near_target_band_w))
+
+        rise_relevant = (
+            grid_now_w >= target_import_w + near_target_band_w
+            or grid_delta_w >= max(near_target_band_w * 2.0, 80.0)
+        )
+
+        drop_relevant = (
+            grid_now_w <= -near_target_band_w
+            or grid_delta_w <= -max(near_target_band_w * 2.0, 80.0)
+        )
+
         return (
-            bool(hard_rise or statistical_rise),
-            bool(hard_drop or statistical_drop),
+            bool(hard_rise or (statistical_rise and rise_relevant)),
+            bool(hard_drop or (statistical_drop and drop_relevant)),
         )
 
     def _avg_last(self, count: int) -> float:
