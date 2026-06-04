@@ -625,9 +625,18 @@ class RegulationPowerController:
         profile_limited = profile_limited_target != raw
 
         if profile_limited_target > prev:
+            max_step_up = float(self.config.discharge_max_step_up)
+
+            # Softer discharge start:
+            # When output starts from 0 W / keepalive range, do not jump directly to a
+            # high target. This prevents startup spikes while normal running regulation
+            # can still use the profile step limit.
+            if reason.startswith("output_") and prev <= self._discharge_keepalive_w():
+                max_step_up = min(max_step_up, 300.0)
+
             allowed_delta = min(
                 profile_limited_target - prev,
-                float(self.config.discharge_max_step_up),
+                max_step_up,
             )
             final = prev + allowed_delta
         else:
