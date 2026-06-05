@@ -353,6 +353,7 @@ SF2400AC_PROFILE = {
     "CHARGE_MAX_STEP_DOWN": 800.0,
 
     # --- Discharge controller tuning ---
+    "DISCHARGE_TARGET_IMPORT_W": -5.0,
     "DISCHARGE_DEADBAND_W": 30.0,
     "DISCHARGE_KP_UP": 0.65,
     "DISCHARGE_KP_DOWN": 0.90,
