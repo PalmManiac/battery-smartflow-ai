@@ -12,6 +12,7 @@ from .regulation_models import (
 
 
 DEFAULT_TARGET_IMPORT_W = 10.0
+DEFAULT_DISCHARGE_TARGET_IMPORT_W = 10.0
 DEFAULT_EXPORT_GUARD_W = 80.0
 
 DEFAULT_DISCHARGE_DEADBAND_W = 30.0
@@ -33,6 +34,7 @@ DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
 @dataclass
 class RegulationPowerConfig:
     target_import_w: float = DEFAULT_TARGET_IMPORT_W
+    discharge_target_import_w: float = DEFAULT_DISCHARGE_TARGET_IMPORT_W
     export_guard_w: float = DEFAULT_EXPORT_GUARD_W
     keepalive_min_output_w: float = DEFAULT_KEEPALIVE_MIN_OUTPUT_W
     discharge_exit_export_cycles: int = DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES
@@ -75,6 +77,11 @@ def build_regulation_power_config(profile: dict[str, Any]) -> RegulationPowerCon
             profile,
             "TARGET_IMPORT_W",
             DEFAULT_TARGET_IMPORT_W,
+        ),
+        discharge_target_import_w=_profile_float(
+            profile,
+            "DISCHARGE_TARGET_IMPORT_W",
+            _profile_float(profile, "TARGET_IMPORT_W", DEFAULT_TARGET_IMPORT_W),
         ),
         export_guard_w=_profile_float(
             profile,
@@ -274,7 +281,7 @@ class RegulationPowerController:
         grid_now_w = float(grid.grid_now_w or 0.0)
         grid_avg_short_w = float(grid.grid_avg_short_w or 0.0)
 
-        target_import_w = float(self.config.target_import_w)
+        target_import_w = float(self.config.discharge_target_import_w)
         deadband_w = float(self.config.discharge_deadband_w)
         export_guard_w = float(self.config.export_guard_w)
 
@@ -388,7 +395,8 @@ class RegulationPowerController:
             else 0.0
         )
 
-        error_w = control_grid_w - float(self.config.target_import_w)
+        target_import_w = float(self.config.discharge_target_import_w)
+        error_w = control_grid_w - target_import_w
 
         if abs(error_w) <= float(self.config.discharge_deadband_w):
             raw_target = prev
@@ -461,7 +469,7 @@ class RegulationPowerController:
                 "grid_avg_short_w": round(float(grid.grid_avg_short_w or 0.0), 2),
                 "grid_avg_medium_w": round(float(grid.grid_avg_medium_w or 0.0), 2),
                 "control_grid_w": round(control_grid_w, 2),
-                "target_import_w": round(float(self.config.target_import_w), 2),
+                "target_import_w": round(float(target_import_w), 2),
                 "requested_power_w": requested,
                 "error_w": round(error_w, 2),
             },
