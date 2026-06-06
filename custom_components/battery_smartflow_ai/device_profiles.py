@@ -17,6 +17,14 @@ PROFILE_OVERRIDE_FIELDS = {
         "unit": "W",
         "icon": "mdi:transmission-tower-import",
     },
+    "DISCHARGE_TARGET_IMPORT_W": {
+        "label": "Entladen Ziel-Netzbezug",
+        "min": -50.0,
+        "max": 100.0,
+        "step": 1.0,
+        "unit": "W",
+        "icon": "mdi:transmission-tower-export",
+    },
     "EXPORT_GUARD_W": {
         "label": "Export-Schutz",
         "min": 0.0,
@@ -161,6 +169,8 @@ V42_GRID_HISTORY_DEFAULTS = {
     "GRID_HISTORY_MEDIUM_SAMPLES": 6,
     "GRID_HISTORY_MAX_SAMPLES": 12,
     "FAST_LOAD_CHANGE_W": 600.0,
+    "FAST_LOAD_STDDEV_FACTOR": 3.5,
+    "FAST_LOAD_STDDEV_MIN_W": 80.0,
 }
 
 
@@ -306,6 +316,7 @@ SF800PRO_PROFILE = {
     "CHARGE_MAX_STEP_DOWN": 400.0,
 
     # --- Discharge controller tuning ---
+    "DISCHARGE_TARGET_IMPORT_W": 0.0,
     "DISCHARGE_DEADBAND_W": 35.0,
     "DISCHARGE_KP_UP": 0.40,
     "DISCHARGE_KP_DOWN": 0.75,
@@ -401,6 +412,7 @@ SF2400PRO_PROFILE = {
     "CHARGE_MAX_STEP_DOWN": 800.0,
 
     # --- Discharge controller tuning ---
+    "DISCHARGE_TARGET_IMPORT_W": -5.0,
     "DISCHARGE_DEADBAND_W": 30.0,
     "DISCHARGE_KP_UP": 0.65,
     "DISCHARGE_KP_DOWN": 0.90,
@@ -448,6 +460,7 @@ SF1600AC_PROFILE = {
     "CHARGE_MAX_STEP_DOWN": 900.0,
 
     # --- Discharge controller tuning ---
+    "DISCHARGE_TARGET_IMPORT_W": 0.0,
     "DISCHARGE_DEADBAND_W": 40.0,
     "DISCHARGE_KP_UP": 0.55,
     "DISCHARGE_KP_DOWN": 0.95,
@@ -495,6 +508,7 @@ HYPER2000_PROFILE = {
     "CHARGE_MAX_STEP_DOWN": 800.0,
 
     # --- Discharge controller tuning ---
+    "DISCHARGE_TARGET_IMPORT_W": -5.0,
     "DISCHARGE_DEADBAND_W": 30.0,
     "DISCHARGE_KP_UP": 0.65,
     "DISCHARGE_KP_DOWN": 0.90,
@@ -542,6 +556,7 @@ HUB2000_PROFILE = {
     "CHARGE_MAX_STEP_DOWN": 800.0,
 
     # --- Discharge controller tuning ---
+    "DISCHARGE_TARGET_IMPORT_W": 0.0,
     "DISCHARGE_DEADBAND_W": 30.0,
     "DISCHARGE_KP_UP": 0.65,
     "DISCHARGE_KP_DOWN": 0.90,
