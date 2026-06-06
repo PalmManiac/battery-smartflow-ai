@@ -142,7 +142,7 @@ _LOGGER = logging.getLogger(__name__)
 # V4.2.0 development switch:
 # False = legacy command path is used, V4.2 chain only diagnostic
 # True  = V4.2 regulation command path actively controls mode/input/output
-USE_REGULATION_V42_COMMAND_DEV = True
+USE_REGULATION_V42_COMMAND_DEV = False
 
 STORE_VERSION = 1
 
@@ -1023,18 +1023,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         if grid_now_w <= -abs(export_guard_w) and output_really_active:
-            self._persist["regulation_post_output_overshoot_hold_until"] = (
-                now_utc + timedelta(seconds=post_output_overshoot_hold_s)
-            ).isoformat()
-
-        # Post-output-overshoot hold:
-        # If output causes/keeps export beyond guard, block immediate INPUT handover.
-        grid_now_w = float(getattr(grid, "grid_now_w", 0.0) or 0.0)
-        if grid_now_w <= -abs(export_guard_w) and (
-            last_output_w > 0.0
-            or previous_active_state == "discharge_active"
-            or active_state == "discharge_active"
-        ):
             self._persist["regulation_post_output_overshoot_hold_until"] = (
                 now_utc + timedelta(seconds=post_output_overshoot_hold_s)
             ).isoformat()
