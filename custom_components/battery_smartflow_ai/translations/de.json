@@ -200,17 +200,19 @@
         }
       },
       "expert": {
-        "title": "Regelprofil bearbeiten – Expertenmodus",
-        "description": "Erweiterte Schutz-, Diagnose- und Planungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
-        "data": {
-          "expert_mode_enabled": "Expertenmodus aktivieren",
-          "learned_planning_enabled": "Lernbasierte Ladefenster-Planung verwenden"
-        },
-        "data_description": {
-          "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen.",
-          "learned_planning_enabled": "Wenn aktiviert, nutzt Battery SmartFlow AI die lernbasierte Ladefenster-Planung automatisch, sobald genügend Lerndaten vorhanden sind. Bis dahin bleibt die klassische Planung aktiv. Wenn deaktiviert, wird dauerhaft die klassische Planung verwendet."
-        }
-      },
+	    "title": "Regelprofil bearbeiten – Expertenmodus",
+	    "description": "Erweiterte Schutz-, Diagnose-, Planungs- und Regelungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Die verbesserte Leistungsregelung kann hier aktiviert oder bei Problemen wieder deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
+	    "data": {
+		  "expert_mode_enabled": "Expertenmodus aktivieren",
+		  "learned_planning_enabled": "Lernbasierte Ladefenster-Planung verwenden",
+		  "regulation_v42_enabled": "Verbesserte Leistungsregelung verwenden"
+	    },
+	    "data_description": {
+		  "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen.",
+		  "learned_planning_enabled": "Wenn aktiviert, nutzt Battery SmartFlow AI die lernbasierte Ladefenster-Planung automatisch, sobald genügend Lerndaten vorhanden sind. Bis dahin bleibt die klassische Planung aktiv. Wenn deaktiviert, wird dauerhaft die klassische Planung verwendet.",
+		  "regulation_v42_enabled": "Aktiviert die neue technische Leistungsregelung mit Netz-Historie, stabilerer Modusfreigabe und geglätteter Leistungssteuerung. Kann bei Problemen jederzeit wieder deaktiviert werden."
+	    }
+	  },
       "expert_cell_voltage": {
         "title": "Regelprofil bearbeiten – Zellspannungs-Schutz",
         "description": "Aktiviere optional den Zellspannungs-Schutz. Wenn dieser aktiviert wird, folgt im nächsten Schritt die Konfiguration der Zellspannungssensoren und Schutzschwellen.",
