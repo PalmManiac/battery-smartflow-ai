@@ -61,6 +61,7 @@ from .const import (
     SETTING_PV_CHARGE_START_EXPORT_W,
     SETTING_FORECAST_BASE_LOAD,
     SETTING_LEARNED_PLANNING_ENABLED,
+    SETTING_REGULATION_V42_ENABLED,
     # defaults
     DEFAULT_SOC_MIN,
     DEFAULT_SOC_MAX,
@@ -84,6 +85,7 @@ from .const import (
     DEFAULT_PV_CHARGE_START_EXPORT_W,
     DEFAULT_FORECAST_BASE_LOAD,
     DEFAULT_LEARNED_PLANNING_ENABLED,
+    DEFAULT_REGULATION_V42_ENABLED,
     # modes
     AI_MODE_AUTOMATIC,
     AI_MODE_SUMMER,
@@ -2368,12 +2370,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
             )
             
-            use_regulation_v42_command = bool(
-                USE_REGULATION_V42_COMMAND_DEV
-                or self.entry.options.get(
+            regulation_v42_option_enabled = bool(
+                self.entry.options.get(
                     SETTING_REGULATION_V42_ENABLED,
                     DEFAULT_REGULATION_V42_ENABLED,
                 )
+            )
+
+            use_regulation_v42_command = bool(
+                USE_REGULATION_V42_COMMAND_DEV
+                or regulation_v42_option_enabled
+                or self._persist.get("use_regulation_v42_command", False)
             )
 
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
@@ -2837,6 +2844,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # V4.2.0 regulation execution switch / comparison
                 "regulation_v42_command_enabled": bool(use_regulation_v42_command),
                 "regulation_v42_command_dev_switch": bool(USE_REGULATION_V42_COMMAND_DEV),
+                "regulation_v42_option_enabled": bool(regulation_v42_option_enabled),
                 "regulation_v42_command_persist_switch": bool(
                     self._persist.get("use_regulation_v42_command", False)
                 ),
