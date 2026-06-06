@@ -29,6 +29,7 @@ DEFAULT_CHARGE_MAX_STEP_DOWN = 800.0
 
 DEFAULT_KEEPALIVE_MIN_OUTPUT_W = 60.0
 DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
+DEFAULT_DISCHARGE_TARGET_IMPORT_W = 10.0
 
 
 @dataclass
@@ -44,6 +45,7 @@ class RegulationPowerConfig:
     discharge_kp_down: float = DEFAULT_DISCHARGE_KP_DOWN
     discharge_max_step_up: float = DEFAULT_DISCHARGE_MAX_STEP_UP
     discharge_max_step_down: float = DEFAULT_DISCHARGE_MAX_STEP_DOWN
+    discharge_target_import_w: float = DEFAULT_DISCHARGE_TARGET_IMPORT_W
 
     charge_deadband_w: float = DEFAULT_CHARGE_DEADBAND_W
     charge_kp_up: float = DEFAULT_CHARGE_KP_UP
@@ -429,7 +431,11 @@ class RegulationPowerController:
 
         # For strategic discharge decisions, never exceed the strategy request.
         if requested > 0.0:
-            raw_target = min(raw_target, requested)
+            request_margin_w = 80.0
+            raw_target = min(
+                raw_target,
+                requested + request_margin_w,
+            )
 
         # Keep economic/automatic discharge alive while the strategy still requests
         # OUTPUT. Without this, small target overshoots can collapse output to 0 W
