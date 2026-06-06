@@ -96,6 +96,8 @@ SETTING_FORECAST_BASE_LOAD = "forecast_base_load"
 
 SETTING_LEARNED_PLANNING_ENABLED = "learned_planning_enabled"
 
+SETTING_REGULATION_V42_ENABLED = "regulation_v42_enabled"
+
 # Default
 DEFAULT_PACK_CAPACITY_KWH = 2.88
 DEFAULT_BATTERY_PACKS = 1
@@ -118,6 +120,8 @@ DEFAULT_PV_CHARGE_START_EXPORT_W = 80.0
 DEFAULT_FORECAST_BASE_LOAD = 300.0
 
 DEFAULT_LEARNED_PLANNING_ENABLED = True
+
+DEFAULT_REGULATION_V42_ENABLED = False
 
 # --------------------------------------------------
 # Device profiles (V1.5.x / V3.2.0 overrides)
