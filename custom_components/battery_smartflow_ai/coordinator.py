@@ -2370,7 +2370,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
             use_regulation_v42_command = bool(
                 USE_REGULATION_V42_COMMAND_DEV
-                or self._persist.get("use_regulation_v42_command", False)
+                or self.entry.options.get(
+                    SETTING_REGULATION_V42_ENABLED,
+                    DEFAULT_REGULATION_V42_ENABLED,
+                )
             )
 
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
@@ -3071,6 +3074,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         profile.get("TARGET_IMPORT_W", 10.0),
                     )
                     or 0.0
+                ),
+                "regulation_v42_option_enabled": bool(
+                    self.entry.options.get(
+                        SETTING_REGULATION_V42_ENABLED,
+                        DEFAULT_REGULATION_V42_ENABLED,
+                    )
                 ),
 
                 # SF800Pro passthrough / arbiter debug
