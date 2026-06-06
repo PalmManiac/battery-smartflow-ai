@@ -927,9 +927,12 @@ class ModeArbiter:
 
         return str(current_ac_mode) != str(requested_mode)
 
-    def _state_for_intent(self, intent: str):
+    def _state_for_intent(self, intent: str) -> str:
         if intent == "pv_charge":
             return "pv_charge_active"
+
+        if intent == "passthrough":
+            return "passthrough_active"
 
         if intent in (
             "cover_deficit",
@@ -940,14 +943,11 @@ class ModeArbiter:
         ):
             return "discharge_active"
 
-        if intent == "passthrough":
-            return "passthrough_active"
-
         if intent in (
             "planned_charge",
             "manual_charge",
             "emergency_charge",
         ):
-            return "pv_charge_active"
+            return "input_active"
 
         return "none"
