@@ -2051,6 +2051,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             )
 
+            regulation_v42_option_enabled = bool(
+                self.entry.options.get(
+                    SETTING_REGULATION_V42_ENABLED,
+                    DEFAULT_REGULATION_V42_ENABLED,
+                )
+            )
+
+            use_regulation_v42_command = bool(
+                USE_REGULATION_V42_COMMAND_DEV
+                or regulation_v42_option_enabled
+                or self._persist.get("use_regulation_v42_command", False)
+            )
+
             ai_mode = str(self.runtime_mode.get("ai_mode", AI_MODE_AUTOMATIC))
             manual_action = str(self.runtime_mode.get("manual_action", MANUAL_STANDBY))
 
@@ -2250,20 +2263,33 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             manual_mode_active = ai_mode == AI_MODE_MANUAL
 
-            if manual_mode_active:
+            if manual_mode_active or use_regulation_v42_command:
+                sf800_stop_reason = (
+                    "manual_mode"
+                    if manual_mode_active
+                    else "improved_regulation_active"
+                )
+
                 self._persist["pv_houseload_passthrough_active"] = False
                 self._persist["pv_houseload_passthrough_started_ts"] = None
                 self._persist["pv_houseload_passthrough_export_counter"] = 0
                 self._persist["pv_houseload_passthrough_target_w"] = 0.0
-                self._persist["pv_houseload_passthrough_stop_reason"] = "manual_mode"
+                self._persist["pv_houseload_passthrough_stop_reason"] = sf800_stop_reason
 
                 self._persist["sf800_pv_charge_latched"] = False
                 self._persist["sf800_pv_charge_started_ts"] = None
                 self._persist["sf800_pv_charge_stop_counter"] = 0
 
+                self._persist["sf800_mode_arbiter_state"] = (
+                    "disabled"
+                    if manual_mode_active
+                    else "improved_regulation_active"
+                )
+                self._persist["sf800_mode_arbiter_reason"] = sf800_stop_reason
+
                 pv_houseload_passthrough_active = False
                 pv_houseload_passthrough_target_w = 0.0
-                pv_houseload_passthrough_stop_reason = "manual_mode"
+                pv_houseload_passthrough_stop_reason = sf800_stop_reason
             else:
                 pv_houseload_passthrough_active, pv_houseload_passthrough_target_w, pv_houseload_passthrough_stop_reason = (
                     self._update_pv_houseload_passthrough(
@@ -2354,34 +2380,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             decision = self._engine.evaluate(ctx)
 
-            decision = self._sf800_apply_mode_arbiter(
-                now=now,
-                profile=profile,
-                decision=decision,
-                pv_w=float(pv_w),
-                house_load_w=float(house_load),
-                grid_import_w=float(grid_import or 0.0),
-                grid_export_w=float(grid_export or 0.0),
-                max_discharge_w=float(max_discharge),
-                pv_charge_start_export_w=float(pv_charge_start_export_w),
-                discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
-                cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
-                cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
-                additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
-            )
-            
-            regulation_v42_option_enabled = bool(
-                self.entry.options.get(
-                    SETTING_REGULATION_V42_ENABLED,
-                    DEFAULT_REGULATION_V42_ENABLED,
+            if not use_regulation_v42_command:
+                decision = self._sf800_apply_mode_arbiter(
+                    now=now,
+                    profile=profile,
+                    decision=decision,
+                    pv_w=float(pv_w),
+                    house_load_w=float(house_load),
+                    grid_import_w=float(grid_import or 0.0),
+                    grid_export_w=float(grid_export or 0.0),
+                    max_discharge_w=float(max_discharge),
+                    pv_charge_start_export_w=float(pv_charge_start_export_w),
+                    discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
+                    cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
+                    cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+                    additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
                 )
-            )
-
-            use_regulation_v42_command = bool(
-                USE_REGULATION_V42_COMMAND_DEV
-                or regulation_v42_option_enabled
-                or self._persist.get("use_regulation_v42_command", False)
-            )
+            else:
+                self._persist["sf800_mode_arbiter_state"] = "improved_regulation_active"
+                self._persist["sf800_mode_arbiter_reason"] = "legacy_sf800_arbiter_bypassed"
 
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
             low_soc_pv_charge_requires_export = bool(
