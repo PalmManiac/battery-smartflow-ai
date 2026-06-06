@@ -3076,7 +3076,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "regulation_profile_requires_stable_export_for_input": bool(
                     profile.get("REQUIRES_STABLE_EXPORT_FOR_INPUT", False)
-),
+                ),
+                "regulation_profile_discharge_target_import_w": float(
+                    profile.get(
+                        "DISCHARGE_TARGET_IMPORT_W",
+                        profile.get("TARGET_IMPORT_W", 10.0),
+                    )
+                    or 0.0
+                ),
 
                 # SF800Pro passthrough / arbiter debug
                 "pv_houseload_passthrough_enabled": bool(
