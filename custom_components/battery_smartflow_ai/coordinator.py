@@ -610,6 +610,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return pack_capacity * packs
 
+    def _stable_iso_minute(self, value: datetime | None) -> str | None:
+        """Return a stable ISO timestamp rounded to full minutes.
+
+        This avoids Recorder churn from second/microsecond jitter in timestamp
+        sensors. Learned planning works in 15-minute slots, so second-level
+        precision is not useful for Home Assistant states.
+        """
+        if value is None:
+            return None
+
+        try:
+            dt = dt_util.as_local(value)
+            dt = dt.replace(second=0, microsecond=0)
+            return dt.isoformat()
+        except Exception:
+            return None
+
     def _learning_slot_start(self, ts: datetime) -> datetime:
         """Return the local 15-minute slot start for a timestamp."""
         local = dt_util.as_local(ts)
@@ -2705,7 +2722,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if is_charging or is_discharging or (is_passthrough and out_w > 0.0):
                 if not self._persist.get("next_action_time"):
-                    self._persist["next_action_time"] = now.isoformat()
+                    self._persist["next_action_time"] = self._stable_iso_minute(now)
             else:
                 self._persist["next_action_time"] = None
 
@@ -3289,21 +3306,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "learned_planning_effective_window_minutes": int(
                     learned_charge_plan.effective_window_minutes
                 ),
-                "learned_planning_deadline": (
-                    learned_charge_plan.planning_deadline.isoformat()
-                    if learned_charge_plan.planning_deadline
-                    else None
+                "learned_planning_deadline": self._stable_iso_minute(
+                    learned_charge_plan.planning_deadline
                 ),
                 "learned_planning_deadline_reason": learned_charge_plan.deadline_reason,
-                "learned_planning_optimal_charge_start": (
-                    learned_charge_plan.optimal_charge_start.isoformat()
-                    if learned_charge_plan.optimal_charge_start
-                    else None
+                "learned_planning_optimal_charge_start": self._stable_iso_minute(
+                    learned_charge_plan.optimal_charge_start
                 ),
-                "learned_planning_optimal_charge_end": (
-                    learned_charge_plan.optimal_charge_end.isoformat()
-                    if learned_charge_plan.optimal_charge_end
-                    else None
+                "learned_planning_optimal_charge_end": self._stable_iso_minute(
+                    learned_charge_plan.optimal_charge_end
                 ),
                 "learned_planning_window_score": learned_charge_plan.window_score,
                 "learned_planning_enabled": bool(learned_planning_enabled),
