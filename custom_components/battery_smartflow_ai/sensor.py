@@ -667,57 +667,6 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "configured_lowest_cell_voltage_sensor_count"
             ),
             "global_lowest_cell_voltage": details.get("global_lowest_cell_voltage"),
-            "cell_voltage_status": details.get("cell_voltage_status"),
-            "cell_voltage_warning": details.get("cell_voltage_warning"),
-            "cell_voltage_cutoff": details.get("cell_voltage_cutoff"),
-            "cell_voltage_resume": details.get("cell_voltage_resume"),
-            "cell_voltage_emergency_active": details.get("cell_voltage_emergency_active"),
-            "cell_voltage_discharge_blocked": details.get("cell_voltage_discharge_blocked"),
-            "cell_voltage_resume_threshold": details.get("cell_voltage_resume_threshold"),
-            "cell_voltage_soc_plausibility": details.get("cell_voltage_soc_plausibility"),
-            "cell_voltage_soc_warning_threshold": details.get("cell_voltage_soc_warning_threshold"),
-            "cell_voltage_soc_critical_threshold": details.get("cell_voltage_soc_critical_threshold"),
-
-            # V4.0.0 forecast transparency
-            "forecast_status": details.get("forecast_status"),
-            "pv_outlook": details.get("pv_outlook"),
-            "forecast_remaining_today_kwh": details.get("forecast_remaining_today_kwh"),
-            "forecast_tomorrow_kwh": details.get("forecast_tomorrow_kwh"),
-            "forecast_next_3h_kwh": details.get("forecast_next_3h_kwh"),
-            "forecast_next_6h_kwh": details.get("forecast_next_6h_kwh"),
-            "forecast_peak_today_w": details.get("forecast_peak_today_w"),
-            "forecast_peak_tomorrow_w": details.get("forecast_peak_tomorrow_w"),
-            "forecast_source_name": details.get("forecast_source_name"),
-
-            # V4.1.0 learned charge-window planning summary
-            "learned_planning_status": details.get("learned_planning_status"),
-            "learned_planning_mode": details.get("learned_planning_mode"),
-            "learned_planning_blocking_reason": details.get("learned_planning_blocking_reason"),
-            "learned_planning_decision_reason": details.get("learned_planning_decision_reason"),
-            "learned_planning_history_days": details.get("learned_planning_history_days"),
-            "learned_planning_usable_days": details.get("learned_planning_usable_days"),
-            "learned_planning_data_coverage": details.get("learned_planning_data_coverage"),
-            "learned_planning_expected_consumption_kwh": details.get(
-                "learned_planning_expected_consumption_kwh"
-            ),
-            "learned_planning_required_charge_energy_kwh": details.get(
-                "learned_planning_required_charge_energy_kwh"
-            ),
-            "learned_planning_effective_charge_power_w": details.get(
-                "learned_planning_effective_charge_power_w"
-            ),
-            "learned_planning_effective_window_minutes": details.get(
-                "learned_planning_effective_window_minutes"
-            ),
-            "learned_planning_deadline": details.get("learned_planning_deadline"),
-            "learned_planning_deadline_reason": details.get("learned_planning_deadline_reason"),
-            "learned_planning_optimal_charge_start": details.get(
-                "learned_planning_optimal_charge_start"
-            ),
-            "learned_planning_optimal_charge_end": details.get(
-                "learned_planning_optimal_charge_end"
-            ),
-            "learned_planning_window_score": details.get("learned_planning_window_score"),
         }
 
         attrs["profile_overrides"] = profile_overrides
@@ -725,11 +674,18 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
         return attrs
 
     def _handle_coordinator_update(self) -> None:
-        data = self.coordinator.data or {}
-        details = dict(data.get("details") or {})
+        """Update sensor attributes without duplicating the full details block.
+
+        Important for Home Assistant Recorder:
+        The coordinator details dictionary can be large and changes often.
+        Attaching it to every sensor causes massive database growth because
+        every sensor state stores its own copy of the attributes.
+        """
+
+        attrs: dict | None = None
 
         if self.entity_description.runtime_key == "device_profile":
-            details.update(self._build_device_profile_attributes())
+            attrs = self._build_device_profile_attributes()
 
-        self._attr_extra_state_attributes = details
+        self._attr_extra_state_attributes = attrs
         super()._handle_coordinator_update()
