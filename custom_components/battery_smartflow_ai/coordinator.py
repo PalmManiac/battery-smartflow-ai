@@ -2704,7 +2704,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["power_state"] = "idle"
 
             if is_charging or is_discharging or (is_passthrough and out_w > 0.0):
-                self._persist["next_action_time"] = now.isoformat()
+                if not self._persist.get("next_action_time"):
+                    self._persist["next_action_time"] = now.isoformat()
             else:
                 self._persist["next_action_time"] = None
 
