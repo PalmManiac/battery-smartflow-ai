@@ -2582,6 +2582,59 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
                 decision.reason = "cell_voltage_cutoff_block"
+            
+            regulation_runtime = self._get_regulation_runtime_state()
+
+            # V4.2 PV charge latch continuation:
+            # In the improved regulation path, do not let a short idle cycle from
+            # the strategic DecisionEngine immediately stop an already active PV
+            # charge. This can happen in the morning transition when charging
+            # consumes the visible export for one or more cycles.
+            #
+            # The technical regulation should continue PV charging and let the
+            # PowerController reduce input smoothly until stable grid import
+            # confirms that PV charge should really exit.
+            pv_charge_exit_import_cycles = int(
+                profile.get("PV_CHARGE_EXIT_IMPORT_CYCLES", 3) or 3
+            )
+
+            original_decision_reason = str(decision.reason or "")
+
+            if (
+                use_regulation_v42_command
+                and ai_mode != AI_MODE_MANUAL
+                and str(regulation_runtime.active_regulation_state)
+                == "pv_charge_active"
+                and bool(pv_charge_latched)
+                and decision.action == "idle"
+                and original_decision_reason in (
+                    "idle",
+                    "state_idle",
+                    "standby",
+                )
+                and int(grid_history_state.stable_import_cycles or 0)
+                < pv_charge_exit_import_cycles
+                and soc_limit != 1
+                and not additional_battery_discharge_active
+                and float(soc) < float(soc_max)
+            ):
+                decision = DecisionResult(
+                    action="charge",
+                    ac_mode="input",
+                    charge_w=max(
+                        80.0,
+                        float(self._persist.get("last_set_input_w", 0.0) or 0.0),
+                    ),
+                    discharge_w=0.0,
+                    reason="pv_surplus_charge",
+                    target_soc=decision.target_soc,
+                )
+
+                self._persist["regulation_pv_charge_latch_continue_reason"] = (
+                    original_decision_reason
+                )
+            else:
+                self._persist["regulation_pv_charge_latch_continue_reason"] = "none"
                 
             # Store final effective previous power only after all protection and limit
             # blockers have modified the decision. Otherwise a blocked discharge can leave
@@ -2603,8 +2656,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             
             strategy_intent = decision_to_strategy_intent(decision)
-            
-            regulation_runtime = self._get_regulation_runtime_state()
 
             mode_arbiter_result = self._mode_arbiter.evaluate(
                 now=now,
