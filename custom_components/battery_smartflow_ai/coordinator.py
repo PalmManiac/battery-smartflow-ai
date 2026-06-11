@@ -2616,13 +2616,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 < pv_charge_exit_import_cycles
                 and soc_limit != 1
                 and not additional_battery_discharge_active
+                and not bool(cell_voltage_emergency_active)
                 and float(soc) < float(soc_max)
             ):
                 decision = DecisionResult(
                     action="charge",
                     ac_mode="input",
                     charge_w=max(
-                        80.0,
+                        0.0,
                         float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                     ),
                     discharge_w=0.0,
@@ -2657,6 +2658,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
             strategy_intent = decision_to_strategy_intent(decision)
 
+            # Hard discharge permission for the V4.2 regulation chain.
+            # The DecisionEngine decision is already sanitized above, but the
+            # ModeArbiter may still have an active discharge/passthrough latch
+            # from a previous cycle. This explicit flag prevents such technical
+            # holds from producing a short output pulse at SoC minimum or during
+            # cell-voltage discharge protection.
+            discharge_allowed_for_regulation = not bool(
+                discharge_blocked_by_soc_min
+                or cell_voltage_discharge_blocked
+                or soc_limit == 2
+            )
+
             mode_arbiter_result = self._mode_arbiter.evaluate(
                 now=now,
                 intent=strategy_intent,
@@ -2664,6 +2677,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 runtime=regulation_runtime,
                 current_ac_mode=self._state(self.entities.ac_mode),
                 additional_battery_discharge_w=float(additional_battery_discharge_w or 0.0),
+                discharge_allowed=bool(discharge_allowed_for_regulation),
             )
             
             regulation_power_result = self._regulation_power_controller.calculate(
@@ -2977,6 +2991,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     strategy_intent.allow_mode_switch
                 ),
                 "regulation_strategy_force": bool(strategy_intent.force),
+                "regulation_discharge_allowed": bool(
+                    discharge_allowed_for_regulation
+                ),
                 
                 "regulation_resolved_mode": mode_arbiter_result.resolved_mode,
                 "regulation_mode_allowed": bool(mode_arbiter_result.allowed),
