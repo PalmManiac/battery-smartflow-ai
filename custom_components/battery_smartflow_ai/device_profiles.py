@@ -377,6 +377,54 @@ SF2400AC_PROFILE = {
 }
 
 
+SF2400AC+_PROFILE = {
+    # --- UI ---
+    "label": "Zendure SF2400AC+",
+
+    # --- Legacy controller tuning / fallback ---
+    "TARGET_IMPORT_W": 10.0,
+    "DEADBAND_W": 30.0,
+    "EXPORT_GUARD_W": 80.0,
+    "KP_UP": 0.65,
+    "KP_DOWN": 0.90,
+    "MAX_STEP_UP": 550.0,
+    "MAX_STEP_DOWN": 800.0,
+
+    # --- Shared / other tuning ---
+    "KEEPALIVE_MIN_DEFICIT_W": 15.0,
+    "KEEPALIVE_MIN_OUTPUT_W": 60.0,
+    "SOC_DISCHARGE_RESUME_MARGIN": 3.0,
+
+    # --- Low-SoC / cell-voltage protection behavior ---
+    "LOW_SOC_PROTECTION_STRICT": False,
+    "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
+    "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
+
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **PASSTHROUGH_DISABLED_DEFAULTS,
+
+    # --- Charge controller tuning ---
+    "CHARGE_DEADBAND_W": 30.0,
+    "CHARGE_KP_UP": 0.65,
+    "CHARGE_KP_DOWN": 0.90,
+    "CHARGE_MAX_STEP_UP": 550.0,
+    "CHARGE_MAX_STEP_DOWN": 800.0,
+
+    # --- Discharge controller tuning ---
+    "DISCHARGE_TARGET_IMPORT_W": -10.0,
+    "DISCHARGE_DEADBAND_W": 30.0,
+    "DISCHARGE_KP_UP": 0.65,
+    "DISCHARGE_KP_DOWN": 0.90,
+    "DISCHARGE_MAX_STEP_UP": 550.0,
+    "DISCHARGE_MAX_STEP_DOWN": 800.0,
+
+    # --- Hardware limits (safety clamp) ---
+    "MAX_INPUT_W": 2400.0,
+    "MAX_OUTPUT_W": 2400.0,
+}
+
+
 SF2400PRO_PROFILE = {
     # --- UI ---
     "label": "Zendure SF2400Pro",
@@ -572,6 +620,7 @@ HUB2000_PROFILE = {
 DEVICE_PROFILES = {
     "SF800Pro": SF800PRO_PROFILE,
     "SF2400AC": SF2400AC_PROFILE,
+    "SF2400AC+": SF2400AC+_PROFILE,
     "SF2400Pro": SF2400PRO_PROFILE,
     "SF1600AC": SF1600AC_PROFILE,
     "Hyper 2000": HYPER2000_PROFILE,
