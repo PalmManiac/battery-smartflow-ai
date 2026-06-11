@@ -236,6 +236,7 @@ class ModeArbiter:
         runtime: RegulationRuntimeState,
         current_ac_mode: str | None,
         additional_battery_discharge_w: float = 0.0,
+        discharge_allowed: bool = True,
     ) -> ModeArbiterResult:
         now_utc = dt_util.as_utc(now)
         requested_mode = intent.requested_mode
@@ -243,6 +244,10 @@ class ModeArbiter:
         metadata: dict[str, Any] = {
             "intent": intent.intent,
             "requested_power_w": intent.requested_power_w,
+            "intent_reason": intent.reason,
+            "allow_mode_switch": intent.allow_mode_switch,
+            "force": intent.force,
+            "discharge_allowed": bool(discharge_allowed),
             "grid_now_w": grid.grid_now_w,
             "grid_avg_short_w": grid.grid_avg_short_w,
             "stable_import_cycles": grid.stable_import_cycles,
@@ -273,6 +278,28 @@ class ModeArbiter:
                 self.config.discharge_exit_export_cycles
             ),
         }
+
+        # Hard discharge protection must override active output holds.
+        # This is intentionally checked before force intents and before
+        # post/active holds, so low-SoC/cell protection can never be bypassed
+        # by ramp_down_output, discharge latch or passthrough hold.
+        if not bool(discharge_allowed) and (
+            requested_mode == "output"
+            or runtime.active_regulation_state in (
+                "discharge_active",
+                "passthrough_active",
+            )
+        ):
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="idle",
+                allowed=False,
+                reason="discharge_blocked_by_strategy",
+                active_regulation_state="neutral_hold",
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata=metadata,
+            )
 
         # Emergency/manual force may switch modes immediately.
         if intent.force:
@@ -336,6 +363,7 @@ class ModeArbiter:
         active_hold_result = self._evaluate_active_min_hold(
             now_utc=now_utc,
             intent=intent,
+            grid=grid,
             runtime=runtime,
             metadata=metadata,
         )
@@ -489,9 +517,12 @@ class ModeArbiter:
             # If OUTPUT is already fully ramped down and PV surplus is stable,
             # do not keep blocking PV charge just because an old post-output
             # overshoot hold is still stored.
+            current_export_active = float(grid.grid_now_w or 0.0) < 0.0
+
             if (
                 last_output_w <= 0.0
                 and stable_export_cycles >= required_export_cycles
+                and current_export_active
             ):
                 return ModeArbiterResult(
                     requested_mode=requested_mode,
@@ -510,6 +541,7 @@ class ModeArbiter:
                         "last_output_limit_w": last_output_w,
                         "stable_export_cycles": stable_export_cycles,
                         "required_export_cycles": required_export_cycles,
+                        "current_export_active": current_export_active,
                     },
                 )
 
@@ -557,6 +589,7 @@ class ModeArbiter:
         *,
         now_utc: datetime,
         intent: StrategyIntent,
+        grid: GridHistoryState,
         runtime: RegulationRuntimeState,
         metadata: dict[str, Any],
     ) -> ModeArbiterResult | None:
@@ -565,6 +598,19 @@ class ModeArbiter:
         requested_mode = intent.requested_mode
 
         if runtime.active_regulation_state == "pv_charge_active":
+            stable_import_cycles = int(grid.stable_import_cycles or 0)
+            exit_import_cycles = max(
+                1,
+                int(self.config.pv_charge_exit_import_cycles),
+            )
+
+            # Do not let the minimum hold override a real PV-charge exit.
+            # The status may be kept briefly during marginal conditions, but
+            # once import is stable enough, the PV charge latch must be allowed
+            # to end even if the minimum hold time is still running.
+            if stable_import_cycles >= exit_import_cycles:
+                return None
+
             remaining_s = self._latch_remaining_s(
                 now_utc=now_utc,
                 started_ts=runtime.pv_charge_latch_started_ts,
@@ -583,6 +629,8 @@ class ModeArbiter:
                     metadata={
                         **metadata,
                         "pv_charge_hold_remaining_s": round(remaining_s, 1),
+                        "stable_import_cycles": stable_import_cycles,
+                        "pv_charge_exit_import_cycles": exit_import_cycles,
                     },
                 )
 
@@ -685,10 +733,10 @@ class ModeArbiter:
                 if int(grid.stable_import_cycles or 0) < exit_import_cycles:
                     return ModeArbiterResult(
                         requested_mode="input",
-                        resolved_mode="input",
-                        allowed=True,
-                        reason="pv_charge_latch_keep_active",
-                        active_regulation_state="pv_charge_active",
+                        resolved_mode="idle",
+                        allowed=False,
+                        reason="pv_charge_latch_exit_import_stable",
+                        active_regulation_state="neutral_hold",
                         active_hold_remaining_s=0.0,
                         cooldown_remaining_s=0.0,
                         metadata={
@@ -714,6 +762,24 @@ class ModeArbiter:
                             grid.stable_import_cycles or 0
                         ),
                         "pv_charge_exit_import_cycles": exit_import_cycles,
+                    },
+                )
+
+            # Starting a new PV charge also needs current export.
+            # Stable export cycles alone can be stale during fast-changing
+            # cloud situations.
+            if float(grid.grid_now_w or 0.0) >= 0.0:
+                return ModeArbiterResult(
+                    requested_mode="input",
+                    resolved_mode="hold",
+                    allowed=False,
+                    reason="pv_charge_wait_current_export",
+                    active_regulation_state=runtime.active_regulation_state,
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "grid_now_w": float(grid.grid_now_w or 0.0),
                     },
                 )
 
