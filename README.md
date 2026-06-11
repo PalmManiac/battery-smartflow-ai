@@ -16,6 +16,8 @@
 
 **Intelligent, economic and stable control for Zendure SolarFlow systems in Home Assistant**
 
+*Note: Currently, only a single battery system is supported. Support for multi-battery systems (up to 3 units) is planned.*
+
 
 ---
 
@@ -302,6 +304,8 @@ For details (including screenshots, examples, FAQ) see:
 # Battery SmartFlow AI
 
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
+
+*Achtung: Aktuell wird nur ein Batterie-System unterstützt. Die Unterstützung für Multi-Batterie-Systeme (bis zu 3 Stück) ist geplant*
 
 ---
 
