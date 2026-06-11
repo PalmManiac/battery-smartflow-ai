@@ -205,10 +205,12 @@
         "data": {
           "expert_mode_enabled": "Activer le mode expert",
           "learned_planning_enabled": "Utiliser la planification apprise des fenêtres de charge"
+		  "regulation_v42_enabled": "Utiliser la régulation de puissance améliorée"
         },
         "data_description": {
           "expert_mode_enabled": "Active la zone expert avancée pour des fonctions supplémentaires de protection et de diagnostic.",
           "learned_planning_enabled": "Si activé, Battery SmartFlow AI utilise automatiquement la planification apprise des fenêtres de charge dès que suffisamment de données sont disponibles. Jusque-là, la planification classique reste active. Si désactivé, la planification classique est toujours utilisée."
+          "regulation_v42_enabled": "Active la nouvelle régulation technique de puissance avec historique réseau, validation de mode plus stable et commande de puissance lissée. Peut être désactivée à tout moment en cas de problème."
         }
       },
       "expert_cell_voltage": {

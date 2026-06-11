@@ -205,10 +205,12 @@
         "data": {
           "expert_mode_enabled": "Expertmodus inschakelen",
           "learned_planning_enabled": "Lerende laadvensterplanning gebruiken"
+		  "regulation_v42_enabled": "Verbeterde vermogensregeling gebruiken"
         },
         "data_description": {
           "expert_mode_enabled": "Activeert het uitgebreide expertgedeelte voor aanvullende beschermings- en diagnosefuncties.",
           "learned_planning_enabled": "Indien ingeschakeld gebruikt Battery SmartFlow AI automatisch de lerende laadvensterplanning zodra voldoende leerdata beschikbaar is. Tot die tijd blijft de klassieke planning actief. Indien uitgeschakeld wordt altijd de klassieke planning gebruikt."
+		  "regulation_v42_enabled": "Activeert de nieuwe technische vermogensregeling met nethistorie, stabielere modusvrijgave en afgevlakte vermogensregeling. Kan bij problemen op elk moment weer worden uitgeschakeld."
         }
       },
       "expert_cell_voltage": {
