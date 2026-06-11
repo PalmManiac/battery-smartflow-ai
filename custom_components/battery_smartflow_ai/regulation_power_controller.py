@@ -29,7 +29,6 @@ DEFAULT_CHARGE_MAX_STEP_DOWN = 800.0
 
 DEFAULT_KEEPALIVE_MIN_OUTPUT_W = 60.0
 DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
-DEFAULT_DISCHARGE_TARGET_IMPORT_W = 10.0
 
 
 @dataclass
@@ -45,7 +44,6 @@ class RegulationPowerConfig:
     discharge_kp_down: float = DEFAULT_DISCHARGE_KP_DOWN
     discharge_max_step_up: float = DEFAULT_DISCHARGE_MAX_STEP_UP
     discharge_max_step_down: float = DEFAULT_DISCHARGE_MAX_STEP_DOWN
-    discharge_target_import_w: float = DEFAULT_DISCHARGE_TARGET_IMPORT_W
 
     charge_deadband_w: float = DEFAULT_CHARGE_DEADBAND_W
     charge_kp_up: float = DEFAULT_CHARGE_KP_UP
@@ -495,9 +493,15 @@ class RegulationPowerController:
         if intent.intent == "pv_charge":
             # PV charge is a delta controller:
             # The current grid value is measured AFTER the current battery charge.
-            # Therefore remaining export must increase the existing input limit,
+            # Therefore remaining export may increase the existing input limit,
             # while real import must reduce it.
+            #
+            # Important for cloudy/fast-changing PV:
+            # The smoothed control value can still contain old export while the
+            # current grid value already shows import. Therefore the final PV
+            # charge target is additionally capped by the current grid value.
             target_import_w = float(self.config.target_import_w)
+            grid_now_w = float(grid.grid_now_w or 0.0)
             error_w = target_import_w - float(control_grid_w)
 
             if abs(error_w) <= float(self.config.charge_deadband_w):
@@ -530,6 +534,41 @@ class RegulationPowerController:
 
                 raw_target = prev - delta
 
+            # Current-grid cap:
+            # Because grid_now_w is measured after the current battery input,
+            # the safe target is the previous input plus the current distance
+            # to the desired import target.
+            #
+            # Examples:
+            # - grid_now_w = -200 W export, target = 10 W:
+            #   safe target may increase by about 210 W.
+            # - grid_now_w = +200 W import, target = 10 W:
+            #   safe target must decrease by about 190 W.
+            #
+            # This prevents PV charging from increasing based on stale smoothed
+            # export when the sun is already dropping.
+            current_grid_safe_target_w = max(
+                0.0,
+                prev + (target_import_w - grid_now_w),
+            )
+
+            current_grid_limited = False
+            max_step_down_override_w: float | None = None
+
+            if raw_target > current_grid_safe_target_w:
+                raw_target = current_grid_safe_target_w
+                current_grid_limited = True
+                reason = f"{reason}_current_grid_cap"
+
+                # If current import is above the target, reducing PV charge is
+                # protective and should not be delayed by the normal charge
+                # step-down limit. Increasing remains step-limited normally.
+                if grid_now_w > target_import_w:
+                    max_step_down_override_w = max(
+                        float(self.config.charge_max_step_down),
+                        prev - raw_target,
+                    )
+
             return self._limit_input_step(
                 raw_target_w=raw_target,
                 previous_input_w=prev,
@@ -537,12 +576,18 @@ class RegulationPowerController:
                 metadata={
                     "intent": intent.intent,
                     "resolved_mode": arbiter.resolved_mode,
+                    "grid_now_w": round(grid_now_w, 2),
+                    "grid_avg_short_w": round(float(grid.grid_avg_short_w or 0.0), 2),
+                    "grid_avg_medium_w": round(float(grid.grid_avg_medium_w or 0.0), 2),
                     "control_grid_w": round(control_grid_w, 2),
                     "target_import_w": round(target_import_w, 2),
                     "requested_power_w": None,
                     "error_w": round(error_w, 2),
                     "previous_input_w": round(prev, 2),
+                    "current_grid_safe_target_w": round(current_grid_safe_target_w, 2),
+                    "current_grid_limited": bool(current_grid_limited),
                 },
+                max_step_down_override_w=max_step_down_override_w,
             )
 
         # Planned/manual/emergency charging uses the strategy request.
@@ -683,6 +728,7 @@ class RegulationPowerController:
         previous_input_w: float,
         reason: str,
         metadata: dict[str, Any],
+        max_step_down_override_w: float | None = None,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_input_w or 0.0))
         raw = max(0.0, float(raw_target_w or 0.0))
@@ -697,9 +743,15 @@ class RegulationPowerController:
             )
             final = prev + allowed_delta
         else:
+            max_step_down = (
+                float(max_step_down_override_w)
+                if max_step_down_override_w is not None
+                else float(self.config.charge_max_step_down)
+            )
+
             allowed_delta = -min(
                 prev - profile_limited_target,
-                float(self.config.charge_max_step_down),
+                max(0.0, max_step_down),
             )
             final = prev + allowed_delta
 
@@ -716,5 +768,12 @@ class RegulationPowerController:
             profile_limited=bool(profile_limited),
             step_limited=bool(step_limited),
             reason=reason,
-            metadata=metadata,
+            metadata={
+                **metadata,
+                "max_step_down_override_w": (
+                    round(float(max_step_down_override_w), 2)
+                    if max_step_down_override_w is not None
+                    else None
+                ),
+            },
         )
