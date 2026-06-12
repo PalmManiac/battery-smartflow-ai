@@ -730,37 +730,35 @@ class ModeArbiter:
             # enough to really exit. Stable export is required for starting PV
             # charge, not for keeping an already active PV charge alive.
             if runtime.active_regulation_state == "pv_charge_active":
-                if int(grid.stable_import_cycles or 0) < exit_import_cycles:
+                stable_import_cycles = int(grid.stable_import_cycles or 0)
+
+                if stable_import_cycles < exit_import_cycles:
                     return ModeArbiterResult(
                         requested_mode="input",
-                        resolved_mode="idle",
-                        allowed=False,
-                        reason="pv_charge_latch_exit_import_stable",
-                        active_regulation_state="neutral_hold",
+                        resolved_mode="input",
+                        allowed=True,
+                        reason="pv_charge_latch_keep_active",
+                        active_regulation_state="pv_charge_active",
                         active_hold_remaining_s=0.0,
                         cooldown_remaining_s=0.0,
                         metadata={
                             **metadata,
-                            "stable_import_cycles": int(
-                                grid.stable_import_cycles or 0
-                            ),
+                            "stable_import_cycles": stable_import_cycles,
                             "pv_charge_exit_import_cycles": exit_import_cycles,
                         },
                     )
 
                 return ModeArbiterResult(
                     requested_mode="input",
-                    resolved_mode="input",
-                    allowed=True,
+                    resolved_mode="idle",
+                    allowed=False,
                     reason="pv_charge_latch_exit_import_stable",
-                    active_regulation_state="pv_charge_active",
+                    active_regulation_state="neutral_hold",
                     active_hold_remaining_s=0.0,
                     cooldown_remaining_s=0.0,
                     metadata={
                         **metadata,
-                        "stable_import_cycles": int(
-                            grid.stable_import_cycles or 0
-                        ),
+                        "stable_import_cycles": stable_import_cycles,
                         "pv_charge_exit_import_cycles": exit_import_cycles,
                     },
                 )
