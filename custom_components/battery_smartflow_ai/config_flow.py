@@ -16,6 +16,8 @@ from .const import (
     CONF_BATTERY_AC_POWER_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
+    CONF_OFFGRID_POWER_ENTITY,
+    CONF_OFFGRID_MODE_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
     CONF_AC_MODE_ENTITY,
@@ -73,6 +75,8 @@ OPTIONAL_ENTITY_KEYS = (
     CONF_SOC_LIMIT_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
+    CONF_OFFGRID_POWER_ENTITY,
+    CONF_OFFGRID_MODE_ENTITY,
     CONF_PV_FORECAST_TODAY_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
 )
@@ -382,6 +386,40 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Optional(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY)
             ] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
+            )
+
+        offgrid_power_val = _val(CONF_OFFGRID_POWER_ENTITY)
+        if offgrid_power_val:
+            schema[
+                vol.Optional(
+                    CONF_OFFGRID_POWER_ENTITY,
+                    default=offgrid_power_val,
+                )
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
+        else:
+            schema[
+                vol.Optional(CONF_OFFGRID_POWER_ENTITY)
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
+
+        offgrid_mode_val = _val(CONF_OFFGRID_MODE_ENTITY)
+        if offgrid_mode_val:
+            schema[
+                vol.Optional(
+                    CONF_OFFGRID_MODE_ENTITY,
+                    default=offgrid_mode_val,
+                )
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="select")
+            )
+        else:
+            schema[
+                vol.Optional(CONF_OFFGRID_MODE_ENTITY)
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="select")
             )
 
         price_export_val = _val(CONF_PRICE_EXPORT_ENTITY)
