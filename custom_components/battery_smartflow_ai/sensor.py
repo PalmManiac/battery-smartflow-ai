@@ -86,6 +86,19 @@ LEARNED_PLANNING_BLOCKING_REASON_ENUMS = [
     "latest_start_reached",
 ]
 
+OFFGRID_MODE_ENUMS = [
+    "not_configured",
+    "unknown",
+    "off",
+    "normal",
+    "eco",
+]
+
+OFFGRID_RULE_REASON_ENUMS = [
+    "none",
+    "offgrid_load_active_blocks_ac_charge",
+]
+
 
 @dataclass(frozen=True, kw_only=True)
 class ZendureSensorEntityDescription(SensorEntityDescription):
@@ -461,6 +474,55 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         native_unit_of_measurement="€/kWh",
         icon="mdi:currency-eur",
     ),
+
+    # --------------------------------------------------
+    # OFF-GRID / INSELSTECKDOSE (V4.2.x, optional)
+    # --------------------------------------------------
+    ZendureSensorEntityDescription(
+        key="offgrid_power_w",
+        translation_key="offgrid_power_w",
+        runtime_key="offgrid_power_w",
+        native_unit_of_measurement="W",
+        icon="mdi:power-socket-de",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="offgrid_mode",
+        translation_key="offgrid_mode",
+        runtime_key="offgrid_mode",
+        device_class=SensorDeviceClass.ENUM,
+        options=OFFGRID_MODE_ENUMS,
+        icon="mdi:power-socket-de",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="offgrid_load_active",
+        translation_key="offgrid_load_active",
+        runtime_key="offgrid_load_active",
+        icon="mdi:power-plug-battery",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="offgrid_rule_reason",
+        translation_key="offgrid_rule_reason",
+        runtime_key="offgrid_rule_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=OFFGRID_RULE_REASON_ENUMS,
+        icon="mdi:shield-power",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="offgrid_source_active",
+        translation_key="offgrid_source_active",
+        runtime_key="offgrid_source_active",
+        icon="mdi:solar-power-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+
+    # --------------------------------------------------
+    # ECONOMICS
+    # --------------------------------------------------
 
     # --------------------------------------------------
     # ECONOMICS
