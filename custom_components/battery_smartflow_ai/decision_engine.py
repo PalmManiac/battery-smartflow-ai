@@ -92,6 +92,14 @@ class DecisionContext:
     pv_houseload_passthrough_active: bool = False
     pv_houseload_passthrough_target_w: float = 0.0
     pv_houseload_passthrough_stop_reason: str = "none"
+    
+    # V4.2.x Off-Grid / Inselsteckdose
+    offgrid_power_w: float = 0.0
+    offgrid_mode: str = "not_configured"
+    offgrid_available: bool = False
+    offgrid_active: bool = False
+    offgrid_load_active: bool = False
+    offgrid_source_active: bool = False
 
 
 @dataclass
