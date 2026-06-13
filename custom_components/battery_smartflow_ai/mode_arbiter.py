@@ -35,6 +35,8 @@ DEFAULT_POST_OUTPUT_OVERSHOOT_HOLD_S = 60.0
 
 DEFAULT_EXTERNAL_BATTERY_DISCHARGE_BLOCK_W = 50.0
 
+DEFAULT_OFFGRID_LOAD_ACTIVE_W = 50.0
+
 
 @dataclass
 class ModeArbiterConfig:
@@ -69,6 +71,13 @@ class ModeArbiterConfig:
     input_keepalive_safe: bool = True
     requires_stable_export_for_input: bool = False
     supports_fast_mode_switch: bool = True
+
+    supports_offgrid_socket: bool = False
+    supports_offgrid_input: bool = False
+    offgrid_max_internal_supply_w: float = 0.0
+    offgrid_load_active_w: float = DEFAULT_OFFGRID_LOAD_ACTIVE_W
+    offgrid_load_blocks_ac_charge: bool = False
+    offgrid_input_affects_energy_balance: bool = False
 
 
 def _profile_float(profile: dict[str, Any], key: str, default: float) -> float:
@@ -214,6 +223,36 @@ def build_mode_arbiter_config(profile: dict[str, Any]) -> ModeArbiterConfig:
             "SUPPORTS_FAST_MODE_SWITCH",
             True,
         ),
+        supports_offgrid_socket=_profile_bool(
+            profile,
+            "SUPPORTS_OFFGRID_SOCKET",
+            False,
+        ),
+        supports_offgrid_input=_profile_bool(
+            profile,
+            "SUPPORTS_OFFGRID_INPUT",
+            False,
+        ),
+        offgrid_max_internal_supply_w=_profile_float(
+            profile,
+            "OFFGRID_MAX_INTERNAL_SUPPLY_W",
+            0.0,
+        ),
+        offgrid_load_active_w=_profile_float(
+            profile,
+            "OFFGRID_LOAD_ACTIVE_W",
+            DEFAULT_OFFGRID_LOAD_ACTIVE_W,
+        ),
+        offgrid_load_blocks_ac_charge=_profile_bool(
+            profile,
+            "OFFGRID_LOAD_BLOCKS_AC_CHARGE",
+            False,
+        ),
+        offgrid_input_affects_energy_balance=_profile_bool(
+            profile,
+            "OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE",
+            False,
+        ),
     )
 
 
@@ -237,6 +276,10 @@ class ModeArbiter:
         current_ac_mode: str | None,
         additional_battery_discharge_w: float = 0.0,
         discharge_allowed: bool = True,
+        offgrid_power_w: float = 0.0,
+        offgrid_mode: str = "not_configured",
+        offgrid_load_active: bool = False,
+        offgrid_source_active: bool = False,
     ) -> ModeArbiterResult:
         now_utc = dt_util.as_utc(now)
         requested_mode = intent.requested_mode
@@ -276,6 +319,22 @@ class ModeArbiter:
             ),
             "discharge_exit_export_cycles": int(
                 self.config.discharge_exit_export_cycles
+            ),
+            "offgrid_power_w": float(offgrid_power_w or 0.0),
+            "offgrid_mode": str(offgrid_mode or "not_configured"),
+            "offgrid_load_active": bool(offgrid_load_active),
+            "offgrid_source_active": bool(offgrid_source_active),
+            "supports_offgrid_socket": bool(self.config.supports_offgrid_socket),
+            "supports_offgrid_input": bool(self.config.supports_offgrid_input),
+            "offgrid_max_internal_supply_w": float(
+                self.config.offgrid_max_internal_supply_w
+            ),
+            "offgrid_load_active_w": float(self.config.offgrid_load_active_w),
+            "offgrid_load_blocks_ac_charge": bool(
+                self.config.offgrid_load_blocks_ac_charge
+            ),
+            "offgrid_input_affects_energy_balance": bool(
+                self.config.offgrid_input_affects_energy_balance
             ),
         }
 
@@ -342,6 +401,69 @@ class ModeArbiter:
                     **metadata,
                     "additional_battery_discharge_w": float(
                         additional_battery_discharge_w or 0.0
+                    ),
+                },
+            )
+
+        # Off-Grid / island socket protection:
+        # A positive Off-Grid power value is treated as active load at the
+        # island socket for confirmed 2400-series/ZHA setups.
+        #
+        # When such a load is active, do not allow automatic INPUT
+        # counter-regulation. Zendure should supply the Off-Grid load from
+        # internal PV/battery up to its own capability. Only explicit priority
+        # charge reasons such as emergency, manual, planned or price-planned
+        # grid charging may still enter INPUT.
+        priority_charge_reasons = {
+            "emergency_latched_charge",
+            "cell_voltage_emergency_charge",
+            "manual_charge",
+            "very_cheap_force_charge",
+            "learned_charge_window_active",
+            "learned_charge_window_latest_start_reached",
+            "learned_charge_window_deadline_too_close_start_now",
+            "planning_latest_start",
+            "planning_forecast_poor",
+            "planning_forecast_mixed",
+            "planning_forecast_reality_override",
+            "valley_boost_charge",
+            "valley_boost_charge_mixed_forecast",
+            "valley_opportunity_charge",
+            "valley_opportunity_charge_mixed_forecast",
+        }
+
+        priority_charge_intents = {
+            "emergency_charge",
+            "manual_charge",
+            "planned_charge",
+        }
+
+        if (
+            bool(self.config.offgrid_load_blocks_ac_charge)
+            and bool(offgrid_load_active)
+            and requested_mode == "input"
+            and str(intent.intent or "") not in priority_charge_intents
+            and str(intent.reason or "") not in priority_charge_reasons
+        ):
+            return ModeArbiterResult(
+                requested_mode=requested_mode,
+                resolved_mode="hold",
+                allowed=False,
+                reason="offgrid_load_active_blocks_ac_charge",
+                active_regulation_state=runtime.active_regulation_state,
+                active_hold_remaining_s=0.0,
+                cooldown_remaining_s=0.0,
+                metadata={
+                    **metadata,
+                    "offgrid_power_w": float(offgrid_power_w or 0.0),
+                    "offgrid_mode": str(offgrid_mode or "not_configured"),
+                    "offgrid_load_active": bool(offgrid_load_active),
+                    "offgrid_source_active": bool(offgrid_source_active),
+                    "offgrid_load_active_w": float(
+                        self.config.offgrid_load_active_w
+                    ),
+                    "offgrid_max_internal_supply_w": float(
+                        self.config.offgrid_max_internal_supply_w
                     ),
                 },
             )

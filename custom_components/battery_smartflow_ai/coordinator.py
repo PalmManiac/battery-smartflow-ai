@@ -38,6 +38,8 @@ from .const import (
     CONF_INSTALLED_PV_WP,
     CONF_EXPERT_MODE_ENABLED,
     CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
+    CONF_OFFGRID_POWER_ENTITY,
+    CONF_OFFGRID_MODE_ENTITY,
     LOWEST_CELL_VOLTAGE_CONFIG_KEYS,
     GRID_MODE_NONE,
     GRID_MODE_SINGLE,
@@ -183,6 +185,8 @@ class SelectedEntities:
     grid_import: str | None
     grid_export: str | None
     lowest_cell_voltage_entities: tuple[str | None, ...]
+    offgrid_power: str | None
+    offgrid_mode: str | None
 
 
 class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -224,6 +228,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             grid_power=entry.data.get(CONF_GRID_POWER_ENTITY),
             grid_import=entry.data.get(CONF_GRID_IMPORT_ENTITY),
             grid_export=entry.data.get(CONF_GRID_EXPORT_ENTITY),
+            offgrid_power=entry.data.get(CONF_OFFGRID_POWER_ENTITY),
+            offgrid_mode=entry.data.get(CONF_OFFGRID_MODE_ENTITY),
             lowest_cell_voltage_entities=tuple(
                 entry.options.get(key) for key in LOWEST_CELL_VOLTAGE_CONFIG_KEYS
             ),
@@ -579,6 +585,26 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if p is not None:
                 return float(p)
         return None
+
+    def _normalize_offgrid_mode(self, raw: Any) -> str:
+        if raw is None:
+            return "not_configured"
+
+        value = str(raw).strip().lower()
+
+        if value in ("off", "aus", "0", "disabled"):
+            return "off"
+
+        if value in ("normal", "on"):
+            return "normal"
+
+        if value in ("eco", "economic", "ökonomisch", "oekonomisch"):
+            return "eco"
+
+        if value in ("unknown", "unavailable", "none", ""):
+            return "unknown"
+
+        return "unknown"
 
     def _get_soc_limit(self) -> int | None:
         if not self.entities.soc_limit:
@@ -2022,6 +2048,56 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             profile = self._get_active_profile()
 
+            offgrid_raw = _to_float(
+                self._state(self.entities.offgrid_power),
+                None,
+            )
+
+            offgrid_mode_raw = self._state(self.entities.offgrid_mode)
+            offgrid_mode = self._normalize_offgrid_mode(offgrid_mode_raw)
+
+            supports_offgrid_socket = bool(
+                profile.get("SUPPORTS_OFFGRID_SOCKET", False)
+            ) or bool(self.entities.offgrid_power)
+
+            supports_offgrid_input = bool(
+                profile.get("SUPPORTS_OFFGRID_INPUT", False)
+            )
+
+            offgrid_load_active_w = float(
+                profile.get("OFFGRID_LOAD_ACTIVE_W", 50.0) or 50.0
+            )
+
+            offgrid_available = bool(
+                supports_offgrid_socket
+                and self.entities.offgrid_power
+                and offgrid_raw is not None
+            )
+
+            offgrid_power_raw_w = float(offgrid_raw or 0.0)
+
+            # Confirmed for SF2400Pro/ZHA:
+            # positive Off-Grid power means active load at the island socket.
+            offgrid_power_w = max(0.0, offgrid_power_raw_w)
+
+            offgrid_mode_allows_active = offgrid_mode not in ("off",)
+
+            offgrid_load_active = bool(
+                offgrid_available
+                and offgrid_mode_allows_active
+                and offgrid_power_w > offgrid_load_active_w
+            )
+
+            # Diagnostic only for now. Direction for Off-Grid input/source still
+            # needs separate verification.
+            offgrid_source_active = bool(
+                supports_offgrid_input
+                and offgrid_available
+                and offgrid_power_raw_w < -offgrid_load_active_w
+            )
+
+            offgrid_active = bool(offgrid_load_active or offgrid_source_active)
+
             soc_min = self._get_setting(
                 SETTING_SOC_MIN,
                 profile.get("SOC_MIN", DEFAULT_SOC_MIN),
@@ -2372,6 +2448,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_houseload_passthrough_stop_reason=str(pv_houseload_passthrough_stop_reason),
                 learned_charge_plan=learned_charge_plan,
                 learned_planning_enabled=bool(learned_planning_enabled),
+                offgrid_power_w=float(offgrid_power_w),
+                offgrid_mode=str(offgrid_mode),
+                offgrid_available=bool(offgrid_available),
+                offgrid_active=bool(offgrid_active),
+                offgrid_load_active=bool(offgrid_load_active),
+                offgrid_source_active=bool(offgrid_source_active),
             )
 
             base_required_kwh = (
@@ -2478,6 +2560,38 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     pv_charge_latched = False
                     pv_charge_start_counter = 0
                     pv_charge_stop_counter = 0
+
+            offgrid_priority_charge_reasons = {
+                "emergency_latched_charge",
+                "cell_voltage_emergency_charge",
+                "manual_charge",
+                "very_cheap_force_charge",
+                "learned_charge_window_active",
+                "learned_charge_window_latest_start_reached",
+                "learned_charge_window_deadline_too_close_start_now",
+                "planning_latest_start",
+                "planning_forecast_poor",
+                "planning_forecast_mixed",
+                "planning_forecast_reality_override",
+                "valley_boost_charge",
+                "valley_boost_charge_mixed_forecast",
+                "valley_opportunity_charge",
+                "valley_opportunity_charge_mixed_forecast",
+            }
+
+            if (
+                not use_regulation_v42_command
+                and bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
+                and bool(offgrid_load_active)
+                and decision.ac_mode == "input"
+                and float(decision.charge_w or 0.0) > 0.0
+                and str(decision.reason or "") not in offgrid_priority_charge_reasons
+            ):
+                decision.charge_w = 0.0
+                decision.discharge_w = 0.0
+                decision.action = "idle"
+                decision.ac_mode = "output"
+                decision.reason = "offgrid_load_active_blocks_ac_charge"
 
             charge_price_applied = None
             charge_source = "no_charge_delta"
@@ -2678,6 +2792,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 current_ac_mode=self._state(self.entities.ac_mode),
                 additional_battery_discharge_w=float(additional_battery_discharge_w or 0.0),
                 discharge_allowed=bool(discharge_allowed_for_regulation),
+                offgrid_power_w=float(offgrid_power_w),
+                offgrid_mode=str(offgrid_mode),
+                offgrid_load_active=bool(offgrid_load_active),
+                offgrid_source_active=bool(offgrid_source_active),
             )
             
             regulation_power_result = self._regulation_power_controller.calculate(
@@ -2861,6 +2979,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_houseload_passthrough_stop_reason=str(pv_houseload_passthrough_stop_reason),
                 learned_charge_plan=learned_charge_plan,
                 learned_planning_enabled=bool(learned_planning_enabled),
+                offgrid_power_w=float(offgrid_power_w),
+                offgrid_mode=str(offgrid_mode),
+                offgrid_available=bool(offgrid_available),
+                offgrid_active=bool(offgrid_active),
+                offgrid_load_active=bool(offgrid_load_active),
+                offgrid_source_active=bool(offgrid_source_active),
             )
 
             transparency_result = self._engine._with_thresholds(
@@ -3262,6 +3386,33 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "additional_battery_discharge_w": additional_battery_discharge_w,
                 "additional_battery_discharge_active": bool(additional_battery_discharge_active),
                 "additional_battery_discharge_block_threshold_w": 50.0,
+
+                # V4.2.x Off-Grid / Inselsteckdose
+                "offgrid_power_w": float(offgrid_power_w),
+                "offgrid_power_raw_w": float(offgrid_power_raw_w),
+                "offgrid_mode": str(offgrid_mode),
+                "offgrid_mode_raw": offgrid_mode_raw,
+                "offgrid_available": bool(offgrid_available),
+                "offgrid_active": bool(offgrid_active),
+                "offgrid_load_active": bool(offgrid_load_active),
+                "offgrid_source_active": bool(offgrid_source_active),
+                "offgrid_load_active_w": float(offgrid_load_active_w),
+                "offgrid_rule_reason": (
+                    "offgrid_load_active_blocks_ac_charge"
+                    if bool(offgrid_load_active)
+                    and bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
+                    else "none"
+                ),
+                "offgrid_max_internal_supply_w": float(
+                    profile.get("OFFGRID_MAX_INTERNAL_SUPPLY_W", 0.0) or 0.0
+                ),
+                "offgrid_load_blocks_ac_charge": bool(
+                    profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False)
+                ),
+                "offgrid_input_affects_energy_balance": bool(
+                    profile.get("OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE", False)
+                ),
+
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
                 "pv_charge_latched": bool(pv_charge_latched),
                 "pv_charge_start_counter": int(self._persist.get("pv_charge_start_counter", 0)),
