@@ -2761,13 +2761,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             is_passthrough = decision.reason == "pv_house_load_passthrough"
 
-            if ac_mode == ZENDURE_MODE_INPUT:
-                if self._persist.get("last_set_output_w", 0) != 0:
-                    await self._set_output_limit(0)
+            if use_regulation_v42_command:
+                if regulation_device_command.should_write_mode:
+                    await self._set_ac_mode(ac_mode)
 
-            await self._set_ac_mode(ac_mode)
-            await self._set_input_limit(in_w)
-            await self._set_output_limit(out_w)
+                if regulation_device_command.should_write_input:
+                    await self._set_input_limit(in_w)
+
+                if regulation_device_command.should_write_output:
+                    await self._set_output_limit(out_w)
+
+            else:
+                if ac_mode == ZENDURE_MODE_INPUT:
+                    if self._persist.get("last_set_output_w", 0) != 0:
+                        await self._set_output_limit(0)
+
+                await self._set_ac_mode(ac_mode)
+                await self._set_input_limit(in_w)
+                await self._set_output_limit(out_w)
 
             is_charging = ac_mode == ZENDURE_MODE_INPUT and in_w > 0.0
             is_discharging = (
