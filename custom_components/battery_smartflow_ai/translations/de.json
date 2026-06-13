@@ -12,6 +12,8 @@
           "battery_ac_power_entity": "Batterie Leistungssensor (W)",
           "additional_battery_charge_entity": "Zusatzakku Ladeleistung (optional)",
           "additional_battery_discharge_entity": "Zusatzakku Entladeleistung (optional)",
+          "offgrid_power_entity": "Off-Grid-Leistung / Inselsteckdose (optional)",
+          "offgrid_mode_entity": "Off-Grid-Modus (optional)",
           "capacity_entity": "Kapazitätssensor (optional)",
           "installed_pv_wp": "Installierte PV-Leistung (Wp)",
           "pv_entity": "PV-Leistung Sensor",
@@ -35,6 +37,8 @@
           "battery_ac_power_entity": "Sensor für die AC-Leistung der Batterie. Der Wert muss bei Entladung positiv sein. Empfohlen: sensor.solarflow_2400_ac_bat_in_out",
           "additional_battery_charge_entity": "Optionaler Sensor eines zweiten Akkusystems. Wenn dieser Sensor eine positive Ladeleistung meldet, wird die Entladung von Battery SmartFlow AI blockiert.",
           "additional_battery_discharge_entity": "Optionaler Sensor eines zweiten Akkusystems. Wenn dieser Sensor eine positive Entladeleistung meldet, wird das Laden von Battery SmartFlow AI blockiert, damit kein Akku-zu-Akku-Laden entsteht.",
+          "offgrid_power_entity": "Optionaler Sensor für die Leistung der Zendure-Off-Grid-/Inselsteckdose. Positive Werte werden als aktive Last an der Inselsteckdose interpretiert.",
+          "offgrid_mode_entity": "Optionaler Select-Sensor für den Off-Grid-Modus der Zendure-Off-Grid-/Inselsteckdose. Der Modus wird nur gelesen und niemals von Battery SmartFlow AI gesetzt.",
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt. Wird zur Erkennung von Überschuss verwendet.",
@@ -90,6 +94,8 @@
           "battery_ac_power_entity": "Batterie Leistungssensor (W)",
           "additional_battery_charge_entity": "Zusatzakku Ladeleistung (optional)",
           "additional_battery_discharge_entity": "Zusatzakku Entladeleistung (optional)",
+          "offgrid_power_entity": "Off-Grid-Leistung / Inselsteckdose (optional)",
+          "offgrid_mode_entity": "Off-Grid-Modus (optional)",
           "capacity_entity": "Kapazitätssensor (optional)",
           "installed_pv_wp": "Installierte PV-Leistung (Wp)",
           "pv_entity": "PV-Leistung Sensor",
@@ -113,6 +119,8 @@
           "battery_ac_power_entity": "Sensor für die AC-Leistung der Batterie. Der Wert muss bei Entladung positiv sein. Empfohlen: sensor.solarflow_2400_ac_bat_in_out",
           "additional_battery_charge_entity": "Optionaler Sensor eines zweiten Akkusystems. Wenn dieser Sensor eine positive Ladeleistung meldet, wird die Entladung von Battery SmartFlow AI blockiert.",
           "additional_battery_discharge_entity": "Optionaler Sensor eines zweiten Akkusystems. Wenn dieser Sensor eine positive Entladeleistung meldet, wird das Laden von Battery SmartFlow AI blockiert, damit kein Akku-zu-Akku-Laden entsteht.",
+          "offgrid_power_entity": "Optionaler Sensor für die Leistung der Zendure-Off-Grid-/Inselsteckdose. Positive Werte werden als aktive Last an der Inselsteckdose interpretiert.",
+          "offgrid_mode_entity": "Optionaler Select-Sensor für den Off-Grid-Modus der Zendure-Off-Grid-/Inselsteckdose. Der Modus wird nur gelesen und niemals von Battery SmartFlow AI gesetzt.",
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt.",
@@ -200,19 +208,19 @@
         }
       },
       "expert": {
-	    "title": "Regelprofil bearbeiten – Expertenmodus",
-	    "description": "Erweiterte Schutz-, Diagnose-, Planungs- und Regelungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Die verbesserte Leistungsregelung kann hier aktiviert oder bei Problemen wieder deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
-	    "data": {
-		  "expert_mode_enabled": "Expertenmodus aktivieren",
-		  "learned_planning_enabled": "Lernbasierte Ladefenster-Planung verwenden",
-		  "regulation_v42_enabled": "Verbesserte Leistungsregelung verwenden"
-	    },
-	    "data_description": {
-		  "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen.",
-		  "learned_planning_enabled": "Wenn aktiviert, nutzt Battery SmartFlow AI die lernbasierte Ladefenster-Planung automatisch, sobald genügend Lerndaten vorhanden sind. Bis dahin bleibt die klassische Planung aktiv. Wenn deaktiviert, wird dauerhaft die klassische Planung verwendet.",
-		  "regulation_v42_enabled": "Aktiviert die neue technische Leistungsregelung mit Netz-Historie, stabilerer Modusfreigabe und geglätteter Leistungssteuerung. Kann bei Problemen jederzeit wieder deaktiviert werden."
-	    }
-	  },
+        "title": "Regelprofil bearbeiten – Expertenmodus",
+        "description": "Erweiterte Schutz-, Diagnose-, Planungs- und Regelungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Die verbesserte Leistungsregelung kann hier aktiviert oder bei Problemen wieder deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
+        "data": {
+          "expert_mode_enabled": "Expertenmodus aktivieren",
+          "learned_planning_enabled": "Lernbasierte Ladefenster-Planung verwenden",
+          "regulation_v42_enabled": "Verbesserte Leistungsregelung verwenden"
+        },
+        "data_description": {
+          "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen.",
+          "learned_planning_enabled": "Wenn aktiviert, nutzt Battery SmartFlow AI die lernbasierte Ladefenster-Planung automatisch, sobald genügend Lerndaten vorhanden sind. Bis dahin bleibt die klassische Planung aktiv. Wenn deaktiviert, wird dauerhaft die klassische Planung verwendet.",
+          "regulation_v42_enabled": "Aktiviert die neue technische Leistungsregelung mit Netz-Historie, stabilerer Modusfreigabe und geglätteter Leistungssteuerung. Kann bei Problemen jederzeit wieder deaktiviert werden."
+        }
+      },
       "expert_cell_voltage": {
         "title": "Regelprofil bearbeiten – Zellspannungs-Schutz",
         "description": "Aktiviere optional den Zellspannungs-Schutz. Wenn dieser aktiviert wird, folgt im nächsten Schritt die Konfiguration der Zellspannungssensoren und Schutzschwellen.",
@@ -356,7 +364,7 @@
           "manual": "Manuelle Ladestrategie",
           "valley_opportunity": "Opportunistische Tal-Ladung",
           "valley_opportunity_mixed": "Opportunistische Tal-Ladung bei gemischter Prognose",
-		  "learned_planning": "Lernbasierte Ladefenster-Planung"
+          "learned_planning": "Lernbasierte Ladefenster-Planung"
         }
       },
       "learned_planning_status": {
@@ -448,7 +456,7 @@
       "learned_planning_window_score": {
         "name": "Diagnose: Lernplanung Fensterscore"
       },
-	  "learned_profile_typical_daily_consumption_kwh": {
+      "learned_profile_typical_daily_consumption_kwh": {
         "name": "Diagnose: Lernplanung typischer Tagesverbrauch"
       },
       "learned_profile_average_house_load_w": {
@@ -486,6 +494,32 @@
       },
       "effective_discharge_threshold": {
         "name": "Effektive Entladeschwelle"
+      },
+      "offgrid_power_w": {
+        "name": "Off-Grid-Leistung"
+      },
+      "offgrid_mode": {
+        "name": "Off-Grid-Modus",
+        "state": {
+          "not_configured": "Nicht konfiguriert",
+          "unknown": "Unbekannt",
+          "off": "Aus",
+          "normal": "Normal",
+          "eco": "Ökonomisch"
+        }
+      },
+      "offgrid_load_active": {
+        "name": "Off-Grid-Last aktiv"
+      },
+      "offgrid_rule_reason": {
+        "name": "Regelgrund Off-Grid",
+        "state": {
+          "none": "Kein Off-Grid-Blocker",
+          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose aktiv – Netzladung blockiert"
+        }
+      },
+      "offgrid_source_active": {
+        "name": "Off-Grid-Quelle aktiv"
       },
       "global_lowest_cell_voltage": {
         "name": "Globale niedrigste Zellspannung"
@@ -623,6 +657,7 @@
           "very_cheap_force_charge": "Sehr-billig-Schwelle erreicht: Maximalladung aktiv",
           "additional_battery_charging_block": "Zusatzakku lädt: Entladung blockiert",
           "additional_battery_discharging_block": "Zusatzakku entlädt: Laden blockiert",
+          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose aktiv: automatische Netzladung blockiert",
           "soc_min_resume_block": "Entladung blockiert (Wiederfreigabe-Schwelle noch nicht erreicht)",
           "cell_voltage_cutoff_block": "Entladung blockiert (Zellspannungs-Schutz aktiv)",
           "cell_voltage_emergency_charge": "Notladung aktiv (Zellspannung kritisch)",
