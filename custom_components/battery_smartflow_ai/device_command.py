@@ -80,9 +80,18 @@ class DeviceCommandBuilder:
                 last_output_limit_w=last_output_limit_w,
             )
 
-        # hold/idle fallback: keep output mode with 0 W as neutral command.
-        # This avoids accidental INPUT keepalive behavior on sensitive devices
-        # once this command path becomes active.
+        if resolved_mode == "hold":
+            return self._build_hold_command(
+                intent=intent,
+                arbiter=arbiter,
+                power=power,
+                current_ac_mode=current_ac_mode,
+                last_input_limit_w=last_input_limit_w,
+                last_output_limit_w=last_output_limit_w,
+            )
+
+        # idle fallback: keep output mode with 0 W as neutral command.
+        # This avoids accidental INPUT keepalive behavior on sensitive devices.
         return self._build_idle_command(
             intent=intent,
             arbiter=arbiter,
@@ -202,6 +211,72 @@ class DeviceCommandBuilder:
                 "arbiter_reason": arbiter.reason,
                 "power_reason": power.reason,
                 "current_ac_mode": current_ac_mode,
+                "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
+                "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "min_power_write_delta_w": float(
+                    self.config.min_power_write_delta_w
+                ),
+            },
+        )
+        
+    def _build_hold_command(
+        self,
+        *,
+        intent: StrategyIntent,
+        arbiter: ModeArbiterResult,
+        power: PowerControllerResult,
+        current_ac_mode: str | None,
+        last_input_limit_w: float,
+        last_output_limit_w: float,
+    ) -> DeviceCommand:
+        """Hold current technical mode without forcing a neutral mode switch.
+
+        HOLD means: the ModeArbiter does not allow the requested mode yet.
+        It should not automatically become OUTPUT 0 W, because that can cause
+        visible INPUT/OUTPUT status flicker during PV transition phases.
+
+        If the current mode is known, keep it and zero the active power.
+        If the current mode is unknown, fall back to neutral OUTPUT 0 W.
+        """
+
+        ac_mode: Literal["input", "output"] = (
+            "input" if current_ac_mode == "input" else "output"
+        )
+
+        should_write_mode = current_ac_mode not in ("input", "output")
+
+        should_write_input = self._zero_write_needed(
+            old_value=last_input_limit_w,
+        )
+        should_write_output = self._zero_write_needed(
+            old_value=last_output_limit_w,
+        )
+
+        skipped = (
+            not should_write_mode
+            and not should_write_input
+            and not should_write_output
+        )
+
+        return DeviceCommand(
+            ac_mode=ac_mode,
+            input_limit_w=0.0,
+            output_limit_w=0.0,
+            reason=power.reason or arbiter.reason or intent.reason,
+            should_write_mode=bool(should_write_mode),
+            should_write_input=bool(should_write_input),
+            should_write_output=bool(should_write_output),
+            skipped=bool(skipped),
+            skip_reason="hold_current_mode_zero_power" if skipped else "none",
+            metadata={
+                "intent": intent.intent,
+                "requested_mode": intent.requested_mode,
+                "resolved_mode": arbiter.resolved_mode,
+                "mode_allowed": arbiter.allowed,
+                "arbiter_reason": arbiter.reason,
+                "power_reason": power.reason,
+                "current_ac_mode": current_ac_mode,
+                "hold_ac_mode": ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
                 "min_power_write_delta_w": float(
