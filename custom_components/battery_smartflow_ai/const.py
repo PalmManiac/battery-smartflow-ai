@@ -76,6 +76,9 @@ LOWEST_CELL_VOLTAGE_CONFIG_KEYS = [
     CONF_LOWEST_CELL_VOLTAGE_PACK_6,
 ]
 
+CONF_OFFGRID_POWER_ENTITY = "offgrid_power_entity"
+CONF_OFFGRID_MODE_ENTITY = "offgrid_mode_entity"
+
 # --- Helper constants for dynamic GUI profile override entities ---
 PROFILE_OVERRIDE_PREFIX = "profile_override_"
 
@@ -122,6 +125,8 @@ DEFAULT_FORECAST_BASE_LOAD = 300.0
 DEFAULT_LEARNED_PLANNING_ENABLED = True
 
 DEFAULT_REGULATION_V42_ENABLED = False
+
+DEFAULT_OFFGRID_LOAD_ACTIVE_W = 50.0
 
 # --------------------------------------------------
 # Device profiles (V1.5.x / V3.2.0 overrides)
