@@ -904,15 +904,28 @@ class DecisionEngine:
         valley_threshold = self._compute_valley_threshold(prices, ctx.valley_factor)
         economic_threshold = self._compute_economic_discharge_threshold(ctx)
 
+        try:
+            configured_expensive_threshold = float(ctx.expensive_threshold)
+        except Exception:
+            configured_expensive_threshold = 0.0
+
+        # The user-configured expensive threshold is a hard lower bound for
+        # economic / price-based discharging. Without this floor, very low
+        # avg_charge_price values such as 0.0 from PV charging can pull the
+        # effective threshold down so far that normal prices, e.g. 0.14 €/kWh,
+        # are treated as a high-price discharge window.
+        threshold_floor = max(0.0, configured_expensive_threshold)
+
         if economic_threshold is None:
-            return market_peak_threshold
+            return max(market_peak_threshold, threshold_floor)
 
         market_anchor = market_peak_threshold * 0.82
         effective = (market_anchor * 0.70) + (economic_threshold * 0.30)
 
         effective = max(effective, economic_threshold)
         effective = max(effective, valley_threshold)
-        effective = min(effective, market_peak_threshold)
+        effective = max(effective, threshold_floor)
+        effective = min(effective, max(market_peak_threshold, threshold_floor))
 
         return effective
 
