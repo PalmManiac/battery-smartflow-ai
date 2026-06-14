@@ -658,6 +658,7 @@
           "additional_battery_charging_block": "Zusatzakku lädt: Entladung blockiert",
           "additional_battery_discharging_block": "Zusatzakku entlädt: Laden blockiert",
           "offgrid_load_active_blocks_ac_charge": "Inselsteckdose aktiv: automatische Netzladung blockiert",
+		  "offgrid_load_support": "Inselsteckdose aktiv: Versorgung über Akku/PV",
           "soc_min_resume_block": "Entladung blockiert (Wiederfreigabe-Schwelle noch nicht erreicht)",
           "cell_voltage_cutoff_block": "Entladung blockiert (Zellspannungs-Schutz aktiv)",
           "cell_voltage_emergency_charge": "Notladung aktiv (Zellspannung kritisch)",
