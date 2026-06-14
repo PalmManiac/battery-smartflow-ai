@@ -2579,7 +2579,54 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "valley_opportunity_charge_mixed_forecast",
             }
 
-            if (
+            offgrid_priority_charge_active = bool(
+                decision.ac_mode == "input"
+                and float(decision.charge_w or 0.0) > 0.0
+                and str(decision.reason or "") in offgrid_priority_charge_reasons
+            )
+
+            offgrid_support_allowed = bool(
+                bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
+                and bool(offgrid_load_active)
+                and not offgrid_priority_charge_active
+                and ai_mode != AI_MODE_MANUAL
+                and not bool(discharge_blocked_by_soc_min)
+                and not bool(cell_voltage_discharge_blocked)
+                and not bool(cell_voltage_emergency_active)
+                and soc_limit != 2
+                and float(soc) > float(soc_min)
+            )
+
+            if offgrid_support_allowed:
+                offgrid_max_internal_supply_w = float(
+                    profile.get("OFFGRID_MAX_INTERNAL_SUPPLY_W", max_discharge)
+                    or max_discharge
+                )
+
+                offgrid_target_w = min(
+                    float(offgrid_power_w or 0.0),
+                    float(max_discharge),
+                    float(offgrid_max_internal_supply_w),
+                )
+
+                offgrid_min_output_w = max(
+                    float(profile.get("KEEPALIVE_MIN_OUTPUT_W", 60.0) or 60.0),
+                    float(profile.get("OFFGRID_LOAD_ACTIVE_W", 50.0) or 50.0),
+                )
+
+                if offgrid_target_w >= float(
+                    profile.get("OFFGRID_LOAD_ACTIVE_W", 50.0) or 50.0
+                ):
+                    decision.charge_w = 0.0
+                    decision.discharge_w = max(
+                        float(offgrid_target_w),
+                        float(offgrid_min_output_w),
+                    )
+                    decision.action = "passthrough"
+                    decision.ac_mode = "output"
+                    decision.reason = "offgrid_load_support"
+
+            elif (
                 not use_regulation_v42_command
                 and bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
                 and bool(offgrid_load_active)
@@ -2639,7 +2686,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 and price_now is not None
                 and decision.ac_mode == "output"
                 and float(decision.discharge_w or 0.0) > 0.0
-                and decision.reason != "pv_house_load_passthrough"
+                and decision.reason
+                not in {
+                    "pv_house_load_passthrough",
+                    "offgrid_load_support",
+                }
             ):
                 sold_kwh = abs(float(delta_kwh))
                 avg_price = self._persist.get("trade_avg_charge_price")
@@ -2877,7 +2928,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 grid=grid_history_state,
             )
 
-            is_passthrough = decision.reason == "pv_house_load_passthrough"
+            is_passthrough = decision.reason in {
+                "pv_house_load_passthrough",
+                "offgrid_load_support",
+            }
 
             if use_regulation_v42_command:
                 if regulation_device_command.should_write_mode:
@@ -3411,6 +3465,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "offgrid_input_affects_energy_balance": bool(
                     profile.get("OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE", False)
+                ),
+                "offgrid_support_active": bool(
+                    decision.reason == "offgrid_load_support"
+                ),
+                "offgrid_support_target_w": (
+                    float(decision.discharge_w or 0.0)
+                    if decision.reason == "offgrid_load_support"
+                    else 0.0
                 ),
 
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
