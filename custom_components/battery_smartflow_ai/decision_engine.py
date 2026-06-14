@@ -596,12 +596,16 @@ class PvRule(BaseRule):
 
         required_start_cycles = 6 if sf800_passthrough_enabled else 2
 
+        # The user-configured "PV-Ladestart ab Einspeisung" must be a real
+        # hard start threshold for new PV charging.
+        #
+        # Soft-start may help to keep or smooth an already active PV charge,
+        # but it must not start a new INPUT/PV charge below the configured
+        # export threshold. Otherwise BSFAI can enter PV charging too early
+        # during weak morning PV and cause INPUT/OUTPUT/status flicker.
         start_allowed = (
             has_direct_surplus
             and start_counter >= required_start_cycles
-        ) or (
-            soft_start_ready
-            and not sf800_passthrough_enabled
         )
 
         # Laufende PV-Ladung deutlich stärker halten.
@@ -649,7 +653,11 @@ class PvRule(BaseRule):
             else:
                 charge_w = max(charge_w, engine._charge_keepalive_w(ctx))
 
-        if soft_start_ready and not keepalive_charge and not sf800_passthrough_enabled:
+        if (
+            soft_start_ready
+            and keepalive_charge
+            and not sf800_passthrough_enabled
+        ):
             if import_w <= 60.0:
                 charge_w = max(charge_w, 80.0)
 
