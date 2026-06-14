@@ -2560,6 +2560,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     pv_charge_latched = False
                     pv_charge_start_counter = 0
                     pv_charge_stop_counter = 0
+                    
+            soc_limit = self._get_soc_limit()
 
             offgrid_priority_charge_reasons = {
                 "emergency_latched_charge",
@@ -2716,8 +2718,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._persist["trade_avg_charge_price"] = 0.0
 
             adaptive_peak_active = decision.reason == "adaptive_peak_discharge"
-
-            soc_limit = self._get_soc_limit()
             
             if soc_limit == 1 and decision.ac_mode == "input" and float(decision.charge_w or 0.0) > 0:
                 decision.charge_w = 0.0
