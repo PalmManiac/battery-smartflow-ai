@@ -104,6 +104,21 @@ def decision_to_strategy_intent(decision: DecisionResult) -> StrategyIntent:
         )
 
     # ---------------------------------------------------------------------
+    # Off-Grid / Inselsteckdose
+    # ---------------------------------------------------------------------
+    if reason == "offgrid_load_support":
+        return StrategyIntent(
+            intent="cover_deficit",
+            requested_mode="output",
+            requested_power_w=discharge_w,
+            reason=reason,
+            priority=70,
+            allow_mode_switch=True,
+            force=False,
+            metadata=metadata,
+        )
+
+    # ---------------------------------------------------------------------
     # PV / passthrough
     # ---------------------------------------------------------------------
     if reason == "pv_surplus_charge":
