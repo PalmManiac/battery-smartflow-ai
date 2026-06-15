@@ -515,7 +515,8 @@
         "name": "Regelgrund Off-Grid",
         "state": {
           "none": "Kein Off-Grid-Blocker",
-          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose aktiv – Netzladung blockiert"
+          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose aktiv – Netzladung blockiert",
+		  "offgrid_load_support": "Inselsteckdose aktiv – Versorgung über Akku/PV"
         }
       },
       "offgrid_source_active": {
