@@ -2563,22 +2563,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     
             soc_limit = self._get_soc_limit()
 
+            # Beta10/Beta11 Off-Grid correction:
+            # When the island socket has an active load, automatic/economic
+            # grid charging must not continue. Otherwise Zendure can use AC for
+            # the Off-Grid load and even charge the battery at the same time.
+            #
+            # Only true protection/manual charge reasons may override Off-Grid
+            # load support. Learned planning, price planning, valley charging
+            # and very-cheap charging are deliberately NOT priority here.
             offgrid_priority_charge_reasons = {
                 "emergency_latched_charge",
                 "cell_voltage_emergency_charge",
                 "manual_charge",
-                "very_cheap_force_charge",
-                "learned_charge_window_active",
-                "learned_charge_window_latest_start_reached",
-                "learned_charge_window_deadline_too_close_start_now",
-                "planning_latest_start",
-                "planning_forecast_poor",
-                "planning_forecast_mixed",
-                "planning_forecast_reality_override",
-                "valley_boost_charge",
-                "valley_boost_charge_mixed_forecast",
-                "valley_opportunity_charge",
-                "valley_opportunity_charge_mixed_forecast",
             }
 
             offgrid_priority_charge_active = bool(
@@ -2624,7 +2620,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         float(offgrid_target_w),
                         float(offgrid_min_output_w),
                     )
-                    decision.action = "passthrough"
+
+                    # Use a real discharge action so the strategy adapter and
+                    # V4.2 regulation chain clearly request OUTPUT. The reason
+                    # still marks this as technical Off-Grid support, not as
+                    # economic/price discharge.
+                    decision.action = "discharge"
                     decision.ac_mode = "output"
                     decision.reason = "offgrid_load_support"
 
@@ -3452,7 +3453,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "offgrid_source_active": bool(offgrid_source_active),
                 "offgrid_load_active_w": float(offgrid_load_active_w),
                 "offgrid_rule_reason": (
-                    "offgrid_load_active_blocks_ac_charge"
+                    "offgrid_load_support"
+                    if decision.reason == "offgrid_load_support"
+                    else "offgrid_load_active_blocks_ac_charge"
                     if bool(offgrid_load_active)
                     and bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
                     else "none"
