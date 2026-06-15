@@ -405,37 +405,23 @@ class ModeArbiter:
                 },
             )
 
-        # Off-Grid / island socket protection:
-        # A positive Off-Grid power value is treated as active load at the
-        # island socket for confirmed 2400-series/ZHA setups.
+        # Off-Grid correction:
+        # Active island socket load must block automatic/economic INPUT charging.
+        # Only true protection or manual charging may override Off-Grid load.
         #
-        # When such a load is active, do not allow automatic INPUT
-        # counter-regulation. Zendure should supply the Off-Grid load from
-        # internal PV/battery up to its own capability. Only explicit priority
-        # charge reasons such as emergency, manual, planned or price-planned
-        # grid charging may still enter INPUT.
+        # Learned planning, price planning, valley charging and very-cheap
+        # charging are deliberately not priorities here, because they can cause
+        # Zendure to pull AC power for the Off-Grid load and charge the battery
+        # at the same time.
         priority_charge_reasons = {
             "emergency_latched_charge",
             "cell_voltage_emergency_charge",
             "manual_charge",
-            "very_cheap_force_charge",
-            "learned_charge_window_active",
-            "learned_charge_window_latest_start_reached",
-            "learned_charge_window_deadline_too_close_start_now",
-            "planning_latest_start",
-            "planning_forecast_poor",
-            "planning_forecast_mixed",
-            "planning_forecast_reality_override",
-            "valley_boost_charge",
-            "valley_boost_charge_mixed_forecast",
-            "valley_opportunity_charge",
-            "valley_opportunity_charge_mixed_forecast",
         }
 
         priority_charge_intents = {
             "emergency_charge",
             "manual_charge",
-            "planned_charge",
         }
 
         if (
