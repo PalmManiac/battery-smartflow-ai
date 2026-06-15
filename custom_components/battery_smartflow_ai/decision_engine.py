@@ -925,23 +925,55 @@ class DecisionEngine:
         except Exception:
             configured_expensive_threshold = 0.0
 
-        # The user-configured expensive threshold is a hard lower bound for
-        # economic / price-based discharging. Without this floor, very low
-        # avg_charge_price values such as 0.0 from PV charging can pull the
-        # effective threshold down so far that normal prices, e.g. 0.14 €/kWh,
-        # are treated as a high-price discharge window.
-        threshold_floor = max(0.0, configured_expensive_threshold)
+        configured_expensive_threshold = max(0.0, configured_expensive_threshold)
+
+        avg_charge_price = ctx.avg_charge_price
+        try:
+            avg_charge_price_float = (
+                float(avg_charge_price)
+                if avg_charge_price is not None
+                else None
+            )
+        except Exception:
+            avg_charge_price_float = None
+
+        # Beta11:
+        # The user-configured expensive threshold must protect against false
+        # discharge when the stored average charge price is missing or effectively
+        # zero, e.g. after PV-only charging. In that case, avg_charge_price * margin
+        # would be near zero and normal prices such as 0.14 €/kWh could otherwise
+        # look profitable.
+        #
+        # If a real charge price exists, do not force every economic discharge up
+        # to the expensive threshold. Otherwise Automatic/Winter mode becomes too
+        # restrictive and may stop discharging entirely after the Beta7 threshold
+        # hardening.
+        avg_price_missing_or_zero = (
+            avg_charge_price_float is None
+            or avg_charge_price_float <= 0.0001
+        )
 
         if economic_threshold is None:
-            return max(market_peak_threshold, threshold_floor)
+            return max(market_peak_threshold, configured_expensive_threshold)
+
+        if avg_price_missing_or_zero:
+            return max(
+                market_peak_threshold,
+                configured_expensive_threshold,
+                valley_threshold,
+            )
 
         market_anchor = market_peak_threshold * 0.82
+
         effective = (market_anchor * 0.70) + (economic_threshold * 0.30)
 
         effective = max(effective, economic_threshold)
         effective = max(effective, valley_threshold)
-        effective = max(effective, threshold_floor)
-        effective = min(effective, max(market_peak_threshold, threshold_floor))
+
+        # Do not force valid economic discharge to the configured expensive
+        # threshold. The configured threshold remains relevant when no real
+        # charge price exists and for the separate very-expensive force logic.
+        effective = min(effective, market_peak_threshold)
 
         return effective
 
