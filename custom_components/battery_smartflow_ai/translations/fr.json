@@ -25,7 +25,9 @@
           "grid_export_entity": "Export réseau (séparé)",
           "ac_mode_entity": "Mode AC Zendure",
           "input_limit_entity": "Puissance de charge Zendure",
-          "output_limit_entity": "Puissance de décharge Zendure"
+          "output_limit_entity": "Puissance de décharge Zendure",
+		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
+          "offgrid_mode_entity": "Mode hors réseau (optionnel)"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Le profil contient des paramètres de régulation ajustés.",
@@ -48,7 +50,9 @@
           "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
           "ac_mode_entity": "Entité select de l’intégration Zendure qui bascule entre charge (INPUT) et décharge (OUTPUT).",
           "input_limit_entity": "Entité number pour définir la puissance de charge en watts.",
-          "output_limit_entity": "Entité number pour définir la puissance de décharge en watts."
+          "output_limit_entity": "Entité number pour définir la puissance de décharge en watts.",
+		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
+          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI."
         }
       },
       "reconfigure_grid": {
@@ -103,7 +107,9 @@
           "grid_export_entity": "Export réseau (séparé)",
           "ac_mode_entity": "Mode AC Zendure",
           "input_limit_entity": "Puissance de charge Zendure",
-          "output_limit_entity": "Puissance de décharge Zendure"
+          "output_limit_entity": "Puissance de décharge Zendure",
+		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
+          "offgrid_mode_entity": "Mode hors réseau (optionnel)"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Les paramètres de régulation sont ajustés automatiquement.",
@@ -126,7 +132,9 @@
           "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
           "ac_mode_entity": "Mode AC Zendure (INPUT/OUTPUT). Contrôlé automatiquement par l’intégration.",
           "input_limit_entity": "Puissance de charge réglable en watts.",
-          "output_limit_entity": "Puissance de décharge réglable en watts."
+          "output_limit_entity": "Puissance de décharge réglable en watts.",
+		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
+          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI."
         }
       }
     }
@@ -515,6 +523,33 @@
           "sensor_invalid": "Données capteur invalides"
         }
       },
+	  "offgrid_power_w": {
+        "name": "Puissance hors réseau"
+      },
+      "offgrid_mode": {
+        "name": "Mode hors réseau",
+        "state": {
+          "not_configured": "Non configuré",
+          "unknown": "Inconnu",
+          "off": "Arrêt",
+          "normal": "Normal",
+          "eco": "Éco"
+        }
+      },
+      "offgrid_load_active": {
+        "name": "Charge hors réseau active"
+      },
+      "offgrid_rule_reason": {
+        "name": "Raison de régulation hors réseau",
+        "state": {
+          "none": "Aucun blocage hors réseau",
+          "offgrid_load_active_blocks_ac_charge": "Prise îlot active – charge réseau bloquée",
+          "offgrid_load_support": "Prise îlot active – alimentation par batterie/PV"
+        }
+      },
+      "offgrid_source_active": {
+        "name": "Source hors réseau active"
+      },
       "engine_health": {
         "name": "État moteur",
         "state": {
@@ -627,7 +662,9 @@
           "cell_voltage_cutoff_block": "Décharge bloquée (protection tension cellule active)",
           "cell_voltage_emergency_charge": "Charge d’urgence active (tension cellule critique)",
           "pv_charge_blocked_by_discharge_protection": "Charge PV bloquée car la décharge est encore bloquée par la protection SoC/cellule",
-          "learned_charge_window_deadline_too_close_start_now": "Planification apprise : deadline trop proche, démarrer maintenant"
+          "learned_charge_window_deadline_too_close_start_now": "Planification apprise : deadline trop proche, démarrer maintenant",
+		  "offgrid_load_active_blocks_ac_charge": "Prise îlot active : charge réseau automatique bloquée",
+          "offgrid_load_support": "Prise îlot active : alimentation par batterie/PV"
         }
       },
       "next_planned_action": {

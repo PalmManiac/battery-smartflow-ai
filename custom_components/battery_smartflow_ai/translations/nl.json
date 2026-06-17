@@ -25,7 +25,9 @@
           "grid_export_entity": "Netteruglevering (split)",
           "ac_mode_entity": "Zendure AC-modus",
           "input_limit_entity": "Zendure laadvermogen",
-          "output_limit_entity": "Zendure ontlaadvermogen"
+          "output_limit_entity": "Zendure ontlaadvermogen",
+		  "offgrid_power_entity": "Off-grid vermogen / eilandstopcontact (optioneel)",
+          "offgrid_mode_entity": "Off-grid modus (optioneel)"
         },
         "data_description": {
           "device_profile": "Kies het passende apparaatprofiel voor je Zendure-systeem. Het profiel bevat afgestemde regelparameters.",
@@ -48,7 +50,9 @@
           "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
           "ac_mode_entity": "Select-entiteit uit de Zendure-integratie die schakelt tussen laden (INPUT) en ontladen (OUTPUT).",
           "input_limit_entity": "Number-entiteit voor het instellen van het laadvermogen in watt.",
-          "output_limit_entity": "Number-entiteit voor het instellen van het ontlaadvermogen in watt."
+          "output_limit_entity": "Number-entiteit voor het instellen van het ontlaadvermogen in watt.",
+		  "offgrid_power_entity": "Optionele sensor voor het vermogen van het Zendure off-grid / eilandstopcontact. Positieve waarden worden geïnterpreteerd als een actieve belasting op het eilandstopcontact.",
+          "offgrid_mode_entity": "Optionele select-sensor voor de Zendure off-grid / eilandstopcontact-modus. De modus wordt alleen gelezen en nooit door Battery SmartFlow AI ingesteld."
         }
       },
       "reconfigure_grid": {
@@ -103,7 +107,9 @@
           "grid_export_entity": "Netteruglevering (split)",
           "ac_mode_entity": "Zendure AC-modus",
           "input_limit_entity": "Zendure laadvermogen",
-          "output_limit_entity": "Zendure ontlaadvermogen"
+          "output_limit_entity": "Zendure ontlaadvermogen",
+		  "offgrid_power_entity": "Off-grid vermogen / eilandstopcontact (optioneel)",
+          "offgrid_mode_entity": "Off-grid modus (optioneel)"
         },
         "data_description": {
           "device_profile": "Kies het passende apparaatprofiel voor je Zendure-systeem. De regelparameters worden automatisch aangepast.",
@@ -126,7 +132,9 @@
           "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
           "ac_mode_entity": "Zendure AC-modus (INPUT/OUTPUT). Wordt automatisch door de integratie gestuurd.",
           "input_limit_entity": "Instelbaar laadvermogen in watt.",
-          "output_limit_entity": "Instelbaar ontlaadvermogen in watt."
+          "output_limit_entity": "Instelbaar ontlaadvermogen in watt.",
+		  "offgrid_power_entity": "Optionele sensor voor het vermogen van het Zendure off-grid / eilandstopcontact. Positieve waarden worden geïnterpreteerd als een actieve belasting op het eilandstopcontact.",
+          "offgrid_mode_entity": "Optionele select-sensor voor de Zendure off-grid / eilandstopcontact-modus. De modus wordt alleen gelezen en nooit door Battery SmartFlow AI ingesteld."
         }
       }
     }
@@ -515,6 +523,33 @@
           "sensor_invalid": "Ongeldige sensorgegevens"
         }
       },
+	  "offgrid_power_w": {
+        "name": "Off-grid vermogen"
+      },
+      "offgrid_mode": {
+        "name": "Off-grid modus",
+        "state": {
+          "not_configured": "Niet geconfigureerd",
+          "unknown": "Onbekend",
+          "off": "Uit",
+          "normal": "Normaal",
+          "eco": "Eco"
+        }
+      },
+      "offgrid_load_active": {
+        "name": "Off-grid belasting actief"
+      },
+      "offgrid_rule_reason": {
+        "name": "Off-grid regelreden",
+        "state": {
+          "none": "Geen off-grid blokkering",
+          "offgrid_load_active_blocks_ac_charge": "Eilandstopcontact actief – netladen geblokkeerd",
+          "offgrid_load_support": "Eilandstopcontact actief – gevoed door accu/PV"
+        }
+      },
+      "offgrid_source_active": {
+        "name": "Off-grid bron actief"
+      },
       "engine_health": {
         "name": "Engine-status",
         "state": {
@@ -627,7 +662,9 @@
           "cell_voltage_cutoff_block": "Ontladen geblokkeerd (celspanningsbescherming actief)",
           "cell_voltage_emergency_charge": "Noodladen actief (celspanning kritiek)",
           "pv_charge_blocked_by_discharge_protection": "PV-laden geblokkeerd omdat ontladen nog door SoC-/celbescherming is geblokkeerd",
-          "learned_charge_window_deadline_too_close_start_now": "Lerende planning: deadline te dichtbij, nu starten"
+          "learned_charge_window_deadline_too_close_start_now": "Lerende planning: deadline te dichtbij, nu starten",
+		  "offgrid_load_active_blocks_ac_charge": "Eilandstopcontact actief: automatisch netladen geblokkeerd",
+          "offgrid_load_support": "Eilandstopcontact actief: gevoed door accu/PV"
         }
       },
       "next_planned_action": {

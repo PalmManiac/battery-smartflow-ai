@@ -25,7 +25,9 @@
           "grid_export_entity": "Grid export (split)",
           "ac_mode_entity": "Zendure AC mode",
           "input_limit_entity": "Zendure charge power",
-          "output_limit_entity": "Zendure discharge power"
+          "output_limit_entity": "Zendure discharge power",
+		  "offgrid_power_entity": "Off-grid power / island socket (optional)",
+          "offgrid_mode_entity": "Off-grid mode (optional)"
         },
         "data_description": {
           "device_profile": "Select the matching device profile for your Zendure system. The profile contains tuned control parameters.",
@@ -48,7 +50,9 @@
           "grid_export_entity": "Sensor with current grid export power in watts.",
           "ac_mode_entity": "Select entity from the Zendure integration that switches between charging (INPUT) and discharging (OUTPUT).",
           "input_limit_entity": "Number entity for setting the charge power in watts.",
-          "output_limit_entity": "Number entity for setting the discharge power in watts."
+          "output_limit_entity": "Number entity for setting the discharge power in watts.",
+		  "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
+          "offgrid_mode_entity": "Optional select sensor for the Zendure off-grid / island socket mode. The mode is only read and is never set by Battery SmartFlow AI."
         }
       },
       "reconfigure_grid": {
@@ -103,7 +107,9 @@
           "grid_export_entity": "Grid export (split)",
           "ac_mode_entity": "Zendure AC mode",
           "input_limit_entity": "Zendure charge power",
-          "output_limit_entity": "Zendure discharge power"
+          "output_limit_entity": "Zendure discharge power",
+		  "offgrid_power_entity": "Off-grid power / island socket (optional)",
+          "offgrid_mode_entity": "Off-grid mode (optional)"
         },
         "data_description": {
           "device_profile": "Select the matching device profile for your Zendure system. The control parameters are adjusted automatically.",
@@ -126,7 +132,9 @@
           "grid_export_entity": "Sensor with current grid export power in watts.",
           "ac_mode_entity": "Zendure AC mode (INPUT/OUTPUT). Controlled automatically by the integration.",
           "input_limit_entity": "Adjustable charge power in watts.",
-          "output_limit_entity": "Adjustable discharge power in watts."
+          "output_limit_entity": "Adjustable discharge power in watts.",
+		  "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
+          "offgrid_mode_entity": "Optional select sensor for the Zendure off-grid / island socket mode. The mode is only read and is never set by Battery SmartFlow AI."
         }
       }
     }
@@ -515,6 +523,33 @@
           "sensor_invalid": "Invalid sensor data"
         }
       },
+	  "offgrid_power_w": {
+        "name": "Off-grid power"
+      },
+      "offgrid_mode": {
+        "name": "Off-grid mode",
+        "state": {
+          "not_configured": "Not configured",
+          "unknown": "Unknown",
+          "off": "Off",
+          "normal": "Normal",
+          "eco": "Eco"
+        }
+      },
+      "offgrid_load_active": {
+        "name": "Off-grid load active"
+      },
+      "offgrid_rule_reason": {
+        "name": "Off-grid control reason",
+        "state": {
+          "none": "No off-grid blocker",
+          "offgrid_load_active_blocks_ac_charge": "Island socket active – grid charging blocked",
+          "offgrid_load_support": "Island socket active – supplied by battery/PV"
+        }
+      },
+      "offgrid_source_active": {
+        "name": "Off-grid source active"
+      },
       "engine_health": {
         "name": "Engine status",
         "state": {
@@ -627,7 +662,9 @@
           "cell_voltage_cutoff_block": "Discharging blocked (cell-voltage protection active)",
           "cell_voltage_emergency_charge": "Emergency charge active (cell voltage critical)",
           "pv_charge_blocked_by_discharge_protection": "PV charging blocked because discharging is still blocked by SoC/cell protection",
-          "learned_charge_window_deadline_too_close_start_now": "Learned planning: deadline too close, start now"
+          "learned_charge_window_deadline_too_close_start_now": "Learned planning: deadline too close, start now",
+		  "offgrid_load_active_blocks_ac_charge": "Island socket active: automatic grid charging blocked",
+          "offgrid_load_support": "Island socket active: supplied by battery/PV"
         }
       },
       "next_planned_action": {
