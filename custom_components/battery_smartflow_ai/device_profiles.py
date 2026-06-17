@@ -336,6 +336,86 @@ SF800PRO_PROFILE = {
 }
 
 
+SF800PRO2_PROFILE = {
+    # --- UI ---
+    "label": "Zendure SF800Pro2",
+
+    # --- Legacy controller tuning / fallback ---
+    # Slightly more conservative than SF800Pro. The Pro2 seems to react quickly
+    # and can become nervous when chasing 0 W too aggressively.
+    "TARGET_IMPORT_W": 20.0,
+    "DEADBAND_W": 45.0,
+    "EXPORT_GUARD_W": 80.0,
+    "KP_UP": 0.30,
+    "KP_DOWN": 0.55,
+    "MAX_STEP_UP": 120.0,
+    "MAX_STEP_DOWN": 220.0,
+
+    # --- Shared / other tuning ---
+    "KEEPALIVE_MIN_DEFICIT_W": 20.0,
+    "KEEPALIVE_MIN_OUTPUT_W": 80.0,
+    "SOC_DISCHARGE_RESUME_MARGIN": 3.0,
+
+    # --- Low-SoC / cell-voltage protection behavior ---
+    # Keep the strict SF800Pro behavior for now. The Pro2 still belongs to the
+    # smaller 800 W class and should not be treated like the stronger 2400-series.
+    "LOW_SOC_PROTECTION_STRICT": True,
+    "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": True,
+    "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": True,
+
+    # --- V4.2.0 regulation / capabilities ---
+    **V42_COMMON_DEFAULTS,
+    **V42_SF800PRO_CAPABILITIES,
+    **SF800PRO_PASSTHROUGH_DEFAULTS,
+
+    # --- V4.2.0 mode stability ---
+    # Avoid frequent INPUT/OUTPUT changes on the smaller 800 W platform.
+    "SUPPORTS_FAST_MODE_SWITCH": False,
+    "MODE_SWITCH_COOLDOWN_S": 45.0,
+    "INPUT_AFTER_OUTPUT_BLOCK_S": 90.0,
+    "OUTPUT_AFTER_INPUT_BLOCK_S": 45.0,
+
+    # Require slightly more stable grid evidence before starting charge/discharge.
+    "STABLE_EXPORT_CYCLES_FOR_PV_CHARGE": 4,
+    "STABLE_IMPORT_CYCLES_FOR_DISCHARGE": 3,
+
+    # Keep active regulation states a bit longer to avoid short mode flicker.
+    "PV_CHARGE_LATCH_MIN_HOLD_S": 150.0,
+    "DISCHARGE_LATCH_MIN_HOLD_S": 90.0,
+    "PASSTHROUGH_LATCH_MIN_HOLD_S": 150.0,
+
+    # --- Charge controller tuning ---
+    # More damped than SF800Pro to reduce short INPUT spikes and fast jumps.
+    "CHARGE_DEADBAND_W": 50.0,
+    "CHARGE_KP_UP": 0.25,
+    "CHARGE_KP_DOWN": 0.45,
+    "CHARGE_MAX_STEP_UP": 120.0,
+    "CHARGE_MAX_STEP_DOWN": 180.0,
+
+    # --- Discharge controller tuning ---
+    # Do not chase exact 0 W. A small intentional import target is calmer.
+    "DISCHARGE_TARGET_IMPORT_W": 20.0,
+    "DISCHARGE_DEADBAND_W": 45.0,
+    "DISCHARGE_KP_UP": 0.30,
+    "DISCHARGE_KP_DOWN": 0.55,
+    "DISCHARGE_MAX_STEP_UP": 120.0,
+    "DISCHARGE_MAX_STEP_DOWN": 220.0,
+
+    # --- Hardware limits (safety clamp) ---
+    "MAX_INPUT_W": 1000.0,
+    "MAX_OUTPUT_W": 800.0,
+
+    # --- Off-Grid / island socket ---
+    # No confirmed Off-Grid socket support for this profile yet.
+    "SUPPORTS_OFFGRID_SOCKET": False,
+    "SUPPORTS_OFFGRID_INPUT": False,
+    "OFFGRID_MAX_INTERNAL_SUPPLY_W": 0.0,
+    "OFFGRID_LOAD_ACTIVE_W": 50.0,
+    "OFFGRID_LOAD_BLOCKS_AC_CHARGE": False,
+    "OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE": False,
+}
+
+
 SF2400AC_PROFILE = {
     # --- UI ---
     "label": "Zendure SF2400AC",
@@ -668,6 +748,7 @@ HUB2000_PROFILE = {
 
 DEVICE_PROFILES = {
     "SF800Pro": SF800PRO_PROFILE,
+    "SF800Pro2": SF800PRO2_PROFILE,
     "SF2400AC": SF2400AC_PROFILE,
     "SF2400AC+": SF2400ACPLUS_PROFILE,
     "SF2400Pro": SF2400PRO_PROFILE,
