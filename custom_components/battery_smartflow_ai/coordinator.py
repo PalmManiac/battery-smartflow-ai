@@ -149,6 +149,8 @@ _LOGGER = logging.getLogger(__name__)
 USE_REGULATION_V42_COMMAND_DEV = False
 
 STORE_VERSION = 1
+SEASON_COUNTER_MIN = -100
+SEASON_COUNTER_MAX = 100
 
 
 def _to_float(v: Any, default: float | None = None) -> float | None:
@@ -163,6 +165,20 @@ def _to_float(v: Any, default: float | None = None) -> float | None:
         return float(s)
     except Exception:
         return default
+        
+def _clamp_season_counter(value: Any) -> int:
+    """Limit the season hysteresis counter to a sane range.
+
+    The counter is only used as hysteresis for the automatic summer/winter
+    detection. It must not grow indefinitely, otherwise Automatic mode can get
+    stuck in winter or summer for a very long time after months of operation.
+    """
+    try:
+        counter = int(value or 0)
+    except Exception:
+        counter = 0
+
+    return max(SEASON_COUNTER_MIN, min(SEASON_COUNTER_MAX, counter))
 
 
 @dataclass
@@ -359,6 +375,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data = await self._store.async_load()
         if isinstance(data, dict):
             self._persist.update(data)
+
+            # V4.2.2:
+            # Normalize old persisted extreme values. Previous versions could let
+            # season_counter grow indefinitely, e.g. -167000, effectively pinning
+            # Automatic mode to winter for a very long time.
+            self._persist["season_counter"] = _clamp_season_counter(
+                self._persist.get("season_counter", 0)
+            )
+
             if "runtime_mode" in data and isinstance(data["runtime_mode"], dict):
                 self.runtime_mode.update(data["runtime_mode"])
 
@@ -1876,7 +1901,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _season_detection(self, pv_w: float, export_w: float) -> str:
         season = self._persist.get("season_mode", "winter")
-        counter = int(self._persist.get("season_counter", 0))
+        counter = _clamp_season_counter(
+            self._persist.get("season_counter", 0)
+        )
 
         installed_pv_wp = self._get_installed_pv_wp()
 
@@ -1911,6 +1938,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 counter -= 1
             elif counter < 0:
                 counter += 1
+
+        counter = _clamp_season_counter(counter)
 
         thresh = 30
         if counter > thresh:
