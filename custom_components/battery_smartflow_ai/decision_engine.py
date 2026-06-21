@@ -462,6 +462,14 @@ class ValleyOpportunityRule(BaseRule):
         if not engine._is_valley_price_now(ctx):
             return None
 
+        # V4.2.2:
+        # Normal valley-opportunity charging must not fight with PV surplus
+        # charging. If PV charging is already active/latched or clearly
+        # possible, keep the PV charge path stable. Valley opportunity is only
+        # an optional cheap-price charge and should not replace free PV energy.
+        if engine._pv_surplus_should_prefer_pv_charge(ctx):
+            return None
+
         if not engine._is_real_pv_underperforming(ctx):
             return None
 
@@ -884,6 +892,55 @@ class DecisionEngine:
         # No real active discharge, only idle/old keepalive:
         # PV surplus should block starting or keeping economic discharge.
         return True
+        
+    def _pv_surplus_should_prefer_pv_charge(self, ctx: DecisionContext) -> bool:
+        """Return True when normal valley-opportunity charging should not
+        replace PV surplus charging.
+
+        Valley opportunity charging is only an optional cheap-price charge.
+        If PV surplus charging is already active/latched or clearly possible,
+        PV charging should keep priority. This prevents short strategy
+        flapping between pv_surplus_charge and valley_opportunity_charge.
+        """
+
+        if ctx.soc >= ctx.soc_max:
+            return False
+
+        export_w = float(ctx.grid_export_w or 0.0)
+        import_w = float(ctx.grid_import_w or 0.0)
+        pv_w = float(ctx.pv_w or 0.0)
+        house_load_w = float(ctx.house_load_w or 0.0)
+        start_export_threshold = float(ctx.pv_charge_start_export_w or 0.0)
+
+        # If PV charging is already latched, do not let a normal valley
+        # opportunity charge steal the active charge phase unless there is
+        # sustained real import. The PV rule itself decides when the latch
+        # should end.
+        if bool(ctx.pv_charge_latched) and import_w <= 140.0:
+            return True
+
+        # Direct export means PV surplus is actually available.
+        if export_w >= max(40.0, start_export_threshold * 0.50) and import_w <= 80.0:
+            return True
+
+        # Fallback when the grid export signal is noisy or delayed:
+        # PV clearly exceeds the known house load and there is no relevant import.
+        if (
+            pv_w >= house_load_w + max(80.0, start_export_threshold * 0.50)
+            and import_w <= 80.0
+        ):
+            return True
+
+        # During PV charge start confirmation, keep the decision path stable
+        # and do not switch to valley opportunity for one or two cycles.
+        if (
+            int(ctx.pv_charge_start_counter or 0) > 0
+            and export_w >= max(10.0, start_export_threshold * 0.15)
+            and import_w <= 80.0
+        ):
+            return True
+
+        return False
 
     def _compute_base_price(self, prices: List[float]) -> float:
         return sum(prices) / len(prices)
