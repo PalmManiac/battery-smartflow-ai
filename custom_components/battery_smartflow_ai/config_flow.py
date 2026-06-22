@@ -112,6 +112,28 @@ def _cleanup_optional_entities(data: dict[str, Any]) -> None:
             data.pop(key, None)
         else:
             data[key] = value
+            
+            
+def _normalize_optional_float(value: Any, default: float = 0.0) -> float:
+    """Normalize optional numeric config values.
+
+    Accepts stored floats, ints and strings. Strings with comma decimal
+    separators are accepted for resilience, although Home Assistant number
+    selectors normally submit dot decimals.
+    """
+
+    try:
+        if value is None:
+            return float(default)
+
+        if isinstance(value, str):
+            value = value.strip().replace(",", ".")
+            if value == "" or value.lower() in EMPTY_ENTITY_VALUES:
+                return float(default)
+
+        return max(0.0, float(value))
+    except Exception:
+        return float(default)
 
 
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -144,6 +166,11 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "grid_split_missing"
 
             _cleanup_optional_entities(self._user_input)
+            
+            self._user_input[CONF_FEED_IN_TARIFF] = _normalize_optional_float(
+                self._user_input.get(CONF_FEED_IN_TARIFF),
+                DEFAULT_FEED_IN_TARIFF,
+            )
 
             if grid_mode != GRID_MODE_SINGLE:
                 self._user_input.pop(CONF_GRID_POWER_ENTITY, None)
@@ -205,6 +232,11 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "grid_split_missing"
 
             _cleanup_optional_entities(cleaned)
+            
+            cleaned[CONF_FEED_IN_TARIFF] = _normalize_optional_float(
+                cleaned.get(CONF_FEED_IN_TARIFF),
+                DEFAULT_FEED_IN_TARIFF,
+            )
 
             if not errors:
                 return self.async_update_reload_and_abort(
@@ -311,6 +343,24 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             vol.Required(CONF_PV_ENTITY, default=_val(CONF_PV_ENTITY))
         ] = selector.EntitySelector(
             selector.EntitySelectorConfig(domain="sensor")
+        )
+        
+        schema[
+            vol.Optional(
+                CONF_FEED_IN_TARIFF,
+                default=_normalize_optional_float(
+                    _val(CONF_FEED_IN_TARIFF),
+                    DEFAULT_FEED_IN_TARIFF,
+                ),
+            )
+        ] = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.0,
+                max=1.0,
+                step=0.0001,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="EUR/kWh",
+            )
         )
 
         pv_forecast_today_val = _val(CONF_PV_FORECAST_TODAY_ENTITY)
@@ -590,7 +640,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         merged = self._current_options()
         merged.update(self._working_options)
         return merged
-
+        
     def _build_merged_options(
         self,
         user_input: dict[str, Any],
@@ -604,17 +654,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 self.config_entry.data.get(
                     CONF_INSTALLED_PV_WP,
                     DEFAULT_INSTALLED_PV_WP,
-                ),
-            ),
-        )
-        
-        feed_in_tariff = user_input.get(
-            CONF_FEED_IN_TARIFF,
-            self.config_entry.options.get(
-                CONF_FEED_IN_TARIFF,
-                self.config_entry.data.get(
-                    CONF_FEED_IN_TARIFF,
-                    DEFAULT_FEED_IN_TARIFF,
                 ),
             ),
         )
@@ -637,17 +676,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 continue
 
         merged_options[CONF_INSTALLED_PV_WP] = float(installed_pv_wp)
-        merged_options[CONF_PROFILE_OVERRIDES] = profile_overrides
-        
-        merged_options[CONF_INSTALLED_PV_WP] = float(installed_pv_wp)
-
-        try:
-            merged_options[CONF_FEED_IN_TARIFF] = max(
-                0.0,
-                float(feed_in_tariff or DEFAULT_FEED_IN_TARIFF),
-            )
-        except (TypeError, ValueError):
-            merged_options[CONF_FEED_IN_TARIFF] = DEFAULT_FEED_IN_TARIFF
 
         merged_options[CONF_PROFILE_OVERRIDES] = profile_overrides
 
@@ -720,15 +748,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         unit_of_measurement="Wp",
                     )
                 ),
-                vol.Optional(CONF_FEED_IN_TARIFF): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0.0,
-                        max=1.0,
-                        step=0.0001,
-                        mode=selector.NumberSelectorMode.BOX,
-                        unit_of_measurement="€/kWh",
-                    )
-                ),
                 vol.Optional("TARGET_IMPORT_W"): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.0,
@@ -785,13 +804,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     DEFAULT_INSTALLED_PV_WP,
                 ),
             ),
-            CONF_FEED_IN_TARIFF: self.config_entry.options.get(
-                CONF_FEED_IN_TARIFF,
-                self.config_entry.data.get(
-                    CONF_FEED_IN_TARIFF,
-                    DEFAULT_FEED_IN_TARIFF,
-                ),
-            ),
+            CONF_FEED_IN_TARIFF: self._current_feed_in_tariff(),
             "TARGET_IMPORT_W": current_overrides.get(
                 "TARGET_IMPORT_W",
                 profile.get("TARGET_IMPORT_W"),
