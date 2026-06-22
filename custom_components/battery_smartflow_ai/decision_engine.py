@@ -65,6 +65,12 @@ class DecisionContext:
     peak_factor: float = 1.35
     valley_factor: float = 0.85
     very_cheap_price: Optional[float] = None
+    
+    # V4.2.3-Beta3:
+    # Opportunity cost of using PV for charging instead of exporting it.
+    # If no feed-in tariff is available, 0.0 is conservative: only zero/negative
+    # grid prices may override currently useful PV.
+    feed_in_tariff: float = 0.0
 
     # V3.5.0 cell voltage protection
     cell_voltage_emergency_active: bool = False
@@ -367,6 +373,14 @@ class VeryCheapRule(BaseRule):
         if float(ctx.price_now) > float(ctx.very_cheap_price):
             return None
 
+        # V4.2.3-Beta3:
+        # Do not let a user-defined very-cheap threshold blindly suppress useful
+        # PV charging. PV should keep priority unless grid energy is really
+        # cheaper than the PV opportunity cost, e.g. zero/negative prices or
+        # price below feed-in tariff.
+        if engine._optional_grid_charge_should_wait_for_pv(ctx):
+            return None
+
         block = engine._charge_blocked_by_additional_battery_discharge(ctx)
         if block is not None:
             return block
@@ -411,6 +425,13 @@ class ValleyBoostRule(BaseRule):
             return None
 
         if ctx.pv_w < 100:
+            return None
+            
+        # V4.2.3-Beta3:
+        # Valley boost is still optional grid charging. If useful PV is already
+        # available and grid energy is not cheaper than PV opportunity cost,
+        # keep PV charging priority.
+        if engine._optional_grid_charge_should_wait_for_pv(ctx):
             return None
 
         soc_gap_pct = max(0.0, ctx.soc_max - ctx.soc)
@@ -462,12 +483,11 @@ class ValleyOpportunityRule(BaseRule):
         if not engine._is_valley_price_now(ctx):
             return None
 
-        # V4.2.2:
-        # Normal valley-opportunity charging must not fight with PV surplus
-        # charging. If PV charging is already active/latched or clearly
-        # possible, keep the PV charge path stable. Valley opportunity is only
-        # an optional cheap-price charge and should not replace free PV energy.
-        if engine._pv_surplus_should_prefer_pv_charge(ctx):
+        # V4.2.3-Beta3:
+        # Valley opportunity is only optional grid charging. It must not take over
+        # while useful PV is available or already charging the battery, unless grid
+        # energy is economically better than using/exporting PV.
+        if engine._optional_grid_charge_should_wait_for_pv(ctx):
             return None
 
         if not engine._is_real_pv_underperforming(ctx):
@@ -891,6 +911,93 @@ class DecisionEngine:
 
         # No real active discharge, only idle/old keepalive:
         # PV surplus should block starting or keeping economic discharge.
+        return True
+        
+    def _pv_power_is_relevant_for_charging(self, ctx: DecisionContext) -> bool:
+        """Return True when current PV should keep priority over optional grid charge.
+
+        This intentionally does not rely only on grid export. During active INPUT
+        charging the device may absorb PV directly, so the grid export sensor can
+        stay near 0 W even though PV is clearly available and already charging the
+        battery.
+        """
+
+        if ctx.soc >= ctx.soc_max:
+            return False
+
+        if self._additional_battery_discharge_blocks_charge(ctx):
+            return False
+
+        pv_w = max(0.0, float(ctx.pv_w or 0.0))
+        house_load_w = max(0.0, float(ctx.house_load_w or 0.0))
+        export_w = max(0.0, float(ctx.grid_export_w or 0.0))
+        import_w = max(0.0, float(ctx.grid_import_w or 0.0))
+        prev_charge_w = max(0.0, float(ctx.prev_charge_w or 0.0))
+
+        start_export_threshold = max(
+            0.0,
+            float(ctx.pv_charge_start_export_w or 0.0),
+        )
+
+        # Direct export is the strongest signal.
+        if export_w >= max(30.0, start_export_threshold * 0.40):
+            return True
+
+        # If PV is already charging the battery, grid export may be 0.
+        # Keep PV priority as long as PV power is meaningful.
+        if prev_charge_w > 0.0 and pv_w >= max(180.0, house_load_w * 0.75):
+            return True
+
+        # Strong standalone PV signal: PV clearly covers house load and leaves
+        # meaningful remaining power for charging.
+        if pv_w >= house_load_w + max(120.0, start_export_threshold):
+            return True
+
+        # Fallback for low house-load systems: PV is clearly available and there
+        # is no strong external import pressure.
+        if pv_w >= max(300.0, house_load_w * 1.50) and import_w <= 250.0:
+            return True
+
+        return False
+
+    def _grid_charge_is_cheaper_than_pv(self, ctx: DecisionContext) -> bool:
+        """Return True when grid charging is economically better than using PV.
+
+        PV is not strictly free if exporting would earn a feed-in tariff. The
+        opportunity cost of PV is therefore the feed-in tariff. If no tariff is
+        configured/passed, 0.0 is used, which means only zero or negative grid
+        prices may override PV.
+        """
+
+        if ctx.price_now is None:
+            return False
+
+        try:
+            price_now = float(ctx.price_now)
+        except Exception:
+            return False
+
+        try:
+            pv_opportunity_price = max(0.0, float(ctx.feed_in_tariff or 0.0))
+        except Exception:
+            pv_opportunity_price = 0.0
+
+        # Small epsilon avoids oscillation on equal/rounded values.
+        return price_now <= (pv_opportunity_price - 0.001)
+
+    def _optional_grid_charge_should_wait_for_pv(self, ctx: DecisionContext) -> bool:
+        """Return True when optional grid charging should not override current PV.
+
+        Applies to opportunity/comfort charging, not to emergency, manual charge,
+        learned/deadline charge or other hard safety reasons.
+        """
+
+        if not self._pv_power_is_relevant_for_charging(ctx):
+            return False
+
+        if self._grid_charge_is_cheaper_than_pv(ctx):
+            return False
+
         return True
         
     def _pv_surplus_should_prefer_pv_charge(self, ctx: DecisionContext) -> bool:
