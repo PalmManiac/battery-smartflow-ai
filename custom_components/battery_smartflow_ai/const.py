@@ -132,6 +132,8 @@ DEFAULT_REGULATION_V42_ENABLED = False
 
 DEFAULT_OFFGRID_LOAD_ACTIVE_W = 50.0
 
+DEFAULT_FEED_IN_TARIFF = 0.0
+
 # --------------------------------------------------
 # Device profiles (V1.5.x / V3.2.0 overrides)
 # --------------------------------------------------
