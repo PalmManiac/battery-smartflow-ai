@@ -103,8 +103,6 @@ SETTING_LEARNED_PLANNING_ENABLED = "learned_planning_enabled"
 
 SETTING_REGULATION_V42_ENABLED = "regulation_v42_enabled"
 
-SETTING_FEED_IN_TARIFF = "feed_in_tariff"
-
 # Default
 DEFAULT_PACK_CAPACITY_KWH = 2.88
 DEFAULT_BATTERY_PACKS = 1
