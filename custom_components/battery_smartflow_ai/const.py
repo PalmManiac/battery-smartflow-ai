@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.2.3-Beta2"
+INTEGRATION_VERSION = "4.2.3-Beta3"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -79,6 +79,8 @@ LOWEST_CELL_VOLTAGE_CONFIG_KEYS = [
 CONF_OFFGRID_POWER_ENTITY = "offgrid_power_entity"
 CONF_OFFGRID_MODE_ENTITY = "offgrid_mode_entity"
 
+CONF_FEED_IN_TARIFF = "feed_in_tariff"
+
 # --- Helper constants for dynamic GUI profile override entities ---
 PROFILE_OVERRIDE_PREFIX = "profile_override_"
 
@@ -100,6 +102,8 @@ SETTING_FORECAST_BASE_LOAD = "forecast_base_load"
 SETTING_LEARNED_PLANNING_ENABLED = "learned_planning_enabled"
 
 SETTING_REGULATION_V42_ENABLED = "regulation_v42_enabled"
+
+SETTING_FEED_IN_TARIFF = "feed_in_tariff"
 
 # Default
 DEFAULT_PACK_CAPACITY_KWH = 2.88
