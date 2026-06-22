@@ -156,6 +156,7 @@
         "description": "Allgemeine Regelparameter des aktiven Geräteprofils.",
         "data": {
           "installed_pv_wp": "Installierte PV-Leistung (Wp)",
+		  "feed_in_tariff": "Einspeisevergütung",
           "TARGET_IMPORT_W": "Ziel-Netzbezug",
           "EXPORT_GUARD_W": "Export-Schutz",
           "KEEPALIVE_MIN_DEFICIT_W": "Keepalive Mindestdefizit",
@@ -164,6 +165,7 @@
         },
         "data_description": {
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
+		  "feed_in_tariff": "Vergütung pro eingespeister kWh. Wird als wirtschaftlicher Vergleichswert genutzt: Optionale Netzladungen dürfen vorhandene PV-Ladung nur verdrängen, wenn Netzstrom günstiger ist als diese Einspeisevergütung. Wenn keine Vergütung eingetragen ist, bleibt der Wert 0,0.",
           "TARGET_IMPORT_W": "Zielwert für einen kleinen gewollten Netzbezug. Ein höherer Wert reduziert das Risiko ungewollter Einspeisung, erhöht aber den Netzverbrauch leicht.",
           "EXPORT_GUARD_W": "Zusätzliche Schutzreserve gegen ungewollte Einspeisung. Höhere Werte machen die Regelung vorsichtiger.",
           "KEEPALIVE_MIN_DEFICIT_W": "Mindestdefizit, ab dem die Entladung aktiv gehalten wird. Hilft gegen Flattern bei sehr kleinen Lasten.",
