@@ -134,6 +134,12 @@ def _normalize_optional_float(value: Any, default: float = 0.0) -> float:
         return max(0.0, float(value))
     except Exception:
         return float(default)
+        
+        
+def _validate_feed_in_tariff(value: Any) -> float:
+    """Validate feed-in tariff from config/reconfigure forms."""
+
+    return _normalize_optional_float(value, DEFAULT_FEED_IN_TARIFF)
 
 
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -353,14 +359,9 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     DEFAULT_FEED_IN_TARIFF,
                 ),
             )
-        ] = selector.NumberSelector(
-            selector.NumberSelectorConfig(
-                min=0.0,
-                max=1.0,
-                step=0.0001,
-                mode=selector.NumberSelectorMode.BOX,
-                unit_of_measurement="EUR/kWh",
-            )
+        ] = vol.All(
+            vol.Coerce(float),
+            vol.Range(min=0.0, max=1.0),
         )
 
         pv_forecast_today_val = _val(CONF_PV_FORECAST_TODAY_ENTITY)
@@ -804,7 +805,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     DEFAULT_INSTALLED_PV_WP,
                 ),
             ),
-            CONF_FEED_IN_TARIFF: self._current_feed_in_tariff(),
             "TARGET_IMPORT_W": current_overrides.get(
                 "TARGET_IMPORT_W",
                 profile.get("TARGET_IMPORT_W"),
