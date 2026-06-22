@@ -2458,6 +2458,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
                 price_points=price_points,
+                feed_in_tariff=float(self._get_setting("feed_in_tariff", 0.0) or 0.0),
                 ai_mode=ai_mode,
                 manual_action=manual_action,
                 season=season,
