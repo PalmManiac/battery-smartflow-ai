@@ -899,8 +899,13 @@ class DecisionEngine:
 
         Valley opportunity charging is only an optional cheap-price charge.
         If PV surplus charging is already active/latched or clearly possible,
-        PV charging should keep priority. This prevents short strategy
-        flapping between pv_surplus_charge and valley_opportunity_charge.
+        PV charging should keep priority. This prevents strategy flapping
+        between pv_surplus_charge and valley_opportunity_charge.
+
+        Important:
+        During an active INPUT/PV charge phase the charge itself can create
+        temporary grid import. That import must not be interpreted as a reason
+        to switch from PV surplus charging to valley-opportunity charging.
         """
 
         if ctx.soc >= ctx.soc_max:
@@ -912,31 +917,32 @@ class DecisionEngine:
         house_load_w = float(ctx.house_load_w or 0.0)
         start_export_threshold = float(ctx.pv_charge_start_export_w or 0.0)
 
-        # If PV charging is already latched, do not let a normal valley
-        # opportunity charge steal the active charge phase unless there is
-        # sustained real import. The PV rule itself decides when the latch
-        # should end.
-        if bool(ctx.pv_charge_latched) and import_w <= 140.0:
+        # Strongest rule:
+        # If PV charge is latched, ValleyOpportunity must not take over.
+        # The PV charge hysteresis / latch logic is responsible for deciding
+        # when PV charging has really ended.
+        if bool(ctx.pv_charge_latched):
+            return True
+
+        # If PV charge start confirmation is currently running, do not switch
+        # to valley opportunity for one or two cycles.
+        if int(ctx.pv_charge_start_counter or 0) > 0:
+            return True
+
+        # If PV charge stop confirmation is counting, keep ValleyOpportunity out
+        # until the PV hysteresis has fully released.
+        if int(ctx.pv_charge_stop_counter or 0) > 0:
             return True
 
         # Direct export means PV surplus is actually available.
-        if export_w >= max(40.0, start_export_threshold * 0.50) and import_w <= 80.0:
+        if export_w >= max(40.0, start_export_threshold * 0.50):
             return True
 
         # Fallback when the grid export signal is noisy or delayed:
-        # PV clearly exceeds the known house load and there is no relevant import.
+        # PV clearly exceeds the known house load and there is no strong import.
         if (
             pv_w >= house_load_w + max(80.0, start_export_threshold * 0.50)
-            and import_w <= 80.0
-        ):
-            return True
-
-        # During PV charge start confirmation, keep the decision path stable
-        # and do not switch to valley opportunity for one or two cycles.
-        if (
-            int(ctx.pv_charge_start_counter or 0) > 0
-            and export_w >= max(10.0, start_export_threshold * 0.15)
-            and import_w <= 80.0
+            and import_w <= 180.0
         ):
             return True
 
