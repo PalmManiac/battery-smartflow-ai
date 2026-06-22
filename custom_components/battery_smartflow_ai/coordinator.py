@@ -37,6 +37,7 @@ from .const import (
     CONF_PROFILE_OVERRIDES,
     CONF_INSTALLED_PV_WP,
     CONF_EXPERT_MODE_ENABLED,
+    CONF_FEED_IN_TARIFF,
     CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
     CONF_OFFGRID_POWER_ENTITY,
     CONF_OFFGRID_MODE_ENTITY,
@@ -80,6 +81,7 @@ from .const import (
     DEFAULT_DEVICE_PROFILE,
     DEFAULT_INSTALLED_PV_WP,
     DEFAULT_EXPERT_MODE_ENABLED,
+    DEFAULT_FEED_IN_TARIFF,
     DEFAULT_CELL_VOLTAGE_PROTECTION_ENABLED,
     DEFAULT_CELL_VOLTAGE_WARNING,
     DEFAULT_CELL_VOLTAGE_CUTOFF,
@@ -427,6 +429,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return float(value)
         except Exception:
             return float(DEFAULT_INSTALLED_PV_WP)
+            
+    def _get_feed_in_tariff(self) -> float:
+        try:
+            value = self.entry.options.get(
+                CONF_FEED_IN_TARIFF,
+                self.entry.data.get(CONF_FEED_IN_TARIFF, DEFAULT_FEED_IN_TARIFF),
+            )
+            return max(0.0, float(value or DEFAULT_FEED_IN_TARIFF))
+        except Exception:
+            return float(DEFAULT_FEED_IN_TARIFF)
 
     def _expert_mode_enabled(self) -> bool:
         return bool(
@@ -2083,6 +2095,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist["prev_soc"] = soc
 
             profile = self._get_active_profile()
+            
+            feed_in_tariff = self._get_feed_in_tariff()
 
             offgrid_raw = _to_float(
                 self._state(self.entities.offgrid_power),
@@ -2458,7 +2472,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
                 price_points=price_points,
-                feed_in_tariff=float(self._get_setting("feed_in_tariff", 0.0) or 0.0),
+                feed_in_tariff=float(feed_in_tariff),
                 ai_mode=ai_mode,
                 manual_action=manual_action,
                 season=season,
@@ -3124,6 +3138,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
                 price_points=price_points,
+                feed_in_tariff=float(feed_in_tariff),
                 ai_mode=ai_mode,
                 manual_action=manual_action,
                 season=season,
@@ -3215,6 +3230,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 
                 "price_now": price_now,
+                "feed_in_tariff": float(feed_in_tariff),
+                "pv_opportunity_price": float(feed_in_tariff),
                 "avg_charge_price": self._persist.get("trade_avg_charge_price"),
                 "economic_discharge_threshold": economic_discharge_threshold,
                 "effective_discharge_threshold": effective_discharge_threshold,
