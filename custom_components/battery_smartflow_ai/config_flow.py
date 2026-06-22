@@ -38,6 +38,8 @@ from .const import (
     CONF_PROFILE_OVERRIDES,
     CONF_INSTALLED_PV_WP,
     DEFAULT_INSTALLED_PV_WP,
+    CONF_FEED_IN_TARIFF,
+    DEFAULT_FEED_IN_TARIFF,
     # V3.5.0
     CONF_EXPERT_MODE_ENABLED,
     CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
@@ -605,6 +607,17 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 ),
             ),
         )
+        
+        feed_in_tariff = user_input.get(
+            CONF_FEED_IN_TARIFF,
+            self.config_entry.options.get(
+                CONF_FEED_IN_TARIFF,
+                self.config_entry.data.get(
+                    CONF_FEED_IN_TARIFF,
+                    DEFAULT_FEED_IN_TARIFF,
+                ),
+            ),
+        )
 
         profile_overrides: dict[str, float] = dict(
             self.config_entry.options.get(CONF_PROFILE_OVERRIDES, {})
@@ -624,6 +637,18 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 continue
 
         merged_options[CONF_INSTALLED_PV_WP] = float(installed_pv_wp)
+        merged_options[CONF_PROFILE_OVERRIDES] = profile_overrides
+        
+        merged_options[CONF_INSTALLED_PV_WP] = float(installed_pv_wp)
+
+        try:
+            merged_options[CONF_FEED_IN_TARIFF] = max(
+                0.0,
+                float(feed_in_tariff or DEFAULT_FEED_IN_TARIFF),
+            )
+        except (TypeError, ValueError):
+            merged_options[CONF_FEED_IN_TARIFF] = DEFAULT_FEED_IN_TARIFF
+
         merged_options[CONF_PROFILE_OVERRIDES] = profile_overrides
 
         if CONF_EXPERT_MODE_ENABLED in user_input:
@@ -695,6 +720,15 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         unit_of_measurement="Wp",
                     )
                 ),
+                vol.Optional(CONF_FEED_IN_TARIFF): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0,
+                        max=1.0,
+                        step=0.0001,
+                        mode=selector.NumberSelectorMode.BOX,
+                        unit_of_measurement="€/kWh",
+                    )
+                ),
                 vol.Optional("TARGET_IMPORT_W"): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=0.0,
@@ -749,6 +783,13 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 self.config_entry.data.get(
                     CONF_INSTALLED_PV_WP,
                     DEFAULT_INSTALLED_PV_WP,
+                ),
+            ),
+            CONF_FEED_IN_TARIFF: self.config_entry.options.get(
+                CONF_FEED_IN_TARIFF,
+                self.config_entry.data.get(
+                    CONF_FEED_IN_TARIFF,
+                    DEFAULT_FEED_IN_TARIFF,
                 ),
             ),
             "TARGET_IMPORT_W": current_overrides.get(
