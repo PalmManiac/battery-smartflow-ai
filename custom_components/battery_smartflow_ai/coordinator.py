@@ -149,6 +149,7 @@ _LOGGER = logging.getLogger(__name__)
 USE_REGULATION_V42_COMMAND_DEV = False
 
 STORE_VERSION = 1
+PV_SURPLUS_DISPLAY_HOLD_S = 60
 SEASON_COUNTER_MIN = -100
 SEASON_COUNTER_MAX = 100
 
@@ -316,6 +317,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "pv_charge_start_counter": 0,
             "pv_charge_stop_counter": 0,
             "pv_charge_latched": False,
+            
+            # V4.2.3-Beta2:
+            # Display-only hold for weak PV surplus transitions. This reduces visible
+            # idle <-> pv_surplus_charge flicker without changing the real command path.
+            "pv_surplus_display_hold_until": None,
+            "pv_surplus_display_hold_reason": "none",
 
             # Forecast / reality override
             "forecast_wait_block_counter": 0,
@@ -3003,19 +3010,98 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist["next_action_time"] = self._stable_iso_minute(now)
             else:
                 self._persist["next_action_time"] = None
+                
+            # V4.2.3-Beta2:
+            # Display-only stabilization for weak PV surplus phases.
+            #
+            # The command decision must remain unchanged. This only stabilizes the
+            # externally visible status/diagnostic values when PV surplus charging has just
+            # been active and the DecisionEngine briefly returns idle in a marginal PV phase.
+            display_decision = decision
+
+            now_utc = dt_util.as_utc(now)
+
+            if str(decision.reason or "") == "pv_surplus_charge":
+                self._persist["pv_surplus_display_hold_until"] = (
+                    now_utc + timedelta(seconds=PV_SURPLUS_DISPLAY_HOLD_S)
+                ).isoformat()
+                self._persist["pv_surplus_display_hold_reason"] = "pv_surplus_active"
+
+            elif (
+                decision.action == "idle"
+                and str(decision.reason or "") in ("idle", "state_idle", "standby")
+                and ai_mode != AI_MODE_MANUAL
+            ):
+                hold_raw = self._persist.get("pv_surplus_display_hold_until")
+                hold_active = False
+
+                if hold_raw:
+                    try:
+                        hold_dt = dt_util.parse_datetime(str(hold_raw))
+                        hold_active = bool(
+                            hold_dt is not None and dt_util.as_utc(hold_dt) > now_utc
+                        )
+                    except Exception:
+                        hold_active = False
+
+                pv_w_now = max(0.0, float(pv_w or 0.0))
+                house_load_now = max(0.0, float(house_load or 0.0))
+                grid_import_now = max(0.0, float(grid_import or 0.0))
+                grid_export_now = max(0.0, float(grid_export or 0.0))
+
+                start_export_threshold = max(0.0, float(pv_charge_start_export_w or 0.0))
+
+                pv_still_plausible = (
+                    grid_export_now >= max(10.0, start_export_threshold * 0.15)
+                    or (
+                        pv_w_now >= max(180.0, house_load_now * 0.80)
+                        and grid_import_now <= max(120.0, start_export_threshold)
+                    )
+                )
+
+                no_hard_blocker = (
+                    float(soc) < float(soc_max)
+                    and not bool(additional_battery_discharge_active)
+                    and not bool(cell_voltage_emergency_active)
+                    and not bool(discharge_blocked_by_soc_min)
+                    and not bool(cell_voltage_discharge_blocked)
+                )
+
+                if hold_active and pv_still_plausible and no_hard_blocker:
+                    display_decision = DecisionResult(
+                        action="charge",
+                        ac_mode=decision.ac_mode,
+                        charge_w=0.0,
+                        discharge_w=0.0,
+                        reason="pv_surplus_charge",
+                        target_soc=decision.target_soc,
+                        current_peak_threshold=decision.current_peak_threshold,
+                        current_valley_threshold=decision.current_valley_threshold,
+                        economic_discharge_threshold=decision.economic_discharge_threshold,
+                        effective_discharge_threshold=decision.effective_discharge_threshold,
+                    )
+                    self._persist["pv_surplus_display_hold_reason"] = "display_hold"
+                else:
+                    self._persist["pv_surplus_display_hold_reason"] = "none"
+
+            else:
+                # Any real non-idle/non-PV decision, e.g. price discharge or planned charge,
+                # must not be hidden by the PV display hold.
+                self._persist["pv_surplus_display_hold_until"] = None
+                self._persist["pv_surplus_display_hold_reason"] = "none"
 
             ai_status = self._map_ai_status(
                 ai_mode=ai_mode,
-                action=decision.action,
-                reason=decision.reason,
+                action=display_decision.action,
+                reason=display_decision.reason,
             )
 
-            recommendation = self._map_reco(decision.action)
+            recommendation = self._map_reco(display_decision.action)
 
             charge_strategy = self._map_charge_strategy(
                 ai_mode=ai_mode,
-                action=decision.action,
-                reason=decision.reason,
+                action=display_decision.action,
+                reason=display_decision.reason,
             )
 
             transparency_ctx = DecisionContext(
@@ -3074,12 +3160,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             transparency_result = self._engine._with_thresholds(
                 transparency_ctx,
                 DecisionResult(
-                    action=decision.action,
-                    ac_mode=decision.ac_mode,
-                    charge_w=float(decision.charge_w or 0.0),
-                    discharge_w=float(decision.discharge_w or 0.0),
-                    reason=decision.reason,
-                    target_soc=decision.target_soc,
+                    action=display_decision.action,
+                    ac_mode=display_decision.ac_mode,
+                    charge_w=float(display_decision.charge_w or 0.0),
+                    discharge_w=float(display_decision.discharge_w or 0.0),
+                    reason=display_decision.reason,
+                    target_soc=display_decision.target_soc,
                 ),
             )
 
