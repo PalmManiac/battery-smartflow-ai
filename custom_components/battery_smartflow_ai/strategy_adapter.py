@@ -185,19 +185,24 @@ def decision_to_strategy_intent(decision: DecisionResult) -> StrategyIntent:
             metadata=metadata,
         )
 
-    # ---------------------------------------------------------------------
-    # Discharge strategies
-    # ---------------------------------------------------------------------
     if reason == "summer_cover_deficit":
+        # V4.2.3:
+        # summer_cover_deficit is a dynamic house-load covering intent.
+        # The old DecisionEngine discharge_w is only a legacy delta result and must
+        # not cap the new V4.2 PowerController. Let the regulation controller derive
+        # the concrete OUTPUT power from grid history/current import.
         return StrategyIntent(
             intent="cover_deficit",
             requested_mode="output",
-            requested_power_w=discharge_w,
+            requested_power_w=None,
             reason=reason,
             priority=45,
             allow_mode_switch=True,
             force=False,
-            metadata=metadata,
+            metadata={
+                **metadata,
+                "legacy_discharge_request_w": discharge_w,
+            },
         )
 
     if reason in {
