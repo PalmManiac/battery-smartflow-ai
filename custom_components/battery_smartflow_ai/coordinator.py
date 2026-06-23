@@ -293,7 +293,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "prev_charge_w": 0.0,
 
             # basic state
-            "power_state": "idle",  # idle|charging|discharging|passthrough
+            "power_state": "idle",  # idle|charging|discharging|discharge_waiting_for_import|passthrough
             "emergency_active": False,
             "discharge_blocked_by_soc_min": False,
             "discharge_resume_soc": None,
@@ -3042,22 +3042,69 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 await self._set_output_limit(out_w)
 
             is_charging = ac_mode == ZENDURE_MODE_INPUT and in_w > 0.0
-            is_discharging = (
+
+            discharge_command_active = (
                 ac_mode == ZENDURE_MODE_OUTPUT
                 and out_w > 0.0
                 and not is_passthrough
+            )
+
+            real_discharge_threshold_w = 30.0
+
+            real_discharge_active = (
+                float(battery_discharge_w or 0.0) > real_discharge_threshold_w
+            )
+
+            no_relevant_grid_import = float(grid_import or 0.0) <= max(
+                60.0,
+                float(profile.get("TARGET_IMPORT_W", 10.0) or 10.0)
+                + float(
+                    profile.get(
+                        "DISCHARGE_DEADBAND_W",
+                        profile.get("DEADBAND_W", 30.0),
+                    )
+                    or 30.0
+                ),
+            )
+
+            pv_covers_load = (
+                float(grid_export or 0.0) > 0.0
+                or float(pv_w or 0.0) >= max(
+                    120.0,
+                    float(house_load or 0.0) * 0.80,
+                )
+            )
+
+            discharge_waiting_for_import = (
+                discharge_command_active
+                and decision.action == "discharge"
+                and not real_discharge_active
+                and no_relevant_grid_import
+                and pv_covers_load
+            )
+
+            is_discharging = (
+                discharge_command_active
+                and real_discharge_active
             )
 
             if is_passthrough and out_w > 0.0:
                 self._persist["power_state"] = "passthrough"
             elif is_charging:
                 self._persist["power_state"] = "charging"
+            elif discharge_waiting_for_import:
+                self._persist["power_state"] = "discharge_waiting_for_import"
             elif is_discharging:
                 self._persist["power_state"] = "discharging"
             else:
                 self._persist["power_state"] = "idle"
 
-            if is_charging or is_discharging or (is_passthrough and out_w > 0.0):
+            if (
+                is_charging
+                or is_discharging
+                or discharge_waiting_for_import
+                or (is_passthrough and out_w > 0.0)
+            ):
                 if not self._persist.get("next_action_time"):
                     self._persist["next_action_time"] = self._stable_iso_minute(now)
             else:
@@ -3816,6 +3863,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if self._persist.get("power_state") == "charging"
                 else "discharging_active"
                 if self._persist.get("power_state") == "discharging"
+                else "discharge_waiting_for_import"
+                if self._persist.get("power_state") == "discharge_waiting_for_import"
                 else "pv_house_load_passthrough_active"
                 if self._persist.get("power_state") == "passthrough"
                 else "none"
