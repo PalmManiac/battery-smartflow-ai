@@ -723,6 +723,14 @@ class SummerRule(BaseRule):
                     and engine._discharge_protection_active(ctx)
                 )
             ):
+                # V4.2.3-Beta5:
+                # Do not request summer house-load discharge while PV already
+                # nearly covers the load and real grid import is small/absent.
+                # This avoids false summer_cover_deficit decisions during
+                # active PV surplus charging.
+                if engine._pv_surplus_blocks_discharge(ctx):
+                    return None
+
                 discharge_w = engine._delta_discharge(ctx)
                 if discharge_w > 0:
                     return engine._with_thresholds(
