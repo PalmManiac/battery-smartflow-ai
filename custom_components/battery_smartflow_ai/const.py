@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.2.3-Beta6"
+INTEGRATION_VERSION = "4.2.3"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -268,6 +268,7 @@ NEXT_ACTION_STATE_ENUMS = [
     "planned_discharge",
     "charging_active",
     "discharging_active",
+    "discharge_waiting_for_import",
     "manual_charge",
     "manual_discharge",
     "manual_constant_discharge",
