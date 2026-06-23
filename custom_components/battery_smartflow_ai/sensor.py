@@ -97,6 +97,7 @@ OFFGRID_MODE_ENUMS = [
 OFFGRID_RULE_REASON_ENUMS = [
     "none",
     "offgrid_load_active_blocks_ac_charge",
+    "offgrid_load_support",
 ]
 
 

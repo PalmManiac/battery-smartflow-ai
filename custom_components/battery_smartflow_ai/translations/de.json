@@ -689,6 +689,7 @@
           "planned_discharge": "Geplante Entladung",
           "charging_active": "Ladevorgang aktiv",
           "discharging_active": "Entladevorgang aktiv",
+		  "discharge_waiting_for_import": "Entladung freigegeben – wartet auf Netzbezug",
           "manual_charge": "Manuelles Laden",
           "manual_discharge": "Manuelle Entladung",
           "manual_constant_discharge": "Konstante Entladung aktiv",
