@@ -27,7 +27,8 @@
           "input_limit_entity": "Puissance de charge Zendure",
           "output_limit_entity": "Puissance de décharge Zendure",
 		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
-          "offgrid_mode_entity": "Mode hors réseau (optionnel)"
+          "offgrid_mode_entity": "Mode hors réseau (optionnel)",
+		  "feed_in_tariff": "Rémunération de l’injection"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Le profil contient des paramètres de régulation ajustés.",
@@ -52,7 +53,8 @@
           "input_limit_entity": "Entité number pour définir la puissance de charge en watts.",
           "output_limit_entity": "Entité number pour définir la puissance de décharge en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
-          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI."
+          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
         }
       },
       "reconfigure_grid": {
@@ -109,7 +111,8 @@
           "input_limit_entity": "Puissance de charge Zendure",
           "output_limit_entity": "Puissance de décharge Zendure",
 		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
-          "offgrid_mode_entity": "Mode hors réseau (optionnel)"
+          "offgrid_mode_entity": "Mode hors réseau (optionnel)",
+		  "feed_in_tariff": "Rémunération de l’injection"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Les paramètres de régulation sont ajustés automatiquement.",
@@ -134,7 +137,8 @@
           "input_limit_entity": "Puissance de charge réglable en watts.",
           "output_limit_entity": "Puissance de décharge réglable en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
-          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI."
+          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
         }
       }
     }
@@ -544,7 +548,8 @@
         "state": {
           "none": "Aucun blocage hors réseau",
           "offgrid_load_active_blocks_ac_charge": "Prise îlot active – charge réseau bloquée",
-          "offgrid_load_support": "Prise îlot active – alimentation par batterie/PV"
+          "offgrid_load_support": "Prise îlot active – alimentation par batterie/PV",
+		  "offgrid_load_support": "Prise Off-Grid active – alimentation par batterie/PV"
         }
       },
       "offgrid_source_active": {
@@ -664,7 +669,8 @@
           "pv_charge_blocked_by_discharge_protection": "Charge PV bloquée car la décharge est encore bloquée par la protection SoC/cellule",
           "learned_charge_window_deadline_too_close_start_now": "Planification apprise : deadline trop proche, démarrer maintenant",
 		  "offgrid_load_active_blocks_ac_charge": "Prise îlot active : charge réseau automatique bloquée",
-          "offgrid_load_support": "Prise îlot active : alimentation par batterie/PV"
+          "offgrid_load_support": "Prise îlot active : alimentation par batterie/PV",
+		  "offgrid_load_support": "Prise Off-Grid active : alimentation par batterie/PV"
         }
       },
       "next_planned_action": {
@@ -689,7 +695,8 @@
           "manual_discharge": "Décharge manuelle",
           "manual_constant_discharge": "Décharge constante active",
           "emergency_charge": "Charge d’urgence",
-          "pv_house_load_passthrough_active": "SF800Pro : passthrough PV vers charge maison actif"
+          "pv_house_load_passthrough_active": "SF800Pro : passthrough PV vers charge maison actif",
+		  "discharge_waiting_for_import": "Décharge autorisée – en attente d’un soutirage réseau"
         }
       },
       "next_action_time": {
