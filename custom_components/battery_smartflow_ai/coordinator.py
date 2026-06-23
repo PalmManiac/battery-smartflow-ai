@@ -155,6 +155,12 @@ PV_SURPLUS_DISPLAY_HOLD_S = 60
 SEASON_COUNTER_MIN = -100
 SEASON_COUNTER_MAX = 100
 
+# V4.2.3-Beta6:
+# Do not evaluate winter signals in the evening/night.
+# Low PV and low export after sunset must not count as "winter".
+SEASON_WINTER_EVALUATION_START_HOUR = 10.0
+SEASON_WINTER_EVALUATION_END_HOUR = 16.0
+
 
 def _to_float(v: Any, default: float | None = None) -> float | None:
     try:
@@ -1918,7 +1924,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         out.sort(key=lambda x: x.start)
         return out
 
-    def _season_detection(self, pv_w: float, export_w: float) -> str:
+    def _season_detection(
+        self,
+        pv_w: float,
+        export_w: float,
+        now: datetime | None = None,
+    ) -> str:
         season = self._persist.get("season_mode", "winter")
         counter = _clamp_season_counter(
             self._persist.get("season_counter", 0)
@@ -1947,12 +1958,29 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             pv_w < winter_pv_threshold
             and export_w < winter_export_threshold
         )
+        
+        try:
+            local_now = dt_util.as_local(now or dt_util.utcnow())
+            season_eval_hour = local_now.hour + (local_now.minute / 60.0)
+        except Exception:
+            season_eval_hour = 12.0
+
+        winter_evaluation_active = (
+            SEASON_WINTER_EVALUATION_START_HOUR
+            <= season_eval_hour
+            < SEASON_WINTER_EVALUATION_END_HOUR
+        )
 
         if summer_signal:
             counter += 1
-        elif winter_signal:
+
+        elif winter_signal and winter_evaluation_active:
             counter -= 1
-        else:
+
+        elif winter_evaluation_active:
+            # Only decay towards neutral during the daytime evaluation window.
+            # Outside this window we keep the last season tendency stable, so
+            # evening/night darkness does not undo a valid summer detection.
             if counter > 0:
                 counter -= 1
             elif counter < 0:
@@ -1976,6 +2004,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "winter_pv_threshold": winter_pv_threshold,
             "winter_export_threshold": winter_export_threshold,
             "counter": counter,
+            "winter_evaluation_active": bool(winter_evaluation_active),
+            "season_eval_hour": round(float(season_eval_hour), 2),
+            "winter_evaluation_start_hour": float(
+                SEASON_WINTER_EVALUATION_START_HOUR
+            ),
+            "winter_evaluation_end_hour": float(
+                SEASON_WINTER_EVALUATION_END_HOUR
+            ),
         }
 
         return season
@@ -2361,6 +2397,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             season = self._season_detection(
                 pv_w=pv_w,
                 export_w=float(grid_export),
+                now=now,
             )
 
             global_lowest_cell_voltage = self._get_global_lowest_cell_voltage()
