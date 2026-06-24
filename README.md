@@ -10,6 +10,17 @@
 ![License](https://img.shields.io/github/license/PalmManiac/battery-smartflow-ai?style=for-the-badge)
 ![HACS](https://img.shields.io/badge/HACS-Default-blue?style=for-the-badge)
 
+## Unterstützung
+
+Battery SmartFlow AI ist ein privates Freizeitprojekt. Wenn dir die Integration hilft und du die weitere Entwicklung unterstützen möchtest, freue ich mich über eine kleine Unterstützung:
+
+<a href="https://www.buymeacoffee.com/palm_maniac">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" width="217" height="42">
+</a>
+<a href="https://www.paypal.com/donate/?hosted_button_id=PYBRJ6T7S4T5U">
+  <img src="https://pics.paypal.com/00/s/NmUyYjVhZTItYTRkZi00ZTkwLThjMDAtODMwMjk3NTY5Yzdl/file.PNG" alt="Spenden mit PayPal" width="217">
+</a>
+
 ---
 
 <img src="docs/images/infografik.png" width="900">
