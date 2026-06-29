@@ -368,7 +368,8 @@
           "manual": "Manuelle Ladestrategie",
           "valley_opportunity": "Opportunistische Tal-Ladung",
           "valley_opportunity_mixed": "Opportunistische Tal-Ladung bei gemischter Prognose",
-          "learned_planning": "Lernbasierte Ladefenster-Planung"
+          "learned_planning": "Lernbasierte Ladefenster-Planung",
+		  "summer_peak_reserve": "Sommer-Peak-Reserve"
         }
       },
       "learned_planning_status": {
@@ -668,7 +669,9 @@
           "cell_voltage_cutoff_block": "Entladung blockiert (Zellspannungs-Schutz aktiv)",
           "cell_voltage_emergency_charge": "Notladung aktiv (Zellspannung kritisch)",
           "pv_charge_blocked_by_discharge_protection": "PV-Ladung blockiert, da Entladung noch durch SoC-/Zellschutz gesperrt ist",
-          "learned_charge_window_deadline_too_close_start_now": "Lernplanung: Deadline zu nah, Start jetzt"
+          "learned_charge_window_deadline_too_close_start_now": "Lernplanung: Deadline zu nah, Start jetzt",
+		  "summer_peak_reserve_charge": "Automatik-Sommer: Hochpreisfenster absichern",
+          "summer_peak_reserve_hold": "Automatik-Sommer: Akku-Reserve für spätere Preisspitze halten"
         }
       },
       "next_planned_action": {
@@ -708,6 +711,42 @@
       },
       "price_now": {
         "name": "Aktueller Strompreis"
+      },
+	  "charge_source": {
+        "name": "Ladequelle",
+        "state": {
+          "no_charge_delta": "Keine Ladeänderung",
+          "not_in_input_mode": "Nicht im Lademodus",
+          "no_charge_command": "Kein Ladebefehl",
+          "pv_surplus_export": "PV-Überschuss",
+          "pv_or_free_low_import": "PV / kein relevanter Netzbezug",
+          "price_missing_assume_pv_opportunity": "Preis fehlt – PV-Opportunitätswert",
+          "mixed_grid_pv_charge": "Gemischte PV-/Netzladung",
+          "grid_charge": "Netzladung",
+          "pv_opportunity_charge": "PV-Opportunitätsladung",
+          "very_cheap_force_charge": "Sehr günstige Netzladung",
+          "valley_boost_charge": "Talpreis-Ladung",
+          "valley_boost_charge_mixed_forecast": "Talpreis-Ladung bei gemischter Prognose",
+          "planning_latest_start": "Planung: spätester Ladestart",
+          "planning_forecast_poor": "Planung: schwache PV-Prognose",
+          "planning_forecast_mixed": "Planung: gemischte PV-Prognose",
+          "planning_forecast_reality_override": "Planung: reale PV schwächer als Prognose",
+          "valley_opportunity_charge": "Talpreis-Gelegenheitsladung",
+          "valley_opportunity_charge_mixed_forecast": "Talpreis-Gelegenheitsladung bei gemischter Prognose",
+          "summer_peak_reserve_charge": "Automatik-Sommer: Hochpreisfenster absichern"
+        }
+      },
+      "charge_price_applied": {
+        "name": "Angerechneter Ladepreis"
+      },
+      "charge_grid_part_w": {
+        "name": "Ladeanteil Netz"
+      },
+      "charge_pv_part_w": {
+        "name": "Ladeanteil PV"
+      },
+      "charge_mixed_price_active": {
+        "name": "Mischpreis aktiv"
       },
       "avg_charge_price": {
         "name": "Ø Ladepreis Akku"
