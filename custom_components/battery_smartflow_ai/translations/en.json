@@ -368,7 +368,8 @@
           "manual": "Manual charge strategy",
           "valley_opportunity": "Opportunistic valley charging",
           "valley_opportunity_mixed": "Opportunistic valley charging with mixed forecast",
-          "learned_planning": "Learned charge-window planning"
+          "learned_planning": "Learned charge-window planning",
+		  "summer_peak_reserve": "Summer peak reserve"
         }
       },
       "learned_planning_status": {
@@ -668,8 +669,9 @@
           "pv_charge_blocked_by_discharge_protection": "PV charging blocked because discharging is still blocked by SoC/cell protection",
           "learned_charge_window_deadline_too_close_start_now": "Learned planning: deadline too close, start now",
 		  "offgrid_load_active_blocks_ac_charge": "Island socket active: automatic grid charging blocked",
-          "offgrid_load_support": "Island socket active: supplied by battery/PV"
-        }
+          "offgrid_load_support": "Island socket active: supplied by battery/PV",
+		  "summer_peak_reserve_charge": "Automatic summer: securing high-price window",
+          "summer_peak_reserve_hold": "Automatic summer: holding battery reserve for later price peak"
       },
       "next_planned_action": {
         "name": "Planned next action",
@@ -708,6 +710,42 @@
       },
       "price_now": {
         "name": "Current electricity price"
+      },
+	  "charge_source": {
+        "name": "Charge source",
+        "state": {
+          "no_charge_delta": "No charge delta",
+          "not_in_input_mode": "Not in charge mode",
+          "no_charge_command": "No charge command",
+          "pv_surplus_export": "PV surplus",
+          "pv_or_free_low_import": "PV / no relevant grid import",
+          "price_missing_assume_pv_opportunity": "Price missing – PV opportunity value",
+          "mixed_grid_pv_charge": "Mixed PV/grid charge",
+          "grid_charge": "Grid charge",
+          "pv_opportunity_charge": "PV opportunity charge",
+          "very_cheap_force_charge": "Very cheap grid charge",
+          "valley_boost_charge": "Valley price charge",
+          "valley_boost_charge_mixed_forecast": "Valley price charge with mixed forecast",
+          "planning_latest_start": "Planning: latest charge start",
+          "planning_forecast_poor": "Planning: poor PV forecast",
+          "planning_forecast_mixed": "Planning: mixed PV forecast",
+          "planning_forecast_reality_override": "Planning: real PV below forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge with mixed forecast",
+          "summer_peak_reserve_charge": "Automatic summer: securing high-price window"
+        }
+      },
+      "charge_price_applied": {
+        "name": "Applied charge price"
+      },
+      "charge_grid_part_w": {
+        "name": "Grid charge share"
+      },
+      "charge_pv_part_w": {
+        "name": "PV charge share"
+      },
+      "charge_mixed_price_active": {
+        "name": "Mixed price active"
       },
       "avg_charge_price": {
         "name": "Avg. battery charge price"

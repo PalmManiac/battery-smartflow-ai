@@ -368,7 +368,8 @@
           "manual": "Handmatige laadstrategie",
           "valley_opportunity": "Opportunistisch dal laden",
           "valley_opportunity_mixed": "Opportunistisch dal laden bij gemengde prognose",
-          "learned_planning": "Lerende laadvensterplanning"
+          "learned_planning": "Lerende laadvensterplanning",
+		  "summer_peak_reserve": "Zomer-piekreserve"
         }
       },
       "learned_planning_status": {
@@ -670,7 +671,9 @@
           "learned_charge_window_deadline_too_close_start_now": "Lerende planning: deadline te dichtbij, nu starten",
 		  "offgrid_load_active_blocks_ac_charge": "Eilandstopcontact actief: automatisch netladen geblokkeerd",
           "offgrid_load_support": "Eilandstopcontact actief: gevoed door accu/PV",
-		  "offgrid_load_support": "Eilandstopcontact actief: gevoed door batterij/PV"
+		  "offgrid_load_support": "Eilandstopcontact actief: gevoed door batterij/PV",
+		  "summer_peak_reserve_charge": "Automatische zomer: hoogprijsvenster veiligstellen",
+          "summer_peak_reserve_hold": "Automatische zomer: batterijreserve vasthouden voor latere prijspiek"
         }
       },
       "next_planned_action": {
@@ -710,6 +713,42 @@
       },
       "price_now": {
         "name": "Actuele stroomprijs"
+      },
+	  "charge_source": {
+        "name": "Laadbron",
+        "state": {
+          "no_charge_delta": "Geen laadverandering",
+          "not_in_input_mode": "Niet in laadmodus",
+          "no_charge_command": "Geen laadopdracht",
+          "pv_surplus_export": "PV-overschot",
+          "pv_or_free_low_import": "PV / geen relevante netafname",
+          "price_missing_assume_pv_opportunity": "Prijs ontbreekt – PV-opportuniteitswaarde",
+          "mixed_grid_pv_charge": "Gemengde PV-/netlading",
+          "grid_charge": "Netlading",
+          "pv_opportunity_charge": "PV-opportuniteitslading",
+          "very_cheap_force_charge": "Zeer goedkope netlading",
+          "valley_boost_charge": "Dalprijs-lading",
+          "valley_boost_charge_mixed_forecast": "Dalprijs-lading met gemengde prognose",
+          "planning_latest_start": "Planning: laatste laadstart",
+          "planning_forecast_poor": "Planning: zwakke PV-prognose",
+          "planning_forecast_mixed": "Planning: gemengde PV-prognose",
+          "planning_forecast_reality_override": "Planning: werkelijke PV lager dan prognose",
+          "valley_opportunity_charge": "Opportunistische dalprijs-lading",
+          "valley_opportunity_charge_mixed_forecast": "Opportunistische dalprijs-lading met gemengde prognose",
+          "summer_peak_reserve_charge": "Automatische zomer: hoogprijsvenster veiligstellen"
+        }
+      },
+      "charge_price_applied": {
+        "name": "Toegepaste laadprijs"
+      },
+      "charge_grid_part_w": {
+        "name": "Net-laadaandeel"
+      },
+      "charge_pv_part_w": {
+        "name": "PV-laadaandeel"
+      },
+      "charge_mixed_price_active": {
+        "name": "Gemengde prijs actief"
       },
       "avg_charge_price": {
         "name": "Gem. laadprijs batterij"

@@ -368,7 +368,8 @@
           "manual": "Stratégie de charge manuelle",
           "valley_opportunity": "Charge opportuniste dans creux",
           "valley_opportunity_mixed": "Charge opportuniste dans creux avec prévision mixte",
-          "learned_planning": "Planification apprise des fenêtres de charge"
+          "learned_planning": "Planification apprise des fenêtres de charge",
+		  "summer_peak_reserve": "Réserve de pic d’été"
         }
       },
       "learned_planning_status": {
@@ -670,7 +671,9 @@
           "learned_charge_window_deadline_too_close_start_now": "Planification apprise : deadline trop proche, démarrer maintenant",
 		  "offgrid_load_active_blocks_ac_charge": "Prise îlot active : charge réseau automatique bloquée",
           "offgrid_load_support": "Prise îlot active : alimentation par batterie/PV",
-		  "offgrid_load_support": "Prise Off-Grid active : alimentation par batterie/PV"
+		  "offgrid_load_support": "Prise Off-Grid active : alimentation par batterie/PV",
+		  "summer_peak_reserve_charge": "Automatique été : sécurisation de la période de prix élevé",
+          "summer_peak_reserve_hold": "Automatique été : réserve de batterie conservée pour un pic de prix ultérieur"
         }
       },
       "next_planned_action": {
@@ -710,6 +713,42 @@
       },
       "price_now": {
         "name": "Prix actuel de l’électricité"
+      },
+	  "charge_source": {
+        "name": "Source de charge",
+        "state": {
+          "no_charge_delta": "Aucune variation de charge",
+          "not_in_input_mode": "Pas en mode charge",
+          "no_charge_command": "Aucune commande de charge",
+          "pv_surplus_export": "Surplus PV",
+          "pv_or_free_low_import": "PV / pas d’import réseau significatif",
+          "price_missing_assume_pv_opportunity": "Prix manquant – valeur d’opportunité PV",
+          "mixed_grid_pv_charge": "Charge mixte PV/réseau",
+          "grid_charge": "Charge depuis le réseau",
+          "pv_opportunity_charge": "Charge PV valorisée par coût d’opportunité",
+          "very_cheap_force_charge": "Charge réseau à prix très bas",
+          "valley_boost_charge": "Charge en période de prix bas",
+          "valley_boost_charge_mixed_forecast": "Charge en période de prix bas avec prévision mixte",
+          "planning_latest_start": "Planification : dernier démarrage de charge",
+          "planning_forecast_poor": "Planification : faible prévision PV",
+          "planning_forecast_mixed": "Planification : prévision PV mixte",
+          "planning_forecast_reality_override": "Planification : PV réel inférieur à la prévision",
+          "valley_opportunity_charge": "Charge opportuniste en période de prix bas",
+          "valley_opportunity_charge_mixed_forecast": "Charge opportuniste en période de prix bas avec prévision mixte",
+          "summer_peak_reserve_charge": "Automatique été : sécurisation de la période de prix élevé"
+        }
+      },
+      "charge_price_applied": {
+        "name": "Prix de charge appliqué"
+      },
+      "charge_grid_part_w": {
+        "name": "Part de charge réseau"
+      },
+      "charge_pv_part_w": {
+        "name": "Part de charge PV"
+      },
+      "charge_mixed_price_active": {
+        "name": "Prix mixte actif"
       },
       "avg_charge_price": {
         "name": "Prix moyen de charge batterie"
