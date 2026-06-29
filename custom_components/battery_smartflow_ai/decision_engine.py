@@ -174,6 +174,12 @@ class PeakRule(BaseRule):
     def evaluate(self, engine, ctx):
         if engine._pv_surplus_blocks_discharge(ctx):
             return None
+            
+        if engine._automatic_summer_should_hold_peak_reserve(ctx):
+            return engine._idle_result(
+                ctx,
+                reason="summer_peak_reserve_hold",
+            )
 
         if ctx.soc > ctx.soc_min and ctx.ai_mode in ("automatic", "winter"):
             if (
@@ -224,6 +230,12 @@ class ArbitrageRule(BaseRule):
     def evaluate(self, engine, ctx):
         if engine._pv_surplus_blocks_discharge(ctx):
             return None
+            
+        if engine._automatic_summer_should_hold_peak_reserve(ctx):
+            return engine._idle_result(
+                ctx,
+                reason="summer_peak_reserve_hold",
+            )
 
         if (
             ctx.price_now is not None
@@ -560,6 +572,57 @@ class PvHouseLoadPassthroughRule(BaseRule):
                 reason="pv_house_load_passthrough",
             ),
         )
+        
+        
+class AutomaticSummerPeakReserveRule(BaseRule):
+    """V4.2.4: Economic peak reserve for Automatic summer mode.
+
+    Only applies when the user selected Automatic mode and the detected season
+    is summer. Explicit/manual summer mode remains unchanged.
+    """
+
+    def evaluate(self, engine, ctx):
+        if not engine._automatic_summer_peak_reserve_enabled(ctx):
+            return None
+
+        if ctx.soc >= ctx.soc_max:
+            return None
+
+        if ctx.price_now is None or not ctx.price_points:
+            return None
+
+        target_soc = engine._automatic_summer_peak_target_soc(ctx)
+        if target_soc is None:
+            return None
+
+        if float(ctx.soc) >= float(target_soc):
+            return None
+
+        expected_peak_price = engine._automatic_summer_expected_peak_price(ctx)
+        if expected_peak_price is None:
+            return None
+
+        # Grid charging must still be economically meaningful compared to the
+        # upcoming high-price window. Feed-in tariff must not block this case.
+        min_profit_factor = 1.0 + (float(ctx.profit_margin_pct or 0.0) / 100.0)
+        if float(ctx.price_now) * min_profit_factor > float(expected_peak_price):
+            return None
+
+        block = engine._charge_blocked_by_additional_battery_discharge(ctx)
+        if block is not None:
+            return block
+
+        return engine._with_thresholds(
+            ctx,
+            DecisionResult(
+                action="charge",
+                ac_mode="input",
+                charge_w=float(ctx.max_charge_w),
+                discharge_w=0.0,
+                reason="summer_peak_reserve_charge",
+                target_soc=float(target_soc),
+            ),
+        )
 
 
 class PvRule(BaseRule):
@@ -730,6 +793,12 @@ class SummerRule(BaseRule):
                 # active PV surplus charging.
                 if engine._pv_surplus_blocks_discharge(ctx):
                     return None
+                    
+                if engine._automatic_summer_should_hold_peak_reserve(ctx):
+                    return engine._idle_result(
+                        ctx,
+                        reason="summer_peak_reserve_hold",
+                    )
 
                 discharge_w = engine._delta_discharge(ctx)
                 if discharge_w > 0:
@@ -811,6 +880,7 @@ class DecisionEngine:
             ManualRule(),
             VeryCheapRule(),
             PvHouseLoadPassthroughRule(),
+            AutomaticSummerPeakReserveRule(),
             PvRule(),
             PeakRule(),
             ArbitrageRule(),
@@ -1180,6 +1250,126 @@ class DecisionEngine:
         market_anchor = market_peak_threshold * 0.82
 
         return float(ctx.price_now) >= float(market_anchor)
+        
+    def _automatic_summer_peak_reserve_enabled(self, ctx: DecisionContext) -> bool:
+        return bool(
+            ctx.ai_mode == "automatic"
+            and ctx.season == "summer"
+            and ctx.price_now is not None
+            and bool(ctx.price_points)
+            and ctx.battery_capacity_kwh > 0
+        )
+
+
+    def _automatic_summer_future_peak_slots(
+        self,
+        ctx: DecisionContext,
+    ) -> list[PricePoint]:
+        if not self._automatic_summer_peak_reserve_enabled(ctx):
+            return []
+
+        prices = [p.price for p in ctx.price_points]
+        if not prices:
+            return []
+
+        peak_threshold = self._compute_peak_threshold(prices, ctx.peak_factor)
+
+        future_slots = [
+            p
+            for p in ctx.price_points
+            if p.end > ctx.now
+            and (
+                p.price >= peak_threshold
+                or p.price >= float(ctx.very_expensive_threshold)
+            )
+        ]
+
+        return sorted(future_slots, key=lambda p: p.start)
+
+
+    def _automatic_summer_expected_peak_price(
+        self,
+        ctx: DecisionContext,
+    ) -> float | None:
+        slots = self._automatic_summer_future_peak_slots(ctx)
+        if not slots:
+            return None
+
+        try:
+            return max(float(p.price) for p in slots)
+        except Exception:
+            return None
+
+
+    def _automatic_summer_peak_target_soc(
+        self,
+        ctx: DecisionContext,
+    ) -> float | None:
+        expected_peak = self._automatic_summer_expected_peak_price(ctx)
+        if expected_peak is None:
+            return None
+
+        prices = [p.price for p in ctx.price_points] if ctx.price_points else []
+        if not prices:
+            return None
+
+        peak_threshold = self._compute_peak_threshold(prices, ctx.peak_factor)
+
+        # Severity-based target. This is intentionally simple and conservative for
+        # V4.2.4: avoid a large architecture change, but stop entering extreme peaks
+        # with only 60-70% SoC.
+        if expected_peak >= float(ctx.very_expensive_threshold):
+            target_soc = 95.0
+        elif expected_peak >= peak_threshold * 1.35:
+            target_soc = 90.0
+        elif expected_peak >= peak_threshold * 1.15:
+            target_soc = 85.0
+        else:
+            target_soc = 80.0
+
+        return max(
+            float(ctx.soc_min),
+            min(float(ctx.soc_max), float(target_soc)),
+        )
+
+
+    def _automatic_summer_should_hold_peak_reserve(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return True when Automatic summer mode should preserve energy for later,
+        higher price slots instead of discharging too early.
+        """
+
+        if not self._automatic_summer_peak_reserve_enabled(ctx):
+            return False
+
+        if ctx.soc <= ctx.soc_min:
+            return False
+
+        target_soc = self._automatic_summer_peak_target_soc(ctx)
+        if target_soc is None:
+            return False
+
+        # Only hold when the battery is still below the desired reserve level.
+        if float(ctx.soc) >= float(target_soc):
+            return False
+
+        future_slots = [
+            p for p in self._automatic_summer_future_peak_slots(ctx)
+            if p.start > ctx.now
+        ]
+        if not future_slots:
+            return False
+
+        future_peak = max(float(p.price) for p in future_slots)
+
+        if ctx.price_now is None:
+            return False
+
+        # Do not block discharge when the current slot is already one of the best
+        # slots. Only preserve energy if a clearly better price is still ahead.
+        return future_peak >= float(ctx.price_now) + max(0.03, float(ctx.price_now) * 0.10)
 
     def _is_effective_discharge_price_reached(self, ctx: DecisionContext) -> bool:
         if ctx.price_now is None:
