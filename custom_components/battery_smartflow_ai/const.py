@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.2.3"
+INTEGRATION_VERSION = "4.2.4"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -341,6 +341,7 @@ CHARGE_STRATEGY_ENUMS = [
     "planning_forecast_poor",
     "planning_forecast_mixed",
     "planning_reality_override",
+    "summer_peak_reserve",
     "valley_boost",
     "valley_boost_mixed",
     "very_cheap",
