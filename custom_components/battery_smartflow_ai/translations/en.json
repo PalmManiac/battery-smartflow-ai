@@ -668,10 +668,11 @@
           "cell_voltage_emergency_charge": "Emergency charge active (cell voltage critical)",
           "pv_charge_blocked_by_discharge_protection": "PV charging blocked because discharging is still blocked by SoC/cell protection",
           "learned_charge_window_deadline_too_close_start_now": "Learned planning: deadline too close, start now",
-		  "offgrid_load_active_blocks_ac_charge": "Island socket active: automatic grid charging blocked",
+		      "offgrid_load_active_blocks_ac_charge": "Island socket active: automatic grid charging blocked",
           "offgrid_load_support": "Island socket active: supplied by battery/PV",
-		  "summer_peak_reserve_charge": "Automatic summer: securing high-price window",
+		      "summer_peak_reserve_charge": "Automatic summer: securing high-price window",
           "summer_peak_reserve_hold": "Automatic summer: holding battery reserve for later price peak"
+        }
       },
       "next_planned_action": {
         "name": "Planned next action",
@@ -696,7 +697,7 @@
           "manual_constant_discharge": "Constant discharge active",
           "emergency_charge": "Emergency charging",
           "pv_house_load_passthrough_active": "SF800Pro: PV house-load passthrough active",
-		  "discharge_waiting_for_import": "Discharge allowed – waiting for grid import"
+		      "discharge_waiting_for_import": "Discharge allowed – waiting for grid import"
         }
       },
       "next_action_time": {
@@ -711,7 +712,7 @@
       "price_now": {
         "name": "Current electricity price"
       },
-	  "charge_source": {
+	    "charge_source": {
         "name": "Charge source",
         "state": {
           "no_charge_delta": "No charge delta",
