@@ -1192,31 +1192,42 @@ class DecisionEngine:
         except Exception:
             avg_charge_price_float = None
 
-        # Beta11:
-        # The user-configured expensive threshold must protect against false
-        # discharge when the stored average charge price is missing or effectively
-        # zero, e.g. after PV-only charging. In that case, avg_charge_price * margin
-        # would be near zero and normal prices such as 0.14 €/kWh could otherwise
-        # look profitable.
-        #
-        # If a real charge price exists, do not force every economic discharge up
-        # to the expensive threshold. Otherwise Automatic/Winter mode becomes too
-        # restrictive and may stop discharging entirely after the Beta7 threshold
-        # hardening.
         avg_price_missing_or_zero = (
             avg_charge_price_float is None
             or avg_charge_price_float <= 0.0001
         )
 
+        # V4.2.6:
+        # If the average charge price is missing or effectively zero, do not use
+        # the market peak threshold as a hard fallback. That made the effective
+        # discharge threshold equal to the current peak threshold and blocked
+        # normal economic discharge until a real peak was reached.
+        #
+        # Instead use a conservative floor based on:
+        # - user configured expensive/discharge threshold
+        # - current valley threshold
+        # - optional PV opportunity value from feed-in tariff plus margin
+        missing_price_fallback_threshold = max(
+            configured_expensive_threshold,
+            valley_threshold,
+        )
+
+        try:
+            feed_in_floor = max(0.0, float(ctx.feed_in_tariff or 0.0)) * (
+                1.0 + float(ctx.profit_margin_pct or 0.0) / 100.0
+            )
+            missing_price_fallback_threshold = max(
+                missing_price_fallback_threshold,
+                feed_in_floor,
+            )
+        except Exception:
+            pass
+
         if economic_threshold is None:
-            return max(market_peak_threshold, configured_expensive_threshold)
+            return missing_price_fallback_threshold
 
         if avg_price_missing_or_zero:
-            return max(
-                market_peak_threshold,
-                configured_expensive_threshold,
-                valley_threshold,
-            )
+            return missing_price_fallback_threshold
 
         market_anchor = market_peak_threshold * 0.82
 
