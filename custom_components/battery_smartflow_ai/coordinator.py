@@ -2838,25 +2838,42 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 sold_kwh = abs(float(delta_kwh))
                 avg_price = self._persist.get("trade_avg_charge_price")
 
-                if avg_price is not None and sold_kwh > 0:
-                    profit = (float(price_now) - float(avg_price)) * sold_kwh
+                tracked_kwh = max(
+                    0.0,
+                    float(self._persist.get("trade_charged_kwh", 0.0) or 0.0),
+                )
+
+                # V4.2.5:
+                # trade_charged_kwh is only the internally priced charge ledger,
+                # not the physical battery energy. It can be depleted while the
+                # battery still contains energy, e.g. after restarts, updates,
+                # SoC jumps or incomplete historic charge tracking.
+                #
+                # Therefore only book profit for the part of the discharge that
+                # is still covered by priced charge energy, but do not reset the
+                # average charge price here.
+                accounted_sold_kwh = min(float(sold_kwh), float(tracked_kwh))
+
+                if avg_price is not None and accounted_sold_kwh > 0:
+                    profit = (
+                        float(price_now) - float(avg_price)
+                    ) * float(accounted_sold_kwh)
 
                     self._persist["profit_eur"] = (
                         float(self._persist.get("profit_eur", 0.0))
                         + float(profit)
                     )
 
-                    remaining_kwh = (
-                        float(self._persist.get("trade_charged_kwh", 0.0))
-                        - sold_kwh
-                    )
+                remaining_kwh = max(
+                    0.0,
+                    float(tracked_kwh) - float(accounted_sold_kwh),
+                )
 
-                    remaining_kwh = max(0.0, remaining_kwh)
-                    self._persist["trade_charged_kwh"] = remaining_kwh
+                self._persist["trade_charged_kwh"] = remaining_kwh
 
-                    if remaining_kwh <= 0:
-                        self._persist["trade_charged_kwh"] = 0.0
-                        self._persist["trade_avg_charge_price"] = 0.0
+                # Important:
+                # Do not set trade_avg_charge_price to 0 here.
+                # The real reset is handled above when SoC reaches SoC-Min.
 
             adaptive_peak_active = decision.reason == "adaptive_peak_discharge"
             
