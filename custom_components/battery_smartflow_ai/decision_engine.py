@@ -590,6 +590,13 @@ class AutomaticSummerPeakReserveRule(BaseRule):
 
         if ctx.price_now is None or not ctx.price_points:
             return None
+            
+        # V4.2.4 Hotfix:
+        # Peak-reserve charging is only allowed in cheap/valley slots.
+        # During an active high-price window this rule must not fight the
+        # peak discharge rules by switching back to INPUT.
+        if not engine._is_valley_price_now(ctx):
+            return None
 
         target_soc = engine._automatic_summer_peak_target_soc(ctx)
         if target_soc is None:
