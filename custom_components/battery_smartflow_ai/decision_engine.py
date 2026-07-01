@@ -682,6 +682,13 @@ class PvRule(BaseRule):
 
         required_start_cycles = 6 if sf800_passthrough_enabled else 2
 
+        # V4.2.7:
+        # Do not let a short early-morning PV/export pulse immediately interrupt
+        # an active house-load discharge. During active discharge, require a
+        # longer stable export confirmation before switching to INPUT/PV charge.
+        if discharge_active and not charge_already_active:
+            required_start_cycles = max(required_start_cycles, 6)
+
         # The user-configured "PV-Ladestart ab Einspeisung" must be a real
         # hard start threshold for new PV charging.
         #
@@ -796,6 +803,47 @@ class SummerRule(BaseRule):
                     )
 
                 discharge_w = engine._delta_discharge(ctx)
+
+                # V4.2.7:
+                # Keep active summer house-load coverage alive across short
+                # sensor/load dips. A single cycle with calculated 0 W must not
+                # immediately collapse to idle and create an INPUT/OUTPUT/idle
+                # sawtooth.
+                if discharge_w <= 0.0:
+                    prev_discharge_w = max(
+                        0.0,
+                        float(ctx.prev_discharge_w or 0.0),
+                    )
+                    export_w = max(0.0, float(ctx.grid_export_w or 0.0))
+                    import_w = max(0.0, float(ctx.grid_import_w or 0.0))
+
+                    export_guard_w = max(
+                        40.0,
+                        float(ctx.profile.get("EXPORT_GUARD_W", 80.0) or 80.0),
+                    )
+
+                    hold_import_tolerance_w = max(
+                        80.0,
+                        float(ctx.profile.get("TARGET_IMPORT_W", 10.0) or 10.0)
+                        + float(
+                            ctx.profile.get(
+                                "DISCHARGE_DEADBAND_W",
+                                ctx.profile.get("DEADBAND_W", 30.0),
+                            )
+                            or 30.0
+                        ),
+                    )
+
+                    if (
+                        prev_discharge_w > 0.0
+                        and export_w <= export_guard_w
+                        and import_w <= hold_import_tolerance_w
+                    ):
+                        discharge_w = max(
+                            engine._discharge_keepalive_w(ctx),
+                            min(prev_discharge_w, float(ctx.max_discharge_w)),
+                        )
+
                 if discharge_w > 0:
                     return engine._with_thresholds(
                         ctx,
@@ -1249,7 +1297,18 @@ class DecisionEngine:
         effective = (market_anchor * 0.70) + (economic_threshold * 0.30)
 
         effective = max(effective, economic_threshold)
-        effective = max(effective, valley_threshold)
+
+        # V4.2.6 refinement:
+        # Do not let a very low but non-zero average charge price collapse the
+        # effective discharge threshold exactly to the valley threshold.
+        # The valley threshold remains the lower market reference, but the
+        # effective discharge threshold should stay slightly above it unless the
+        # calculated economic threshold itself is higher.
+        dynamic_valley_floor = valley_threshold + (
+            max(0.0, market_anchor - valley_threshold) * 0.35
+        )
+
+        effective = max(effective, dynamic_valley_floor)
 
         # Do not force valid economic discharge to the configured expensive
         # threshold. The configured threshold remains relevant when no real
