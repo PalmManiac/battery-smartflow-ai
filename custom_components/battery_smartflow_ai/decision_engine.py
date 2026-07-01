@@ -1195,7 +1195,7 @@ class DecisionEngine:
         # - user configured expensive/discharge threshold
         # - current valley threshold
         # - optional PV opportunity value from feed-in tariff plus margin
-        missing_price_fallback_threshold = max(
+        missing_price_floor = max(
             configured_expensive_threshold,
             valley_threshold,
         )
@@ -1204,12 +1204,35 @@ class DecisionEngine:
             feed_in_floor = max(0.0, float(ctx.feed_in_tariff or 0.0)) * (
                 1.0 + float(ctx.profit_margin_pct or 0.0) / 100.0
             )
-            missing_price_fallback_threshold = max(
-                missing_price_fallback_threshold,
+            missing_price_floor = max(
+                missing_price_floor,
                 feed_in_floor,
             )
         except Exception:
             pass
+
+        # V4.2.6 Hotfix refinement:
+        # Keep the peak threshold out as a hard fallback, but allow a soft market
+        # component so the effective discharge threshold does not become a flat
+        # configured value such as 0.35 €/kWh all day.
+        market_anchor = market_peak_threshold * 0.82
+
+        dynamic_missing_price_threshold = (
+            missing_price_floor * 0.70
+            + market_anchor * 0.30
+        )
+
+        missing_price_fallback_threshold = max(
+            missing_price_floor,
+            min(dynamic_missing_price_threshold, market_anchor),
+        )
+
+        # Safety cap:
+        # Never let the missing-price fallback become the peak threshold again.
+        missing_price_fallback_threshold = min(
+            missing_price_fallback_threshold,
+            market_peak_threshold * 0.95,
+        )
 
         if economic_threshold is None:
             return missing_price_fallback_threshold
