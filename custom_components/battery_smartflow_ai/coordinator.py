@@ -3090,8 +3090,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "pv_house_load_passthrough",
                 "offgrid_load_support",
             }
+            
+            manual_standby_no_command = bool(
+                ai_mode == AI_MODE_MANUAL
+                and str(manual_action) == MANUAL_STANDBY
+            )
 
-            if use_regulation_v42_command:
+            if manual_standby_no_command:
+                # V4.2.7:
+                # Manual standby means BSFAI must not fight the device or an
+                # external Zendure/Zendure Manager control. Keep sensors updated,
+                # but do not write AC mode or power limits.
+                self._persist["regulation_skipped_write_reason"] = (
+                    "manual_standby_no_command"
+                )
+
+            elif use_regulation_v42_command:
                 if regulation_device_command.should_write_mode:
                     await self._set_ac_mode(ac_mode)
 
