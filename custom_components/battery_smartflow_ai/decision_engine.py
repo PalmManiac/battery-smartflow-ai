@@ -174,12 +174,6 @@ class PeakRule(BaseRule):
     def evaluate(self, engine, ctx):
         if engine._pv_surplus_blocks_discharge(ctx):
             return None
-            
-        if engine._automatic_summer_should_hold_peak_reserve(ctx):
-            return engine._idle_result(
-                ctx,
-                reason="summer_peak_reserve_hold",
-            )
 
         if ctx.soc > ctx.soc_min and ctx.ai_mode in ("automatic", "winter"):
             if (
@@ -231,12 +225,6 @@ class ArbitrageRule(BaseRule):
         if engine._pv_surplus_blocks_discharge(ctx):
             return None
             
-        if engine._automatic_summer_should_hold_peak_reserve(ctx):
-            return engine._idle_result(
-                ctx,
-                reason="summer_peak_reserve_hold",
-            )
-
         if (
             ctx.price_now is not None
             and ctx.avg_charge_price is not None
