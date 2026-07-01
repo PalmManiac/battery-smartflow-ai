@@ -1185,53 +1185,57 @@ class DecisionEngine:
             or avg_charge_price_float <= 0.0001
         )
 
-        # V4.2.6:
+        # V4.2.6 refinement:
         # If the average charge price is missing or effectively zero, do not use
-        # the market peak threshold as a hard fallback. That made the effective
-        # discharge threshold equal to the current peak threshold and blocked
-        # normal economic discharge until a real peak was reached.
+        # the market peak threshold as a hard fallback. Also do not collapse to
+        # the valley threshold alone, because that would allow discharge too
+        # early on normal prices.
         #
-        # Instead use a conservative floor based on:
-        # - user configured expensive/discharge threshold
-        # - current valley threshold
-        # - optional PV opportunity value from feed-in tariff plus margin
-        missing_price_floor = max(
-            configured_expensive_threshold,
+        # Use a dynamic market fallback between valley and peak anchor.
+        # The configured threshold is only a soft anchor, not a hard floor.
+        market_anchor = max(
             valley_threshold,
+            market_peak_threshold * 0.82,
         )
+
+        safety_floor = max(0.0, valley_threshold)
 
         try:
             feed_in_floor = max(0.0, float(ctx.feed_in_tariff or 0.0)) * (
                 1.0 + float(ctx.profit_margin_pct or 0.0) / 100.0
             )
-            missing_price_floor = max(
-                missing_price_floor,
-                feed_in_floor,
-            )
+            safety_floor = max(safety_floor, feed_in_floor)
         except Exception:
             pass
 
-        # V4.2.6 Hotfix refinement:
-        # Keep the peak threshold out as a hard fallback, but allow a soft market
-        # component so the effective discharge threshold does not become a flat
-        # configured value such as 0.35 €/kWh all day.
-        market_anchor = market_peak_threshold * 0.82
+        configured_anchor = max(0.0, configured_expensive_threshold)
 
-        dynamic_missing_price_threshold = (
-            missing_price_floor * 0.70
-            + market_anchor * 0.30
+        market_mid_threshold = valley_threshold + (
+            max(0.0, market_anchor - valley_threshold) * 0.55
         )
 
+        if configured_anchor > 0.0:
+            configured_blend_threshold = (
+                configured_anchor * 0.65
+                + market_anchor * 0.35
+            )
+            dynamic_missing_price_threshold = max(
+                market_mid_threshold,
+                configured_blend_threshold,
+            )
+        else:
+            dynamic_missing_price_threshold = market_mid_threshold
+
         missing_price_fallback_threshold = max(
-            missing_price_floor,
-            min(dynamic_missing_price_threshold, market_anchor),
+            safety_floor,
+            dynamic_missing_price_threshold,
         )
 
         # Safety cap:
-        # Never let the missing-price fallback become the peak threshold again.
+        # Never let the missing-price fallback become the full peak threshold again.
         missing_price_fallback_threshold = min(
             missing_price_fallback_threshold,
-            market_peak_threshold * 0.95,
+            market_peak_threshold * 0.90,
         )
 
         if economic_threshold is None:
