@@ -178,6 +178,7 @@ class PeakRule(BaseRule):
         if ctx.soc > ctx.soc_min and ctx.ai_mode in ("automatic", "winter"):
             if (
                 engine._detect_adaptive_peak(ctx)
+                and engine._is_market_discharge_window(ctx)
                 and engine._is_effective_discharge_price_reached(ctx)
             ):
                 discharge_w = engine._delta_discharge(ctx)
@@ -230,6 +231,7 @@ class ArbitrageRule(BaseRule):
             and ctx.avg_charge_price is not None
             and ctx.soc > ctx.soc_min
             and ctx.ai_mode in ("automatic", "winter")
+            and engine._is_market_discharge_window(ctx)
             and engine._is_effective_discharge_price_reached(ctx)
         ):
             discharge_w = engine._delta_discharge(ctx)
@@ -1339,7 +1341,21 @@ class DecisionEngine:
             return False
 
         market_peak_threshold = self._compute_peak_threshold(prices, ctx.peak_factor)
-        market_anchor = market_peak_threshold * 0.82
+        valley_threshold = self._compute_valley_threshold(prices, ctx.valley_factor)
+
+        # V4.2.7:
+        # Price-based discharge must not start in the lower/mid market band just
+        # because the effective discharge threshold is reached. This avoids
+        # discharging in a valley/transition slot before a later price peak.
+        #
+        # Use a stricter market window:
+        # - at least 90% of the calculated peak threshold
+        # - or at least the upper 65% band between valley and peak
+        market_anchor = max(
+            market_peak_threshold * 0.90,
+            valley_threshold
+            + (max(0.0, market_peak_threshold - valley_threshold) * 0.65),
+        )
 
         return float(ctx.price_now) >= float(market_anchor)
         
