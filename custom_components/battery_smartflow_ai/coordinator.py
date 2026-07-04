@@ -2905,6 +2905,108 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
                 decision.reason = "cell_voltage_cutoff_block"
+
+            # V4.2.8:
+            # Summer house-load coverage must not collapse to idle just because
+            # the controller successfully regulated grid power close to 0 W for
+            # one or a few cycles.
+            #
+            # Without this latch, the legacy DecisionEngine can oscillate between
+            # summer_cover_deficit and idle:
+            # - active discharge brings grid import close to 0 W
+            # - _delta_discharge() returns 0 W
+            # - SummerRule returns idle
+            # - next cycle import rises again and summer_cover_deficit returns
+            #
+            # Keep the previous OUTPUT command alive until stable export confirms
+            # that discharge should really exit, or until a real blocker/protection
+            # reason is active.
+            summer_cover_mode_active = bool(
+                ai_mode == AI_MODE_SUMMER
+                or (
+                    ai_mode == AI_MODE_AUTOMATIC
+                    and str(season) == "summer"
+                )
+            )
+
+            summer_original_reason = str(decision.reason or "")
+
+            previous_discharge_w = max(
+                0.0,
+                float(self._persist.get("prev_discharge_w", 0.0) or 0.0),
+            )
+
+            stable_export_cycles = int(
+                getattr(grid_history_state, "stable_export_cycles", 0) or 0
+            )
+
+            summer_discharge_exit_cycles = int(
+                profile.get(
+                    "SUMMER_DISCHARGE_EXIT_EXPORT_CYCLES",
+                    profile.get("DISCHARGE_EXIT_EXPORT_CYCLES", 8),
+                )
+                or 8
+            )
+
+            summer_discharge_exit_export_w = max(
+                80.0,
+                float(
+                    profile.get(
+                        "SUMMER_DISCHARGE_EXIT_EXPORT_W",
+                        profile.get("EXPORT_GUARD_W", 80.0),
+                    )
+                    or 80.0
+                ),
+            )
+
+            grid_export_now_w = max(0.0, float(grid_export or 0.0))
+
+            summer_discharge_exit_confirmed = bool(
+                grid_export_now_w >= summer_discharge_exit_export_w
+                and stable_export_cycles >= summer_discharge_exit_cycles
+            )
+
+            if (
+                summer_cover_mode_active
+                and ai_mode != AI_MODE_MANUAL
+                and decision.action == "idle"
+                and summer_original_reason in (
+                    "idle",
+                    "state_idle",
+                    "standby",
+                )
+                and previous_discharge_w > 0.0
+                and float(soc) > float(soc_min)
+                and not bool(discharge_blocked_by_soc_min)
+                and not bool(cell_voltage_discharge_blocked)
+                and not bool(cell_voltage_emergency_active)
+                and float(additional_battery_charge_w or 0.0) <= 50.0
+                and soc_limit != 2
+                and not summer_discharge_exit_confirmed
+            ):
+                hold_discharge_w = max(
+                    self._engine._discharge_keepalive_w(ctx),
+                    min(previous_discharge_w, float(max_discharge)),
+                )
+
+                decision = DecisionResult(
+                    action="discharge",
+                    ac_mode="output",
+                    charge_w=0.0,
+                    discharge_w=hold_discharge_w,
+                    reason="summer_cover_deficit",
+                    target_soc=decision.target_soc,
+                    current_peak_threshold=decision.current_peak_threshold,
+                    current_valley_threshold=decision.current_valley_threshold,
+                    economic_discharge_threshold=decision.economic_discharge_threshold,
+                    effective_discharge_threshold=decision.effective_discharge_threshold,
+                )
+
+                self._persist["summer_discharge_latch_reason"] = (
+                    f"hold_{summer_original_reason}"
+                )
+            else:
+                self._persist["summer_discharge_latch_reason"] = "none"
             
             regulation_runtime = self._get_regulation_runtime_state()
 
