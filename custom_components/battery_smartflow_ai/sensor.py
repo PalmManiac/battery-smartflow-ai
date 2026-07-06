@@ -30,6 +30,9 @@ from .const import (
     FORECAST_STATUS_ENUMS,
     PV_OUTLOOK_ENUMS,
     CHARGE_STRATEGY_ENUMS,
+    STRATEGY_STATE_ENUMS,
+    VISIBLE_STATE_ENUMS,
+    TECHNICAL_REASON_ENUMS,
 )
 from .device_profiles import DEVICE_PROFILES
 
@@ -160,6 +163,72 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="next_action_time",
         device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:clock-start",
+    ),
+    
+    ZendureSensorEntityDescription(
+        key="strategy_state",
+        translation_key="strategy_state",
+        runtime_key="strategy_state",
+        device_class=SensorDeviceClass.ENUM,
+        options=STRATEGY_STATE_ENUMS,
+        icon="mdi:strategy",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="visible_state",
+        translation_key="visible_state",
+        runtime_key="visible_state",
+        device_class=SensorDeviceClass.ENUM,
+        options=VISIBLE_STATE_ENUMS,
+        icon="mdi:eye-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="strategic_reason",
+        translation_key="strategic_reason",
+        runtime_key="strategic_reason",
+        icon="mdi:head-question-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="technical_reason",
+        translation_key="technical_reason",
+        runtime_key="technical_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=TECHNICAL_REASON_ENUMS,
+        icon="mdi:cog-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="strategy_priority",
+        translation_key="strategy_priority",
+        runtime_key="strategy_priority",
+        icon="mdi:sort-numeric-descending",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="source_reason",
+        translation_key="source_reason",
+        runtime_key="source_reason",
+        icon="mdi:source-branch",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    ZendureSensorEntityDescription(
+        key="source_action",
+        translation_key="source_action",
+        runtime_key="source_action",
+        icon="mdi:play-box-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    ZendureSensorEntityDescription(
+        key="source_ac_mode",
+        translation_key="source_ac_mode",
+        runtime_key="source_ac_mode",
+        icon="mdi:swap-horizontal",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
 
     # --------------------------------------------------
