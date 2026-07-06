@@ -401,10 +401,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             if "runtime_mode" in data and isinstance(data["runtime_mode"], dict):
                 self.runtime_mode.update(data["runtime_mode"])
+                
+            self.runtime_mode["ai_mode"] = self._normalize_ai_mode(
+                self.runtime_mode.get("ai_mode")
+            )
 
     async def _save(self) -> None:
         self._persist["runtime_mode"] = dict(self.runtime_mode)
         await self._store.async_save(self._persist)
+        
+    def _normalize_ai_mode(self, mode: str | None) -> str:
+        """Normalize legacy/invalid AI modes.
+
+        V4.3:
+        - winter is legacy and becomes automatic
+        - summer remains the internal key for UI Autarkie
+        """
+        if mode == AI_MODE_WINTER:
+            return AI_MODE_AUTOMATIC
+        if mode in (AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_MANUAL):
+            return str(mode)
+        return AI_MODE_AUTOMATIC
 
     def _state(self, entity_id: str | None) -> Any:
         if not entity_id:
@@ -548,7 +565,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return "normal"
 
     def set_ai_mode(self, mode: str) -> None:
-        self.runtime_mode["ai_mode"] = mode
+        self.runtime_mode["ai_mode"] = self._normalize_ai_mode(mode)
 
     def set_manual_action(self, action: str) -> None:
         self.runtime_mode["manual_action"] = action
@@ -3082,6 +3099,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             
             strategy_intent = decision_to_strategy_intent(decision)
+            
+            strategy_meta = dict(strategy_intent.metadata or {})
+
+            strategy_state = str(strategy_meta.get("strategy_state", "idle_ready"))
+            visible_state = str(strategy_meta.get("visible_state", "ready"))
+            strategic_reason = str(
+                strategy_meta.get("strategic_reason", decision.reason or "idle")
+            )
+            technical_reason = str(strategy_meta.get("technical_reason", "none"))
+            strategy_priority = int(strategy_meta.get("strategy_priority", strategy_intent.priority))
+            source_reason = str(strategy_meta.get("source_reason", decision.reason or "idle"))
+            source_action = str(strategy_meta.get("source_action", decision.action or "idle"))
+            source_ac_mode = str(strategy_meta.get("source_ac_mode", decision.ac_mode or "output"))
 
             # Hard discharge permission for the V4.2 regulation chain.
             # The DecisionEngine decision is already sanitized above, but the
@@ -4036,6 +4066,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "learned_profile_current_slot_index": int(
                     learned_profile_diagnostics.current_slot_index
                 ),
+                "strategy_state": strategy_state,
+                "visible_state": visible_state,
+                "strategic_reason": strategic_reason,
+                "technical_reason": technical_reason,
+                "strategy_priority": strategy_priority,
+                "source_reason": source_reason,
+                "source_action": source_action,
+                "source_ac_mode": source_ac_mode,
             }
 
             def _iso_or_none(val):
@@ -4087,6 +4125,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economic_discharge_threshold": economic_discharge_threshold,
                 "effective_discharge_threshold": effective_discharge_threshold,
                 "engine_health": engine_health,
+                "strategy_state": strategy_state,
+                "visible_state": visible_state,
+                "strategic_reason": strategic_reason,
+                "technical_reason": technical_reason,
+                "strategy_priority": strategy_priority,
+                "source_reason": source_reason,
+                "source_action": source_action,
+                "source_ac_mode": source_ac_mode,
             }
 
         except Exception as err:
