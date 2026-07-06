@@ -269,7 +269,7 @@
         "name": "Betriebsmodus",
         "state": {
           "automatic": "Automatik",
-          "summer": "Sommer",
+          "summer": "Autarkie",
           "winter": "Winter",
           "manual": "Manuell"
         }
@@ -753,6 +753,30 @@
       },
       "profit_eur": {
         "name": "Ersparnis / Gewinn (gesamt)"
+      },
+	  "strategy_state": {
+        "name": "Strategiezustand"
+      },
+      "visible_state": {
+        "name": "Sichtbarer Zustand"
+      },
+      "strategic_reason": {
+        "name": "Strategischer Grund"
+      },
+      "technical_reason": {
+        "name": "Technischer Grund"
+      },
+      "strategy_priority": {
+        "name": "Strategiepriorität"
+      },
+      "source_reason": {
+        "name": "Quellgrund"
+      },
+      "source_action": {
+        "name": "Quellaktion"
+      },
+      "source_ac_mode": {
+        "name": "Quell-AC-Modus"
       }
     }
   }
