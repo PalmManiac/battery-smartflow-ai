@@ -155,10 +155,13 @@ GRID_MODE_SPLIT = "split"
 # Runtime select modes (internal values remain EN)
 # ==================================================
 AI_MODE_AUTOMATIC = "automatic"
-AI_MODE_SUMMER = "summer"
-AI_MODE_WINTER = "winter"
+AI_MODE_SUMMER = "summer"      # legacy internal key, UI label = Autarkie
+AI_MODE_WINTER = "winter"      # legacy only, normalized to automatic
 AI_MODE_MANUAL = "manual"
 
+# Active selectable modes.
+# Do not include winter anymore. Stored/legacy winter values are normalized
+# to automatic in the coordinator.
 AI_MODES = [AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_MANUAL]
 LEGACY_AI_MODES = [AI_MODE_WINTER]
 
