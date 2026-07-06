@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.2.8"
+INTEGRATION_VERSION = "4.3.0-dev1"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -159,7 +159,8 @@ AI_MODE_SUMMER = "summer"
 AI_MODE_WINTER = "winter"
 AI_MODE_MANUAL = "manual"
 
-AI_MODES = [AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_WINTER, AI_MODE_MANUAL]
+AI_MODES = [AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_MANUAL]
+LEGACY_AI_MODES = [AI_MODE_WINTER]
 
 MANUAL_STANDBY = "standby"
 MANUAL_CHARGE = "charge"
@@ -350,6 +351,59 @@ CHARGE_STRATEGY_ENUMS = [
     "valley_opportunity",
     "valley_opportunity_mixed",
     "learned_planning",
+]
+
+STRATEGY_STATE_ENUMS = [
+    "protection",
+    "emergency_charge",
+    "manual_charge",
+    "manual_discharge",
+    "manual_idle",
+    "ac_charge_committed",
+    "ac_charge_planned",
+    "ac_charge_price",
+    "ac_charge_learned",
+    "ac_charge_reserve",
+    "pv_surplus_charge",
+    "load_coverage",
+    "economic_discharge",
+    "offgrid_support",
+    "passthrough",
+    "hold",
+    "idle_ready",
+    "idle_safe",
+]
+
+VISIBLE_STATE_ENUMS = [
+    "ready",
+    "safe_idle",
+    "protection_active",
+    "emergency_charge",
+    "manual",
+    "grid_charge",
+    "pv_charge",
+    "reserve_charge",
+    "autarky_cover",
+    "load_coverage",
+    "economic_discharge",
+    "waiting_for_charge_window",
+    "waiting_blocked",
+    "hold",
+]
+
+TECHNICAL_REASON_ENUMS = [
+    "none",
+    "mode_hold_active",
+    "input_after_output_block_active",
+    "output_after_input_block_active",
+    "pv_charge_min_hold_active",
+    "discharge_min_hold_active",
+    "passthrough_min_hold_active",
+    "ramp_down_output",
+    "inside_deadband",
+    "increase_output_to_reduce_import",
+    "decrease_output_to_avoid_export",
+    "skipped_unchanged_command",
 ]
 
 # ==================================================
