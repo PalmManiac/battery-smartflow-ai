@@ -473,6 +473,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return str(mode)
         return AI_MODE_AUTOMATIC
         
+    def _charge_pricing_reason(self, decision_reason: str | None) -> str:
+        """Return the reason that should be used for charge price attribution.
+
+        During an active AC-Ladebindung the public decision reason becomes
+        charge_commit_active. For price/source attribution we still need the
+        original AC charge reason, e.g. valley_opportunity_charge.
+        """
+        reason = str(decision_reason or "idle")
+
+        if reason == "charge_commit_active":
+            source_reason = str(
+                self._persist.get("charge_commit_source_reason", "") or ""
+            )
+            if source_reason:
+                return source_reason
+
+        return reason
+        
     def _charge_commit_type_for_reason(self, reason: str) -> str:
         """Return the V4.3 charge commit type for a DecisionResult reason."""
         if reason in CHARGE_COMMIT_PLANNING_REASONS:
@@ -3180,12 +3198,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             charge_grid_part_w = 0.0
             charge_pv_part_w = 0.0
 
+            # V4.3.0-dev2.1:
+            # Use the original AC charge reason for price/source attribution while an
+            # AC-Ladebindung is active. The strategy reason itself remains
+            # charge_commit_active, but the price logic needs e.g. valley_opportunity_charge.
+            charge_pricing_reason = self._charge_pricing_reason(decision.reason)
+
             if delta_kwh > 0:
                 is_below_soc_min_cycle = bool(
                     self._persist.get("trade_cycle_below_soc_min", False)
                 )
-
-                is_grid_charge, applied_price, charge_source, charge_grid_part_w, charge_pv_part_w = self._classify_charge_source(
+                (
+                    is_grid_charge,
+                    applied_price,
+                    charge_source,
+                    charge_grid_part_w,
+                    charge_pv_part_w,
+                ) = self._classify_charge_source(
                     delta_kwh=float(delta_kwh),
                     grid_import_w=float(grid_import or 0.0),
                     grid_export_w=float(grid_export or 0.0),
@@ -3194,9 +3223,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     price_now=price_now,
                     feed_in_tariff=float(feed_in_tariff),
                     battery_charge_w=float(battery_charge_w),
-                    decision_reason=str(decision.reason),
+                    decision_reason=charge_pricing_reason,
                 )
-
                 charge_price_applied = float(applied_price)
 
                 if not is_below_soc_min_cycle:
@@ -3218,6 +3246,36 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                     self._persist["trade_charged_kwh"] = new_total_kwh
                     self._persist["trade_avg_charge_price"] = new_avg
+                    
+            elif (
+                str(decision.ac_mode) == "input"
+                and float(decision.charge_w or 0.0) > 0.0
+            ):
+                # Display-only classification while charging is active but the SoC/energy
+                # delta has not advanced in this cycle.
+                #
+                # This prevents the diagnostic sensor "Angerechneter Ladepreis" from
+                # flickering to unknown between two real charge-energy updates.
+                #
+                # Important: This does NOT update trade_charged_kwh or average charge price.
+                (
+                    is_grid_charge,
+                    preview_price,
+                    charge_source,
+                    charge_grid_part_w,
+                    charge_pv_part_w,
+                ) = self._classify_charge_source(
+                    delta_kwh=0.0,
+                    grid_import_w=float(grid_import or 0.0),
+                    grid_export_w=float(grid_export or 0.0),
+                    decision_charge_w=float(decision.charge_w or 0.0),
+                    decision_ac_mode=str(decision.ac_mode),
+                    price_now=price_now,
+                    feed_in_tariff=float(feed_in_tariff),
+                    battery_charge_w=float(battery_charge_w),
+                    decision_reason=charge_pricing_reason,
+                )
+                charge_price_applied = float(preview_price)
 
             if (
                 delta_kwh < 0
