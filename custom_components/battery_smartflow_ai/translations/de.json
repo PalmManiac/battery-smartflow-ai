@@ -779,10 +779,10 @@
         "name": "Quell-AC-Modus"
       },
       "charge_commit_active": {
-        "name": "AC-Lade-Commit aktiv"
+        "name": "AC-Ladebindung aktiv"
       },
       "charge_commit_type": {
-        "name": "AC-Lade-Commit Typ",
+        "name": "Art der AC-Ladebindung",
         "state": {
           "none": "Kein Commit",
           "planning": "Planung",
@@ -794,22 +794,22 @@
         }
       },
       "charge_commit_reason": {
-        "name": "AC-Lade-Commit Grund"
+        "name": "Grund der AC-Ladebindung"
       },
       "charge_commit_source_reason": {
-        "name": "AC-Lade-Commit Quellgrund"
+        "name": "Auslöser der AC-Ladebindung"
       },
       "charge_commit_target_soc": {
-        "name": "AC-Lade-Commit Ziel-SoC"
+        "name": "Ziel-SoC der AC-Ladebindung"
       },
       "charge_commit_started_at": {
-        "name": "AC-Lade-Commit gestartet"
+        "name": "AC-Ladebindung gestartet"
       },
       "charge_commit_valid_until": {
-        "name": "AC-Lade-Commit gültig bis"
+        "name": "AC-Ladebindung gültig bis"
       },
       "charge_commit_abort_reason": {
-        "name": "AC-Lade-Commit Abbruchgrund",
+        "name": "Abbruchgrund der AC-Ladebindung",
         "state": {
           "none": "Kein Abbruch",
           "target_soc_reached": "Ziel-SoC erreicht",
@@ -830,10 +830,10 @@
         }
       },
       "charge_commit_requested_power_w": {
-        "name": "AC-Lade-Commit Leistung"
+        "name": "Leistung der AC-Ladebindung"
       },
       "charge_commit_allow_pv_blend": {
-        "name": "AC-Lade-Commit PV-Anteil erlaubt"
+        "name": "PV-Anteil für AC-Ladebindung erlaubt"
       }
     }
   }
