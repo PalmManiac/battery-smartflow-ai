@@ -521,10 +521,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
 
     def _commit_dt_to_store(self, value: datetime | None) -> str | None:
+        """Store charge commit timestamps in local HA time for diagnostics.
+
+        Internally parsed values are normalized back to UTC when needed.
+        The stored string is primarily shown in diagnostic sensors, so local
+        Home Assistant time is easier to read than raw UTC.
+        """
         if value is None:
             return None
         try:
-            return dt_util.as_utc(value).isoformat()
+            local_value = dt_util.as_local(value)
+            return local_value.replace(microsecond=0).isoformat(timespec="seconds")
         except Exception:
             return None
 
