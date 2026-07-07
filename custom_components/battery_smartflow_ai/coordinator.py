@@ -676,14 +676,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return "max_soc_reached"
             return "target_soc_reached"
 
-            # V4.3.0-dev2.2:
-            # Do not abort an AC-Ladebindung only because a fixed validity timestamp
-            # has expired. PV surplus or a short price-window timeout must not cancel
-            # a strategic AC charge while the target SoC has not been reached.
-            #
-            # A real price-condition abort can be added later, but it must compare the
-            # current price against the original charge condition instead of using a
-            # fixed timeout.
+        # V4.3.0-dev2.2:
+        # Do not abort an AC-Ladebindung only because a fixed validity timestamp
+        # has expired. PV surplus or a short price-window timeout must not cancel
+        # a strategic AC charge while the target SoC has not been reached.
+        #
+        # A real price-condition abort can be added later, but it must compare the
+        # current price against the original charge condition instead of using a
+        # fixed timeout.
 
         return "none"
 
