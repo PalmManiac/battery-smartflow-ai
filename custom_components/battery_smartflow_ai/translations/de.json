@@ -777,6 +777,36 @@
       },
       "source_ac_mode": {
         "name": "Quell-AC-Modus"
+      },
+	  "charge_commit_active": {
+        "name": "AC-Lade-Commit aktiv"
+      },
+      "charge_commit_type": {
+        "name": "AC-Lade-Commit Typ"
+      },
+      "charge_commit_reason": {
+        "name": "AC-Lade-Commit Grund"
+      },
+      "charge_commit_source_reason": {
+        "name": "AC-Lade-Commit Quellgrund"
+      },
+      "charge_commit_target_soc": {
+        "name": "AC-Lade-Commit Ziel-SoC"
+      },
+      "charge_commit_started_at": {
+        "name": "AC-Lade-Commit gestartet"
+      },
+      "charge_commit_valid_until": {
+        "name": "AC-Lade-Commit gültig bis"
+      },
+      "charge_commit_abort_reason": {
+        "name": "AC-Lade-Commit Abbruchgrund"
+      },
+      "charge_commit_requested_power_w": {
+        "name": "AC-Lade-Commit Leistung"
+      },
+      "charge_commit_allow_pv_blend": {
+        "name": "AC-Lade-Commit PV-Anteil erlaubt"
       }
     }
   }
