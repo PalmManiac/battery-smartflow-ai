@@ -623,10 +623,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now: datetime,
         commit_type: str,
     ) -> datetime | None:
-        if commit_type in ("very_cheap", "valley", "opportunity"):
-            return dt_util.as_utc(now) + timedelta(
-                minutes=CHARGE_COMMIT_PRICE_VALID_MINUTES
-            )
+        """Return optional validity timeout for AC-Ladebindungen.
+
+        V4.3.0-dev2.2:
+        Do not end price/opportunity charge bindings by a fixed timeout.
+
+        A fixed 20-minute timeout can wrongly cancel an active AC-Ladebindung even
+        when the current price is still good or even lower than at start. Until a
+        real price-condition check is implemented, price-based AC-Ladebindungen are
+        held until target SoC, protection, blocker or manual abort.
+        """
         return None
 
 
@@ -670,12 +676,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return "max_soc_reached"
             return "target_soc_reached"
 
-        if commit.valid_until is not None:
-            try:
-                if dt_util.as_utc(now) > dt_util.as_utc(commit.valid_until):
-                    return "price_window_expired"
-            except Exception:
-                return "price_window_expired"
+            # V4.3.0-dev2.2:
+            # Do not abort an AC-Ladebindung only because a fixed validity timestamp
+            # has expired. PV surplus or a short price-window timeout must not cancel
+            # a strategic AC charge while the target SoC has not been reached.
+            #
+            # A real price-condition abort can be added later, but it must compare the
+            # current price against the original charge condition instead of using a
+            # fixed timeout.
 
         return "none"
 
