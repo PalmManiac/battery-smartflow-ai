@@ -33,6 +33,8 @@ LEARNED_DEADLINE_REASONS = {
     "learned_charge_window_deadline_too_close_start_now",
 }
 
+CHARGE_COMMIT_ACTIVE_REASON = "charge_commit_active"
+
 IDLE_SAFE_REASONS = {
     "sensor_invalid",
     "additional_battery_charging_block",
@@ -219,6 +221,29 @@ def decision_to_strategy_decision(decision: DecisionResult) -> StrategyDecision:
             allow_mode_switch=True,
             force=False,
             metadata=metadata,
+        )
+        
+    # --------------------------------------------------
+    # Active AC charge commit
+    # --------------------------------------------------
+    if reason == CHARGE_COMMIT_ACTIVE_REASON:
+        return StrategyDecision(
+            state=StrategicState.AC_CHARGE_COMMITTED,
+            visible_state=VisibleState.GRID_CHARGE,
+            requested_mode="input",
+            requested_power_w=charge_w,
+            strategic_reason=reason,
+            source_reason=reason,
+            source_action=action,
+            source_ac_mode=ac_mode,
+            priority=700,
+            target_soc=decision.target_soc,
+            allow_mode_switch=True,
+            force=False,
+            metadata={
+                **metadata,
+                "charge_commit_active": True,
+            },
         )
 
     # --------------------------------------------------
