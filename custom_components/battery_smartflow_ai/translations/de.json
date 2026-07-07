@@ -778,11 +778,20 @@
       "source_ac_mode": {
         "name": "Quell-AC-Modus"
       },
-	  "charge_commit_active": {
+      "charge_commit_active": {
         "name": "AC-Lade-Commit aktiv"
       },
       "charge_commit_type": {
-        "name": "AC-Lade-Commit Typ"
+        "name": "AC-Lade-Commit Typ",
+        "state": {
+          "none": "Kein Commit",
+          "planning": "Planung",
+          "learned": "Lernplanung",
+          "very_cheap": "Sehr günstig",
+          "valley": "Talpreis",
+          "opportunity": "Gelegenheit",
+          "reserve": "Reserve"
+        }
       },
       "charge_commit_reason": {
         "name": "AC-Lade-Commit Grund"
@@ -800,7 +809,25 @@
         "name": "AC-Lade-Commit gültig bis"
       },
       "charge_commit_abort_reason": {
-        "name": "AC-Lade-Commit Abbruchgrund"
+        "name": "AC-Lade-Commit Abbruchgrund",
+        "state": {
+          "none": "Kein Abbruch",
+          "target_soc_reached": "Ziel-SoC erreicht",
+          "max_soc_reached": "Maximaler SoC erreicht",
+          "battery_full": "Akku voll",
+          "price_window_expired": "Preisfenster abgelaufen",
+          "price_condition_lost": "Preisbedingung nicht mehr erfüllt",
+          "protection_cutoff": "Schutz aktiv",
+          "cell_voltage_cutoff": "Zellspannungs-Schutz aktiv",
+          "soc_invalid": "SoC ungültig",
+          "sensor_invalid": "Sensordaten ungültig",
+          "additional_battery_discharging_blocks_charge": "Zusatzakku entlädt: Laden blockiert",
+          "offgrid_load_blocks_ac_charge": "Inselsteckdose aktiv: Netzladung blockiert",
+          "manual_mode_selected": "Manueller Modus gewählt",
+          "user_disabled_automatic": "Automatik deaktiviert",
+          "device_error": "Gerätefehler",
+          "unsafe_measurements": "Unsichere Messwerte"
+        }
       },
       "charge_commit_requested_power_w": {
         "name": "AC-Lade-Commit Leistung"
