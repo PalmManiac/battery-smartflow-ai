@@ -3255,35 +3255,47 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist["trade_charged_kwh"] = new_total_kwh
                     self._persist["trade_avg_charge_price"] = new_avg
                     
-            elif (
-                str(decision.ac_mode) == "input"
+            # V4.3.0-dev2.3:
+            # Display-only fallback for active AC charging / AC-Ladebindung.
+            #
+            # The real charge price history is updated only when delta_kwh > 0.
+            # This block only keeps the diagnostic sensors stable while charging is
+            # currently requested but the battery energy counter has not advanced yet.
+            if (
+                charge_price_applied is None
+                and str(decision.ac_mode) == "input"
                 and float(decision.charge_w or 0.0) > 0.0
             ):
-                # Display-only classification while charging is active but the SoC/energy
-                # delta has not advanced in this cycle.
-                #
-                # This prevents the diagnostic sensor "Angerechneter Ladepreis" from
-                # flickering to unknown between two real charge-energy updates.
-                #
-                # Important: This does NOT update trade_charged_kwh or average charge price.
-                (
-                    is_grid_charge,
-                    preview_price,
-                    charge_source,
-                    charge_grid_part_w,
-                    charge_pv_part_w,
-                ) = self._classify_charge_source(
-                    delta_kwh=0.0,
-                    grid_import_w=float(grid_import or 0.0),
-                    grid_export_w=float(grid_export or 0.0),
-                    decision_charge_w=float(decision.charge_w or 0.0),
-                    decision_ac_mode=str(decision.ac_mode),
-                    price_now=price_now,
-                    feed_in_tariff=float(feed_in_tariff),
-                    battery_charge_w=float(battery_charge_w),
-                    decision_reason=charge_pricing_reason,
-                )
-                charge_price_applied = float(preview_price)
+                preview_reason = self._charge_pricing_reason(decision.reason)
+                preview_reason = str(preview_reason or "")
+
+                # Default: active AC charge is treated as grid-priced unless the existing
+                # source classifier later proves a PV/mixed share on a real energy delta.
+                if price_now is not None:
+                    charge_price_applied = float(price_now)
+
+                    if preview_reason in {
+                        "very_cheap_force_charge",
+                        "valley_boost_charge",
+                        "valley_boost_charge_mixed_forecast",
+                        "valley_opportunity_charge",
+                        "valley_opportunity_charge_mixed_forecast",
+                        "planning_latest_start",
+                        "planning_forecast_poor",
+                        "planning_forecast_mixed",
+                        "planning_forecast_reality_override",
+                        "learned_charge_window_active",
+                        "learned_charge_window_latest_start_reached",
+                        "learned_charge_window_deadline_too_close_start_now",
+                        "summer_peak_reserve_charge",
+                    }:
+                        charge_source = preview_reason
+                    else:
+                        charge_source = "grid_charge"
+
+                    charge_grid_part_w = float(decision.charge_w or 0.0)
+                    charge_pv_part_w = 0.0
+                    is_grid_charge = True
 
             if (
                 delta_kwh < 0
