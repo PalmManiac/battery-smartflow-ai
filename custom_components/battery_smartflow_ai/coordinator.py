@@ -424,6 +424,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "charge_commit_requested_power_w": 0.0,
             "charge_commit_allow_pv_blend": True,
             "charge_commit_abort_reason": "none",
+            "charge_commit_price_eur_kwh": None,
 
             # debug
             "debug": "init",
@@ -616,6 +617,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["charge_commit_requested_power_w"] = 0.0
         self._persist["charge_commit_allow_pv_blend"] = True
         self._persist["charge_commit_abort_reason"] = str(abort_reason or "none")
+        self._persist["charge_commit_price_eur_kwh"] = None
 
 
     def _price_commit_valid_until(
@@ -730,6 +732,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         additional_battery_discharge_w: float,
         offgrid_load_active: bool,
         cell_voltage_emergency_active: bool,
+        price_now: float | None,
     ) -> DecisionResult:
         """Start, hold or stop a strategic AC charge commit.
 
@@ -777,8 +780,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 if refreshed_until is not None:
                     commit.valid_until = refreshed_until
+                if price_now is not None:
+                    self._persist["charge_commit_price_eur_kwh"] = float(price_now)
                 self._store_charge_commit(commit)
-
+                
             return self._committed_charge_decision(
                 base_decision=decision,
                 commit=commit,
@@ -817,6 +822,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 abort_reason="none",
             )
             self._store_charge_commit(new_commit)
+            
+            if price_now is not None:
+                self._persist["charge_commit_price_eur_kwh"] = float(price_now)
+            else:
+                self._persist["charge_commit_price_eur_kwh"] = None
 
             return self._committed_charge_decision(
                 base_decision=decision,
@@ -3269,10 +3279,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 preview_reason = self._charge_pricing_reason(decision.reason)
                 preview_reason = str(preview_reason or "")
 
-                # Default: active AC charge is treated as grid-priced unless the existing
-                # source classifier later proves a PV/mixed share on a real energy delta.
+                stored_commit_price = _to_float(
+                    self._persist.get("charge_commit_price_eur_kwh"),
+                    None,
+                )
+
+                preview_price = None
                 if price_now is not None:
-                    charge_price_applied = float(price_now)
+                    preview_price = float(price_now)
+                elif stored_commit_price is not None:
+                    preview_price = float(stored_commit_price)
+
+                if preview_price is not None:
+                    charge_price_applied = float(preview_price)
 
                     if preview_reason in {
                         "very_cheap_force_charge",
@@ -3550,6 +3569,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 additional_battery_discharge_w=float(additional_battery_discharge_w or 0.0),
                 offgrid_load_active=bool(offgrid_load_active),
                 cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+                price_now=price_now,
             )
                 
             # Store final effective previous power only after all protection and limit
