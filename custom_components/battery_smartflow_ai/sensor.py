@@ -10,6 +10,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
+from homeassistant.const import UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -33,6 +34,8 @@ from .const import (
     STRATEGY_STATE_ENUMS,
     VISIBLE_STATE_ENUMS,
     TECHNICAL_REASON_ENUMS,
+    CHARGE_COMMIT_TYPE_ENUMS,
+    CHARGE_COMMIT_ABORT_REASON_ENUMS,
 )
 from .device_profiles import DEVICE_PROFILES
 
@@ -227,6 +230,87 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="source_ac_mode",
         runtime_key="source_ac_mode",
         icon="mdi:swap-horizontal",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_active",
+        translation_key="charge_commit_active",
+        runtime_key="charge_commit_active",
+        icon="mdi:lock-check-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_type",
+        translation_key="charge_commit_type",
+        runtime_key="charge_commit_type",
+        device_class=SensorDeviceClass.ENUM,
+        options=CHARGE_COMMIT_TYPE_ENUMS,
+        icon="mdi:battery-clock-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_reason",
+        translation_key="charge_commit_reason",
+        runtime_key="charge_commit_reason",
+        icon="mdi:message-text-clock-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_source_reason",
+        translation_key="charge_commit_source_reason",
+        runtime_key="charge_commit_source_reason",
+        icon="mdi:source-branch",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_target_soc",
+        translation_key="charge_commit_target_soc",
+        runtime_key="charge_commit_target_soc",
+        native_unit_of_measurement="%",
+        icon="mdi:battery-charging-80",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_started_at",
+        translation_key="charge_commit_started_at",
+        runtime_key="charge_commit_started_at",
+        icon="mdi:clock-start",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_valid_until",
+        translation_key="charge_commit_valid_until",
+        runtime_key="charge_commit_valid_until",
+        icon="mdi:clock-end",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_abort_reason",
+        translation_key="charge_commit_abort_reason",
+        runtime_key="charge_commit_abort_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=CHARGE_COMMIT_ABORT_REASON_ENUMS,
+        icon="mdi:cancel",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_requested_power_w",
+        translation_key="charge_commit_requested_power_w",
+        runtime_key="charge_commit_requested_power_w",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        icon="mdi:flash",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_commit_allow_pv_blend",
+        translation_key="charge_commit_allow_pv_blend",
+        runtime_key="charge_commit_allow_pv_blend",
+        icon="mdi:solar-power-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ),
