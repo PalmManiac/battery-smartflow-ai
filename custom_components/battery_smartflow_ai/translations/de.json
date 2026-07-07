@@ -803,10 +803,10 @@
         "name": "Ziel-SoC der AC-Ladebindung"
       },
       "charge_commit_started_at": {
-        "name": "AC-Ladebindung gestartet"
+        "name": "Ladebindung gestartet"
       },
       "charge_commit_valid_until": {
-        "name": "AC-Ladebindung gültig bis"
+        "name": "Ladebindung gültig bis"
       },
       "charge_commit_abort_reason": {
         "name": "Abbruchgrund der AC-Ladebindung",
