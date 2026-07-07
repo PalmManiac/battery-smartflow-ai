@@ -135,6 +135,7 @@ from .learned_planning import (
 )
 from .grid_history import GridHistory, build_grid_history_config
 from .strategy_adapter import decision_to_strategy_intent
+from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
 from .regulation_power_controller import (
@@ -152,6 +153,41 @@ USE_REGULATION_V42_COMMAND_DEV = False
 
 STORE_VERSION = 1
 PV_SURPLUS_DISPLAY_HOLD_S = 60
+
+CHARGE_COMMIT_PRICE_VALID_MINUTES = 20
+
+CHARGE_COMMIT_PLANNING_REASONS = {
+    "planning_latest_start",
+    "planning_forecast_poor",
+    "planning_forecast_mixed",
+    "planning_forecast_reality_override",
+}
+
+CHARGE_COMMIT_LEARNED_REASONS = {
+    "learned_charge_window_active",
+    "learned_charge_window_latest_start_reached",
+    "learned_charge_window_deadline_too_close_start_now",
+}
+
+CHARGE_COMMIT_PRICE_REASONS = {
+    "very_cheap_force_charge",
+    "valley_boost_charge",
+    "valley_boost_charge_mixed_forecast",
+    "valley_opportunity_charge",
+    "valley_opportunity_charge_mixed_forecast",
+}
+
+CHARGE_COMMIT_RESERVE_REASONS = {
+    "summer_peak_reserve_charge",
+}
+
+CHARGE_COMMIT_SOURCE_REASONS = (
+    CHARGE_COMMIT_PLANNING_REASONS
+    | CHARGE_COMMIT_LEARNED_REASONS
+    | CHARGE_COMMIT_PRICE_REASONS
+    | CHARGE_COMMIT_RESERVE_REASONS
+)
+
 SEASON_COUNTER_MIN = -100
 SEASON_COUNTER_MAX = 100
 
@@ -374,6 +410,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "regulation_discharge_latch_started_ts": None,
             "regulation_passthrough_latch_started_ts": None,
             "regulation_skipped_write_reason": "none",
+            
+            # V4.3.0-dev2 strategic AC charge commit
+            "charge_commit_active": False,
+            "charge_commit_type": "none",
+            "charge_commit_source_state": "",
+            "charge_commit_reason": "",
+            "charge_commit_source_reason": "",
+            "charge_commit_target_soc": None,
+            "charge_commit_started_at": None,
+            "charge_commit_updated_at": None,
+            "charge_commit_valid_until": None,
+            "charge_commit_requested_power_w": 0.0,
+            "charge_commit_allow_pv_blend": True,
+            "charge_commit_abort_reason": "none",
 
             # debug
             "debug": "init",
@@ -422,6 +472,327 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mode in (AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_MANUAL):
             return str(mode)
         return AI_MODE_AUTOMATIC
+        
+    def _charge_commit_type_for_reason(self, reason: str) -> str:
+        """Return the V4.3 charge commit type for a DecisionResult reason."""
+        if reason in CHARGE_COMMIT_PLANNING_REASONS:
+            return "planning"
+        if reason in CHARGE_COMMIT_LEARNED_REASONS:
+            return "learned"
+        if reason == "very_cheap_force_charge":
+            return "very_cheap"
+        if reason in {
+            "valley_boost_charge",
+            "valley_boost_charge_mixed_forecast",
+        }:
+            return "valley"
+        if reason in {
+            "valley_opportunity_charge",
+            "valley_opportunity_charge_mixed_forecast",
+        }:
+            return "opportunity"
+        if reason in CHARGE_COMMIT_RESERVE_REASONS:
+            return "reserve"
+        return "none"
+
+
+    def _charge_commit_source_state_for_type(self, commit_type: str) -> str:
+        if commit_type == "planning":
+            return "ac_charge_planned"
+        if commit_type == "learned":
+            return "ac_charge_learned"
+        if commit_type in ("very_cheap", "valley", "opportunity"):
+            return "ac_charge_price"
+        if commit_type == "reserve":
+            return "ac_charge_reserve"
+        return ""
+
+
+    def _parse_commit_dt(self, value: Any) -> datetime | None:
+        if not value:
+            return None
+        try:
+            parsed = dt_util.parse_datetime(str(value))
+            if parsed is None:
+                return None
+            return dt_util.as_utc(parsed)
+        except Exception:
+            return None
+
+
+    def _commit_dt_to_store(self, value: datetime | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            return dt_util.as_utc(value).isoformat()
+        except Exception:
+            return None
+
+
+    def _get_charge_commit(self) -> ChargeCommitState:
+        return ChargeCommitState(
+            active=bool(self._persist.get("charge_commit_active", False)),
+            commit_type=str(self._persist.get("charge_commit_type", "none") or "none"),
+            source_state=str(self._persist.get("charge_commit_source_state", "") or ""),
+            source_reason=str(self._persist.get("charge_commit_source_reason", "") or ""),
+            strategic_reason=str(self._persist.get("charge_commit_reason", "") or ""),
+            target_soc=_to_float(self._persist.get("charge_commit_target_soc"), None),
+            started_at=self._parse_commit_dt(self._persist.get("charge_commit_started_at")),
+            updated_at=self._parse_commit_dt(self._persist.get("charge_commit_updated_at")),
+            valid_until=self._parse_commit_dt(self._persist.get("charge_commit_valid_until")),
+            requested_power_w=_to_float(
+                self._persist.get("charge_commit_requested_power_w"),
+                0.0,
+            ),
+            allow_pv_blend=bool(
+                self._persist.get("charge_commit_allow_pv_blend", True)
+            ),
+            abort_reason=str(
+                self._persist.get("charge_commit_abort_reason", "none") or "none"
+            ),
+        )
+
+
+    def _store_charge_commit(self, commit: ChargeCommitState) -> None:
+        self._persist["charge_commit_active"] = bool(commit.active)
+        self._persist["charge_commit_type"] = str(commit.commit_type or "none")
+        self._persist["charge_commit_source_state"] = str(commit.source_state or "")
+        self._persist["charge_commit_reason"] = str(commit.strategic_reason or "")
+        self._persist["charge_commit_source_reason"] = str(commit.source_reason or "")
+        self._persist["charge_commit_target_soc"] = commit.target_soc
+        self._persist["charge_commit_started_at"] = self._commit_dt_to_store(
+            commit.started_at
+        )
+        self._persist["charge_commit_updated_at"] = self._commit_dt_to_store(
+            commit.updated_at
+        )
+        self._persist["charge_commit_valid_until"] = self._commit_dt_to_store(
+            commit.valid_until
+        )
+        self._persist["charge_commit_requested_power_w"] = float(
+            commit.requested_power_w or 0.0
+        )
+        self._persist["charge_commit_allow_pv_blend"] = bool(commit.allow_pv_blend)
+        self._persist["charge_commit_abort_reason"] = str(
+            commit.abort_reason or "none"
+        )
+
+
+    def _clear_charge_commit(self, abort_reason: str = "none") -> None:
+        self._persist["charge_commit_active"] = False
+        self._persist["charge_commit_type"] = "none"
+        self._persist["charge_commit_source_state"] = ""
+        self._persist["charge_commit_reason"] = ""
+        self._persist["charge_commit_source_reason"] = ""
+        self._persist["charge_commit_target_soc"] = None
+        self._persist["charge_commit_started_at"] = None
+        self._persist["charge_commit_updated_at"] = None
+        self._persist["charge_commit_valid_until"] = None
+        self._persist["charge_commit_requested_power_w"] = 0.0
+        self._persist["charge_commit_allow_pv_blend"] = True
+        self._persist["charge_commit_abort_reason"] = str(abort_reason or "none")
+
+
+    def _price_commit_valid_until(
+        self,
+        now: datetime,
+        commit_type: str,
+    ) -> datetime | None:
+        if commit_type in ("very_cheap", "valley", "opportunity"):
+            return dt_util.as_utc(now) + timedelta(
+                minutes=CHARGE_COMMIT_PRICE_VALID_MINUTES
+            )
+        return None
+
+
+    def _charge_commit_abort_reason(
+        self,
+        *,
+        commit: ChargeCommitState,
+        now: datetime,
+        soc: float,
+        soc_max: float,
+        ai_mode: str,
+        manual_action: str,
+        additional_battery_discharge_w: float,
+        offgrid_load_active: bool,
+        cell_voltage_emergency_active: bool,
+    ) -> str:
+        if not commit.active:
+            return "none"
+
+        if ai_mode == AI_MODE_MANUAL:
+            return "manual_mode_selected"
+
+        if bool(cell_voltage_emergency_active):
+            return "protection_cutoff"
+
+        if float(additional_battery_discharge_w or 0.0) > 50.0:
+            return "additional_battery_discharging_blocks_charge"
+
+        if bool(offgrid_load_active):
+            return "offgrid_load_blocks_ac_charge"
+
+        target_soc = commit.target_soc
+        if target_soc is None:
+            target_soc = float(soc_max)
+
+        effective_target_soc = min(float(target_soc), float(soc_max))
+
+        # Small tolerance avoids a commit flickering at exact target.
+        if float(soc) >= effective_target_soc - 0.2:
+            if effective_target_soc >= float(soc_max) - 0.2:
+                return "max_soc_reached"
+            return "target_soc_reached"
+
+        if commit.valid_until is not None:
+            try:
+                if dt_util.as_utc(now) > dt_util.as_utc(commit.valid_until):
+                    return "price_window_expired"
+            except Exception:
+                return "price_window_expired"
+
+        return "none"
+
+
+    def _committed_charge_decision(
+        self,
+        *,
+        base_decision: DecisionResult,
+        commit: ChargeCommitState,
+        max_charge_w: float,
+    ) -> DecisionResult:
+        requested_power = float(commit.requested_power_w or 0.0)
+        if requested_power <= 0.0:
+            requested_power = float(base_decision.charge_w or 0.0)
+        if requested_power <= 0.0:
+            requested_power = float(max_charge_w)
+
+        requested_power = max(0.0, min(float(requested_power), float(max_charge_w)))
+
+        return DecisionResult(
+            action="charge",
+            ac_mode="input",
+            charge_w=requested_power,
+            discharge_w=0.0,
+            reason="charge_commit_active",
+            target_soc=commit.target_soc,
+            current_peak_threshold=base_decision.current_peak_threshold,
+            current_valley_threshold=base_decision.current_valley_threshold,
+            economic_discharge_threshold=base_decision.economic_discharge_threshold,
+            effective_discharge_threshold=base_decision.effective_discharge_threshold,
+        )
+
+
+    def _apply_charge_commit(
+        self,
+        *,
+        now: datetime,
+        decision: DecisionResult,
+        soc: float,
+        soc_max: float,
+        max_charge_w: float,
+        ai_mode: str,
+        manual_action: str,
+        additional_battery_discharge_w: float,
+        offgrid_load_active: bool,
+        cell_voltage_emergency_active: bool,
+    ) -> DecisionResult:
+        """Start, hold or stop a strategic AC charge commit.
+
+        This is intentionally placed above StrategyIntent creation so both the
+        legacy command path and the V4.2 regulation path see the same decision.
+        """
+        reason = str(decision.reason or "idle")
+        now_utc = dt_util.as_utc(now)
+
+        commit = self._get_charge_commit()
+
+        # Active commit: check whether it must stop.
+        if commit.active:
+            abort_reason = self._charge_commit_abort_reason(
+                commit=commit,
+                now=now_utc,
+                soc=float(soc),
+                soc_max=float(soc_max),
+                ai_mode=str(ai_mode),
+                manual_action=str(manual_action),
+                additional_battery_discharge_w=float(
+                    additional_battery_discharge_w or 0.0
+                ),
+                offgrid_load_active=bool(offgrid_load_active),
+                cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+            )
+
+            if abort_reason != "none":
+                self._clear_charge_commit(abort_reason)
+                return decision
+
+            # If the same charge reason is still present, refresh power and
+            # price-window timeout for optional price commits.
+            if reason in CHARGE_COMMIT_SOURCE_REASONS:
+                commit.requested_power_w = max(
+                    0.0,
+                    min(float(decision.charge_w or 0.0), float(max_charge_w)),
+                )
+                if commit.requested_power_w <= 0.0:
+                    commit.requested_power_w = float(max_charge_w)
+                commit.updated_at = now_utc
+                refreshed_until = self._price_commit_valid_until(
+                    now_utc,
+                    str(commit.commit_type or "none"),
+                )
+                if refreshed_until is not None:
+                    commit.valid_until = refreshed_until
+                self._store_charge_commit(commit)
+
+            return self._committed_charge_decision(
+                base_decision=decision,
+                commit=commit,
+                max_charge_w=float(max_charge_w),
+            )
+
+        # No active commit: start one for strategic AC charge decisions.
+        if (
+            reason in CHARGE_COMMIT_SOURCE_REASONS
+            and str(decision.action or "") == "charge"
+            and str(decision.ac_mode or "") == "input"
+            and float(decision.charge_w or 0.0) > 0.0
+            and float(soc) < float(soc_max)
+        ):
+            commit_type = self._charge_commit_type_for_reason(reason)
+            target_soc = decision.target_soc
+            if target_soc is None:
+                target_soc = float(soc_max)
+
+            new_commit = ChargeCommitState(
+                active=True,
+                commit_type=commit_type,
+                source_state=self._charge_commit_source_state_for_type(commit_type),
+                source_reason=reason,
+                strategic_reason=reason,
+                target_soc=float(target_soc),
+                max_soc=float(soc_max),
+                started_at=now_utc,
+                updated_at=now_utc,
+                valid_until=self._price_commit_valid_until(now_utc, commit_type),
+                requested_power_w=min(
+                    float(decision.charge_w or 0.0),
+                    float(max_charge_w),
+                ),
+                allow_pv_blend=True,
+                abort_reason="none",
+            )
+            self._store_charge_commit(new_commit)
+
+            return self._committed_charge_decision(
+                base_decision=decision,
+                commit=new_commit,
+                max_charge_w=float(max_charge_w),
+            )
+
+        # Keep last abort reason visible, but no active commit.
+        return decision
 
     def _state(self, entity_id: str | None) -> Any:
         if not entity_id:
@@ -3079,6 +3450,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 self._persist["regulation_pv_charge_latch_continue_reason"] = "none"
                 
+            # V4.3.0-dev2:
+            # Strategic AC charge commit. Must run before prev_charge/prev_discharge
+            # tracking and before StrategyIntent creation, so both the legacy command path
+            # and the V4.2 regulation chain see the committed charge decision.
+            decision = self._apply_charge_commit(
+                now=now,
+                decision=decision,
+                soc=float(soc),
+                soc_max=float(soc_max),
+                max_charge_w=float(max_charge),
+                ai_mode=str(ai_mode),
+                manual_action=str(manual_action),
+                additional_battery_discharge_w=float(additional_battery_discharge_w or 0.0),
+                offgrid_load_active=bool(offgrid_load_active),
+                cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+            )
+                
             # Store final effective previous power only after all protection and limit
             # blockers have modified the decision. Otherwise a blocked discharge can leave
             # a stale prev_discharge_w > 0 and suppress PV charging in the next cycle.
@@ -3112,6 +3500,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             source_reason = str(strategy_meta.get("source_reason", decision.reason or "idle"))
             source_action = str(strategy_meta.get("source_action", decision.action or "idle"))
             source_ac_mode = str(strategy_meta.get("source_ac_mode", decision.ac_mode or "output"))
+            
+            charge_commit_active = bool(self._persist.get("charge_commit_active", False))
+            charge_commit_type = str(self._persist.get("charge_commit_type", "none") or "none")
+            charge_commit_reason = str(self._persist.get("charge_commit_reason", "") or "")
+            charge_commit_source_reason = str(
+                self._persist.get("charge_commit_source_reason", "") or ""
+            )
+            charge_commit_target_soc = self._persist.get("charge_commit_target_soc")
+            charge_commit_started_at = self._persist.get("charge_commit_started_at")
+            charge_commit_valid_until = self._persist.get("charge_commit_valid_until")
+            charge_commit_abort_reason = str(
+                self._persist.get("charge_commit_abort_reason", "none") or "none"
+            )
+            charge_commit_requested_power_w = float(
+                self._persist.get("charge_commit_requested_power_w", 0.0) or 0.0
+            )
+            charge_commit_allow_pv_blend = bool(
+                self._persist.get("charge_commit_allow_pv_blend", True)
+            )
 
             # Hard discharge permission for the V4.2 regulation chain.
             # The DecisionEngine decision is already sanitized above, but the
@@ -4074,6 +4481,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "source_reason": source_reason,
                 "source_action": source_action,
                 "source_ac_mode": source_ac_mode,
+                "charge_commit_active": charge_commit_active,
+                "charge_commit_type": charge_commit_type,
+                "charge_commit_reason": charge_commit_reason,
+                "charge_commit_source_reason": charge_commit_source_reason,
+                "charge_commit_target_soc": charge_commit_target_soc,
+                "charge_commit_started_at": charge_commit_started_at,
+                "charge_commit_valid_until": charge_commit_valid_until,
+                "charge_commit_abort_reason": charge_commit_abort_reason,
+                "charge_commit_requested_power_w": charge_commit_requested_power_w,
+                "charge_commit_allow_pv_blend": charge_commit_allow_pv_blend,
             }
 
             def _iso_or_none(val):
@@ -4133,6 +4550,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "source_reason": source_reason,
                 "source_action": source_action,
                 "source_ac_mode": source_ac_mode,
+                "charge_commit_active": charge_commit_active,
+                "charge_commit_type": charge_commit_type,
+                "charge_commit_reason": charge_commit_reason,
+                "charge_commit_source_reason": charge_commit_source_reason,
+                "charge_commit_target_soc": charge_commit_target_soc,
+                "charge_commit_started_at": charge_commit_started_at,
+                "charge_commit_valid_until": charge_commit_valid_until,
+                "charge_commit_abort_reason": charge_commit_abort_reason,
+                "charge_commit_requested_power_w": charge_commit_requested_power_w,
+                "charge_commit_allow_pv_blend": charge_commit_allow_pv_blend,
             }
 
         except Exception as err:
