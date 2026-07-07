@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.3.0-dev1"
+INTEGRATION_VERSION = "4.3.0-dev2"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -407,6 +407,39 @@ TECHNICAL_REASON_ENUMS = [
     "increase_output_to_reduce_import",
     "decrease_output_to_avoid_export",
     "skipped_unchanged_command",
+]
+
+# ==================================================
+# Charge commit enums (V4.3.0-dev2)
+# ==================================================
+
+CHARGE_COMMIT_TYPE_ENUMS = [
+    "none",
+    "planning",
+    "learned",
+    "very_cheap",
+    "valley",
+    "opportunity",
+    "reserve",
+]
+
+CHARGE_COMMIT_ABORT_REASON_ENUMS = [
+    "none",
+    "target_soc_reached",
+    "max_soc_reached",
+    "battery_full",
+    "price_window_expired",
+    "price_condition_lost",
+    "protection_cutoff",
+    "cell_voltage_cutoff",
+    "soc_invalid",
+    "sensor_invalid",
+    "additional_battery_discharging_blocks_charge",
+    "offgrid_load_blocks_ac_charge",
+    "manual_mode_selected",
+    "user_disabled_automatic",
+    "device_error",
+    "unsafe_measurements",
 ]
 
 # ==================================================
