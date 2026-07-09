@@ -21,6 +21,17 @@ DEFAULT_DISCHARGE_KP_DOWN = 0.90
 DEFAULT_DISCHARGE_MAX_STEP_UP = 550.0
 DEFAULT_DISCHARGE_MAX_STEP_DOWN = 800.0
 
+# V4.3.0-dev3:
+# Active OUTPUT near-zero trim.
+#
+# These values are intentionally central defaults, not per-device profile
+# micro-tuning. Device profiles may override them later, but dev3 should first
+# prove that a common adaptive near-zero trim improves load coverage.
+DEFAULT_DISCHARGE_NEAR_ZERO_DEADBAND_W = 12.0
+DEFAULT_DISCHARGE_NEAR_ZERO_MIN_IMPORT_W = 25.0
+DEFAULT_DISCHARGE_NEAR_ZERO_TRIM_STEP_W = 20.0
+DEFAULT_DISCHARGE_NEAR_ZERO_MAX_TRIM_W = 80.0
+
 DEFAULT_CHARGE_DEADBAND_W = 30.0
 DEFAULT_CHARGE_KP_UP = 0.65
 DEFAULT_CHARGE_KP_DOWN = 0.90
@@ -44,6 +55,11 @@ class RegulationPowerConfig:
     discharge_kp_down: float = DEFAULT_DISCHARGE_KP_DOWN
     discharge_max_step_up: float = DEFAULT_DISCHARGE_MAX_STEP_UP
     discharge_max_step_down: float = DEFAULT_DISCHARGE_MAX_STEP_DOWN
+    
+    discharge_near_zero_deadband_w: float = DEFAULT_DISCHARGE_NEAR_ZERO_DEADBAND_W
+    discharge_near_zero_min_import_w: float = DEFAULT_DISCHARGE_NEAR_ZERO_MIN_IMPORT_W
+    discharge_near_zero_trim_step_w: float = DEFAULT_DISCHARGE_NEAR_ZERO_TRIM_STEP_W
+    discharge_near_zero_max_trim_w: float = DEFAULT_DISCHARGE_NEAR_ZERO_MAX_TRIM_W
 
     charge_deadband_w: float = DEFAULT_CHARGE_DEADBAND_W
     charge_kp_up: float = DEFAULT_CHARGE_KP_UP
@@ -122,6 +138,26 @@ def build_regulation_power_config(profile: dict[str, Any]) -> RegulationPowerCon
             profile,
             "DISCHARGE_MAX_STEP_DOWN",
             _profile_float(profile, "MAX_STEP_DOWN", DEFAULT_DISCHARGE_MAX_STEP_DOWN),
+        ),
+        discharge_near_zero_deadband_w=_profile_float(
+            profile,
+            "DISCHARGE_NEAR_ZERO_DEADBAND_W",
+            DEFAULT_DISCHARGE_NEAR_ZERO_DEADBAND_W,
+        ),
+        discharge_near_zero_min_import_w=_profile_float(
+            profile,
+            "DISCHARGE_NEAR_ZERO_MIN_IMPORT_W",
+            DEFAULT_DISCHARGE_NEAR_ZERO_MIN_IMPORT_W,
+        ),
+        discharge_near_zero_trim_step_w=_profile_float(
+            profile,
+            "DISCHARGE_NEAR_ZERO_TRIM_STEP_W",
+            DEFAULT_DISCHARGE_NEAR_ZERO_TRIM_STEP_W,
+        ),
+        discharge_near_zero_max_trim_w=_profile_float(
+            profile,
+            "DISCHARGE_NEAR_ZERO_MAX_TRIM_W",
+            DEFAULT_DISCHARGE_NEAR_ZERO_MAX_TRIM_W,
         ),
         charge_deadband_w=_profile_float(
             profile,
@@ -343,6 +379,108 @@ class RegulationPowerController:
                 float(self.config.keepalive_min_output_w),
             ),
         )
+        
+    def _near_zero_output_import_trim(
+        self,
+        *,
+        grid: GridHistoryState,
+        target_import_w: float,
+        previous_output_w: float,
+    ) -> tuple[float, str, dict[str, Any]]:
+        """Small extra OUTPUT trim for persistent import during active discharge.
+
+        V4.3.0-dev3:
+        The normal discharge deadband is intentionally stable, but it can leave
+        50-100 W import standing forever. This trim only acts while OUTPUT is
+        already active and only on confirmed/persistent import.
+
+        It does not decide strategy and it does not switch modes.
+        """
+        prev = max(0.0, float(previous_output_w or 0.0))
+
+        # Do not add extra trim during the initial OUTPUT startup/keepalive range.
+        # Startup remains controlled by the existing KP and step limiter.
+        if prev <= self._discharge_keepalive_w():
+            return 0.0, "none", {
+                "near_zero_active": False,
+                "near_zero_reason": "startup_or_keepalive",
+            }
+
+        grid_now_w = float(grid.grid_now_w or 0.0)
+        grid_avg_short_w = float(grid.grid_avg_short_w or 0.0)
+        grid_avg_medium_w = float(grid.grid_avg_medium_w or 0.0)
+
+        near_deadband_w = max(
+            5.0,
+            float(self.config.discharge_near_zero_deadband_w),
+        )
+        min_import_w = max(
+            near_deadband_w,
+            float(self.config.discharge_near_zero_min_import_w),
+        )
+        trim_step_w = max(
+            1.0,
+            float(self.config.discharge_near_zero_trim_step_w),
+        )
+        max_trim_w = max(
+            trim_step_w,
+            float(self.config.discharge_near_zero_max_trim_w),
+        )
+
+        # Do not trim upward if export is already present or was just detected.
+        if int(getattr(grid, "stable_export_cycles", 0) or 0) > 0:
+            return 0.0, "none", {
+                "near_zero_active": False,
+                "near_zero_reason": "export_guard_active",
+                "near_zero_target_w": round(float(target_import_w), 2),
+                "near_zero_grid_now_w": round(grid_now_w, 2),
+                "near_zero_grid_avg_short_w": round(grid_avg_short_w, 2),
+                "near_zero_deadband_w": round(near_deadband_w, 2),
+            }
+
+        trigger_now_w = float(target_import_w) + min_import_w
+        trigger_short_w = float(target_import_w) + near_deadband_w
+
+        persistent_import = (
+            grid_now_w > trigger_now_w
+            and grid_avg_short_w > trigger_short_w
+        )
+
+        if not persistent_import:
+            return 0.0, "none", {
+                "near_zero_active": False,
+                "near_zero_reason": "inside_near_zero_band",
+                "near_zero_target_w": round(float(target_import_w), 2),
+                "near_zero_grid_now_w": round(grid_now_w, 2),
+                "near_zero_grid_avg_short_w": round(grid_avg_short_w, 2),
+                "near_zero_grid_avg_medium_w": round(grid_avg_medium_w, 2),
+                "near_zero_deadband_w": round(near_deadband_w, 2),
+            }
+
+        confirmed_error_w = min(
+            max(0.0, grid_now_w - float(target_import_w)),
+            max(0.0, grid_avg_short_w - float(target_import_w)),
+        )
+
+        # Combine a minimum trim step with a proportional part.
+        # This is deliberately small and still goes through the existing
+        # output step limiter afterwards.
+        trim_w = min(
+            max_trim_w,
+            max(trim_step_w, confirmed_error_w * 0.25),
+        )
+
+        return trim_w, "near_zero_persistent_import_trim", {
+            "near_zero_active": True,
+            "near_zero_reason": "persistent_import",
+            "near_zero_target_w": round(float(target_import_w), 2),
+            "near_zero_error_w": round(confirmed_error_w, 2),
+            "near_zero_grid_now_w": round(grid_now_w, 2),
+            "near_zero_grid_avg_short_w": round(grid_avg_short_w, 2),
+            "near_zero_grid_avg_medium_w": round(grid_avg_medium_w, 2),
+            "near_zero_deadband_w": round(near_deadband_w, 2),
+            "near_zero_trim_w": round(trim_w, 2),
+        }
 
     def _calculate_output(
         self,
@@ -398,6 +536,13 @@ class RegulationPowerController:
         target_import_w = float(self.config.discharge_target_import_w)
         error_w = control_grid_w - target_import_w
 
+        near_zero_trim_w = 0.0
+        near_zero_reason = "none"
+        near_zero_metadata: dict[str, Any] = {
+            "near_zero_active": False,
+            "near_zero_reason": "not_evaluated",
+        }
+
         if abs(error_w) <= float(self.config.discharge_deadband_w):
             raw_target = prev
             reason = "output_inside_deadband"
@@ -426,6 +571,34 @@ class RegulationPowerController:
                 reason = "output_decrease_to_avoid_export"
 
             raw_target = prev - delta
+            
+        # V4.3.0-dev3:
+        # Near-zero import trim for active OUTPUT regulation.
+        #
+        # This acts only while OUTPUT is already active and confirmed import remains.
+        # It does not switch modes and it still passes through the existing profile and
+        # step limits in _limit_output_step().
+        if (
+            intent.intent in (
+                "cover_deficit",
+                "peak_discharge",
+                "arbitrage_discharge",
+                "manual_discharge",
+            )
+            and arbiter.resolved_mode == "output"
+            and arbiter.allowed
+        ):
+            near_zero_trim_w, near_zero_reason, near_zero_metadata = (
+                self._near_zero_output_import_trim(
+                    grid=grid,
+                    target_import_w=target_import_w,
+                    previous_output_w=prev,
+                )
+            )
+
+            if near_zero_trim_w > 0.0:
+                raw_target += near_zero_trim_w
+                reason = f"{reason}_{near_zero_reason}"
 
         # For strategic discharge decisions, never exceed the strategy request.
         if requested > 0.0:
@@ -476,6 +649,9 @@ class RegulationPowerController:
                 "target_import_w": round(float(target_import_w), 2),
                 "requested_power_w": requested,
                 "error_w": round(error_w, 2),
+                "near_zero_trim_w": round(float(near_zero_trim_w or 0.0), 2),
+                "near_zero_controller_reason": near_zero_reason,
+                **near_zero_metadata,
             },
         )
 
