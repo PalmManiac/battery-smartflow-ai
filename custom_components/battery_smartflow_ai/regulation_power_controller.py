@@ -831,16 +831,16 @@ class RegulationPowerController:
         arbiter: ModeArbiterResult,
         grid: GridHistoryState,
         previous_input_w: float,
-        ) -> PowerControllerResult:
-            prev = max(0.0, float(previous_input_w or 0.0))
+    ) -> PowerControllerResult:
+        prev = max(0.0, float(previous_input_w or 0.0))
 
-            requested = (
-                float(intent.requested_power_w)
-                if intent.requested_power_w is not None
-                else 0.0
-            )
+        requested = (
+            float(intent.requested_power_w)
+            if intent.requested_power_w is not None
+            else 0.0
+        )
 
-            base_target_import_w = float(self.config.target_import_w)
+        base_target_import_w = float(self.config.target_import_w)
         target_import_w, economic_target_metadata = (
             self._effective_target_import_w(
                 intent=intent,
