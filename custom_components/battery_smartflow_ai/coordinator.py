@@ -3592,7 +3592,42 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             
             strategy_intent = decision_to_strategy_intent(decision)
-            
+
+            # V4.3.0-dev3.1:
+            # Provide economic grid-target data to the technical PowerController.
+            #
+            # The PowerController does not decide whether charging or discharging
+            # should start. It only uses these values to shift the small technical
+            # target range toward slight export when that is economically preferable.
+            feed_in_tariff_configured = bool(
+                CONF_FEED_IN_TARIFF in self.entry.options
+                or CONF_FEED_IN_TARIFF in self.entry.data
+            )
+
+            battery_value_eur_kwh = _to_float(
+                self._persist.get("trade_avg_charge_price"),
+                None,
+            )
+
+            # Compatibility fallback for older persisted installations.
+            if battery_value_eur_kwh is None:
+                battery_value_eur_kwh = _to_float(
+                    self._persist.get("avg_charge_price"),
+                    None,
+                )
+
+            strategy_intent.metadata.update(
+                {
+                    "feed_in_tariff_configured": bool(
+                        feed_in_tariff_configured
+                    ),
+                    "feed_in_tariff_eur_kwh": float(
+                        feed_in_tariff or 0.0
+                    ),
+                    "battery_value_eur_kwh": battery_value_eur_kwh,
+                }
+            )
+
             strategy_meta = dict(strategy_intent.metadata or {})
 
             strategy_state = str(strategy_meta.get("strategy_state", "idle_ready"))
