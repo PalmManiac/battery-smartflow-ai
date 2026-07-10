@@ -39,6 +39,7 @@ DEFAULT_DISCHARGE_NEAR_ZERO_MAX_TRIM_W = 80.0
 # value or when stored battery energy is cheaper than the feed-in tariff.
 DEFAULT_ECONOMIC_EXPORT_TARGET_W = -15.0
 DEFAULT_ECONOMIC_EXPORT_MARGIN_EUR_KWH = 0.01
+DEFAULT_ECONOMIC_TARGET_DEADBAND_W = 15.0
 
 DEFAULT_CHARGE_DEADBAND_W = 30.0
 DEFAULT_CHARGE_KP_UP = 0.65
@@ -73,6 +74,7 @@ class RegulationPowerConfig:
     economic_export_margin_eur_kwh: float = (
         DEFAULT_ECONOMIC_EXPORT_MARGIN_EUR_KWH
     )
+    economic_target_deadband_w: float = DEFAULT_ECONOMIC_TARGET_DEADBAND_W
 
     charge_deadband_w: float = DEFAULT_CHARGE_DEADBAND_W
     charge_kp_up: float = DEFAULT_CHARGE_KP_UP
@@ -181,6 +183,11 @@ def build_regulation_power_config(profile: dict[str, Any]) -> RegulationPowerCon
             profile,
             "ECONOMIC_EXPORT_MARGIN_EUR_KWH",
             DEFAULT_ECONOMIC_EXPORT_MARGIN_EUR_KWH,
+        ),
+        economic_target_deadband_w=_profile_float(
+            profile,
+            "ECONOMIC_TARGET_DEADBAND_W",
+            DEFAULT_ECONOMIC_TARGET_DEADBAND_W,
         ),
         charge_deadband_w=_profile_float(
             profile,
@@ -417,6 +424,36 @@ class RegulationPowerController:
         except (TypeError, ValueError, AttributeError):
             return None
 
+    def _effective_deadband_w(
+        self,
+        *,
+        base_deadband_w: float,
+        economic_target_metadata: dict[str, Any],
+    ) -> float:
+        """Return the active technical deadband.
+
+        V4.3.0-dev3.1:
+        When an economic export target is active, use a narrower deadband so
+        small grid import is not accepted as a stable target state.
+        """
+        base_deadband = max(1.0, float(base_deadband_w))
+
+        if not bool(
+            economic_target_metadata.get(
+                "economic_target_active",
+                False,
+            )
+        ):
+            return base_deadband
+
+        economic_deadband = max(
+            1.0,
+            float(self.config.economic_target_deadband_w),
+        )
+
+        # The economic deadband may narrow the normal controller band, but it
+        # must never make an existing device profile less precise.
+        return min(base_deadband, economic_deadband)
 
     def _effective_target_import_w(
         self,
@@ -660,6 +697,11 @@ class RegulationPowerController:
             )
         )
 
+        output_deadband_w = self._effective_deadband_w(
+            base_deadband_w=float(self.config.discharge_deadband_w),
+            economic_target_metadata=economic_target_metadata,
+        )
+
         control_grid_w = self._control_grid_w_for_output(grid)
 
         if intent.intent == "manual_constant_discharge":
@@ -711,7 +753,7 @@ class RegulationPowerController:
             "near_zero_reason": "not_evaluated",
         }
 
-        if abs(error_w) <= float(self.config.discharge_deadband_w):
+        if abs(error_w) <= output_deadband_w:
             raw_target = prev
             reason = "output_inside_deadband"
         elif error_w > 0.0:
@@ -815,6 +857,7 @@ class RegulationPowerController:
                 "grid_avg_medium_w": round(float(grid.grid_avg_medium_w or 0.0), 2),
                 "control_grid_w": round(control_grid_w, 2),
                 "target_import_w": round(float(target_import_w), 2),
+                "effective_deadband_w": round(output_deadband_w, 2),
                 "requested_power_w": requested,
                 "error_w": round(error_w, 2),
                 "near_zero_trim_w": round(float(near_zero_trim_w or 0.0), 2),
@@ -849,6 +892,11 @@ class RegulationPowerController:
             )
         )
 
+        input_deadband_w = self._effective_deadband_w(
+            base_deadband_w=float(self.config.charge_deadband_w),
+            economic_target_metadata=economic_target_metadata,
+        )
+
         control_grid_w = self._control_grid_w_for_input(grid)
 
         if intent.intent == "pv_charge":
@@ -864,7 +912,7 @@ class RegulationPowerController:
             grid_now_w = float(grid.grid_now_w or 0.0)
             error_w = target_import_w - float(control_grid_w)
 
-            if abs(error_w) <= float(self.config.charge_deadband_w):
+            if abs(error_w) <= input_deadband_w:
                 raw_target = prev
                 reason = "pv_input_inside_deadband"
 
@@ -941,6 +989,7 @@ class RegulationPowerController:
                     "grid_avg_medium_w": round(float(grid.grid_avg_medium_w or 0.0), 2),
                     "control_grid_w": round(control_grid_w, 2),
                     "target_import_w": round(float(target_import_w), 2),
+                    "effective_deadband_w": round(input_deadband_w, 2),
                     "requested_power_w": requested,
                     "error_w": round(error_w, 2),
                     "current_grid_limited": bool(current_grid_limited),
