@@ -831,10 +831,16 @@ class RegulationPowerController:
         arbiter: ModeArbiterResult,
         grid: GridHistoryState,
         previous_input_w: float,
-    ) -> PowerControllerResult:
-        prev = max(0.0, float(previous_input_w or 0.0))
+        ) -> PowerControllerResult:
+            prev = max(0.0, float(previous_input_w or 0.0))
 
-        base_target_import_w = float(self.config.target_import_w)
+            requested = (
+                float(intent.requested_power_w)
+                if intent.requested_power_w is not None
+                else 0.0
+            )
+
+            base_target_import_w = float(self.config.target_import_w)
         target_import_w, economic_target_metadata = (
             self._effective_target_import_w(
                 intent=intent,
@@ -937,17 +943,14 @@ class RegulationPowerController:
                     "target_import_w": round(float(target_import_w), 2),
                     "requested_power_w": requested,
                     "error_w": round(error_w, 2),
+                    "current_grid_limited": bool(current_grid_limited),
                     **economic_target_metadata,
                 },
                 max_step_down_override_w=max_step_down_override_w,
             )
 
         # Planned/manual/emergency charging uses the strategy request.
-        raw_target = (
-            float(intent.requested_power_w)
-            if intent.requested_power_w is not None
-            else 0.0
-        )
+        raw_target = requested
 
         return self._limit_input_step(
             raw_target_w=raw_target,
@@ -958,6 +961,7 @@ class RegulationPowerController:
                 "resolved_mode": arbiter.resolved_mode,
                 "control_grid_w": round(control_grid_w, 2),
                 "requested_power_w": raw_target,
+                **economic_target_metadata,
             },
         )
 
