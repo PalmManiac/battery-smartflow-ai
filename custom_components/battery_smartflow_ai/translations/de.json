@@ -834,6 +834,18 @@
       },
       "charge_commit_allow_pv_blend": {
         "name": "PV-Anteil für AC-Ladebindung erlaubt"
+      },
+	  "charge_source_allocation": {
+        "name": "Ladequellen-Aufteilung",
+        "state": {
+          "no_active_charge_binding": "Keine aktive Ladebindung",
+          "no_charge_target": "Kein Ladeziel",
+          "pv_blend_disabled": "PV-Beimischung deaktiviert",
+          "grid_only_no_pv_surplus": "Nur Netzladung",
+          "pv_covers_total_charge_target": "PV deckt das Ladeziel",
+          "mixed_charge_grid_limit_reached": "Mischladung mit Netzbegrenzung",
+          "mixed_pv_grid_charge": "PV- und Netz-Mischladung"
+        }
       }
     }
   }
