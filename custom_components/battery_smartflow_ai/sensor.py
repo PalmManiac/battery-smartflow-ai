@@ -106,6 +106,16 @@ OFFGRID_RULE_REASON_ENUMS = [
     "offgrid_load_support",
 ]
 
+CHARGE_SOURCE_ALLOCATION_REASON_ENUMS = [
+    "no_active_charge_binding",
+    "no_charge_target",
+    "pv_blend_disabled",
+    "grid_only_no_pv_surplus",
+    "pv_covers_total_charge_target",
+    "mixed_charge_grid_limit_reached",
+    "mixed_pv_grid_charge",
+]
+
 
 @dataclass(frozen=True, kw_only=True)
 class ZendureSensorEntityDescription(SensorEntityDescription):
@@ -313,6 +323,15 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         icon="mdi:solar-power-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+    ),
+    ZendureSensorEntityDescription(
+        key="charge_source_allocation",
+        translation_key="charge_source_allocation",
+        runtime_key="charge_source_allocation_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=CHARGE_SOURCE_ALLOCATION_REASON_ENUMS,
+        icon="mdi:transmission-tower-import",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 
     # --------------------------------------------------
@@ -883,6 +902,51 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         return val
 
+    def _build_charge_source_allocation_attributes(self) -> dict:
+        """Return diagnostic attributes for the charge source allocation."""
+
+        data = self.coordinator.data or {}
+        details = data.get("details") or {}
+
+        return {
+            "active": details.get(
+                "charge_source_allocation_active",
+                data.get("charge_source_allocation_active"),
+            ),
+            "total_target_w": details.get(
+                "charge_total_target_w",
+                data.get("charge_total_target_w"),
+            ),
+            "pv_available_w": details.get(
+                "charge_pv_available_w",
+                data.get("charge_pv_available_w"),
+            ),
+            "pv_allocated_w": details.get(
+                "charge_pv_allocated_w",
+                data.get("charge_pv_allocated_w"),
+            ),
+            "grid_requested_w": details.get(
+                "charge_grid_requested_w",
+                data.get("charge_grid_requested_w"),
+            ),
+            "unfilled_w": details.get(
+                "charge_unfilled_w",
+                data.get("charge_unfilled_w"),
+            ),
+            "pv_share_pct": details.get(
+                "charge_pv_share_pct",
+                data.get("charge_pv_share_pct"),
+            ),
+            "grid_share_pct": details.get(
+                "charge_grid_share_pct",
+                data.get("charge_grid_share_pct"),
+            ),
+            "reason": details.get(
+                "charge_source_allocation_reason",
+                data.get("charge_source_allocation_reason"),
+            ),
+        }
+
     def _build_device_profile_attributes(self) -> dict:
         data = self.coordinator.data or {}
         details = data.get("details") or {}
@@ -945,6 +1009,9 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         if self.entity_description.runtime_key == "device_profile":
             attrs = self._build_device_profile_attributes()
+
+        elif self.entity_description.key == "charge_source_allocation":
+            attrs = self._build_charge_source_allocation_attributes()
 
         self._attr_extra_state_attributes = attrs
         super()._handle_coordinator_update()
