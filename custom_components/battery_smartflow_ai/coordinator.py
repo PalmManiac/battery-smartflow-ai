@@ -134,13 +134,11 @@ from .learned_planning import (
     learned_typical_charge_power_w,
 )
 from .grid_history import GridHistory, build_grid_history_config
+from .charge_source_allocator import ChargeSourceAllocator
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
-from .regulation_models import (
-    ChargeSourceAllocation,
-    RegulationRuntimeState,
-)
+from .regulation_models import RegulationRuntimeState
 from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
@@ -305,6 +303,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         self._engine = DecisionEngine()
+        self._charge_source_allocator = ChargeSourceAllocator()
         
         self._grid_history = GridHistory(
             build_grid_history_config(self._get_active_profile())
@@ -476,124 +475,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mode in (AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_MANUAL):
             return str(mode)
         return AI_MODE_AUTOMATIC
-        
-    def _allocate_charge_sources(
-        self,
-        *,
-        charge_commit_active: bool,
-        allow_pv_blend: bool,
-        total_target_w: float,
-        pv_w: float,
-        house_load_w: float,
-        max_grid_input_w: float,
-    ) -> ChargeSourceAllocation:
-        """Calculate the provisional PV/grid split of an AC-Ladebindung.
-
-        V4.3.0-dev4.0:
-        Diagnostic only. This result does not yet modify the device command.
-
-        The estimated PV contribution is the PV power remaining after the
-        measured house load. This also works during mixed charging because the
-        house-load calculation already excludes measured battery charging.
-
-        Example:
-            total charge target = 1800 W
-            PV after house load = 650 W
-            provisional grid request = 1150 W
-        """
-        total_target = max(0.0, float(total_target_w or 0.0))
-        max_grid_input = max(0.0, float(max_grid_input_w or 0.0))
-
-        if not bool(charge_commit_active):
-            return ChargeSourceAllocation(
-                active=False,
-                total_target_w=total_target,
-                reason="no_active_charge_binding",
-            )
-
-        if total_target <= 0.0:
-            return ChargeSourceAllocation(
-                active=False,
-                total_target_w=0.0,
-                reason="no_charge_target",
-            )
-
-        if not bool(allow_pv_blend):
-            grid_requested = min(total_target, max_grid_input)
-            unfilled = max(0.0, total_target - grid_requested)
-
-            return ChargeSourceAllocation(
-                active=True,
-                total_target_w=total_target,
-                pv_available_w=0.0,
-                pv_allocated_w=0.0,
-                grid_requested_w=grid_requested,
-                unfilled_w=unfilled,
-                pv_share_pct=0.0,
-                grid_share_pct=round(
-                    (grid_requested / total_target) * 100.0,
-                    1,
-                ),
-                reason="pv_blend_disabled",
-            )
-
-        pv_available = max(
-            0.0,
-            float(pv_w or 0.0) - float(house_load_w or 0.0),
-        )
-
-        pv_allocated = min(
-            total_target,
-            pv_available,
-        )
-
-        remaining_target = max(
-            0.0,
-            total_target - pv_allocated,
-        )
-
-        grid_requested = min(
-            remaining_target,
-            max_grid_input,
-        )
-
-        unfilled = max(
-            0.0,
-            remaining_target - grid_requested,
-        )
-
-        pv_share_pct = (
-            (pv_allocated / total_target) * 100.0
-            if total_target > 0.0
-            else 0.0
-        )
-
-        grid_share_pct = (
-            (grid_requested / total_target) * 100.0
-            if total_target > 0.0
-            else 0.0
-        )
-
-        if pv_allocated <= 0.0:
-            reason = "grid_only_no_pv_surplus"
-        elif grid_requested <= 0.0:
-            reason = "pv_covers_total_charge_target"
-        elif unfilled > 0.0:
-            reason = "mixed_charge_grid_limit_reached"
-        else:
-            reason = "mixed_pv_grid_charge"
-
-        return ChargeSourceAllocation(
-            active=True,
-            total_target_w=round(total_target, 2),
-            pv_available_w=round(pv_available, 2),
-            pv_allocated_w=round(pv_allocated, 2),
-            grid_requested_w=round(grid_requested, 2),
-            unfilled_w=round(unfilled, 2),
-            pv_share_pct=round(pv_share_pct, 1),
-            grid_share_pct=round(grid_share_pct, 1),
-            reason=reason,
-        )
         
     def _charge_pricing_reason(self, decision_reason: str | None) -> str:
         """Return the reason that should be used for charge price attribution.
@@ -3694,11 +3575,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             
             # V4.3.0-dev4.0:
-            # Calculate the provisional PV/grid split of an active AC-Ladebindung.
+            # Calculate the provisional PV/grid split through the dedicated
+            # ChargeSourceAllocator.
             #
-            # Diagnostic only in dev4.0. The resulting grid_requested_w does not yet
-            # modify decision.charge_w or the final device command.
-            charge_source_allocation = self._allocate_charge_sources(
+            # Diagnostic only in dev4.0. The result does not yet modify
+            # decision.charge_w or the final device command.
+            charge_source_allocation = self._charge_source_allocator.allocate(
                 charge_commit_active=bool(
                     self._persist.get("charge_commit_active", False)
                 ),
