@@ -477,7 +477,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return str(mode)
         return AI_MODE_AUTOMATIC
         
-        def _allocate_charge_sources(
+    def _allocate_charge_sources(
         self,
         *,
         charge_commit_active: bool,
