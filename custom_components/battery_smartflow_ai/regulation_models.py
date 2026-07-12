@@ -136,6 +136,44 @@ class PowerControllerResult:
 
 
 @dataclass
+class ChargeSourceAllocation:
+    """Calculated source split for an active strategic AC charge binding.
+
+    V4.3.0-dev4.0:
+    Diagnostic-only source allocation.
+
+    total_target_w:
+        Strategic total battery charge target.
+
+    pv_available_w:
+        Estimated PV power remaining after house load.
+
+    pv_allocated_w:
+        PV contribution assigned to the total charge target.
+
+    grid_requested_w:
+        Remaining AC/grid contribution required to reach the total target.
+
+    unfilled_w:
+        Part of the total target that cannot be covered because the grid input
+        limit is lower than the required remaining power.
+    """
+
+    active: bool = False
+
+    total_target_w: float = 0.0
+    pv_available_w: float = 0.0
+    pv_allocated_w: float = 0.0
+    grid_requested_w: float = 0.0
+    unfilled_w: float = 0.0
+
+    pv_share_pct: float = 0.0
+    grid_share_pct: float = 0.0
+
+    reason: str = "inactive"
+
+
+@dataclass
 class DeviceCommand:
     """Final command that may be written to Home Assistant/Zendure entities."""
 
