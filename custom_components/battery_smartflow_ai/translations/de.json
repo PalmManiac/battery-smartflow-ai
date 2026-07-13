@@ -372,6 +372,16 @@
 		  "summer_peak_reserve": "Sommer-Peak-Reserve"
         }
       },
+	  "automatic_weighting": {
+        "name": "Automatik-Gewichtung",
+        "state": {
+          "inactive": "Nicht aktiv",
+          "pv_oriented": "PV-orientiert",
+          "balanced": "Ausgeglichen",
+          "price_oriented": "Preisorientiert",
+          "reserve_oriented": "Reserveorientiert"
+        }
+      },
       "learned_planning_status": {
         "name": "Ladeplanung: Lernstatus",
         "state": {
