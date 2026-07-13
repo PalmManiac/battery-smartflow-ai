@@ -135,6 +135,7 @@ from .learned_planning import (
 )
 from .grid_history import GridHistory, build_grid_history_config
 from .charge_source_allocator import ChargeSourceAllocator
+from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
@@ -303,6 +304,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         self._engine = DecisionEngine()
+        self._automatic_strategy = AutomaticStrategy()
         self._charge_source_allocator = ChargeSourceAllocator()
         
         self._grid_history = GridHistory(
@@ -2880,6 +2882,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 export_w=float(grid_export),
                 now=now,
             )
+            
+            # V4.3.0-dev5.0:
+            # Build the new unified automatic-strategy context.
+            #
+            # Diagnostic only in dev5.0. DecisionEngine still uses the existing
+            # strategy paths, so this must not change charging or discharging.
+            automatic_season_context = (
+                "summer_like"
+                if str(season) == "summer"
+                else "winter_like"
+                if str(season) == "winter"
+                else "neutral"
+            )
+
+            automatic_strategy_context = self._automatic_strategy.evaluate(
+                automatic_mode_active=(
+                    str(ai_mode) == AI_MODE_AUTOMATIC
+                ),
+                season_context=automatic_season_context,
+                metadata={
+                    "legacy_season_mode": str(season),
+                    "pv_w": round(float(pv_w or 0.0), 2),
+                    "grid_import_w": round(
+                        float(grid_import or 0.0),
+                        2,
+                    ),
+                    "grid_export_w": round(
+                        float(grid_export or 0.0),
+                        2,
+                    ),
+                    "soc": round(float(soc), 2),
+                    "forecast_status": str(forecast_summary.status),
+                    "pv_outlook": str(forecast_summary.pv_outlook),
+                },
+            )
 
             global_lowest_cell_voltage = self._get_global_lowest_cell_voltage()
             cell_voltage_status = self._get_cell_voltage_status(global_lowest_cell_voltage)
@@ -3648,6 +3685,30 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ),
                     "charge_source_allocation_reason": str(
                         charge_source_allocation.reason
+                    ),
+                    "automatic_strategy_active": bool(
+                        automatic_strategy_context.active
+                    ),
+                    "automatic_weighting": str(
+                        automatic_strategy_context.weighting
+                    ),
+                    "automatic_season_context": str(
+                        automatic_strategy_context.season_context
+                    ),
+                    "automatic_pv_weight": float(
+                        automatic_strategy_context.pv_weight
+                    ),
+                    "automatic_price_weight": float(
+                        automatic_strategy_context.price_weight
+                    ),
+                    "automatic_reserve_weight": float(
+                        automatic_strategy_context.reserve_weight
+                    ),
+                    "automatic_forecast_weight": float(
+                        automatic_strategy_context.forecast_weight
+                    ),
+                    "automatic_strategy_reason": str(
+                        automatic_strategy_context.reason
                     ),
                 }
             )
@@ -4673,6 +4734,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     learned_profile_diagnostics.current_slot_index
                 ),
                 "strategy_state": strategy_state,
+                # V4.3.0-dev5.0 unified automatic-strategy context
+                "automatic_strategy_active": bool(
+                    automatic_strategy_context.active
+                ),
+                "automatic_weighting": str(
+                    automatic_strategy_context.weighting
+                ),
+                "automatic_season_context": str(
+                    automatic_strategy_context.season_context
+                ),
+                "automatic_pv_weight": float(
+                    automatic_strategy_context.pv_weight
+                ),
+                "automatic_price_weight": float(
+                    automatic_strategy_context.price_weight
+                ),
+                "automatic_reserve_weight": float(
+                    automatic_strategy_context.reserve_weight
+                ),
+                "automatic_forecast_weight": float(
+                    automatic_strategy_context.forecast_weight
+                ),
+                "automatic_strategy_reason": str(
+                    automatic_strategy_context.reason
+                ),
                 "visible_state": visible_state,
                 "strategic_reason": strategic_reason,
                 "technical_reason": technical_reason,
@@ -4769,6 +4855,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economic_discharge_threshold": economic_discharge_threshold,
                 "effective_discharge_threshold": effective_discharge_threshold,
                 "engine_health": engine_health,
+                # V4.3.0-dev5.0 unified automatic-strategy context
+                "automatic_strategy_active": bool(
+                    automatic_strategy_context.active
+                ),
+                "automatic_weighting": str(
+                    automatic_strategy_context.weighting
+                ),
+                "automatic_season_context": str(
+                    automatic_strategy_context.season_context
+                ),
+                "automatic_pv_weight": float(
+                    automatic_strategy_context.pv_weight
+                ),
+                "automatic_price_weight": float(
+                    automatic_strategy_context.price_weight
+                ),
+                "automatic_reserve_weight": float(
+                    automatic_strategy_context.reserve_weight
+                ),
+                "automatic_forecast_weight": float(
+                    automatic_strategy_context.forecast_weight
+                ),
+                "automatic_strategy_reason": str(
+                    automatic_strategy_context.reason
+                ),
                 "strategy_state": strategy_state,
                 "visible_state": visible_state,
                 "strategic_reason": strategic_reason,
