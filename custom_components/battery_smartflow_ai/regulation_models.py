@@ -51,6 +51,20 @@ CommandSkipReason = Literal[
     "mode_hold_active",
 ]
 
+AutomaticWeighting = Literal[
+    "inactive",
+    "pv_oriented",
+    "balanced",
+    "price_oriented",
+    "reserve_oriented",
+]
+
+SeasonContext = Literal[
+    "neutral",
+    "summer_like",
+    "winter_like",
+]
+
 
 @dataclass
 class StrategyIntent:
@@ -74,6 +88,29 @@ class StrategyIntent:
     allow_mode_switch: bool = True
     force: bool = False
 
+    metadata: dict[str, Any] = field(default_factory=dict)
+    
+
+@dataclass
+class StrategyContext:
+    """High-level context produced by the automatic strategy layer.
+
+    V4.3.0-dev5.0:
+    The context is diagnostic-only. The DecisionEngine does not consume these
+    weights yet, so this first step must not change strategic behavior.
+    """
+
+    active: bool = False
+
+    weighting: AutomaticWeighting = "inactive"
+    season_context: SeasonContext = "neutral"
+
+    pv_weight: float = 0.0
+    price_weight: float = 0.0
+    reserve_weight: float = 0.0
+    forecast_weight: float = 0.0
+
+    reason: str = "not_evaluated"
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
