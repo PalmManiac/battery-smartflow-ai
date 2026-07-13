@@ -36,6 +36,7 @@ from .const import (
     TECHNICAL_REASON_ENUMS,
     CHARGE_COMMIT_TYPE_ENUMS,
     CHARGE_COMMIT_ABORT_REASON_ENUMS,
+    AUTOMATIC_WEIGHTING_ENUMS,
 )
 from .device_profiles import DEVICE_PROFILES
 
@@ -194,6 +195,15 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=VISIBLE_STATE_ENUMS,
         icon="mdi:eye-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="automatic_weighting",
+        translation_key="automatic_weighting",
+        runtime_key="automatic_weighting",
+        device_class=SensorDeviceClass.ENUM,
+        options=AUTOMATIC_WEIGHTING_ENUMS,
+        icon="mdi:tune-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ZendureSensorEntityDescription(
@@ -901,6 +911,43 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 return None
 
         return val
+        
+    def _build_automatic_weighting_attributes(self) -> dict:
+        """Return diagnostics for the unified automatic strategy context."""
+
+        data = self.coordinator.data or {}
+        details = data.get("details") or {}
+
+        return {
+            "active": details.get(
+                "automatic_strategy_active",
+                data.get("automatic_strategy_active"),
+            ),
+            "season_context": details.get(
+                "automatic_season_context",
+                data.get("automatic_season_context"),
+            ),
+            "pv_weight": details.get(
+                "automatic_pv_weight",
+                data.get("automatic_pv_weight"),
+            ),
+            "price_weight": details.get(
+                "automatic_price_weight",
+                data.get("automatic_price_weight"),
+            ),
+            "reserve_weight": details.get(
+                "automatic_reserve_weight",
+                data.get("automatic_reserve_weight"),
+            ),
+            "forecast_weight": details.get(
+                "automatic_forecast_weight",
+                data.get("automatic_forecast_weight"),
+            ),
+            "reason": details.get(
+                "automatic_strategy_reason",
+                data.get("automatic_strategy_reason"),
+            ),
+        }
 
     def _build_charge_source_allocation_attributes(self) -> dict:
         """Return diagnostic attributes for the charge source allocation."""
@@ -1012,6 +1059,9 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         elif self.entity_description.key == "charge_source_allocation":
             attrs = self._build_charge_source_allocation_attributes()
+
+        elif self.entity_description.key == "automatic_weighting":
+            attrs = self._build_automatic_weighting_attributes()
 
         self._attr_extra_state_attributes = attrs
         super()._handle_coordinator_update()
