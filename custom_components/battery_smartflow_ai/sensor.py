@@ -947,6 +947,22 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "automatic_strategy_reason",
                 data.get("automatic_strategy_reason"),
             ),
+            "pv_weight_reason": details.get(
+                "automatic_pv_weight_reason",
+                data.get("automatic_pv_weight_reason"),
+            ),
+            "price_weight_reason": details.get(
+                "automatic_price_weight_reason",
+                data.get("automatic_price_weight_reason"),
+            ),
+            "reserve_weight_reason": details.get(
+                "automatic_reserve_weight_reason",
+                data.get("automatic_reserve_weight_reason"),
+            ),
+            "forecast_weight_reason": details.get(
+                "automatic_forecast_weight_reason",
+                data.get("automatic_forecast_weight_reason"),
+            ),
         }
 
     def _build_charge_source_allocation_attributes(self) -> dict:
