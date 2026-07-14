@@ -268,6 +268,47 @@ class AutomaticStrategy:
             return "balanced", "balanced_with_high_forecast_relevance"
 
         return "balanced", "no_clear_dominant_weight"
+        
+    def _automatic_discharge_permission(
+        self,
+        *,
+        price_weight: float,
+        price_reason: str,
+        reserve_weight: float,
+        reserve_reason: str,
+        pv_weight: float,
+        pv_reason: str,
+    ) -> tuple[bool, str]:
+        """Return whether Automatic may consider economic discharge.
+
+        V4.3.0-dev5.2:
+        This is a strategic context permission, not the final discharge
+        decision. DecisionEngine still checks the real price threshold,
+        market window, SoC and all protection conditions.
+        """
+
+        if reserve_reason == "reserve_critical":
+            return False, "reserve_critical_blocks_discharge"
+
+        if float(reserve_weight) >= 0.90:
+            return False, "reserve_weight_blocks_discharge"
+
+        if (
+            pv_reason == "pv_covers_house_load"
+            and float(pv_weight) >= 0.85
+        ):
+            return False, "pv_covers_load_blocks_discharge"
+
+        if price_reason not in {
+            "expensive_price_range",
+            "very_expensive_price_range",
+        }:
+            return False, "price_not_in_discharge_range"
+
+        if float(price_weight) < 0.60:
+            return False, "price_weight_too_low"
+
+        return True, "economic_discharge_context_allowed"
 
     def evaluate(
         self,
@@ -295,6 +336,15 @@ class AutomaticStrategy:
         context_metadata = dict(metadata or {})
 
         if not bool(automatic_mode_active):
+            context_metadata.update(
+                {
+                    "automatic_discharge_allowed": False,
+                    "automatic_discharge_reason": (
+                        "automatic_mode_inactive"
+                    ),
+                }
+            )
+
             return StrategyContext(
                 active=False,
                 weighting="inactive",
@@ -342,6 +392,18 @@ class AutomaticStrategy:
             reserve_weight=reserve_weight,
             forecast_weight=forecast_weight,
         )
+        
+        (
+            automatic_discharge_allowed,
+            automatic_discharge_reason,
+        ) = self._automatic_discharge_permission(
+            price_weight=price_weight,
+            price_reason=price_reason,
+            reserve_weight=reserve_weight,
+            reserve_reason=reserve_reason,
+            pv_weight=pv_weight,
+            pv_reason=pv_reason,
+        )
 
         context_metadata.update(
             {
@@ -350,6 +412,12 @@ class AutomaticStrategy:
                 "reserve_weight_reason": reserve_reason,
                 "forecast_weight_reason": forecast_reason,
                 "weighting_reason": weighting_reason,
+                "automatic_discharge_allowed": bool(
+                    automatic_discharge_allowed
+                ),
+                "automatic_discharge_reason": str(
+                    automatic_discharge_reason
+                ),
             }
         )
 
