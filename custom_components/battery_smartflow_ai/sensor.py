@@ -963,6 +963,18 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "automatic_forecast_weight_reason",
                 data.get("automatic_forecast_weight_reason"),
             ),
+            "discharge_allowed": details.get(
+                "automatic_discharge_allowed",
+                data.get("automatic_discharge_allowed"),
+            ),
+            "discharge_reason": details.get(
+                "automatic_discharge_reason",
+                data.get("automatic_discharge_reason"),
+            ),
+            "discharge_latch_reason": details.get(
+                "automatic_discharge_latch_reason",
+                data.get("automatic_discharge_latch_reason"),
+            ),
         }
 
     def _build_charge_source_allocation_attributes(self) -> dict:
