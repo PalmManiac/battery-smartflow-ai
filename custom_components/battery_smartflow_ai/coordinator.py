@@ -2868,10 +2868,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["sf800_pv_charge_stop_counter"] = 0
 
             daily_avg_price = None
+            daily_min_price = None
+            daily_max_price = None
+
             if price_points:
-                prices = [p.price for p in price_points]
+                prices = [float(p.price) for p in price_points]
+
                 if prices:
                     daily_avg_price = sum(prices) / len(prices)
+                    daily_min_price = min(prices)
+                    daily_max_price = max(prices)
 
             peak_factor = float(
                 self.runtime_settings.get(
@@ -2996,9 +3002,32 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     str(ai_mode) == AI_MODE_AUTOMATIC
                 ),
                 season_context=automatic_season_context,
+                pv_w=float(pv_w or 0.0),
+                house_load_w=float(house_load or 0.0),
+                installed_pv_wp=float(
+                    self._get_installed_pv_wp()
+                ),
+                soc=float(soc),
+                soc_min=float(soc_min),
+                soc_max=float(soc_max),
+                price_now=price_now,
+                price_min=daily_min_price,
+                price_max=daily_max_price,
+                price_average=daily_avg_price,
+                forecast_status=str(
+                    forecast_summary.status
+                ),
+                pv_outlook=str(
+                    forecast_summary.pv_outlook
+                ),
+                forecast_remaining_today_kwh=float(
+                    forecast_summary.remaining_today_kwh
+                ),
+                forecast_tomorrow_kwh=float(
+                    forecast_summary.tomorrow_kwh
+                ),
                 metadata={
                     "legacy_season_mode": str(season),
-                    "pv_w": round(float(pv_w or 0.0), 2),
                     "grid_import_w": round(
                         float(grid_import or 0.0),
                         2,
@@ -3007,9 +3036,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         float(grid_export or 0.0),
                         2,
                     ),
-                    "soc": round(float(soc), 2),
-                    "forecast_status": str(forecast_summary.status),
-                    "pv_outlook": str(forecast_summary.pv_outlook),
+                    "daily_min_price": daily_min_price,
+                    "daily_max_price": daily_max_price,
+                    "daily_average_price": daily_avg_price,
                 },
             )
 
@@ -3811,6 +3840,30 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ),
                     "automatic_strategy_reason": str(
                         automatic_strategy_context.reason
+                    ),
+                    "automatic_pv_weight_reason": str(
+                        automatic_strategy_context.metadata.get(
+                            "pv_weight_reason",
+                            "unknown",
+                        )
+                    ),
+                    "automatic_price_weight_reason": str(
+                        automatic_strategy_context.metadata.get(
+                            "price_weight_reason",
+                            "unknown",
+                        )
+                    ),
+                    "automatic_reserve_weight_reason": str(
+                        automatic_strategy_context.metadata.get(
+                            "reserve_weight_reason",
+                            "unknown",
+                        )
+                    ),
+                    "automatic_forecast_weight_reason": str(
+                        automatic_strategy_context.metadata.get(
+                            "forecast_weight_reason",
+                            "unknown",
+                        )
                     ),
                 }
             )
