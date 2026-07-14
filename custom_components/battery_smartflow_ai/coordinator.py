@@ -4914,6 +4914,30 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "automatic_strategy_reason": str(
                     automatic_strategy_context.reason
                 ),
+                "automatic_pv_weight_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "pv_weight_reason",
+                        "unknown",
+                    )
+                ),
+                "automatic_price_weight_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "price_weight_reason",
+                        "unknown",
+                    )
+                ),
+                "automatic_reserve_weight_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "reserve_weight_reason",
+                        "unknown",
+                    )
+                ),
+                "automatic_forecast_weight_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "forecast_weight_reason",
+                        "unknown",
+                    )
+                ),
                 "visible_state": visible_state,
                 "strategic_reason": strategic_reason,
                 "technical_reason": technical_reason,
