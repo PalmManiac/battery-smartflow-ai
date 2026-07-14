@@ -158,6 +158,11 @@ PV_SURPLUS_DISPLAY_HOLD_S = 60
 
 CHARGE_COMMIT_PRICE_VALID_MINUTES = 20
 
+# V4.3.0-dev5.0.1:
+# Small hysteresis for the strategic AC-charge price guard.
+# Prevents a charge binding from flickering exactly at the discharge threshold.
+STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH = 0.005
+
 CHARGE_COMMIT_PLANNING_REASONS = {
     "planning_latest_start",
     "planning_forecast_poor",
@@ -642,6 +647,51 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return None
 
 
+    def _strategic_ac_charge_price_conflict(
+        self,
+        *,
+        reason: str,
+        price_now: float | None,
+        effective_discharge_threshold: float | None,
+    ) -> bool:
+        """Return whether a learned/planned AC charge conflicts with discharge economics.
+
+        V4.3.0-dev5.0.1:
+        A learned or planned charge must not start or continue when the current
+        electricity price is already at or above the effective discharge
+        threshold.
+
+        This guard deliberately does not affect emergency, cell-protection or
+        manual charging.
+        """
+        if reason not in (
+            CHARGE_COMMIT_PLANNING_REASONS
+            | CHARGE_COMMIT_LEARNED_REASONS
+        ):
+            return False
+
+        current_price = _to_float(price_now, None)
+        discharge_threshold = _to_float(
+            effective_discharge_threshold,
+            None,
+        )
+
+        if current_price is None or discharge_threshold is None:
+            return False
+
+        if discharge_threshold <= 0.0:
+            return False
+
+        margin = max(
+            0.0,
+            float(STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH),
+        )
+
+        return float(current_price) >= (
+            float(discharge_threshold) + margin
+        )
+
+
     def _charge_commit_abort_reason(
         self,
         *,
@@ -654,6 +704,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         additional_battery_discharge_w: float,
         offgrid_load_active: bool,
         cell_voltage_emergency_active: bool,
+        price_now: float | None,
+        effective_discharge_threshold: float | None,
     ) -> str:
         if not commit.active:
             return "none"
@@ -669,6 +721,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if bool(offgrid_load_active):
             return "offgrid_load_blocks_ac_charge"
+
+        if self._strategic_ac_charge_price_conflict(
+            reason=str(commit.source_reason or ""),
+            price_now=price_now,
+            effective_discharge_threshold=effective_discharge_threshold,
+        ):
+            return "price_condition_lost"
 
         target_soc = commit.target_soc
         if target_soc is None:
@@ -737,6 +796,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         offgrid_load_active: bool,
         cell_voltage_emergency_active: bool,
         price_now: float | None,
+        effective_discharge_threshold: float | None,
     ) -> DecisionResult:
         """Start, hold or stop a strategic AC charge commit.
 
@@ -761,7 +821,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     additional_battery_discharge_w or 0.0
                 ),
                 offgrid_load_active=bool(offgrid_load_active),
-                cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+                cell_voltage_emergency_active=bool(
+                    cell_voltage_emergency_active
+                ),
+                price_now=price_now,
+                effective_discharge_threshold=(
+                    effective_discharge_threshold
+                ),
             )
 
             if abort_reason != "none":
@@ -792,6 +858,35 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 base_decision=decision,
                 commit=commit,
                 max_charge_w=float(max_charge_w),
+            )
+            
+        # V4.3.0-dev5.0.1:
+        # Do not start a learned/planned AC-Ladebindung when the current price
+        # is already in the effective discharge range.
+        if self._strategic_ac_charge_price_conflict(
+            reason=reason,
+            price_now=price_now,
+            effective_discharge_threshold=effective_discharge_threshold,
+        ):
+            self._persist["charge_commit_abort_reason"] = (
+                "price_condition_lost"
+            )
+
+            return DecisionResult(
+                action="idle",
+                ac_mode="output",
+                charge_w=0.0,
+                discharge_w=0.0,
+                reason="strategic_ac_charge_blocked_price_conflict",
+                target_soc=decision.target_soc,
+                current_peak_threshold=decision.current_peak_threshold,
+                current_valley_threshold=decision.current_valley_threshold,
+                economic_discharge_threshold=(
+                    decision.economic_discharge_threshold
+                ),
+                effective_discharge_threshold=(
+                    decision.effective_discharge_threshold
+                ),
             )
 
         # No active commit: start one for strategic AC charge decisions.
@@ -3605,10 +3700,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 max_charge_w=float(max_charge),
                 ai_mode=str(ai_mode),
                 manual_action=str(manual_action),
-                additional_battery_discharge_w=float(additional_battery_discharge_w or 0.0),
+                additional_battery_discharge_w=float(
+                    additional_battery_discharge_w or 0.0
+                ),
                 offgrid_load_active=bool(offgrid_load_active),
-                cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+                cell_voltage_emergency_active=bool(
+                    cell_voltage_emergency_active
+                ),
                 price_now=price_now,
+                effective_discharge_threshold=(
+                    decision.effective_discharge_threshold
+                ),
             )
             
             # V4.3.0-dev4.0:
