@@ -106,6 +106,16 @@ class DecisionContext:
     offgrid_active: bool = False
     offgrid_load_active: bool = False
     offgrid_source_active: bool = False
+    
+    # V4.3.0-dev5.2 unified AutomaticStrategy context
+    automatic_strategy_active: bool = False
+    automatic_weighting: str = "inactive"
+    automatic_pv_weight: float = 0.0
+    automatic_price_weight: float = 0.0
+    automatic_reserve_weight: float = 0.0
+    automatic_forecast_weight: float = 0.0
+    automatic_discharge_allowed: bool = False
+    automatic_discharge_reason: str = "not_evaluated"
 
 
 @dataclass
