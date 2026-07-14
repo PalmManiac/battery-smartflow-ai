@@ -185,7 +185,11 @@ class PeakRule(BaseRule):
         if engine._pv_surplus_blocks_discharge(ctx):
             return None
 
-        if ctx.soc > ctx.soc_min and ctx.ai_mode in ("automatic", "winter"):
+        if (
+            ctx.soc > ctx.soc_min
+            and ctx.ai_mode in ("automatic", "winter")
+            and engine._automatic_discharge_context_allows(ctx)
+        ):
             if (
                 engine._detect_adaptive_peak(ctx)
                 and engine._is_market_discharge_window(ctx)
@@ -241,6 +245,7 @@ class ArbitrageRule(BaseRule):
             and ctx.avg_charge_price is not None
             and ctx.soc > ctx.soc_min
             and ctx.ai_mode in ("automatic", "winter")
+            and engine._automatic_discharge_context_allows(ctx)
             and engine._is_market_discharge_window(ctx)
             and engine._is_effective_discharge_price_reached(ctx)
         ):
@@ -791,10 +796,11 @@ class PvRule(BaseRule):
 
 class SummerRule(BaseRule):
     def evaluate(self, engine, ctx):
-        if (
-            ctx.ai_mode == "summer"
-            or (ctx.ai_mode == "automatic" and ctx.season == "summer")
-        ):
+        # V4.3.0-dev5.2:
+        # The internal "summer" key is the explicit user-selected Autarkie mode.
+        # Automatic no longer enters this unconditional house-load coverage
+        # branch based on legacy season detection.
+        if ctx.ai_mode == "summer":
             if (
                 ctx.soc > ctx.soc_min
                 and not (
@@ -1004,6 +1010,25 @@ class DecisionEngine:
 
     def _pv_houseload_passthrough_enabled(self, ctx: DecisionContext) -> bool:
         return self._profile_flag(ctx, "PV_HOUSELOAD_PASSTHROUGH", False)
+        
+    def _automatic_discharge_context_allows(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return whether AutomaticStrategy permits economic discharge.
+
+        This permission never replaces the normal price, market-window, SoC or
+        protection checks. It only removes the legacy season branch from the
+        Automatic discharge decision.
+        """
+
+        if ctx.ai_mode != "automatic":
+            return True
+
+        return bool(
+            ctx.automatic_strategy_active
+            and ctx.automatic_discharge_allowed
+        )
 
     def _discharge_protection_active(self, ctx: DecisionContext) -> bool:
         return bool(
