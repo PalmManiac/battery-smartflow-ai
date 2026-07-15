@@ -305,9 +305,12 @@ class AutomaticStrategy:
         }:
             return False, "price_not_in_discharge_range"
 
-        if float(price_weight) < 0.60:
-            return False, "price_weight_too_low"
-
+        # V4.3.0-dev5.2.1:
+        # Do not apply a second numeric price threshold here.
+        #
+        # AutomaticStrategy only classifies the strategic context. The actual
+        # discharge decision still checks the effective discharge threshold,
+        # market window, SoC and all protection conditions in DecisionEngine.
         return True, "economic_discharge_context_allowed"
 
     def evaluate(
