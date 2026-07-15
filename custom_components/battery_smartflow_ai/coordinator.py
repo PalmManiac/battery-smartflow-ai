@@ -721,6 +721,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if bool(offgrid_load_active):
             return "offgrid_load_blocks_ac_charge"
+            
+        # V4.3.0-dev5.3:
+        # Optional peak-reserve charging must end when the unified automatic
+        # context no longer permits it, e.g. because current PV and a good
+        # forecast can cover the reserve need.
+        if (
+            str(commit.source_reason or "")
+            == "summer_peak_reserve_charge"
+            and not bool(automatic_peak_reserve_allowed)
+        ):
+            return "price_condition_lost"
 
         if self._strategic_ac_charge_price_conflict(
             reason=str(commit.source_reason or ""),
@@ -797,6 +808,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cell_voltage_emergency_active: bool,
         price_now: float | None,
         effective_discharge_threshold: float | None,
+        automatic_peak_reserve_allowed: bool,
     ) -> DecisionResult:
         """Start, hold or stop a strategic AC charge commit.
 
@@ -827,6 +839,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 price_now=price_now,
                 effective_discharge_threshold=(
                     effective_discharge_threshold
+                ),
+                automatic_peak_reserve_allowed=bool(
+                    automatic_peak_reserve_allowed
                 ),
             )
 
@@ -3214,6 +3229,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "not_evaluated",
                     )
                 ),
+                automatic_peak_reserve_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_allowed",
+                        False,
+                    )
+                ),
+                automatic_peak_reserve_reason=str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_reason",
+                        "not_evaluated",
+                    )
+                ),
             )
 
             base_required_kwh = (
@@ -3877,6 +3904,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 effective_discharge_threshold=(
                     decision.effective_discharge_threshold
                 ),
+                automatic_peak_reserve_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_allowed",
+                        False,
+                    )
+                ),
             )
             
             # V4.3.0-dev4.0:
@@ -3987,6 +4020,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "automatic_discharge_reason": str(
                         automatic_strategy_context.metadata.get(
                             "automatic_discharge_reason",
+                            "not_evaluated",
+                        )
+                    ),
+                    "automatic_peak_reserve_allowed": bool(
+                        automatic_strategy_context.metadata.get(
+                            "automatic_peak_reserve_allowed",
+                            False,
+                        )
+                    ),
+                    "automatic_peak_reserve_reason": str(
+                        automatic_strategy_context.metadata.get(
+                            "automatic_peak_reserve_reason",
                             "not_evaluated",
                         )
                     ),                    
@@ -5078,6 +5123,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "not_evaluated",
                     )
                 ),
+                "automatic_peak_reserve_allowed": bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_allowed",
+                        False,
+                    )
+                ),
+                "automatic_peak_reserve_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_reason",
+                        "not_evaluated",
+                    )
+                ),
                 "automatic_discharge_latch_reason": str(
                     self._persist.get(
                         "automatic_discharge_latch_reason",
@@ -5229,6 +5286,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "automatic_strategy_reason": str(
                     automatic_strategy_context.reason
+                ),
+                "automatic_peak_reserve_allowed": bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_allowed",
+                        False,
+                    )
+                ),
+                "automatic_peak_reserve_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_reason",
+                        "not_evaluated",
+                    )
                 ),
                 "strategy_state": strategy_state,
                 "visible_state": visible_state,
