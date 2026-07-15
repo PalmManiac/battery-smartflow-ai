@@ -3405,6 +3405,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             charge_price_applied = None
             charge_source = "no_charge_delta"
+            charge_price_bootstrap_active = False
             is_grid_charge = False
             charge_grid_part_w = 0.0
             charge_pv_part_w = 0.0
@@ -3508,6 +3509,64 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     charge_grid_part_w = float(decision.charge_w or 0.0)
                     charge_pv_part_w = 0.0
                     is_grid_charge = True
+                    
+            # V4.3.0-dev5.2.1:
+            # Bootstrap the economic charge-price basis during a confirmed
+            # strategic grid charge even when the SoC sensor has not yet
+            # produced a positive delta_kwh.
+            #
+            # The real energy ledger is still updated only by delta_kwh > 0.
+            # This fallback only prevents the average charge price from staying
+            # at 0.00 €/kWh throughout a real AC charge because of coarse or
+            # delayed SoC updates.
+            current_trade_avg_price = _to_float(
+                self._persist.get("trade_avg_charge_price"),
+                None,
+            )
+            current_trade_charged_kwh = max(
+                0.0,
+                float(
+                    self._persist.get(
+                        "trade_charged_kwh",
+                        0.0,
+                    )
+                    or 0.0
+                ),
+            )
+
+            confirmed_grid_charge_reasons = (
+                CHARGE_COMMIT_PLANNING_REASONS
+                | CHARGE_COMMIT_LEARNED_REASONS
+                | CHARGE_COMMIT_PRICE_REASONS
+                | CHARGE_COMMIT_RESERVE_REASONS
+            )
+
+            bootstrap_pricing_reason = self._charge_pricing_reason(
+                decision.reason
+            )
+
+            confirmed_strategic_grid_charge = bool(
+                str(decision.ac_mode) == "input"
+                and float(decision.charge_w or 0.0) > 0.0
+                and str(bootstrap_pricing_reason)
+                in confirmed_grid_charge_reasons
+                and float(grid_import or 0.0) > 60.0
+                and charge_price_applied is not None
+            )
+
+            if (
+                confirmed_strategic_grid_charge
+                and current_trade_charged_kwh <= 0.0
+                and (
+                    current_trade_avg_price is None
+                    or current_trade_avg_price <= 0.0001
+                )
+            ):
+                self._persist["trade_avg_charge_price"] = float(
+                    charge_price_applied
+                )
+
+                charge_price_bootstrap_active = True                
 
             if (
                 delta_kwh < 0
@@ -4451,6 +4510,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "is_grid_charge": is_grid_charge,
                 "charge_source": charge_source,
                 "charge_price_applied": charge_price_applied,
+                "charge_price_bootstrap_active": bool(
+                    charge_price_bootstrap_active
+                ),
                 "charge_grid_part_w": float(charge_grid_part_w),
                 "charge_pv_part_w": float(charge_pv_part_w),
                 "charge_mixed_price_active": bool(
