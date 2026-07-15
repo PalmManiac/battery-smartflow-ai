@@ -975,6 +975,14 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "automatic_discharge_latch_reason",
                 data.get("automatic_discharge_latch_reason"),
             ),
+            "peak_reserve_allowed": details.get(
+                "automatic_peak_reserve_allowed",
+                data.get("automatic_peak_reserve_allowed"),
+            ),
+            "peak_reserve_reason": details.get(
+                "automatic_peak_reserve_reason",
+                data.get("automatic_peak_reserve_reason"),
+            ),
         }
 
     def _build_charge_source_allocation_attributes(self) -> dict:
