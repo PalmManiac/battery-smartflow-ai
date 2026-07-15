@@ -312,6 +312,79 @@ class AutomaticStrategy:
         # discharge decision still checks the effective discharge threshold,
         # market window, SoC and all protection conditions in DecisionEngine.
         return True, "economic_discharge_context_allowed"
+        
+    def _automatic_peak_reserve_permission(
+        self,
+        *,
+        pv_weight: float,
+        pv_reason: str,
+        reserve_weight: float,
+        reserve_reason: str,
+        forecast_weight: float,
+        forecast_reason: str,
+    ) -> tuple[bool, str]:
+        """Return whether Automatic may consider strategic peak-reserve charging.
+
+        V4.3.0-dev5.3:
+        This is only the high-level context permission. DecisionEngine still
+        validates the future peak, target SoC, charge window, required energy
+        and economic spread.
+
+        Strong current PV together with a good forecast blocks optional grid
+        charging. Weak PV, poor forecast or a low battery reserve may permit the
+        DecisionEngine to evaluate peak-reserve charging.
+        """
+
+        strong_pv = bool(
+            pv_reason == "pv_covers_house_load"
+            and float(pv_weight) >= 0.85
+        )
+
+        good_forecast = forecast_reason in {
+            "good_pv_outlook",
+            "forecast_energy_high",
+        }
+
+        if strong_pv and good_forecast:
+            return False, "pv_and_good_forecast_block_peak_reserve"
+
+        if (
+            float(pv_weight) >= 0.85
+            and good_forecast
+        ):
+            return False, "strong_pv_blocks_peak_reserve"
+
+        if forecast_reason in {
+            "poor_pv_outlook",
+            "forecast_energy_low",
+        }:
+            return True, "poor_forecast_allows_peak_reserve"
+
+        if reserve_reason in {
+            "reserve_critical",
+            "reserve_low",
+        }:
+            return True, "low_reserve_allows_peak_reserve"
+
+        if (
+            pv_reason in {
+                "no_current_pv",
+                "pv_contribution_low",
+            }
+            and float(reserve_weight) >= 0.35
+        ):
+            return True, "weak_pv_and_reserve_need_allow_peak_reserve"
+
+        if (
+            forecast_reason in {
+                "mixed_pv_outlook",
+                "forecast_energy_moderate",
+            }
+            and float(reserve_weight) >= 0.45
+        ):
+            return True, "mixed_forecast_and_reserve_allow_peak_reserve"
+
+        return False, "peak_reserve_context_not_required"
 
     def evaluate(
         self,
@@ -343,6 +416,10 @@ class AutomaticStrategy:
                 {
                     "automatic_discharge_allowed": False,
                     "automatic_discharge_reason": (
+                        "automatic_mode_inactive"
+                    ),
+                    "automatic_peak_reserve_allowed": False,
+                    "automatic_peak_reserve_reason": (
                         "automatic_mode_inactive"
                     ),
                 }
@@ -407,6 +484,17 @@ class AutomaticStrategy:
             pv_weight=pv_weight,
             pv_reason=pv_reason,
         )
+        (
+            automatic_peak_reserve_allowed,
+            automatic_peak_reserve_reason,
+        ) = self._automatic_peak_reserve_permission(
+            pv_weight=pv_weight,
+            pv_reason=pv_reason,
+            reserve_weight=reserve_weight,
+            reserve_reason=reserve_reason,
+            forecast_weight=forecast_weight,
+            forecast_reason=forecast_reason,
+        )
 
         context_metadata.update(
             {
@@ -420,6 +508,12 @@ class AutomaticStrategy:
                 ),
                 "automatic_discharge_reason": str(
                     automatic_discharge_reason
+                ),
+                "automatic_peak_reserve_allowed": bool(
+                    automatic_peak_reserve_allowed
+                ),
+                "automatic_peak_reserve_reason": str(
+                    automatic_peak_reserve_reason
                 ),
             }
         )
