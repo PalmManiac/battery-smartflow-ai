@@ -116,6 +116,10 @@ class DecisionContext:
     automatic_forecast_weight: float = 0.0
     automatic_discharge_allowed: bool = False
     automatic_discharge_reason: str = "not_evaluated"
+    
+    # V4.3.0-dev5.3 strategic peak-reserve context
+    automatic_peak_reserve_allowed: bool = False
+    automatic_peak_reserve_reason: str = "not_evaluated"   
 
 
 @dataclass
@@ -580,10 +584,13 @@ class PvHouseLoadPassthroughRule(BaseRule):
         
         
 class AutomaticSummerPeakReserveRule(BaseRule):
-    """V4.2.4: Economic peak reserve for Automatic summer mode.
+    """Strategic peak reserve for unified Automatic mode.
 
-    Only applies when the user selected Automatic mode and the detected season
-    is summer. Explicit/manual summer mode remains unchanged.
+    V4.3.0-dev5.3:
+    The historic class name remains temporarily, but the rule is no longer
+    activated through the detected summer season. AutomaticStrategy provides
+    the high-level permission; DecisionEngine validates the actual future peak,
+    energy need, target SoC and economic charge window.
     """
 
     def evaluate(self, engine, ctx):
@@ -1396,10 +1403,24 @@ class DecisionEngine:
 
         return float(ctx.price_now) >= float(market_anchor)
         
-    def _automatic_summer_peak_reserve_enabled(self, ctx: DecisionContext) -> bool:
+    def _automatic_summer_peak_reserve_enabled(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return whether Automatic may evaluate strategic peak reserve.
+
+        V4.3.0-dev5.3:
+        The historic method name remains temporarily for compatibility with the
+        existing helper chain. The permission is no longer tied to the detected
+        summer season.
+
+        Dev6 may rename the complete helper family after all automatic
+        summer/winter paths have been migrated.
+        """
         return bool(
             ctx.ai_mode == "automatic"
-            and ctx.season == "summer"
+            and ctx.automatic_strategy_active
+            and ctx.automatic_peak_reserve_allowed
             and ctx.price_now is not None
             and bool(ctx.price_points)
             and ctx.battery_capacity_kwh > 0
