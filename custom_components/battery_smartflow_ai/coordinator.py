@@ -706,6 +706,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cell_voltage_emergency_active: bool,
         price_now: float | None,
         effective_discharge_threshold: float | None,
+        automatic_peak_reserve_allowed: bool,
     ) -> str:
         if not commit.active:
             return "none"
