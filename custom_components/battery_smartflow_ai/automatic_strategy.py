@@ -299,18 +299,20 @@ class AutomaticStrategy:
         ):
             return False, "pv_covers_load_blocks_discharge"
 
-        if price_reason not in {
-            "expensive_price_range",
-            "very_expensive_price_range",
-        }:
-            return False, "price_not_in_discharge_range"
-
-        # V4.3.0-dev5.2.1:
-        # Do not apply a second numeric price threshold here.
+        # V4.3.0-dev5.3.1:
+        # Do not block economic discharge through the relative price-weight
+        # classification.
         #
-        # AutomaticStrategy only classifies the strategic context. The actual
-        # discharge decision still checks the effective discharge threshold,
-        # market window, SoC and all protection conditions in DecisionEngine.
+        # price_reason only describes the position inside the available price
+        # range. Especially later in the day this range may contain only the
+        # remaining slots, so an absolutely high price can still appear near
+        # the middle of that remaining range.
+        #
+        # DecisionEngine remains authoritative for:
+        # - effective discharge threshold
+        # - market discharge window
+        # - peak detection
+        # - SoC and protection conditions
         return True, "economic_discharge_context_allowed"
         
     def _automatic_peak_reserve_permission(
