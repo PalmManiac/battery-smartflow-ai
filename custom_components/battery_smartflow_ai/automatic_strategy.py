@@ -387,6 +387,79 @@ class AutomaticStrategy:
             return True, "mixed_forecast_and_reserve_allow_peak_reserve"
 
         return False, "peak_reserve_context_not_required"
+        
+    def _automatic_valley_charge_permission(
+        self,
+        *,
+        pv_weight: float,
+        pv_reason: str,
+        reserve_weight: float,
+        reserve_reason: str,
+        forecast_weight: float,
+        forecast_reason: str,
+    ) -> tuple[bool, str]:
+        """Return whether Automatic may evaluate optional valley charging.
+
+        V4.3.0-dev5.4:
+        This is only a strategic context permission.
+
+        DecisionEngine remains authoritative for:
+        - the actual valley-price threshold
+        - current PV priority and feed-in opportunity cost
+        - forecast-based waiting
+        - real PV underperformance
+        - SoC, energy need and protection conditions
+
+        The context blocks only clearly unnecessary optional grid charging.
+        """
+
+        strong_pv = bool(
+            pv_reason == "pv_covers_house_load"
+            and float(pv_weight) >= 0.85
+        )
+
+        good_forecast = forecast_reason in {
+            "good_pv_outlook",
+            "forecast_energy_high",
+        }
+
+        if strong_pv and good_forecast:
+            return False, "pv_and_good_forecast_block_valley_charge"
+
+        if (
+            reserve_reason == "reserve_high"
+            and float(reserve_weight) <= 0.20
+        ):
+            return False, "high_reserve_blocks_valley_charge"
+
+        if forecast_reason in {
+            "poor_pv_outlook",
+            "forecast_energy_low",
+        }:
+            return True, "poor_forecast_allows_valley_charge"
+
+        if reserve_reason in {
+            "reserve_critical",
+            "reserve_low",
+        }:
+            return True, "low_reserve_allows_valley_charge"
+
+        if pv_reason in {
+            "no_current_pv",
+            "pv_contribution_low",
+        }:
+            return True, "weak_pv_allows_valley_charge"
+
+        if (
+            forecast_reason in {
+                "mixed_pv_outlook",
+                "forecast_energy_moderate",
+            }
+            and float(reserve_weight) >= 0.25
+        ):
+            return True, "mixed_forecast_allows_valley_charge"
+
+        return False, "valley_charge_context_not_required"
 
     def evaluate(
         self,
@@ -422,6 +495,10 @@ class AutomaticStrategy:
                     ),
                     "automatic_peak_reserve_allowed": False,
                     "automatic_peak_reserve_reason": (
+                        "automatic_mode_inactive"
+                    ),
+                    "automatic_valley_charge_allowed": False,
+                    "automatic_valley_charge_reason": (
                         "automatic_mode_inactive"
                     ),
                 }
@@ -497,6 +574,17 @@ class AutomaticStrategy:
             forecast_weight=forecast_weight,
             forecast_reason=forecast_reason,
         )
+        (
+            automatic_valley_charge_allowed,
+            automatic_valley_charge_reason,
+        ) = self._automatic_valley_charge_permission(
+            pv_weight=pv_weight,
+            pv_reason=pv_reason,
+            reserve_weight=reserve_weight,
+            reserve_reason=reserve_reason,
+            forecast_weight=forecast_weight,
+            forecast_reason=forecast_reason,
+        )
 
         context_metadata.update(
             {
@@ -516,6 +604,12 @@ class AutomaticStrategy:
                 ),
                 "automatic_peak_reserve_reason": str(
                     automatic_peak_reserve_reason
+                ),
+                "automatic_valley_charge_allowed": bool(
+                    automatic_valley_charge_allowed
+                ),
+                "automatic_valley_charge_reason": str(
+                    automatic_valley_charge_reason
                 ),
             }
         )
