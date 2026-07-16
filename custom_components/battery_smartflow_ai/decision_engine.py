@@ -119,7 +119,11 @@ class DecisionContext:
     
     # V4.3.0-dev5.3 strategic peak-reserve context
     automatic_peak_reserve_allowed: bool = False
-    automatic_peak_reserve_reason: str = "not_evaluated"   
+    automatic_peak_reserve_reason: str = "not_evaluated"
+
+    # V4.3.0-dev5.4 optional valley-charge context
+    automatic_valley_charge_allowed: bool = False
+    automatic_valley_charge_reason: str = "not_evaluated"    
 
 
 @dataclass
@@ -424,7 +428,10 @@ class ValleyBoostRule(BaseRule):
         if engine._pv_morning_transition_active(ctx):
             return None
 
-        if ctx.ai_mode not in ("winter", "automatic") or ctx.season != "winter":
+        # V4.3.0-dev5.4:
+        # Optional valley charging in Automatic is no longer enabled through
+        # the detected winter season.
+        if not engine._automatic_valley_charge_context_allows(ctx):
             return None
 
         if ctx.price_now is None:
@@ -489,7 +496,10 @@ class ValleyOpportunityRule(BaseRule):
         if engine._pv_morning_transition_active(ctx):
             return None
 
-        if ctx.ai_mode not in ("automatic", "winter") or ctx.season != "winter":
+        # V4.3.0-dev5.4:
+        # Valley opportunity is controlled by the unified AutomaticStrategy
+        # context instead of the legacy winter season.
+        if not engine._automatic_valley_charge_context_allows(ctx):
             return None
 
         if ctx.price_now is None:
@@ -1017,6 +1027,22 @@ class DecisionEngine:
 
     def _pv_houseload_passthrough_enabled(self, ctx: DecisionContext) -> bool:
         return self._profile_flag(ctx, "PV_HOUSELOAD_PASSTHROUGH", False)
+        
+    def _automatic_valley_charge_context_allows(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return whether AutomaticStrategy permits optional valley charging.
+
+        This permission does not replace the existing price, forecast, PV,
+        battery or protection checks inside the individual valley rules.
+        """
+
+        return bool(
+            ctx.ai_mode == "automatic"
+            and ctx.automatic_strategy_active
+            and ctx.automatic_valley_charge_allowed
+        )
         
     def _automatic_discharge_context_allows(
         self,
