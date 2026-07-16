@@ -667,6 +667,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if reason not in (
             CHARGE_COMMIT_PLANNING_REASONS
             | CHARGE_COMMIT_LEARNED_REASONS
+            | CHARGE_COMMIT_RESERVE_REASONS
         ):
             return False
 
