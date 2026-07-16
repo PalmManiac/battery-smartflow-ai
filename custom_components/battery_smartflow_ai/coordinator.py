@@ -3242,6 +3242,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "not_evaluated",
                     )
                 ),
+                automatic_valley_charge_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_allowed",
+                        False,
+                    )
+                ),
+                automatic_valley_charge_reason=str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_reason",
+                        "not_evaluated",
+                    )
+                ),
             )
 
             base_required_kwh = (
@@ -4033,6 +4045,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "automatic_peak_reserve_reason": str(
                         automatic_strategy_context.metadata.get(
                             "automatic_peak_reserve_reason",
+                            "not_evaluated",
+                        )
+                    ),
+                    "automatic_valley_charge_allowed": bool(
+                        automatic_strategy_context.metadata.get(
+                            "automatic_valley_charge_allowed",
+                            False,
+                        )
+                    ),
+                    "automatic_valley_charge_reason": str(
+                        automatic_strategy_context.metadata.get(
+                            "automatic_valley_charge_reason",
                             "not_evaluated",
                         )
                     ),                    
@@ -5133,6 +5157,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "automatic_peak_reserve_reason": str(
                     automatic_strategy_context.metadata.get(
                         "automatic_peak_reserve_reason",
+                        "not_evaluated",
+                    )
+                ),
+                "automatic_valley_charge_allowed": bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_allowed",
+                        False,
+                    )
+                ),
+                "automatic_valley_charge_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_reason",
                         "not_evaluated",
                     )
                 ),
