@@ -1403,31 +1403,26 @@ class DecisionEngine:
         return result
 
     def _is_market_discharge_window(self, ctx: DecisionContext) -> bool:
-        if ctx.price_now is None or not ctx.price_points:
+        """Return whether the current price may be used for economic discharge.
+
+        V4.3.0-dev5.4.1:
+        The effective discharge threshold is the authoritative economic and
+        market threshold.
+
+        The former additional 90%-of-peak market anchor could block discharge
+        even when the displayed effective discharge threshold had clearly been
+        exceeded. That made the effective threshold misleading and delayed
+        discharge until almost the absolute daily peak.
+        """
+
+        if ctx.price_now is None:
             return False
 
-        prices = [p.price for p in ctx.price_points]
-        if not prices:
+        effective_threshold = self._compute_effective_discharge_threshold(ctx)
+        if effective_threshold is None:
             return False
 
-        market_peak_threshold = self._compute_peak_threshold(prices, ctx.peak_factor)
-        valley_threshold = self._compute_valley_threshold(prices, ctx.valley_factor)
-
-        # V4.2.7:
-        # Price-based discharge must not start in the lower/mid market band just
-        # because the effective discharge threshold is reached. This avoids
-        # discharging in a valley/transition slot before a later price peak.
-        #
-        # Use a stricter market window:
-        # - at least 90% of the calculated peak threshold
-        # - or at least the upper 65% band between valley and peak
-        market_anchor = max(
-            market_peak_threshold * 0.90,
-            valley_threshold
-            + (max(0.0, market_peak_threshold - valley_threshold) * 0.65),
-        )
-
-        return float(ctx.price_now) >= float(market_anchor)
+        return float(ctx.price_now) >= float(effective_threshold)
         
     def _automatic_summer_peak_reserve_enabled(
         self,
