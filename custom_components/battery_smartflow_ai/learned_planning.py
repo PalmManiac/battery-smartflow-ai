@@ -785,7 +785,11 @@ def optimize_charge_window(
         start = _as_local(window[0].start)
         end = _as_local(window[-1].end)
 
-        if start < now_local:
+        # A charge window that has already started but is still active must remain
+        # eligible. The plan is rebuilt regularly, so rejecting every window whose
+        # start lies a few seconds in the past would continuously move the planned
+        # start into the future and prevent charging from ever becoming active.
+        if end <= now_local:
             continue
 
         if end > deadline_local:
