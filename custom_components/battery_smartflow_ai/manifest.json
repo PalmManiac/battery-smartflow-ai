@@ -7,9 +7,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/PalmManiac/battery-smartflow-ai/issues",
   "requirements": [],
-<<<<<<< HEAD
   "version": "4.3.0-dev5.6"
-=======
-  "version": "4.3.0-dev5.5.1"
->>>>>>> 53605ced28e0f05f32c9e2c8adc9eb30fb2861f9
 }
