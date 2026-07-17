@@ -3255,6 +3255,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "not_evaluated",
                     )
                 ),
+                automatic_planning_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_allowed",
+                        False,
+                    )
+                ),
+                automatic_planning_reason=str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_reason",
+                        "not_evaluated",
+                    )
+                ),
             )
 
             base_required_kwh = (
@@ -4060,6 +4072,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "automatic_valley_charge_reason",
                             "not_evaluated",
                         )
+                    ),
+                    "automatic_planning_allowed": bool(
+                        automatic_strategy_context.metadata.get(
+                            "automatic_planning_allowed",
+                            False,
+                        )
+                    ),
+                    "automatic_planning_reason": str(
+                        automatic_strategy_context.metadata.get(
+                            "automatic_planning_reason",
+                            "not_evaluated",
+                        )
                     ),                    
                     "automatic_pv_weight_reason": str(
                         automatic_strategy_context.metadata.get(
@@ -4512,6 +4536,72 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 offgrid_active=bool(offgrid_active),
                 offgrid_load_active=bool(offgrid_load_active),
                 offgrid_source_active=bool(offgrid_source_active),
+                automatic_strategy_active=bool(
+                    automatic_strategy_context.active
+                ),
+                automatic_weighting=str(
+                    automatic_strategy_context.weighting
+                ),
+                automatic_pv_weight=float(
+                    automatic_strategy_context.pv_weight
+                ),
+                automatic_price_weight=float(
+                    automatic_strategy_context.price_weight
+                ),
+                automatic_reserve_weight=float(
+                    automatic_strategy_context.reserve_weight
+                ),
+                automatic_forecast_weight=float(
+                    automatic_strategy_context.forecast_weight
+                ),
+                automatic_discharge_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_discharge_allowed",
+                        False,
+                    )
+                ),
+                automatic_discharge_reason=str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_discharge_reason",
+                        "not_evaluated",
+                    )
+                ),
+                automatic_peak_reserve_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_allowed",
+                        False,
+                    )
+                ),
+                automatic_peak_reserve_reason=str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_peak_reserve_reason",
+                        "not_evaluated",
+                    )
+                ),
+                automatic_valley_charge_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_allowed",
+                        False,
+                    )
+                ),
+                automatic_valley_charge_reason=str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_reason",
+                        "not_evaluated",
+                    )
+                ),
+                automatic_planning_allowed=bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_allowed",
+                        False,
+                    )
+                ),
+                automatic_planning_reason=str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_reason",
+                        "not_evaluated",
+                    )
+                ),
             )
 
             transparency_result = self._engine._with_thresholds(
@@ -5173,6 +5263,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "not_evaluated",
                     )
                 ),
+                "automatic_planning_allowed": bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_allowed",
+                        False,
+                    )
+                ),
+                "automatic_planning_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_reason",
+                        "not_evaluated",
+                    )
+                ),
                 "automatic_discharge_latch_reason": str(
                     self._persist.get(
                         "automatic_discharge_latch_reason",
@@ -5334,6 +5436,30 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "automatic_peak_reserve_reason": str(
                     automatic_strategy_context.metadata.get(
                         "automatic_peak_reserve_reason",
+                        "not_evaluated",
+                    )
+                ),
+                "automatic_valley_charge_allowed": bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_allowed",
+                        False,
+                    )
+                ),
+                "automatic_valley_charge_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_valley_charge_reason",
+                        "not_evaluated",
+                    )
+                ),
+                "automatic_planning_allowed": bool(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_allowed",
+                        False,
+                    )
+                ),
+                "automatic_planning_reason": str(
+                    automatic_strategy_context.metadata.get(
+                        "automatic_planning_reason",
                         "not_evaluated",
                     )
                 ),
