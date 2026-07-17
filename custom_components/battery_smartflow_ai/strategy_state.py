@@ -54,6 +54,14 @@ class VisibleState(StrEnum):
 
 RequestedMode = Literal["input", "output", "idle"]
 
+ChargeCommitPhase = Literal[
+    "waiting",
+    "active",
+    "forced",
+    "completed",
+    "aborted",
+]
+
 
 @dataclass
 class StrategyDecision:
@@ -75,16 +83,43 @@ class StrategyDecision:
 @dataclass
 class ChargeCommitState:
     active: bool = False
+
+    # Runtime phase of the charge binding.
+    #
+    # waiting:
+    #   The plan remains valid, but AC charging is currently paused.
+    #
+    # active:
+    #   AC charging is currently economically permitted.
+    #
+    # forced:
+    #   The latest possible start has been reached. Charging must continue
+    #   so the required energy can still be available before the deadline.
+    #
+    # completed / aborted:
+    #   Terminal diagnostic states. The persisted active flag is False.
+    phase: ChargeCommitPhase = "waiting"
+
     commit_type: str = "none"
     source_state: str = ""
     source_reason: str = ""
     strategic_reason: str = ""
+
     target_soc: float | None = None
     max_soc: float | None = None
+
     started_at: datetime | None = None
     updated_at: datetime | None = None
     valid_until: datetime | None = None
+
+    # Planning timestamps.
+    optimal_start: datetime | None = None
+    latest_start: datetime | None = None
     deadline: datetime | None = None
+
+    # Economic boundary for planned/learned charging.
+    acceptable_price_eur_kwh: float | None = None
+
     requested_power_w: float | None = None
     allow_pv_blend: bool = True
     abort_reason: str = "none"
