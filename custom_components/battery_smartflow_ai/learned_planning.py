@@ -152,8 +152,18 @@ class LearnedChargePlan:
 
     planning_deadline: datetime | None = None
     deadline_reason: str | None = None
+
     optimal_charge_start: datetime | None = None
     optimal_charge_end: datetime | None = None
+
+    # Latest time at which charging may begin while the calculated amount of
+    # energy can still be charged before the planning deadline.
+    latest_charge_start: datetime | None = None
+
+    # Maximum price contained in the selected learned charge window.
+    # Dev5.6 uses this as the economic continuation boundary before latest start.
+    acceptable_charge_price_eur_kwh: float | None = None
+
     window_score: float | None = None
 
     decision_reason: str | None = None
@@ -948,18 +958,40 @@ def build_learned_charge_plan(
         price_points=price_points,
         window_slots=window_slots,
     )
+    
+    deadline_local = _as_local(deadline)
+
+    latest_start = deadline_local - timedelta(
+        minutes=int(window_minutes),
+    )
+
+    acceptable_charge_price = None
+
+    if selected_prices:
+        # The selected learned window already represents the economically preferred
+        # slots. Its highest included price is therefore the natural continuation
+        # limit before charging becomes time-critical.
+        acceptable_charge_price = max(
+            float(price)
+            for price in selected_prices
+        )
 
     now_local = _as_local(now)
 
-    if optimizer_reason in (
-        LEARNED_REASON_DEADLINE_TOO_CLOSE_START_NOW,
-        LEARNED_REASON_LATEST_START_REACHED,
-    ):
+    if optimizer_reason == LEARNED_REASON_DEADLINE_TOO_CLOSE_START_NOW:
         mode = LEARNED_MODE_CHARGE
-        decision_reason = optimizer_reason
+        decision_reason = LEARNED_REASON_DEADLINE_TOO_CLOSE_START_NOW
+
+    elif now_local >= latest_start:
+        # Waiting any longer would make it impossible to charge the calculated
+        # required energy before the deadline.
+        mode = LEARNED_MODE_CHARGE
+        decision_reason = LEARNED_REASON_LATEST_START_REACHED
+
     elif start is not None and now_local >= start:
         mode = LEARNED_MODE_CHARGE
         decision_reason = LEARNED_REASON_ACTIVE
+
     else:
         mode = LEARNED_MODE_WAIT
         decision_reason = LEARNED_REASON_WAIT
@@ -991,6 +1023,12 @@ def build_learned_charge_plan(
         deadline_reason=deadline_reason,
         optimal_charge_start=start,
         optimal_charge_end=end,
+        latest_charge_start=latest_start,
+        acceptable_charge_price_eur_kwh=(
+            round(float(acceptable_charge_price), 6)
+            if acceptable_charge_price is not None
+            else None
+        ),
         window_score=round(float(score), 6) if score is not None else None,
         decision_reason=decision_reason,
         bell_weights=weights,
