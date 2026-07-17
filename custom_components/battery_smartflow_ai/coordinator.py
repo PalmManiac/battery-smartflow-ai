@@ -420,8 +420,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "regulation_passthrough_latch_started_ts": None,
             "regulation_skipped_write_reason": "none",
             
-            # V4.3.0-dev2 strategic AC charge commit
+            # V4.3.0-dev5.6:
+            # Strategic AC charge binding with explicit runtime phase.
             "charge_commit_active": False,
+            "charge_commit_phase": "waiting",
             "charge_commit_type": "none",
             "charge_commit_source_state": "",
             "charge_commit_reason": "",
@@ -430,6 +432,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "charge_commit_started_at": None,
             "charge_commit_updated_at": None,
             "charge_commit_valid_until": None,
+
+            # Learned/planned charge-window context.
+            "charge_commit_optimal_start": None,
+            "charge_commit_latest_start": None,
+            "charge_commit_deadline": None,
+            "charge_commit_acceptable_price_eur_kwh": None,
+
             "charge_commit_requested_power_w": 0.0,
             "charge_commit_allow_pv_blend": True,
             "charge_commit_abort_reason": "none",
@@ -566,55 +575,199 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def _get_charge_commit(self) -> ChargeCommitState:
         return ChargeCommitState(
-            active=bool(self._persist.get("charge_commit_active", False)),
-            commit_type=str(self._persist.get("charge_commit_type", "none") or "none"),
-            source_state=str(self._persist.get("charge_commit_source_state", "") or ""),
-            source_reason=str(self._persist.get("charge_commit_source_reason", "") or ""),
-            strategic_reason=str(self._persist.get("charge_commit_reason", "") or ""),
-            target_soc=_to_float(self._persist.get("charge_commit_target_soc"), None),
-            started_at=self._parse_commit_dt(self._persist.get("charge_commit_started_at")),
-            updated_at=self._parse_commit_dt(self._persist.get("charge_commit_updated_at")),
-            valid_until=self._parse_commit_dt(self._persist.get("charge_commit_valid_until")),
+            active=bool(
+                self._persist.get(
+                    "charge_commit_active",
+                    False,
+                )
+            ),
+            phase=str(
+                self._persist.get(
+                    "charge_commit_phase",
+                    "waiting",
+                )
+                or "waiting"
+            ),
+            commit_type=str(
+                self._persist.get(
+                    "charge_commit_type",
+                    "none",
+                )
+                or "none"
+            ),
+            source_state=str(
+                self._persist.get(
+                    "charge_commit_source_state",
+                    "",
+                )
+                or ""
+            ),
+            source_reason=str(
+                self._persist.get(
+                    "charge_commit_source_reason",
+                    "",
+                )
+                or ""
+            ),
+            strategic_reason=str(
+                self._persist.get(
+                    "charge_commit_reason",
+                    "",
+                )
+                or ""
+            ),
+            target_soc=_to_float(
+                self._persist.get(
+                    "charge_commit_target_soc",
+                ),
+                None,
+            ),
+            started_at=self._parse_commit_dt(
+                self._persist.get(
+                    "charge_commit_started_at",
+                )
+            ),
+            updated_at=self._parse_commit_dt(
+                self._persist.get(
+                    "charge_commit_updated_at",
+                )
+            ),
+            valid_until=self._parse_commit_dt(
+                self._persist.get(
+                    "charge_commit_valid_until",
+                )
+            ),
+            optimal_start=self._parse_commit_dt(
+                self._persist.get(
+                    "charge_commit_optimal_start",
+                )
+            ),
+            latest_start=self._parse_commit_dt(
+                self._persist.get(
+                    "charge_commit_latest_start",
+                )
+            ),
+            deadline=self._parse_commit_dt(
+                self._persist.get(
+                    "charge_commit_deadline",
+                )
+            ),
+            acceptable_price_eur_kwh=_to_float(
+                self._persist.get(
+                    "charge_commit_acceptable_price_eur_kwh",
+                ),
+                None,
+            ),
             requested_power_w=_to_float(
-                self._persist.get("charge_commit_requested_power_w"),
+                self._persist.get(
+                    "charge_commit_requested_power_w",
+                ),
                 0.0,
             ),
             allow_pv_blend=bool(
-                self._persist.get("charge_commit_allow_pv_blend", True)
+                self._persist.get(
+                    "charge_commit_allow_pv_blend",
+                    True,
+                )
             ),
             abort_reason=str(
-                self._persist.get("charge_commit_abort_reason", "none") or "none"
+                self._persist.get(
+                    "charge_commit_abort_reason",
+                    "none",
+                )
+                or "none"
             ),
         )
 
 
-    def _store_charge_commit(self, commit: ChargeCommitState) -> None:
-        self._persist["charge_commit_active"] = bool(commit.active)
-        self._persist["charge_commit_type"] = str(commit.commit_type or "none")
-        self._persist["charge_commit_source_state"] = str(commit.source_state or "")
-        self._persist["charge_commit_reason"] = str(commit.strategic_reason or "")
-        self._persist["charge_commit_source_reason"] = str(commit.source_reason or "")
-        self._persist["charge_commit_target_soc"] = commit.target_soc
-        self._persist["charge_commit_started_at"] = self._commit_dt_to_store(
-            commit.started_at
+    def _store_charge_commit(
+        self,
+        commit: ChargeCommitState,
+    ) -> None:
+        self._persist["charge_commit_active"] = bool(
+            commit.active
         )
-        self._persist["charge_commit_updated_at"] = self._commit_dt_to_store(
-            commit.updated_at
+        self._persist["charge_commit_phase"] = str(
+            commit.phase or "waiting"
         )
-        self._persist["charge_commit_valid_until"] = self._commit_dt_to_store(
-            commit.valid_until
+        self._persist["charge_commit_type"] = str(
+            commit.commit_type or "none"
         )
+        self._persist["charge_commit_source_state"] = str(
+            commit.source_state or ""
+        )
+        self._persist["charge_commit_reason"] = str(
+            commit.strategic_reason or ""
+        )
+        self._persist["charge_commit_source_reason"] = str(
+            commit.source_reason or ""
+        )
+        self._persist["charge_commit_target_soc"] = (
+            commit.target_soc
+        )
+
+        self._persist["charge_commit_started_at"] = (
+            self._commit_dt_to_store(
+                commit.started_at
+            )
+        )
+        self._persist["charge_commit_updated_at"] = (
+            self._commit_dt_to_store(
+                commit.updated_at
+            )
+        )
+        self._persist["charge_commit_valid_until"] = (
+            self._commit_dt_to_store(
+                commit.valid_until
+            )
+        )
+
+        self._persist["charge_commit_optimal_start"] = (
+            self._commit_dt_to_store(
+                commit.optimal_start
+            )
+        )
+        self._persist["charge_commit_latest_start"] = (
+            self._commit_dt_to_store(
+                commit.latest_start
+            )
+        )
+        self._persist["charge_commit_deadline"] = (
+            self._commit_dt_to_store(
+                commit.deadline
+            )
+        )
+
+        self._persist[
+            "charge_commit_acceptable_price_eur_kwh"
+        ] = commit.acceptable_price_eur_kwh
+
         self._persist["charge_commit_requested_power_w"] = float(
             commit.requested_power_w or 0.0
         )
-        self._persist["charge_commit_allow_pv_blend"] = bool(commit.allow_pv_blend)
+        self._persist["charge_commit_allow_pv_blend"] = bool(
+            commit.allow_pv_blend
+        )
         self._persist["charge_commit_abort_reason"] = str(
             commit.abort_reason or "none"
         )
 
 
-    def _clear_charge_commit(self, abort_reason: str = "none") -> None:
+    def _clear_charge_commit(
+        self,
+        abort_reason: str = "none",
+        *,
+        completed: bool = False,
+    ) -> None:
         self._persist["charge_commit_active"] = False
+        self._persist["charge_commit_phase"] = (
+            "completed"
+            if completed
+            else "aborted"
+            if abort_reason != "none"
+            else "waiting"
+        )
+
         self._persist["charge_commit_type"] = "none"
         self._persist["charge_commit_source_state"] = ""
         self._persist["charge_commit_reason"] = ""
@@ -623,9 +776,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["charge_commit_started_at"] = None
         self._persist["charge_commit_updated_at"] = None
         self._persist["charge_commit_valid_until"] = None
+
+        self._persist["charge_commit_optimal_start"] = None
+        self._persist["charge_commit_latest_start"] = None
+        self._persist["charge_commit_deadline"] = None
+        self._persist[
+            "charge_commit_acceptable_price_eur_kwh"
+        ] = None
+
         self._persist["charge_commit_requested_power_w"] = 0.0
         self._persist["charge_commit_allow_pv_blend"] = True
-        self._persist["charge_commit_abort_reason"] = str(abort_reason or "none")
+        self._persist["charge_commit_abort_reason"] = str(
+            abort_reason or "none"
+        )
         self._persist["charge_commit_price_eur_kwh"] = None
 
 
@@ -827,6 +990,121 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             economic_discharge_threshold=base_decision.economic_discharge_threshold,
             effective_discharge_threshold=base_decision.effective_discharge_threshold,
         )
+        
+        
+    def _waiting_charge_commit_decision(
+        self,
+        *,
+        base_decision: DecisionResult,
+        commit: ChargeCommitState,
+    ) -> DecisionResult:
+        """Keep a charge binding alive without requesting grid charging.
+
+        Real PV surplus may still charge the battery while the AC part waits.
+        """
+
+        if (
+            str(base_decision.reason or "")
+            == "pv_surplus_charge"
+            and str(base_decision.action or "") == "charge"
+            and str(base_decision.ac_mode or "") == "input"
+            and float(base_decision.charge_w or 0.0) > 0.0
+        ):
+            return base_decision
+
+        return DecisionResult(
+            action="idle",
+            ac_mode="output",
+            charge_w=0.0,
+            discharge_w=0.0,
+            reason="charge_commit_waiting_price",
+            target_soc=commit.target_soc,
+            current_peak_threshold=(
+                base_decision.current_peak_threshold
+            ),
+            current_valley_threshold=(
+                base_decision.current_valley_threshold
+            ),
+            economic_discharge_threshold=(
+                base_decision.economic_discharge_threshold
+            ),
+            effective_discharge_threshold=(
+                base_decision.effective_discharge_threshold
+            ),
+        )
+        
+        
+    def _learned_commit_plan_values(
+        self,
+        learned_charge_plan: Any | None,
+    ) -> tuple[
+        datetime | None,
+        datetime | None,
+        datetime | None,
+        float | None,
+    ]:
+        """Extract learned planning data for an AC charge binding."""
+
+        if learned_charge_plan is None:
+            return None, None, None, None
+
+        optimal_start = getattr(
+            learned_charge_plan,
+            "optimal_charge_start",
+            None,
+        )
+        latest_start = getattr(
+            learned_charge_plan,
+            "latest_charge_start",
+            None,
+        )
+        deadline = getattr(
+            learned_charge_plan,
+            "planning_deadline",
+            None,
+        )
+        acceptable_price = _to_float(
+            getattr(
+                learned_charge_plan,
+                "acceptable_charge_price_eur_kwh",
+                None,
+            ),
+            None,
+        )
+
+        try:
+            optimal_start = (
+                dt_util.as_utc(optimal_start)
+                if optimal_start is not None
+                else None
+            )
+        except Exception:
+            optimal_start = None
+
+        try:
+            latest_start = (
+                dt_util.as_utc(latest_start)
+                if latest_start is not None
+                else None
+            )
+        except Exception:
+            latest_start = None
+
+        try:
+            deadline = (
+                dt_util.as_utc(deadline)
+                if deadline is not None
+                else None
+            )
+        except Exception:
+            deadline = None
+
+        return (
+            optimal_start,
+            latest_start,
+            deadline,
+            acceptable_price,
+        )
 
 
     def _apply_charge_commit(
@@ -834,6 +1112,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         *,
         now: datetime,
         decision: DecisionResult,
+        learned_charge_plan: Any | None,
         soc: float,
         soc_max: float,
         max_charge_w: float,
@@ -855,6 +1134,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         now_utc = dt_util.as_utc(now)
 
         commit = self._get_charge_commit()
+        
+        (
+            learned_optimal_start,
+            learned_latest_start,
+            learned_deadline,
+            learned_acceptable_price,
+        ) = self._learned_commit_plan_values(
+            learned_charge_plan
+        )
 
         # Active commit: check whether it must stop.
         if commit.active:
@@ -882,8 +1170,103 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             if abort_reason != "none":
-                self._clear_charge_commit(abort_reason)
+                completed = abort_reason in {
+                    "max_soc_reached",
+                    "target_soc_reached",
+                }
+
+                self._clear_charge_commit(
+                    abort_reason,
+                    completed=completed,
+                )
                 return decision
+                
+            # Dev5.6:
+            # Learned planning bindings may pause AC charging before latest start.
+            if str(commit.commit_type or "") == "learned":
+                # Refresh planning values while the plan is still available.
+                if learned_optimal_start is not None:
+                    commit.optimal_start = learned_optimal_start
+
+                if learned_latest_start is not None:
+                    commit.latest_start = learned_latest_start
+
+                if learned_deadline is not None:
+                    commit.deadline = learned_deadline
+
+                if learned_acceptable_price is not None:
+                    commit.acceptable_price_eur_kwh = (
+                        learned_acceptable_price
+                    )
+
+                latest_start_reached = bool(
+                    commit.latest_start is not None
+                    and now_utc >= dt_util.as_utc(
+                        commit.latest_start
+                    )
+                )
+
+                deadline_too_close = bool(
+                    str(commit.source_reason or "")
+                    == (
+                        "learned_charge_window_"
+                        "deadline_too_close_start_now"
+                    )
+                )
+
+                explicitly_forced = bool(
+                    str(reason)
+                    in {
+                        "learned_charge_window_latest_start_reached",
+                        (
+                            "learned_charge_window_"
+                            "deadline_too_close_start_now"
+                        ),
+                    }
+                )
+
+                if (
+                    latest_start_reached
+                    or deadline_too_close
+                    or explicitly_forced
+                ):
+                    commit.phase = "forced"
+
+                else:
+                    acceptable_price = _to_float(
+                        commit.acceptable_price_eur_kwh,
+                        None,
+                    )
+                    current_price = _to_float(
+                        price_now,
+                        None,
+                    )
+
+                    price_too_high = bool(
+                        acceptable_price is not None
+                        and current_price is not None
+                        and float(current_price)
+                        > (
+                            float(acceptable_price)
+                            + float(
+                                STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH
+                            )
+                        )
+                    )
+
+                    if price_too_high:
+                        commit.phase = "waiting"
+                    else:
+                        commit.phase = "active"
+
+                commit.updated_at = now_utc
+                self._store_charge_commit(commit)
+
+                if commit.phase == "waiting":
+                    return self._waiting_charge_commit_decision(
+                        base_decision=decision,
+                        commit=commit,
+                    )
 
             # If the same charge reason is still present, refresh power and
             # price-window timeout for optional price commits.
@@ -953,17 +1336,83 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if target_soc is None:
                 target_soc = float(soc_max)
 
+            initial_phase = "active"
+
+            if commit_type == "learned":
+                latest_start_reached = bool(
+                    learned_latest_start is not None
+                    and now_utc >= learned_latest_start
+                )
+
+                forced_reason = reason in {
+                    "learned_charge_window_latest_start_reached",
+                    "learned_charge_window_deadline_too_close_start_now",
+                }
+
+                if latest_start_reached or forced_reason:
+                    initial_phase = "forced"
+                else:
+                    acceptable_price = _to_float(
+                        learned_acceptable_price,
+                        None,
+                    )
+                    current_price = _to_float(
+                        price_now,
+                        None,
+                    )
+
+                    if (
+                        acceptable_price is not None
+                        and current_price is not None
+                        and float(current_price)
+                        > (
+                            float(acceptable_price)
+                            + float(
+                                STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH
+                            )
+                        )
+                    ):
+                        initial_phase = "waiting"
+
             new_commit = ChargeCommitState(
                 active=True,
+                phase=initial_phase,
                 commit_type=commit_type,
-                source_state=self._charge_commit_source_state_for_type(commit_type),
+                source_state=(
+                    self._charge_commit_source_state_for_type(
+                        commit_type
+                    )
+                ),
                 source_reason=reason,
                 strategic_reason=reason,
                 target_soc=float(target_soc),
                 max_soc=float(soc_max),
                 started_at=now_utc,
                 updated_at=now_utc,
-                valid_until=self._price_commit_valid_until(now_utc, commit_type),
+                valid_until=self._price_commit_valid_until(
+                    now_utc,
+                    commit_type,
+                ),
+                optimal_start=(
+                    learned_optimal_start
+                    if commit_type == "learned"
+                    else None
+                ),
+                latest_start=(
+                    learned_latest_start
+                    if commit_type == "learned"
+                    else None
+                ),
+                deadline=(
+                    learned_deadline
+                    if commit_type == "learned"
+                    else None
+                ),
+                acceptable_price_eur_kwh=(
+                    learned_acceptable_price
+                    if commit_type == "learned"
+                    else None
+                ),
                 requested_power_w=min(
                     float(decision.charge_w or 0.0),
                     float(max_charge_w),
@@ -977,6 +1426,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["charge_commit_price_eur_kwh"] = float(price_now)
             else:
                 self._persist["charge_commit_price_eur_kwh"] = None
+                
+            if new_commit.phase == "waiting":
+                return self._waiting_charge_commit_decision(
+                    base_decision=decision,
+                    commit=new_commit,
+                )
 
             return self._committed_charge_decision(
                 base_decision=decision,
@@ -3948,6 +4403,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             decision = self._apply_charge_commit(
                 now=now,
                 decision=decision,
+                learned_charge_plan=learned_charge_plan,
                 soc=float(soc),
                 soc_max=float(soc_max),
                 max_charge_w=float(max_charge),
