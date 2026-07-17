@@ -460,6 +460,79 @@ class AutomaticStrategy:
             return True, "mixed_forecast_allows_valley_charge"
 
         return False, "valley_charge_context_not_required"
+        
+    def _automatic_planning_permission(
+        self,
+        *,
+        pv_weight: float,
+        pv_reason: str,
+        reserve_weight: float,
+        reserve_reason: str,
+        forecast_weight: float,
+        forecast_reason: str,
+    ) -> tuple[bool, str]:
+        """Return whether Automatic may evaluate strategic charge planning.
+
+        V4.3.0-dev5.5:
+        This is only the high-level context permission.
+
+        DecisionEngine remains authoritative for:
+        - learned-planning readiness and charge windows
+        - actual valley and future peak prices
+        - required battery energy
+        - latest-start deadlines
+        - forecast-based waiting and reality override
+        - SoC and protection conditions
+
+        Planning is blocked only when current PV together with a sufficiently
+        good forecast clearly makes optional grid charging unnecessary.
+        """
+
+        strong_pv = bool(
+            pv_reason == "pv_covers_house_load"
+            and float(pv_weight) >= 0.85
+        )
+
+        good_forecast = forecast_reason in {
+            "good_pv_outlook",
+            "forecast_energy_high",
+        }
+
+        if strong_pv and good_forecast:
+            return False, "pv_and_good_forecast_block_planning"
+
+        if (
+            float(pv_weight) >= 0.85
+            and good_forecast
+            and float(reserve_weight) <= 0.35
+        ):
+            return False, "strong_pv_and_reserve_block_planning"
+
+        if forecast_reason in {
+            "poor_pv_outlook",
+            "forecast_energy_low",
+        }:
+            return True, "poor_forecast_allows_planning"
+
+        if reserve_reason in {
+            "reserve_critical",
+            "reserve_low",
+        }:
+            return True, "low_reserve_allows_planning"
+
+        if pv_reason in {
+            "no_current_pv",
+            "pv_contribution_low",
+        }:
+            return True, "weak_pv_allows_planning"
+
+        if forecast_reason in {
+            "mixed_pv_outlook",
+            "forecast_energy_moderate",
+        }:
+            return True, "mixed_forecast_allows_planning"
+
+        return True, "planning_context_allowed"
 
     def evaluate(
         self,
@@ -499,6 +572,10 @@ class AutomaticStrategy:
                     ),
                     "automatic_valley_charge_allowed": False,
                     "automatic_valley_charge_reason": (
+                        "automatic_mode_inactive"
+                    ),
+                    "automatic_planning_allowed": False,
+                    "automatic_planning_reason": (
                         "automatic_mode_inactive"
                     ),
                 }
@@ -585,6 +662,17 @@ class AutomaticStrategy:
             forecast_weight=forecast_weight,
             forecast_reason=forecast_reason,
         )
+        (
+            automatic_planning_allowed,
+            automatic_planning_reason,
+        ) = self._automatic_planning_permission(
+            pv_weight=pv_weight,
+            pv_reason=pv_reason,
+            reserve_weight=reserve_weight,
+            reserve_reason=reserve_reason,
+            forecast_weight=forecast_weight,
+            forecast_reason=forecast_reason,
+        )
 
         context_metadata.update(
             {
@@ -610,6 +698,12 @@ class AutomaticStrategy:
                 ),
                 "automatic_valley_charge_reason": str(
                     automatic_valley_charge_reason
+                ),
+                "automatic_planning_allowed": bool(
+                    automatic_planning_allowed
+                ),
+                "automatic_planning_reason": str(
+                    automatic_planning_reason
                 ),
             }
         )
