@@ -646,6 +646,21 @@ class AutomaticSummerPeakReserveRule(BaseRule):
         min_profit_factor = 1.0 + (float(ctx.profit_margin_pct or 0.0) / 100.0)
         if float(ctx.price_now) * min_profit_factor > float(expected_peak_price):
             return None
+            
+        # A rejected optional peak-reserve charge must fall through to the next
+        # DecisionEngine rule. The Coordinator cannot safely turn this decision into
+        # terminal idle, because that would suppress PV surplus charging, learned
+        # planning and other valid lower-priority decisions.
+        effective_discharge_threshold = (
+            engine._compute_effective_discharge_threshold(ctx)
+        )
+
+        if (
+            effective_discharge_threshold is not None
+            and float(ctx.price_now)
+            >= float(effective_discharge_threshold)
+        ):
+            return None
 
         block = engine._charge_blocked_by_additional_battery_discharge(ctx)
         if block is not None:
@@ -968,14 +983,26 @@ class DecisionEngine:
             ManualRule(),
             VeryCheapRule(),
             PvHouseLoadPassthroughRule(),
-            AutomaticSummerPeakReserveRule(),
+
+            # Real PV surplus keeps the highest normal charging priority.
             PvRule(),
-            PeakRule(),
-            ArbitrageRule(),
+
+            # A selected learned or classic charge window must be evaluated before
+            # optional peak reserve and economic discharge. Otherwise the current
+            # discharge price can prevent a planned charge from ever starting.
             LearnedPlanningRule(),
             PlanningRule(),
+
+            # Optional strategic charging may only take over when no planned charge
+            # and no usable PV surplus decision exists.
+            AutomaticSummerPeakReserveRule(),
             ValleyBoostRule(),
             ValleyOpportunityRule(),
+
+            # Economic discharge is evaluated only after all valid charging plans.
+            PeakRule(),
+            ArbitrageRule(),
+
             SummerRule(),
         ]
 
