@@ -123,7 +123,11 @@ class DecisionContext:
 
     # V4.3.0-dev5.4 optional valley-charge context
     automatic_valley_charge_allowed: bool = False
-    automatic_valley_charge_reason: str = "not_evaluated"    
+    automatic_valley_charge_reason: str = "not_evaluated"
+
+    # V4.3.0-dev5.5 strategic charge-planning context
+    automatic_planning_allowed: bool = False
+    automatic_planning_reason: str = "not_evaluated"    
 
 
 @dataclass
@@ -293,7 +297,7 @@ class LearnedPlanningRule(BaseRule):
         if plan is None:
             return None
 
-        if ctx.ai_mode not in ("automatic", "winter"):
+        if not engine._automatic_planning_context_allows(ctx):
             return None
 
         if ctx.soc >= ctx.soc_max:
@@ -379,8 +383,12 @@ class LearnedPlanningRule(BaseRule):
 
 class PlanningRule(BaseRule):
     def evaluate(self, engine, ctx):
+        if not engine._automatic_planning_context_allows(ctx):
+            return None
+
         if engine._pv_morning_transition_active(ctx):
             return None
+
         return engine._evaluate_adaptive_planning(ctx)
 
 
@@ -1042,6 +1050,24 @@ class DecisionEngine:
             ctx.ai_mode == "automatic"
             and ctx.automatic_strategy_active
             and ctx.automatic_valley_charge_allowed
+        )
+        
+    def _automatic_planning_context_allows(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return whether AutomaticStrategy permits strategic charge planning.
+
+        This permission does not replace learned-planning readiness, price,
+        forecast, deadline, energy-need, SoC or protection checks.
+        """
+
+        if ctx.ai_mode != "automatic":
+            return True
+
+        return bool(
+            ctx.automatic_strategy_active
+            and ctx.automatic_planning_allowed
         )
         
     def _automatic_discharge_context_allows(
@@ -1896,7 +1922,7 @@ class DecisionEngine:
 
     def _evaluate_adaptive_planning(self, ctx: DecisionContext) -> Optional[DecisionResult]:
         if (
-            ctx.ai_mode not in ("automatic", "winter")
+            not self._automatic_planning_context_allows(ctx)
             or not ctx.price_points
             or ctx.price_now is None
             or ctx.soc >= ctx.soc_max
