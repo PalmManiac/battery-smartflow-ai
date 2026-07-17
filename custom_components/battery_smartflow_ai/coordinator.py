@@ -654,6 +654,40 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         price_now: float | None,
         effective_discharge_threshold: float | None,
     ) -> bool:
+        """Return whether an optional reserve charge conflicts with discharge economics.
+
+        Planned and learned charge windows have already evaluated the complete
+        future price curve, required energy, deadline and available charging slots.
+        Their decisions must therefore not be overridden afterwards by the simpler
+        effective-discharge-threshold check.
+
+        The guard remains active for optional peak-reserve charging so that reserve
+        charging cannot start or continue inside an economic discharge window.
+        """
+
+        if reason not in CHARGE_COMMIT_RESERVE_REASONS:
+            return False
+
+        current_price = _to_float(price_now, None)
+        discharge_threshold = _to_float(
+            effective_discharge_threshold,
+            None,
+        )
+
+        if current_price is None or discharge_threshold is None:
+            return False
+
+        if discharge_threshold <= 0.0:
+            return False
+
+        margin = max(
+            0.0,
+            float(STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH),
+        )
+
+        return float(current_price) >= (
+            float(discharge_threshold) + margin
+        )
         """Return whether a learned/planned AC charge conflicts with discharge economics.
 
         V4.3.0-dev5.0.1:
