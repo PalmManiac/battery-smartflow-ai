@@ -851,43 +851,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return float(current_price) >= (
             float(discharge_threshold) + margin
         )
-        """Return whether a learned/planned AC charge conflicts with discharge economics.
-
-        V4.3.0-dev5.0.1:
-        A learned or planned charge must not start or continue when the current
-        electricity price is already at or above the effective discharge
-        threshold.
-
-        This guard deliberately does not affect emergency, cell-protection or
-        manual charging.
-        """
-        if reason not in (
-            CHARGE_COMMIT_PLANNING_REASONS
-            | CHARGE_COMMIT_LEARNED_REASONS
-            | CHARGE_COMMIT_RESERVE_REASONS
-        ):
-            return False
-
-        current_price = _to_float(price_now, None)
-        discharge_threshold = _to_float(
-            effective_discharge_threshold,
-            None,
-        )
-
-        if current_price is None or discharge_threshold is None:
-            return False
-
-        if discharge_threshold <= 0.0:
-            return False
-
-        margin = max(
-            0.0,
-            float(STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH),
-        )
-
-        return float(current_price) >= (
-            float(discharge_threshold) + margin
-        )
 
 
     def _charge_commit_abort_reason(
@@ -3944,224 +3907,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.action = "idle"
                 decision.ac_mode = "output"
                 decision.reason = "offgrid_load_active_blocks_ac_charge"
-
-            charge_price_applied = None
-            charge_source = "no_charge_delta"
-            charge_price_bootstrap_active = False
-            is_grid_charge = False
-            charge_grid_part_w = 0.0
-            charge_pv_part_w = 0.0
-
-            # V4.3.0-dev2.1:
-            # Use the original AC charge reason for price/source attribution while an
-            # AC-Ladebindung is active. The strategy reason itself remains
-            # charge_commit_active, but the price logic needs e.g. valley_opportunity_charge.
-            charge_pricing_reason = self._charge_pricing_reason(decision.reason)
-
-            if delta_kwh > 0:
-                is_below_soc_min_cycle = bool(
-                    self._persist.get("trade_cycle_below_soc_min", False)
-                )
-                (
-                    is_grid_charge,
-                    applied_price,
-                    charge_source,
-                    charge_grid_part_w,
-                    charge_pv_part_w,
-                ) = self._classify_charge_source(
-                    delta_kwh=float(delta_kwh),
-                    grid_import_w=float(grid_import or 0.0),
-                    grid_export_w=float(grid_export or 0.0),
-                    decision_charge_w=float(decision.charge_w or 0.0),
-                    decision_ac_mode=str(decision.ac_mode),
-                    price_now=price_now,
-                    feed_in_tariff=float(feed_in_tariff),
-                    battery_charge_w=float(battery_charge_w),
-                    decision_reason=charge_pricing_reason,
-                )
-                charge_price_applied = float(applied_price)
-
-                if not is_below_soc_min_cycle:
-                    charged_kwh = float(self._persist.get("trade_charged_kwh", 0.0) or 0.0)
-                    avg_price = self._persist.get("trade_avg_charge_price")
-
-                    new_total_kwh = charged_kwh + float(delta_kwh)
-
-                    if new_total_kwh > 0:
-                        if avg_price is None:
-                            new_avg = float(applied_price)
-                        else:
-                            new_avg = (
-                                (float(avg_price) * charged_kwh + float(applied_price) * float(delta_kwh))
-                                / new_total_kwh
-                            )
-                    else:
-                        new_avg = 0.0
-
-                    self._persist["trade_charged_kwh"] = new_total_kwh
-                    self._persist["trade_avg_charge_price"] = new_avg
-                    
-            # V4.3.0-dev2.3:
-            # Display-only fallback for active AC charging / AC-Ladebindung.
-            #
-            # The real charge price history is updated only when delta_kwh > 0.
-            # This block only keeps the diagnostic sensors stable while charging is
-            # currently requested but the battery energy counter has not advanced yet.
-            if (
-                charge_price_applied is None
-                and str(decision.ac_mode) == "input"
-                and float(decision.charge_w or 0.0) > 0.0
-            ):
-                preview_reason = self._charge_pricing_reason(decision.reason)
-                preview_reason = str(preview_reason or "")
-
-                stored_commit_price = _to_float(
-                    self._persist.get("charge_commit_price_eur_kwh"),
-                    None,
-                )
-
-                preview_price = None
-                if price_now is not None:
-                    preview_price = float(price_now)
-                elif stored_commit_price is not None:
-                    preview_price = float(stored_commit_price)
-
-                if preview_price is not None:
-                    charge_price_applied = float(preview_price)
-
-                    if preview_reason in {
-                        "very_cheap_force_charge",
-                        "valley_boost_charge",
-                        "valley_boost_charge_mixed_forecast",
-                        "valley_opportunity_charge",
-                        "valley_opportunity_charge_mixed_forecast",
-                        "planning_latest_start",
-                        "planning_forecast_poor",
-                        "planning_forecast_mixed",
-                        "planning_forecast_reality_override",
-                        "learned_charge_window_active",
-                        "learned_charge_window_latest_start_reached",
-                        "learned_charge_window_deadline_too_close_start_now",
-                        "summer_peak_reserve_charge",
-                    }:
-                        charge_source = preview_reason
-                    else:
-                        charge_source = "grid_charge"
-
-                    charge_grid_part_w = float(decision.charge_w or 0.0)
-                    charge_pv_part_w = 0.0
-                    is_grid_charge = True
-                    
-            # V4.3.0-dev5.2.1:
-            # Bootstrap the economic charge-price basis during a confirmed
-            # strategic grid charge even when the SoC sensor has not yet
-            # produced a positive delta_kwh.
-            #
-            # The real energy ledger is still updated only by delta_kwh > 0.
-            # This fallback only prevents the average charge price from staying
-            # at 0.00 €/kWh throughout a real AC charge because of coarse or
-            # delayed SoC updates.
-            current_trade_avg_price = _to_float(
-                self._persist.get("trade_avg_charge_price"),
-                None,
-            )
-            current_trade_charged_kwh = max(
-                0.0,
-                float(
-                    self._persist.get(
-                        "trade_charged_kwh",
-                        0.0,
-                    )
-                    or 0.0
-                ),
-            )
-
-            confirmed_grid_charge_reasons = (
-                CHARGE_COMMIT_PLANNING_REASONS
-                | CHARGE_COMMIT_LEARNED_REASONS
-                | CHARGE_COMMIT_PRICE_REASONS
-                | CHARGE_COMMIT_RESERVE_REASONS
-            )
-
-            bootstrap_pricing_reason = self._charge_pricing_reason(
-                decision.reason
-            )
-
-            confirmed_strategic_grid_charge = bool(
-                str(decision.ac_mode) == "input"
-                and float(decision.charge_w or 0.0) > 0.0
-                and str(bootstrap_pricing_reason)
-                in confirmed_grid_charge_reasons
-                and float(grid_import or 0.0) > 60.0
-                and charge_price_applied is not None
-            )
-
-            if (
-                confirmed_strategic_grid_charge
-                and current_trade_charged_kwh <= 0.0
-                and (
-                    current_trade_avg_price is None
-                    or current_trade_avg_price <= 0.0001
-                )
-            ):
-                self._persist["trade_avg_charge_price"] = float(
-                    charge_price_applied
-                )
-
-                charge_price_bootstrap_active = True                
-
-            if (
-                delta_kwh < 0
-                and price_now is not None
-                and decision.ac_mode == "output"
-                and float(decision.discharge_w or 0.0) > 0.0
-                and decision.reason
-                not in {
-                    "pv_house_load_passthrough",
-                    "offgrid_load_support",
-                }
-            ):
-                sold_kwh = abs(float(delta_kwh))
-                avg_price = self._persist.get("trade_avg_charge_price")
-
-                tracked_kwh = max(
-                    0.0,
-                    float(self._persist.get("trade_charged_kwh", 0.0) or 0.0),
-                )
-
-                # V4.2.5:
-                # trade_charged_kwh is only the internally priced charge ledger,
-                # not the physical battery energy. It can be depleted while the
-                # battery still contains energy, e.g. after restarts, updates,
-                # SoC jumps or incomplete historic charge tracking.
-                #
-                # Therefore only book profit for the part of the discharge that
-                # is still covered by priced charge energy, but do not reset the
-                # average charge price here.
-                accounted_sold_kwh = min(float(sold_kwh), float(tracked_kwh))
-
-                if avg_price is not None and accounted_sold_kwh > 0:
-                    profit = (
-                        float(price_now) - float(avg_price)
-                    ) * float(accounted_sold_kwh)
-
-                    self._persist["profit_eur"] = (
-                        float(self._persist.get("profit_eur", 0.0))
-                        + float(profit)
-                    )
-
-                remaining_kwh = max(
-                    0.0,
-                    float(tracked_kwh) - float(accounted_sold_kwh),
-                )
-
-                self._persist["trade_charged_kwh"] = remaining_kwh
-
-                # Important:
-                # Do not set trade_avg_charge_price to 0 here.
-                # The real reset is handled above when SoC reaches SoC-Min.
-
-            adaptive_peak_active = decision.reason == "adaptive_peak_discharge"
             
             if soc_limit == 1 and decision.ac_mode == "input" and float(decision.charge_w or 0.0) > 0:
                 decision.charge_w = 0.0
@@ -4427,6 +4172,228 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                 ),
             )
+
+            # V4.3.0-dev5.6.3:
+            # Charge source classification, economic accounting and diagnostics
+            # must use the final decision after protection, technical holds and
+            # strategic AC charge binding have been applied.            
+            charge_price_applied = None
+            charge_source = "no_charge_delta"
+            charge_price_bootstrap_active = False
+            is_grid_charge = False
+            charge_grid_part_w = 0.0
+            charge_pv_part_w = 0.0
+
+            # V4.3.0-dev2.1:
+            # Use the original AC charge reason for price/source attribution while an
+            # AC-Ladebindung is active. The strategy reason itself remains
+            # charge_commit_active, but the price logic needs e.g. valley_opportunity_charge.
+            charge_pricing_reason = self._charge_pricing_reason(decision.reason)
+
+            if delta_kwh > 0:
+                is_below_soc_min_cycle = bool(
+                    self._persist.get("trade_cycle_below_soc_min", False)
+                )
+                (
+                    is_grid_charge,
+                    applied_price,
+                    charge_source,
+                    charge_grid_part_w,
+                    charge_pv_part_w,
+                ) = self._classify_charge_source(
+                    delta_kwh=float(delta_kwh),
+                    grid_import_w=float(grid_import or 0.0),
+                    grid_export_w=float(grid_export or 0.0),
+                    decision_charge_w=float(decision.charge_w or 0.0),
+                    decision_ac_mode=str(decision.ac_mode),
+                    price_now=price_now,
+                    feed_in_tariff=float(feed_in_tariff),
+                    battery_charge_w=float(battery_charge_w),
+                    decision_reason=charge_pricing_reason,
+                )
+                charge_price_applied = float(applied_price)
+
+                if not is_below_soc_min_cycle:
+                    charged_kwh = float(self._persist.get("trade_charged_kwh", 0.0) or 0.0)
+                    avg_price = self._persist.get("trade_avg_charge_price")
+
+                    new_total_kwh = charged_kwh + float(delta_kwh)
+
+                    if new_total_kwh > 0:
+                        if avg_price is None:
+                            new_avg = float(applied_price)
+                        else:
+                            new_avg = (
+                                (float(avg_price) * charged_kwh + float(applied_price) * float(delta_kwh))
+                                / new_total_kwh
+                            )
+                    else:
+                        new_avg = 0.0
+
+                    self._persist["trade_charged_kwh"] = new_total_kwh
+                    self._persist["trade_avg_charge_price"] = new_avg
+                    
+            # V4.3.0-dev2.3:
+            # Display-only fallback for active AC charging / AC-Ladebindung.
+            #
+            # The real charge price history is updated only when delta_kwh > 0.
+            # This block only keeps the diagnostic sensors stable while charging is
+            # currently requested but the battery energy counter has not advanced yet.
+            if (
+                charge_price_applied is None
+                and str(decision.ac_mode) == "input"
+                and float(decision.charge_w or 0.0) > 0.0
+            ):
+                preview_reason = self._charge_pricing_reason(decision.reason)
+                preview_reason = str(preview_reason or "")
+
+                stored_commit_price = _to_float(
+                    self._persist.get("charge_commit_price_eur_kwh"),
+                    None,
+                )
+
+                preview_price = None
+                if price_now is not None:
+                    preview_price = float(price_now)
+                elif stored_commit_price is not None:
+                    preview_price = float(stored_commit_price)
+
+                if preview_price is not None:
+                    charge_price_applied = float(preview_price)
+
+                    if preview_reason in {
+                        "very_cheap_force_charge",
+                        "valley_boost_charge",
+                        "valley_boost_charge_mixed_forecast",
+                        "valley_opportunity_charge",
+                        "valley_opportunity_charge_mixed_forecast",
+                        "planning_latest_start",
+                        "planning_forecast_poor",
+                        "planning_forecast_mixed",
+                        "planning_forecast_reality_override",
+                        "learned_charge_window_active",
+                        "learned_charge_window_latest_start_reached",
+                        "learned_charge_window_deadline_too_close_start_now",
+                        "summer_peak_reserve_charge",
+                    }:
+                        charge_source = preview_reason
+                    else:
+                        charge_source = "grid_charge"
+
+                    charge_grid_part_w = float(decision.charge_w or 0.0)
+                    charge_pv_part_w = 0.0
+                    is_grid_charge = True
+                    
+            # V4.3.0-dev5.2.1:
+            # Bootstrap the economic charge-price basis during a confirmed
+            # strategic grid charge even when the SoC sensor has not yet
+            # produced a positive delta_kwh.
+            #
+            # The real energy ledger is still updated only by delta_kwh > 0.
+            # This fallback only prevents the average charge price from staying
+            # at 0.00 €/kWh throughout a real AC charge because of coarse or
+            # delayed SoC updates.
+            current_trade_avg_price = _to_float(
+                self._persist.get("trade_avg_charge_price"),
+                None,
+            )
+            current_trade_charged_kwh = max(
+                0.0,
+                float(
+                    self._persist.get(
+                        "trade_charged_kwh",
+                        0.0,
+                    )
+                    or 0.0
+                ),
+            )
+
+            confirmed_grid_charge_reasons = (
+                CHARGE_COMMIT_PLANNING_REASONS
+                | CHARGE_COMMIT_LEARNED_REASONS
+                | CHARGE_COMMIT_PRICE_REASONS
+                | CHARGE_COMMIT_RESERVE_REASONS
+            )
+
+            bootstrap_pricing_reason = self._charge_pricing_reason(
+                decision.reason
+            )
+
+            confirmed_strategic_grid_charge = bool(
+                str(decision.ac_mode) == "input"
+                and float(decision.charge_w or 0.0) > 0.0
+                and str(bootstrap_pricing_reason)
+                in confirmed_grid_charge_reasons
+                and float(grid_import or 0.0) > 60.0
+                and charge_price_applied is not None
+            )
+
+            if (
+                confirmed_strategic_grid_charge
+                and current_trade_charged_kwh <= 0.0
+                and (
+                    current_trade_avg_price is None
+                    or current_trade_avg_price <= 0.0001
+                )
+            ):
+                self._persist["trade_avg_charge_price"] = float(
+                    charge_price_applied
+                )
+
+                charge_price_bootstrap_active = True                
+
+            if (
+                delta_kwh < 0
+                and price_now is not None
+                and decision.ac_mode == "output"
+                and float(decision.discharge_w or 0.0) > 0.0
+                and decision.reason
+                not in {
+                    "pv_house_load_passthrough",
+                    "offgrid_load_support",
+                }
+            ):
+                sold_kwh = abs(float(delta_kwh))
+                avg_price = self._persist.get("trade_avg_charge_price")
+
+                tracked_kwh = max(
+                    0.0,
+                    float(self._persist.get("trade_charged_kwh", 0.0) or 0.0),
+                )
+
+                # V4.2.5:
+                # trade_charged_kwh is only the internally priced charge ledger,
+                # not the physical battery energy. It can be depleted while the
+                # battery still contains energy, e.g. after restarts, updates,
+                # SoC jumps or incomplete historic charge tracking.
+                #
+                # Therefore only book profit for the part of the discharge that
+                # is still covered by priced charge energy, but do not reset the
+                # average charge price here.
+                accounted_sold_kwh = min(float(sold_kwh), float(tracked_kwh))
+
+                if avg_price is not None and accounted_sold_kwh > 0:
+                    profit = (
+                        float(price_now) - float(avg_price)
+                    ) * float(accounted_sold_kwh)
+
+                    self._persist["profit_eur"] = (
+                        float(self._persist.get("profit_eur", 0.0))
+                        + float(profit)
+                    )
+
+                remaining_kwh = max(
+                    0.0,
+                    float(tracked_kwh) - float(accounted_sold_kwh),
+                )
+
+                self._persist["trade_charged_kwh"] = remaining_kwh
+
+                # Important:
+                # Do not set trade_avg_charge_price to 0 here.
+                # The real reset is handled above when SoC reaches SoC-Min.
+
+            adaptive_peak_active = decision.reason == "adaptive_peak_discharge"
             
             # V4.3.0-dev4.0:
             # Calculate the provisional PV/grid split through the dedicated
