@@ -1640,31 +1640,27 @@ class DecisionEngine:
         self,
         ctx: DecisionContext,
     ) -> float | None:
+        """Return the target SoC for strategic peak-reserve charging.
+
+        V4.3.0-dev5.6:
+        Once Automatic starts a strategic AC charge in a valid economical
+        pre-peak window, the configured maximum SoC is authoritative.
+
+        The former fixed 80/85/90/95 percent severity levels could end an
+        otherwise valid charge prematurely, even with a poor PV outlook and a
+        user-configured maximum SoC of 100 percent.
+        """
+
         expected_peak = self._automatic_summer_expected_peak_price(ctx)
         if expected_peak is None:
             return None
 
-        prices = [p.price for p in ctx.price_points] if ctx.price_points else []
-        if not prices:
+        if not ctx.price_points:
             return None
-
-        peak_threshold = self._compute_peak_threshold(prices, ctx.peak_factor)
-
-        # Severity-based target. This is intentionally simple and conservative for
-        # V4.2.4: avoid a large architecture change, but stop entering extreme peaks
-        # with only 60-70% SoC.
-        if expected_peak >= float(ctx.very_expensive_threshold):
-            target_soc = 95.0
-        elif expected_peak >= peak_threshold * 1.35:
-            target_soc = 90.0
-        elif expected_peak >= peak_threshold * 1.15:
-            target_soc = 85.0
-        else:
-            target_soc = 80.0
 
         return max(
             float(ctx.soc_min),
-            min(float(ctx.soc_max), float(target_soc)),
+            min(100.0, float(ctx.soc_max)),
         )
 
 
