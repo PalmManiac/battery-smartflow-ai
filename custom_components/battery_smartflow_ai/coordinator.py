@@ -883,17 +883,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if bool(offgrid_load_active):
             return "offgrid_load_blocks_ac_charge"
-            
-        # V4.3.0-dev5.3:
-        # Optional peak-reserve charging must end when the unified automatic
-        # context no longer permits it, e.g. because current PV and a good
-        # forecast can cover the reserve need.
-        if (
-            str(commit.source_reason or "")
-            == "summer_peak_reserve_charge"
-            and not bool(automatic_peak_reserve_allowed)
-        ):
-            return "price_condition_lost"
 
         if self._strategic_ac_charge_price_conflict(
             reason=str(commit.source_reason or ""),
