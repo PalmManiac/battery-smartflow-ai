@@ -1540,6 +1540,66 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     def set_manual_action(self, action: str) -> None:
         self.runtime_mode["manual_action"] = action
+        
+    def _prepare_number_write(
+        self,
+        *,
+        entity_id: str,
+        requested_w: float,
+        diagnostic_prefix: str,
+    ) -> int:
+        """Clamp a power request to the Number entity's live limits.
+
+        V4.3.0-dev5.7:
+        Some devices may narrow their Number entity range dynamically.
+        Sending a value above that live range can be rejected by Home Assistant
+        or ignored by the device.
+
+        Store both the original request and the effective value for diagnostics.
+        """
+
+        requested = max(0.0, float(requested_w or 0.0))
+        effective = requested
+
+        min_value = _to_float(
+            self._attr(entity_id, "min"),
+            None,
+        )
+        max_value = _to_float(
+            self._attr(entity_id, "max"),
+            None,
+        )
+
+        if min_value is not None:
+            effective = max(float(min_value), effective)
+
+        if max_value is not None:
+            effective = min(float(max_value), effective)
+
+        effective_int = int(round(effective, 0))
+        requested_int = int(round(requested, 0))
+
+        self._persist[
+            f"{diagnostic_prefix}_requested_w"
+        ] = requested_int
+
+        self._persist[
+            f"{diagnostic_prefix}_effective_w"
+        ] = effective_int
+
+        self._persist[
+            f"{diagnostic_prefix}_entity_min_w"
+        ] = min_value
+
+        self._persist[
+            f"{diagnostic_prefix}_entity_max_w"
+        ] = max_value
+
+        self._persist[
+            f"{diagnostic_prefix}_clamped"
+        ] = effective_int != requested_int
+
+        return effective_int
 
     async def _set_ac_mode(self, mode: str) -> None:
         current = self._state(self.entities.ac_mode)
@@ -1556,30 +1616,125 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _set_input_limit(self, watts: float) -> None:
-        val = int(round(float(watts), 0))
-        last = self._persist.get("last_set_input_w")
-        if last == val:
-            return
-        self._persist["last_set_input_w"] = val
-        await self.hass.services.async_call(
-            "number",
-            "set_value",
-            {"entity_id": self.entities.input_limit, "value": val},
-            blocking=False,
+        """Write the effective INPUT limit reliably.
+
+        V4.3.0-dev5.7:
+        - respect dynamic Number entity limits
+        - compare against the real entity state
+        - do not trust the internal cache alone
+        - update the cache only after a successful service call
+        """
+
+        val = self._prepare_number_write(
+            entity_id=self.entities.input_limit,
+            requested_w=float(watts),
+            diagnostic_prefix="input_write",
         )
 
-    async def _set_output_limit(self, watts: float) -> None:
-        val = int(round(float(watts), 0))
-        last = self._persist.get("last_set_output_w")
-        if last == val:
+        cached_value = _to_float(
+            self._persist.get("last_set_input_w"),
+            None,
+        )
+
+        entity_value = _to_float(
+            self._state(self.entities.input_limit),
+            None,
+        )
+
+        cache_matches = bool(
+            cached_value is not None
+            and int(round(cached_value, 0)) == val
+        )
+
+        entity_matches = bool(
+            entity_value is not None
+            and abs(float(entity_value) - float(val)) < 1.0
+        )
+
+        self._persist["input_write_entity_state_w"] = entity_value
+
+        # Skip only when both our cache and the real Number entity agree.
+        if cache_matches and entity_matches:
+            self._persist["input_write_skipped"] = True
+            self._persist["input_write_skip_reason"] = (
+                "cache_and_entity_match"
+            )
             return
-        self._persist["last_set_output_w"] = val
+
+        self._persist["input_write_skipped"] = False
+        self._persist["input_write_skip_reason"] = "none"
+
         await self.hass.services.async_call(
             "number",
             "set_value",
-            {"entity_id": self.entities.output_limit, "value": val},
-            blocking=False,
+            {
+                "entity_id": self.entities.input_limit,
+                "value": val,
+            },
+            blocking=True,
         )
+
+        # Update only after Home Assistant accepted the service call.
+        self._persist["last_set_input_w"] = val
+        self._persist["input_write_last_success_w"] = val
+
+    async def _set_output_limit(self, watts: float) -> None:
+        """Write the effective OUTPUT limit reliably.
+
+        V4.3.0-dev5.7:
+        Uses the same live-limit and Soll-/Ist synchronization as INPUT.
+        """
+
+        val = self._prepare_number_write(
+            entity_id=self.entities.output_limit,
+            requested_w=float(watts),
+            diagnostic_prefix="output_write",
+        )
+
+        cached_value = _to_float(
+            self._persist.get("last_set_output_w"),
+            None,
+        )
+
+        entity_value = _to_float(
+            self._state(self.entities.output_limit),
+            None,
+        )
+
+        cache_matches = bool(
+            cached_value is not None
+            and int(round(cached_value, 0)) == val
+        )
+
+        entity_matches = bool(
+            entity_value is not None
+            and abs(float(entity_value) - float(val)) < 1.0
+        )
+
+        self._persist["output_write_entity_state_w"] = entity_value
+
+        if cache_matches and entity_matches:
+            self._persist["output_write_skipped"] = True
+            self._persist["output_write_skip_reason"] = (
+                "cache_and_entity_match"
+            )
+            return
+
+        self._persist["output_write_skipped"] = False
+        self._persist["output_write_skip_reason"] = "none"
+
+        await self.hass.services.async_call(
+            "number",
+            "set_value",
+            {
+                "entity_id": self.entities.output_limit,
+                "value": val,
+            },
+            blocking=True,
+        )
+
+        self._persist["last_set_output_w"] = val
+        self._persist["output_write_last_success_w"] = val
 
     def _get_setting(self, key: str, default: float) -> float:
         try:
