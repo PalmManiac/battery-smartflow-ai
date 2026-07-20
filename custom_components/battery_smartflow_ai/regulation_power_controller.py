@@ -998,7 +998,52 @@ class RegulationPowerController:
                 max_step_down_override_w=max_step_down_override_w,
             )
 
-        # Planned/manual/emergency charging uses the strategy request.
+        # V4.3.0-dev5.7:
+        # Fixed AC charging must execute the strategic request directly.
+        #
+        # PV surplus charging remains grid-regulated above. Manual, planned,
+        # committed and emergency AC charging are explicit power commands and
+        # must not be altered by the PV controller or delayed by its step limits.
+        if intent.intent in {
+            "manual_charge",
+            "planned_charge",
+            "emergency_charge",
+        }:
+            raw_target = max(0.0, float(requested))
+
+            limited_target = min(
+                raw_target,
+                float(self.config.max_input_w),
+            )
+
+            profile_limited = abs(
+                limited_target - raw_target
+            ) > 0.01
+
+            return PowerControllerResult(
+                raw_target_w=round(raw_target, 2),
+                limited_target_w=round(limited_target, 2),
+                applied_step_w=round(
+                    limited_target - prev,
+                    2,
+                ),
+                final_power_w=round(limited_target, 2),
+                profile_limited=bool(profile_limited),
+                step_limited=False,
+                reason=f"{intent.intent}_fixed_input_power",
+                metadata={
+                    "intent": intent.intent,
+                    "resolved_mode": arbiter.resolved_mode,
+                    "control_grid_w": round(control_grid_w, 2),
+                    "requested_power_w": round(raw_target, 2),
+                    "fixed_ac_charge": True,
+                    "input_step_limiter_bypassed": True,
+                    **economic_target_metadata,
+                },
+            )
+
+        # Conservative fallback for any future INPUT intent that is not yet
+        # explicitly classified as PV-regulated or fixed AC charging.
         raw_target = requested
 
         return self._limit_input_step(
@@ -1010,6 +1055,8 @@ class RegulationPowerController:
                 "resolved_mode": arbiter.resolved_mode,
                 "control_grid_w": round(control_grid_w, 2),
                 "requested_power_w": raw_target,
+                "fixed_ac_charge": False,
+                "input_step_limiter_bypassed": False,
                 **economic_target_metadata,
             },
         )
