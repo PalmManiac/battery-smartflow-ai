@@ -794,6 +794,24 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         unit_of_measurement="%",
                     )
                 ),
+                vol.Optional("PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W"): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=20.0,
+                        max=300.0,
+                        step=5.0,
+                        mode=selector.NumberSelectorMode.BOX,
+                        unit_of_measurement="W",
+                    )
+                ),
+                vol.Optional("PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W"): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=20.0,
+                        max=300.0,
+                        step=5.0,
+                        mode=selector.NumberSelectorMode.BOX,
+                        unit_of_measurement="W",
+                    )
+                ),
             }
         )
 
@@ -824,6 +842,14 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             "SOC_DISCHARGE_RESUME_MARGIN": current_overrides.get(
                 "SOC_DISCHARGE_RESUME_MARGIN",
                 profile.get("SOC_DISCHARGE_RESUME_MARGIN", 3.0),
+            ),
+            "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": current_overrides.get(
+                "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W",
+                profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W", 120.0),
+            ),
+            "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": current_overrides.get(
+                "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W",
+                profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W", 120.0),
             ),
         }
 

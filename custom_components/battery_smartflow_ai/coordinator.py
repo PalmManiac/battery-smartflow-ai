@@ -1085,6 +1085,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         reason = str(decision.reason or "idle")
         now_utc = dt_util.as_utc(now)
 
+        # MPPT_CLIPS_WITHOUT_OUTPUT: Der Voll-Akku-Passthrough darf nicht von
+        # einer Ladebindung verdrängt werden. Er ist nur aktiv, wenn der Akku
+        # praktisch voll ist (>= soc_max - 1), die Bindung kann dann ohnehin
+        # nichts laden (BMS nimmt nichts mehr an), würde aber im Input-Modus
+        # den Output schließen und damit die PV abregeln. Die Bindung bleibt
+        # bestehen und übernimmt wieder, sobald der Passthrough loslässt.
+        if (
+            reason == "pv_house_load_passthrough"
+            and bool(self._persist.get("pv_houseload_passthrough_forced", False))
+        ):
+            return decision
+
         commit = self._get_charge_commit()
         
         (
@@ -2464,6 +2476,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         profile: dict[str, Any],
         soc: float,
         soc_min: float,
+        soc_max: float,
         pv_w: float,
         house_load_w: float,
         grid_import_w: float,
@@ -2498,6 +2511,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         stop_reason = "none"
         target_w = 0.0
+        forced = False
 
         protection_active = bool(
             discharge_blocked_by_soc_min
@@ -2532,6 +2546,42 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             import_val = max(0.0, float(grid_import_w or 0.0))
             pv_charge_latched = bool(self._persist.get("sf800_pv_charge_latched", False))
 
+            # MPPT_CLIPS_WITHOUT_OUTPUT: Geräte wie der SF800Pro regeln den
+            # MPPT auf 0 W ab, sobald weder Akku noch Output den PV-Strom
+            # abnehmen (Akku voll + Einspeiseverbot). Der Messwert ist dann
+            # dauerhaft 0, obwohl das Panel liefern könnte. Deshalb bleibt
+            # der Passthrough bei vollem Akku während des Tages dauerhaft
+            # offen (Output = Hauslast), statt auf gemessene PV zu warten.
+            forced_prev = bool(
+                self._persist.get("pv_houseload_passthrough_forced", False)
+            )
+            forced = False
+            if bool(profile.get("MPPT_CLIPS_WITHOUT_OUTPUT", False)):
+                sun_up = False
+                sun_state = self.hass.states.get("sun.sun")
+                if sun_state is not None:
+                    try:
+                        sun_up = (
+                            float(sun_state.attributes.get("elevation", -90.0))
+                            > 0.0
+                        )
+                    except (TypeError, ValueError):
+                        sun_up = False
+
+                # Ab soc_max - 1 gilt der Akku als voll (BMS nimmt dort
+                # bereits nichts mehr an und das Gerät regelt die PV ab).
+                soc_full = float(soc) >= float(soc_max) - 1.0
+                # Hysterese: einmal aktiviert, erst unter soc_max - 2 %
+                # wieder loslassen, sonst pendeln Laden/Passthrough.
+                soc_holds = float(soc) >= float(soc_max) - 2.0
+
+                forced = (
+                    sun_up
+                    and not pv_charge_latched
+                    and min(house_val, float(max_output_w or 0.0)) >= 60.0
+                    and (soc_full or (forced_prev and soc_holds))
+                )
+
             raw_target_w = min(
                 pv_val,
                 house_val,
@@ -2565,7 +2615,35 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except Exception:
                     hold_active = False
 
-            if active:
+            if forced:
+                # Dauer-Passthrough bei vollem Akku: Output auf Hauslast
+                # halten, damit die PV jederzeit sofort liefern kann. Die
+                # normalen Exit-Prüfungen (pv_low, Export-Handover) greifen
+                # hier bewusst nicht, denn die PV-Ladung kann bei vollem Akku
+                # nichts übernehmen, ein Handover würde den MPPT wieder
+                # abregeln.
+                if not active:
+                    self._persist["pv_houseload_passthrough_started_ts"] = (
+                        dt_util.as_utc(now).isoformat()
+                    )
+                active = True
+                # Output folgt der gemessenen PV (+20 W Luft, damit der MPPT
+                # hochklettern kann), mit einem kleinen Sockel, der ihn wach
+                # hält. So liefert die PV immer sofort, aber der Akku speist
+                # nicht die Hauslast, während der Strompreis billig ist;
+                # das Defizit deckt bewusst das Netz.
+                floor_w = float(
+                    profile.get("PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W", 80.0)
+                    or 80.0
+                )
+                target_w = min(
+                    house_val,
+                    float(max_output_w or 0.0),
+                    max(pv_val + 20.0, floor_w),
+                )
+                stop_reason = "full_battery_pv_passthrough"
+
+            elif active:
                 if not enough_pv:
                     if hold_active:
                         stop_reason = "hold_pv_low"
@@ -2640,6 +2718,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         self._persist["pv_houseload_passthrough_active"] = bool(active)
+        self._persist["pv_houseload_passthrough_forced"] = bool(forced)
         self._persist["pv_houseload_passthrough_export_counter"] = int(export_counter)
         self._persist["pv_houseload_passthrough_target_w"] = float(target_w or 0.0)
         self._persist["pv_houseload_passthrough_stop_reason"] = str(stop_reason)
@@ -3808,6 +3887,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         profile=profile,
                         soc=float(soc),
                         soc_min=float(soc_min),
+                        soc_max=float(soc_max),
                         pv_w=float(pv_w),
                         house_load_w=float(house_load),
                         grid_import_w=float(grid_import or 0.0),
