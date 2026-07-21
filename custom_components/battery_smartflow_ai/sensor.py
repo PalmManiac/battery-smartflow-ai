@@ -1062,6 +1062,12 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
             "output_write_last_success_w": details.get(
                 "output_write_last_success_w"
             ),
+            "input_live_entity_state_w": details.get(
+                "input_live_entity_state_w"
+            ),
+            "output_live_entity_state_w": details.get(
+                "output_live_entity_state_w"
+            ),
         }
 
     def _build_charge_source_allocation_attributes(self) -> dict:
