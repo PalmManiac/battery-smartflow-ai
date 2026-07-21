@@ -3436,6 +3436,32 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             ai_mode = str(self.runtime_mode.get("ai_mode", AI_MODE_AUTOMATIC))
             manual_action = str(self.runtime_mode.get("manual_action", MANUAL_STANDBY))
+            
+            # V4.3.0-dev5.7:
+            # Strategic PV handover policy.
+            #
+            # Automatic:
+            #   React quickly to confirmed PV surplus. Short grid-import phases
+            #   do not need to trigger immediate house-load coverage.
+            #
+            # Autarky (internal legacy key AI_MODE_SUMMER):
+            #   Preserve stronger INPUT/OUTPUT hysteresis because continuous
+            #   house-load coverage has priority and changing clouds must not
+            #   cause rapid mode flapping.
+            #
+            # Manual:
+            #   No automatic PV handover policy is required.
+            if ai_mode == AI_MODE_AUTOMATIC:
+                pv_handover_policy = "fast"
+                load_coverage_priority = False
+
+            elif ai_mode == AI_MODE_SUMMER:
+                pv_handover_policy = "stable"
+                load_coverage_priority = True
+
+            else:
+                pv_handover_policy = "default"
+                load_coverage_priority = False
 
             grid_import, grid_export = self._get_grid()
             if grid_import is None or grid_export is None:
@@ -4583,10 +4609,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 battery_charge_w=float(battery_charge_w),
             )
             
-            strategy_intent = decision_to_strategy_intent(decision)
+            strategy_intent = decision_to_strategy_intent(
+                decision,
+                pv_handover_policy=pv_handover_policy,
+                load_coverage_priority=load_coverage_priority,
+            )
             
             strategy_intent.metadata.update(
                 {
+                    "pv_handover_policy": str(
+                        strategy_intent.pv_handover_policy
+                    ),
+                    "load_coverage_priority": bool(
+                        strategy_intent.load_coverage_priority
+                    ),
                     "charge_source_allocation_active": bool(
                         charge_source_allocation.active
                     ),
@@ -5389,6 +5425,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     strategy_intent.allow_mode_switch
                 ),
                 "regulation_strategy_force": bool(strategy_intent.force),
+                "regulation_pv_handover_policy": str(
+                    strategy_intent.pv_handover_policy
+                ),
+                "regulation_load_coverage_priority": bool(
+                    strategy_intent.load_coverage_priority
+                ),
                 "regulation_discharge_allowed": bool(
                     discharge_allowed_for_regulation
                 ),
