@@ -536,7 +536,12 @@ def decision_to_strategy_decision(decision: DecisionResult) -> StrategyDecision:
     )
 
 
-def strategy_decision_to_intent(strategy: StrategyDecision) -> StrategyIntent:
+def strategy_decision_to_intent(
+    strategy: StrategyDecision,
+    *,
+    pv_handover_policy: str = "default",
+    load_coverage_priority: bool = False,
+) -> StrategyIntent:
     """Convert V4.3 StrategyDecision back into existing StrategyIntent.
 
     The technical V4.2 regulation chain still uses the old intent names.
@@ -600,11 +605,23 @@ def strategy_decision_to_intent(strategy: StrategyDecision) -> StrategyIntent:
         priority=strategy.priority,
         allow_mode_switch=strategy.allow_mode_switch,
         force=strategy.force,
+        pv_handover_policy=pv_handover_policy,
+        load_coverage_priority=bool(load_coverage_priority),
         metadata=metadata,
     )
 
 
-def decision_to_strategy_intent(decision: DecisionResult) -> StrategyIntent:
+def decision_to_strategy_intent(
+    decision: DecisionResult,
+    *,
+    pv_handover_policy: str = "default",
+    load_coverage_priority: bool = False,
+) -> StrategyIntent:
     """Compatibility entrypoint used by the coordinator."""
     strategy = decision_to_strategy_decision(decision)
-    return strategy_decision_to_intent(strategy)
+
+    return strategy_decision_to_intent(
+        strategy,
+        pv_handover_policy=pv_handover_policy,
+        load_coverage_priority=load_coverage_priority,
+    )
