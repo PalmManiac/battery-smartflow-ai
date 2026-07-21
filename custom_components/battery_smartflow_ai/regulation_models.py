@@ -65,6 +65,12 @@ SeasonContext = Literal[
     "winter_like",
 ]
 
+PvHandoverPolicy = Literal[
+    "default",
+    "fast",
+    "stable",
+]
+
 
 @dataclass
 class StrategyIntent:
@@ -87,6 +93,22 @@ class StrategyIntent:
     priority: int = 0
     allow_mode_switch: bool = True
     force: bool = False
+
+    # V4.3.0-dev5.7:
+    # Technical handover behavior for PV charging.
+    #
+    # fast:
+    #   Strategic PV confirmation is sufficient. The technical layer should
+    #   avoid repeating the same export confirmation unnecessarily.
+    #
+    # stable:
+    #   Preserve stronger technical hysteresis because continuous house-load
+    #   coverage has priority and clouds must not cause INPUT/OUTPUT flapping.
+    #
+    # default:
+    #   Conservative compatibility behavior.
+    pv_handover_policy: PvHandoverPolicy = "default"
+    load_coverage_priority: bool = False
 
     metadata: dict[str, Any] = field(default_factory=dict)
     
