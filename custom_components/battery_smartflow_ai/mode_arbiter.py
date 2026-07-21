@@ -871,10 +871,60 @@ class ModeArbiter:
                     },
                 )
 
-            # Starting a new PV charge also needs current export.
-            # Stable export cycles alone can be stale during fast-changing
-            # cloud situations.
-            if float(grid.grid_now_w or 0.0) >= 0.0:
+            # V4.3.0-dev5.7:
+            # PV handover policy is defined by the strategic layer.
+            #
+            # fast:
+            #   Automatic mode has already confirmed real PV surplus through
+            #   its strategic hysteresis. Do not repeat the same stable-export
+            #   confirmation in the technical layer.
+            #
+            # stable:
+            #   Autarky mode keeps an additional technical export confirmation
+            #   so changing clouds do not cause rapid INPUT/OUTPUT switching.
+            #
+            # default:
+            #   Conservative compatibility behavior.
+            pv_handover_policy = str(
+                getattr(
+                    intent,
+                    "pv_handover_policy",
+                    "default",
+                )
+                or "default"
+            )
+
+            load_coverage_priority = bool(
+                getattr(
+                    intent,
+                    "load_coverage_priority",
+                    False,
+                )
+            )
+
+            current_export_active = (
+                float(grid.grid_now_w or 0.0) < 0.0
+            )
+
+            stable_export_cycles = int(
+                grid.stable_export_cycles or 0
+            )
+
+            required_export_cycles = max(
+                1,
+                int(
+                    self.config.stable_export_cycles_for_pv_charge
+                ),
+            )
+
+            last_output_w = max(
+                0.0,
+                float(runtime.last_output_limit_w or 0.0),
+            )
+
+            # A new PV charge must still be based on a real current export.
+            # Historical export counters alone are not sufficient.
+            if not current_export_active:
                 return ModeArbiterResult(
                     requested_mode="input",
                     resolved_mode="hold",
@@ -885,15 +935,46 @@ class ModeArbiter:
                     cooldown_remaining_s=0.0,
                     metadata={
                         **metadata,
+                        "pv_handover_policy": pv_handover_policy,
+                        "load_coverage_priority": load_coverage_priority,
                         "grid_now_w": float(grid.grid_now_w or 0.0),
+                        "last_output_limit_w": last_output_w,
+                        "stable_export_cycles": stable_export_cycles,
+                        "required_export_cycles": required_export_cycles,
                     },
                 )
 
-            # Starting PV charge needs stable export.
+            # Fast Automatic handover:
+            # The strategic PV latch already confirmed the surplus. Once real
+            # export is still present, do not wait for another historical
+            # stable-export confirmation.
             if (
-                grid.stable_export_cycles
-                < self.config.stable_export_cycles_for_pv_charge
+                pv_handover_policy == "fast"
+                and not load_coverage_priority
             ):
+                return ModeArbiterResult(
+                    requested_mode="input",
+                    resolved_mode="input",
+                    allowed=True,
+                    reason="pv_charge_fast_handover",
+                    active_regulation_state="pv_charge_active",
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "pv_handover_policy": pv_handover_policy,
+                        "load_coverage_priority": load_coverage_priority,
+                        "grid_now_w": float(grid.grid_now_w or 0.0),
+                        "last_output_limit_w": last_output_w,
+                        "stable_export_cycles": stable_export_cycles,
+                        "required_export_cycles": required_export_cycles,
+                    },
+                )
+
+            # Stable/default handover:
+            # Keep an additional technical export confirmation. This is used by
+            # Autarky mode and remains the conservative compatibility path.
+            if stable_export_cycles < required_export_cycles:
                 return ModeArbiterResult(
                     requested_mode="input",
                     resolved_mode="hold",
@@ -902,18 +983,34 @@ class ModeArbiter:
                     active_regulation_state=runtime.active_regulation_state,
                     active_hold_remaining_s=0.0,
                     cooldown_remaining_s=0.0,
-                    metadata=metadata,
+                    metadata={
+                        **metadata,
+                        "pv_handover_policy": pv_handover_policy,
+                        "load_coverage_priority": load_coverage_priority,
+                        "grid_now_w": float(grid.grid_now_w or 0.0),
+                        "last_output_limit_w": last_output_w,
+                        "stable_export_cycles": stable_export_cycles,
+                        "required_export_cycles": required_export_cycles,
+                    },
                 )
 
             return ModeArbiterResult(
                 requested_mode="input",
                 resolved_mode="input",
                 allowed=True,
-                reason="pv_charge_stable_export",
+                reason="pv_charge_stable_handover",
                 active_regulation_state="pv_charge_active",
                 active_hold_remaining_s=0.0,
                 cooldown_remaining_s=0.0,
-                metadata=metadata,
+                metadata={
+                    **metadata,
+                    "pv_handover_policy": pv_handover_policy,
+                    "load_coverage_priority": load_coverage_priority,
+                    "grid_now_w": float(grid.grid_now_w or 0.0),
+                    "last_output_limit_w": last_output_w,
+                    "stable_export_cycles": stable_export_cycles,
+                    "required_export_cycles": required_export_cycles,
+                },
             )
 
         # Some devices should not enter INPUT without stable export unless it is
