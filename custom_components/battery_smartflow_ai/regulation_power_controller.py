@@ -28,7 +28,7 @@ DEFAULT_DISCHARGE_MAX_STEP_DOWN = 800.0
 # micro-tuning. Device profiles may override them later, but dev3 should first
 # prove that a common adaptive near-zero trim improves load coverage.
 DEFAULT_DISCHARGE_NEAR_ZERO_DEADBAND_W = 12.0
-DEFAULT_DISCHARGE_NEAR_ZERO_MIN_IMPORT_W = 25.0
+DEFAULT_DISCHARGE_NEAR_ZERO_MIN_IMPORT_W = 15.0
 DEFAULT_DISCHARGE_NEAR_ZERO_TRIM_STEP_W = 20.0
 DEFAULT_DISCHARGE_NEAR_ZERO_MAX_TRIM_W = 80.0
 
