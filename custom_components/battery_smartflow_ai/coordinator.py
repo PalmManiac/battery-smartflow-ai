@@ -1602,18 +1602,69 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return effective_int
 
     async def _set_ac_mode(self, mode: str) -> None:
-        current = self._state(self.entities.ac_mode)
-        if current == mode:
-            self._persist["last_set_mode"] = mode
+        """Write the AC mode reliably.
+
+        V4.3.0-dev5.7:
+        - compare against the real Select entity
+        - do not trust the internal cache alone
+        - wait for Home Assistant to accept the service call
+        - update the cache only after a successful call
+        """
+
+        requested_mode = str(mode or "")
+        current_mode = str(
+            self._state(self.entities.ac_mode) or ""
+        )
+
+        cached_mode = str(
+            self._persist.get("last_set_mode") or ""
+        )
+
+        self._persist["mode_write_requested"] = requested_mode
+        self._persist["mode_write_entity_state"] = current_mode
+
+        cache_matches = (
+            cached_mode == requested_mode
+        )
+
+        entity_matches = (
+            current_mode == requested_mode
+        )
+
+        # Skip only when both our internal cache and the real Select entity agree.
+        if cache_matches and entity_matches:
+            self._persist["mode_write_skipped"] = True
+            self._persist["mode_write_skip_reason"] = (
+                "cache_and_entity_match"
+            )
             return
 
-        self._persist["last_set_mode"] = mode
+        # The real entity is already correct, but our cache is stale.
+        # Synchronize the cache without sending another device command.
+        if entity_matches:
+            self._persist["last_set_mode"] = requested_mode
+            self._persist["mode_write_skipped"] = True
+            self._persist["mode_write_skip_reason"] = (
+                "entity_match_cache_resynced"
+            )
+            return
+
+        self._persist["mode_write_skipped"] = False
+        self._persist["mode_write_skip_reason"] = "none"
+
         await self.hass.services.async_call(
             "select",
             "select_option",
-            {"entity_id": self.entities.ac_mode, "option": mode},
-            blocking=False,
+            {
+                "entity_id": self.entities.ac_mode,
+                "option": requested_mode,
+            },
+            blocking=True,
         )
+
+        # Update our internal cache only after Home Assistant accepted the call.
+        self._persist["last_set_mode"] = requested_mode
+        self._persist["mode_write_last_success"] = requested_mode
 
     async def _set_input_limit(self, watts: float) -> None:
         """Write the effective INPUT limit reliably.
@@ -5374,6 +5425,34 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "set_mode": ac_mode,
                 "set_input_w": int(round(in_w, 0)),
                 "set_output_w": int(round(out_w, 0)),
+                
+                # V4.3.0-dev5.7:
+                # AC mode write diagnostics.
+                "mode_write_requested": self._persist.get(
+                    "mode_write_requested"
+                ),
+                "mode_write_entity_state": self._persist.get(
+                    "mode_write_entity_state"
+                ),
+                "mode_live_entity_state": str(
+                    self._state(self.entities.ac_mode) or ""
+                ),
+                "mode_write_skipped": bool(
+                    self._persist.get(
+                        "mode_write_skipped",
+                        False,
+                    )
+                ),
+                "mode_write_skip_reason": str(
+                    self._persist.get(
+                        "mode_write_skip_reason",
+                        "none",
+                    )
+                    or "none"
+                ),
+                "mode_write_last_success": self._persist.get(
+                    "mode_write_last_success"
+                ),
                 
                 # V4.3.0-dev5.7:
                 # INPUT/OUTPUT write diagnostics.
