@@ -5433,6 +5433,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         False,
                     )
                 ),
+                "input_live_entity_state_w": _to_float(
+                    self._state(self.entities.input_limit),
+                    None,
+                ),
+                "output_live_entity_state_w": _to_float(
+                    self._state(self.entities.output_limit),
+                    None,
+                ),
+                
                 "output_write_entity_state_w": self._persist.get(
                     "output_write_entity_state_w"
                 ),
