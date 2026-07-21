@@ -959,6 +959,26 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "automatic_reserve_weight_reason",
                 data.get("automatic_reserve_weight_reason"),
             ),
+            "mode_arbiter_reason": details.get(
+                "regulation_mode_arbiter_reason",
+                data.get("regulation_mode_arbiter_reason"),
+            ),
+            "resolved_mode": details.get(
+                "regulation_resolved_mode",
+                data.get("regulation_resolved_mode"),
+            ),
+            "mode_allowed": details.get(
+                "regulation_mode_allowed",
+                data.get("regulation_mode_allowed"),
+            ),
+            "active_regulation_state": details.get(
+                "regulation_active_state",
+                data.get("regulation_active_state"),
+            ),
+            "active_hold_remaining_s": details.get(
+                "regulation_active_hold_remaining_s",
+                data.get("regulation_active_hold_remaining_s"),
+            ),
             "forecast_weight_reason": details.get(
                 "automatic_forecast_weight_reason",
                 data.get("automatic_forecast_weight_reason"),
