@@ -5374,6 +5374,84 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "set_mode": ac_mode,
                 "set_input_w": int(round(in_w, 0)),
                 "set_output_w": int(round(out_w, 0)),
+                
+                # V4.3.0-dev5.7:
+                # INPUT/OUTPUT write diagnostics.
+                "input_write_requested_w": self._persist.get(
+                    "input_write_requested_w"
+                ),
+                "input_write_effective_w": self._persist.get(
+                    "input_write_effective_w"
+                ),
+                "input_write_entity_min_w": self._persist.get(
+                    "input_write_entity_min_w"
+                ),
+                "input_write_entity_max_w": self._persist.get(
+                    "input_write_entity_max_w"
+                ),
+                "input_write_clamped": bool(
+                    self._persist.get(
+                        "input_write_clamped",
+                        False,
+                    )
+                ),
+                "input_write_entity_state_w": self._persist.get(
+                    "input_write_entity_state_w"
+                ),
+                "input_write_skipped": bool(
+                    self._persist.get(
+                        "input_write_skipped",
+                        False,
+                    )
+                ),
+                "input_write_skip_reason": str(
+                    self._persist.get(
+                        "input_write_skip_reason",
+                        "none",
+                    )
+                    or "none"
+                ),
+                "input_write_last_success_w": self._persist.get(
+                    "input_write_last_success_w"
+                ),
+
+                "output_write_requested_w": self._persist.get(
+                    "output_write_requested_w"
+                ),
+                "output_write_effective_w": self._persist.get(
+                    "output_write_effective_w"
+                ),
+                "output_write_entity_min_w": self._persist.get(
+                    "output_write_entity_min_w"
+                ),
+                "output_write_entity_max_w": self._persist.get(
+                    "output_write_entity_max_w"
+                ),
+                "output_write_clamped": bool(
+                    self._persist.get(
+                        "output_write_clamped",
+                        False,
+                    )
+                ),
+                "output_write_entity_state_w": self._persist.get(
+                    "output_write_entity_state_w"
+                ),
+                "output_write_skipped": bool(
+                    self._persist.get(
+                        "output_write_skipped",
+                        False,
+                    )
+                ),
+                "output_write_skip_reason": str(
+                    self._persist.get(
+                        "output_write_skip_reason",
+                        "none",
+                    )
+                    or "none"
+                ),
+                "output_write_last_success_w": self._persist.get(
+                    "output_write_last_success_w"
+                ),
 
                 # V4.2.0 regulation execution switch / comparison
                 "regulation_v42_command_enabled": bool(use_regulation_v42_command),
