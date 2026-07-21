@@ -983,6 +983,14 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "automatic_peak_reserve_reason",
                 data.get("automatic_peak_reserve_reason"),
             ),
+            "pv_handover_policy": details.get(
+                "regulation_pv_handover_policy",
+                data.get("regulation_pv_handover_policy"),
+            ),
+            "load_coverage_priority": details.get(
+                "regulation_load_coverage_priority",
+                data.get("regulation_load_coverage_priority"),
+            ),
             "valley_charge_allowed": details.get(
                 "automatic_valley_charge_allowed",
                 data.get("automatic_valley_charge_allowed"),
