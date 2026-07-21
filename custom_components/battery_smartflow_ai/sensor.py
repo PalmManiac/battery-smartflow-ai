@@ -1019,6 +1019,49 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "automatic_valley_charge_reason",
                 data.get("automatic_valley_charge_reason"),
             ),
+            "input_write_requested_w": details.get(
+                "input_write_requested_w"
+            ),
+            "input_write_effective_w": details.get(
+                "input_write_effective_w"
+            ),
+            "input_write_entity_state_w": details.get(
+                "input_write_entity_state_w"
+            ),
+            "input_write_clamped": details.get(
+                "input_write_clamped"
+            ),
+            "input_write_skipped": details.get(
+                "input_write_skipped"
+            ),
+            "input_write_skip_reason": details.get(
+                "input_write_skip_reason"
+            ),
+            "input_write_last_success_w": details.get(
+                "input_write_last_success_w"
+            ),
+
+            "output_write_requested_w": details.get(
+                "output_write_requested_w"
+            ),
+            "output_write_effective_w": details.get(
+                "output_write_effective_w"
+            ),
+            "output_write_entity_state_w": details.get(
+                "output_write_entity_state_w"
+            ),
+            "output_write_clamped": details.get(
+                "output_write_clamped"
+            ),
+            "output_write_skipped": details.get(
+                "output_write_skipped"
+            ),
+            "output_write_skip_reason": details.get(
+                "output_write_skip_reason"
+            ),
+            "output_write_last_success_w": details.get(
+                "output_write_last_success_w"
+            ),
         }
 
     def _build_charge_source_allocation_attributes(self) -> dict:
