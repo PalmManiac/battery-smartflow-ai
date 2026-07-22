@@ -328,6 +328,22 @@ class LearnedPlanningRule(BaseRule):
         if decision_reason == "learned_charge_window_no_charge_needed":
             return None
 
+        # Liegt der Preis bereits im wirtschaftlichen Entladebereich, darf ein
+        # reguläres Ladefenster die Entscheidung nicht an sich ziehen: es
+        # läuft in der Regelliste vor der Entladung, sonst kommt PeakRule nie
+        # zum Zug. Erzwungene Fenster (letzter Start, Deadline) und ein leerer
+        # Akku bleiben ausgenommen.
+        if (
+            decision_reason
+            not in (
+                "learned_charge_window_latest_start_reached",
+                "learned_charge_window_deadline_too_close_start_now",
+            )
+            and float(ctx.soc) > float(ctx.soc_min)
+            and engine._is_effective_discharge_price_reached(ctx)
+        ):
+            return None
+
         if mode == "wait" or decision_reason == "learned_charge_window_wait":
             # Learned waiting must not suppress classic immediate charging rules.
             # If the learned planner only wants to wait, continue with the normal
@@ -383,6 +399,13 @@ class LearnedPlanningRule(BaseRule):
 
 class PlanningRule(BaseRule):
     def evaluate(self, engine, ctx):
+        # Siehe LearnedPlanningRule: im Entladebereich kein Ladefenster,
+        # solange der Akku noch Energie zum Entladen hat.
+        if float(ctx.soc) > float(ctx.soc_min) and (
+            engine._is_effective_discharge_price_reached(ctx)
+        ):
+            return None
+
         if not engine._automatic_planning_context_allows(ctx):
             return None
 

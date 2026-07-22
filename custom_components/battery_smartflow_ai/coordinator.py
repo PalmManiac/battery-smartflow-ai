@@ -868,6 +868,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         price_now: float | None,
         effective_discharge_threshold: float | None,
         automatic_peak_reserve_allowed: bool,
+        battery_charge_w: float = 0.0,
     ) -> str:
         if not commit.active:
             return "none"
@@ -911,6 +912,68 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         # A real price-condition abort can be added later, but it must compare the
         # current price against the original charge condition instead of using a
         # fixed timeout.
+
+        # Eine Bindung, deren Deadline verstrichen ist, hat ihren Zweck
+        # verloren: Sie sollte Energie BIS zu einem Zeitpunkt sicherstellen.
+        # Danach darf sie das Gerät nicht weiter im Input-Modus halten,
+        # auch nicht in der erzwungenen Phase. Wird weiter Energie
+        # gebraucht, legt die Planung eine neue Bindung mit aktuellem
+        # Fenster an.
+        if commit.deadline is not None and now > dt_util.as_utc(
+            commit.deadline
+        ):
+            return "deadline_passed"
+
+        threshold = _to_float(effective_discharge_threshold, None)
+        if threshold is None or threshold <= 0.0:
+            # Der Abbruchpfad bekommt kein DecisionResult mit Schwellen,
+            # deshalb der zuletzt bekannte Wert aus dem Hauptzyklus.
+            threshold = _to_float(
+                self._persist.get("last_known_effective_discharge_threshold"),
+                None,
+            )
+
+        current_price = _to_float(price_now, None)
+        price_in_discharge_range = bool(
+            current_price is not None
+            and threshold is not None
+            and threshold > 0.0
+            and float(current_price) >= float(threshold)
+        )
+
+        commit_forced = str(commit.phase or "") == "forced"
+
+        # Netzladen oberhalb der Entladeschwelle ist nie wirtschaftlich, und
+        # die Bindung würde zugleich die profitable Entladung verdrängen.
+        # Da Phasen seit V4.3.0-dev5.8 monoton sind, kann eine aktive Bindung
+        # nicht mehr pausieren, sie wird hier stattdessen beendet. Die Planung
+        # legt eine neue an, sobald der Preis wieder unter der Schwelle liegt.
+        # Erzwungene Bindungen bleiben ausgenommen, dort zählt die Versorgung.
+        if price_in_discharge_range and not commit_forced:
+            return "price_in_discharge_range"
+
+        target_gap = effective_target_soc - float(soc)
+
+        # Der Akku steht kurz vor dem Ziel, nimmt aber seit längerem keine
+        # Ladung mehr an: das BMS macht vor soc_max dicht. Die Bindung kann
+        # ihr Ziel nie erreichen und würde das Gerät dauerhaft im
+        # Input-Modus halten.
+        if (
+            target_gap <= 3.0
+            and float(battery_charge_w or 0.0) <= 25.0
+            and str(commit.phase or "") in ("active", "forced")
+        ):
+            stalled = (
+                int(self._persist.get("charge_commit_bms_stall_cycles", 0) or 0)
+                + 1
+            )
+        else:
+            stalled = 0
+
+        self._persist["charge_commit_bms_stall_cycles"] = stalled
+
+        if stalled >= 30:
+            return "target_unreachable_battery_full"
 
         return "none"
 
@@ -961,6 +1024,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and str(base_decision.action or "") == "charge"
             and str(base_decision.ac_mode or "") == "input"
             and float(base_decision.charge_w or 0.0) > 0.0
+        ):
+            return base_decision
+
+        # Eine wartende Bindung soll nur das Netzladen aufschieben, nicht
+        # profitable Aktionen verhindern: wirtschaftliche Entladung und
+        # PV-Passthrough laufen weiter, die Bindung selbst bleibt bestehen.
+        if (
+            str(base_decision.action or "") in ("discharge", "passthrough")
+            and float(base_decision.discharge_w or 0.0) > 0.0
         ):
             return base_decision
 
@@ -1076,6 +1148,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         price_now: float | None,
         effective_discharge_threshold: float | None,
         automatic_peak_reserve_allowed: bool,
+        battery_charge_w: float = 0.0,
     ) -> DecisionResult:
         """Start, hold or stop a strategic AC charge commit.
 
@@ -1119,12 +1192,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 automatic_peak_reserve_allowed=bool(
                     automatic_peak_reserve_allowed
                 ),
+                battery_charge_w=float(battery_charge_w or 0.0),
             )
 
             if abort_reason != "none":
                 completed = abort_reason in {
                     "max_soc_reached",
                     "target_soc_reached",
+                    "target_unreachable_battery_full",
+                    "price_in_discharge_range",
                 }
 
                 self._clear_charge_commit(
@@ -4385,6 +4461,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 effective_discharge_threshold=(
                     decision.effective_discharge_threshold
                 ),
+                battery_charge_w=float(battery_charge_w or 0.0),
                 automatic_peak_reserve_allowed=bool(
                     automatic_strategy_context.metadata.get(
                         "automatic_peak_reserve_allowed",
@@ -5341,6 +5418,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             current_valley_threshold = transparency_result.current_valley_threshold
             economic_discharge_threshold = transparency_result.economic_discharge_threshold
             effective_discharge_threshold = transparency_result.effective_discharge_threshold
+
+            # Letztbekannte Schwelle für Prüfungen, deren DecisionResult
+            # keine Schwellen trägt (z. B. Ladebindungs-Abbruch).
+            self._persist["last_known_effective_discharge_threshold"] = (
+                _to_float(effective_discharge_threshold, None)
+            )
 
             self._persist["debug"] = "OK"
             self._persist["last_ts"] = now.isoformat()
