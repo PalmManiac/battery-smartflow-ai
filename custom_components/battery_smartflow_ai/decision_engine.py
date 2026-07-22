@@ -1545,11 +1545,17 @@ class DecisionEngine:
         self,
         ctx: DecisionContext,
     ) -> bool:
-        """Return True when current price is a useful charge slot before a later
-        Automatic-summer peak.
+        """Return whether the current slot is useful for peak-reserve charging.
 
-        This is intentionally broader than _is_valley_price_now(). The formal
-        valley threshold can be too strict on generally expensive days.
+        V4.3.0-dev5.8:
+        Peak-reserve charging must prefer the cheapest amount of energy that is
+        actually required before the next high-price window.
+
+        The former broad 35-percent price band could start AC charging too early,
+        e.g. at 0.20 EUR/kWh although sufficient 0.15 EUR/kWh slots were still
+        available later.
+
+        The peak slot itself is never considered a charging candidate.
         """
 
         if not self._automatic_summer_peak_reserve_enabled(ctx):
@@ -1559,16 +1565,32 @@ class DecisionEngine:
             return False
 
         future_slots = self._automatic_summer_future_peak_slots(ctx)
-        future_slots = [p for p in future_slots if p.start > ctx.now]
+        future_slots = [
+            p
+            for p in future_slots
+            if p.start > ctx.now
+        ]
+
         if not future_slots:
             return False
 
-        next_peak = min(future_slots, key=lambda p: p.start)
-        expected_peak_price = self._automatic_summer_expected_peak_price(ctx)
+        next_peak = min(
+            future_slots,
+            key=lambda p: p.start,
+        )
+
+        expected_peak_price = (
+            self._automatic_summer_expected_peak_price(ctx)
+        )
+
         if expected_peak_price is None:
             return False
 
-        prices = [p.price for p in ctx.price_points]
+        prices = [
+            float(p.price)
+            for p in ctx.price_points
+        ]
+
         if not prices:
             return False
 
@@ -1579,60 +1601,130 @@ class DecisionEngine:
 
         price_now = float(ctx.price_now)
 
-        # Never charge into an already active high-price/peak window.
+        # Never charge inside an active high-price / peak window.
         if price_now >= float(market_peak_threshold):
             return False
 
-        # Additional safety: if the current price is already close to the
-        # expected peak, do not switch back to INPUT.
+        # Do not charge when the current price is already too close
+        # to the expected peak price.
         if price_now >= float(expected_peak_price) * 0.85:
             return False
 
+        target_soc = self._automatic_summer_peak_target_soc(ctx)
+
+        if target_soc is None:
+            return False
+
+        soc_gap_pct = max(
+            0.0,
+            float(target_soc) - float(ctx.soc),
+        )
+
+        required_kwh = (
+            float(ctx.battery_capacity_kwh)
+            * (soc_gap_pct / 100.0)
+        )
+
+        if required_kwh <= 0.0:
+            return False
+
+        charge_power_kw = max(
+            0.1,
+            float(ctx.max_charge_w or 0.0) / 1000.0,
+        )
+
+        hours_needed = max(
+            0.25,
+            required_kwh / charge_power_kw,
+        )
+
+        # Only real pre-peak slots are candidates.
+        # The peak slot itself must never widen the acceptable price range.
         candidate_slots = [
             p
             for p in ctx.price_points
-            if p.end > ctx.now and p.start <= next_peak.start
+            if (
+                p.end > ctx.now
+                and p.start < next_peak.start
+            )
         ]
 
         if not candidate_slots:
             return False
 
-        candidate_prices = [float(p.price) for p in candidate_slots]
-        local_min = min(candidate_prices)
-        local_max = max(candidate_prices)
+        # Determine the price ceiling of the cheapest amount of energy
+        # that is actually required before the peak.
+        remaining_kwh = float(required_kwh)
+        required_price_ceiling: float | None = None
 
-        # Allow the cheaper part of the remaining pre-peak window.
-        cheap_band_limit = local_min + max(
-            0.015,
-            (local_max - local_min) * 0.35,
+        cheapest_slots = sorted(
+            candidate_slots,
+            key=lambda p: (
+                float(p.price),
+                p.start,
+            ),
         )
 
-        if price_now <= cheap_band_limit:
+        for slot in cheapest_slots:
+            usable_start = max(
+                ctx.now,
+                slot.start,
+            )
+            usable_end = min(
+                next_peak.start,
+                slot.end,
+            )
+
+            usable_hours = max(
+                0.0,
+                (
+                    usable_end - usable_start
+                ).total_seconds()
+                / 3600.0,
+            )
+
+            if usable_hours <= 0.0:
+                continue
+
+            slot_energy_kwh = (
+                charge_power_kw * usable_hours
+            )
+
+            if slot_energy_kwh <= 0.0:
+                continue
+
+            required_price_ceiling = float(slot.price)
+            remaining_kwh -= slot_energy_kwh
+
+            if remaining_kwh <= 0.0:
+                break
+
+        # Enough future charging capacity exists:
+        # start only when the current slot belongs to the price range
+        # actually needed for the reserve.
+        if (
+            remaining_kwh <= 0.0
+            and required_price_ceiling is not None
+            and price_now <= required_price_ceiling
+        ):
             return True
 
         # Urgency fallback:
-        # If the peak is approaching and the battery is still clearly below the
-        # target reserve, allow charging even if the current slot is not among
-        # the very cheapest remaining slots.
-        target_soc = self._automatic_summer_peak_target_soc(ctx)
-        if target_soc is None:
-            return False
-
-        soc_gap_pct = max(0.0, float(target_soc) - float(ctx.soc))
-        required_kwh = float(ctx.battery_capacity_kwh) * (soc_gap_pct / 100.0)
-
-        charge_power_kw = max(0.1, float(ctx.max_charge_w or 0.0) / 1000.0)
-        hours_needed = max(0.25, required_kwh / charge_power_kw)
-
+        # If there is no longer enough comfortable time to wait,
+        # charging must start even at a less attractive price.
         hours_until_peak = max(
             0.0,
-            (next_peak.start - ctx.now).total_seconds() / 3600.0,
+            (
+                next_peak.start - ctx.now
+            ).total_seconds()
+            / 3600.0,
         )
 
         return bool(
             required_kwh > 0.15
             and hours_until_peak <= hours_needed * 1.25
-            and price_now < float(expected_peak_price) * 0.80
+            and price_now
+            < float(expected_peak_price) * 0.80
         )
 
 
