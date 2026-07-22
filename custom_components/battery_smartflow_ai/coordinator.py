@@ -1133,23 +1133,26 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 return decision
                 
-            # Dev5.6:
-            # Learned planning bindings may pause AC charging before latest start.
+            # V4.3.0-dev5.8:
+            # Learned charge bindings are snapshots of the planning decision
+            # that created them.
+            #
+            # Do not overwrite optimal_start, latest_start, deadline or the
+            # acceptable price with a newly calculated LearnedChargePlan.
+            #
+            # Phase transitions are monotonic:
+            #
+            #   waiting -> active -> forced
+            #          \-> forced
+            #
+            # Once AC charging has actually become active, a later price
+            # recalculation must not send the same charge binding back to
+            # waiting. The binding then continues until target SoC or a real
+            # abort condition is reached.
             if str(commit.commit_type or "") == "learned":
-                # Refresh planning values while the plan is still available.
-                if learned_optimal_start is not None:
-                    commit.optimal_start = learned_optimal_start
-
-                if learned_latest_start is not None:
-                    commit.latest_start = learned_latest_start
-
-                if learned_deadline is not None:
-                    commit.deadline = learned_deadline
-
-                if learned_acceptable_price is not None:
-                    commit.acceptable_price_eur_kwh = (
-                        learned_acceptable_price
-                    )
+                current_phase = str(
+                    commit.phase or "waiting"
+                )
 
                 latest_start_reached = bool(
                     commit.latest_start is not None
@@ -1166,25 +1169,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                 )
 
-                explicitly_forced = bool(
-                    str(reason)
-                    in {
-                        "learned_charge_window_latest_start_reached",
-                        (
-                            "learned_charge_window_"
-                            "deadline_too_close_start_now"
-                        ),
-                    }
-                )
-
                 if (
-                    latest_start_reached
+                    current_phase == "forced"
+                    or latest_start_reached
                     or deadline_too_close
-                    or explicitly_forced
                 ):
                     commit.phase = "forced"
 
+                elif current_phase == "active":
+                    # Once charging has started, keep the charge binding active.
+                    # A later price or planning recalculation must not pause it.
+                    commit.phase = "active"
+
                 else:
+                    # Only a still-waiting binding may use its original price
+                    # threshold to decide when AC charging starts.
                     acceptable_price = _to_float(
                         commit.acceptable_price_eur_kwh,
                         None,
