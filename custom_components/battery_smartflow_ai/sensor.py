@@ -1019,6 +1019,62 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "automatic_valley_charge_reason",
                 data.get("automatic_valley_charge_reason"),
             ),
+            # V4.3.0-dev5.8:
+            # Near-zero regulation diagnostics.
+            "grid_now_w": details.get(
+                "regulation_grid_now_w"
+            ),
+            "grid_avg_short_w": details.get(
+                "regulation_grid_avg_short_w"
+            ),
+            "grid_avg_medium_w": details.get(
+                "regulation_grid_avg_medium_w"
+            ),
+            "control_grid_w": details.get(
+                "regulation_control_grid_w"
+            ),
+            "target_import_w": details.get(
+                "regulation_target_import_w"
+            ),
+            "effective_deadband_w": details.get(
+                "regulation_effective_deadband_w"
+            ),
+            "error_w": details.get(
+                "regulation_error_w"
+            ),
+            "near_zero_active": details.get(
+                "regulation_near_zero_active"
+            ),
+            "near_zero_reason": details.get(
+                "regulation_near_zero_reason"
+            ),
+            "near_zero_trim_w": details.get(
+                "regulation_near_zero_trim_w"
+            ),
+            "economic_target_active": details.get(
+                "regulation_economic_target_active"
+            ),
+            "economic_target_reason": details.get(
+                "regulation_economic_target_reason"
+            ),
+            "economic_effective_target_import_w": details.get(
+                "regulation_economic_effective_target_import_w"
+            ),
+            "raw_target_w": details.get(
+                "regulation_raw_target_w"
+            ),
+            "limited_target_w": details.get(
+                "regulation_limited_target_w"
+            ),
+            "applied_step_w": details.get(
+                "regulation_applied_step_w"
+            ),
+            "final_power_w": details.get(
+                "regulation_final_power_w"
+            ),
+            "power_reason": details.get(
+                "regulation_power_reason"
+            ),
             "input_write_requested_w": details.get(
                 "input_write_requested_w"
             ),
