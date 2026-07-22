@@ -5637,6 +5637,57 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     regulation_power_result.final_power_w
                 ),
                 "regulation_power_reason": regulation_power_result.reason,
+                # V4.3.0-dev5.8:
+                # Near-zero regulation diagnostics.
+                # Expose the already calculated PowerController metadata without
+                # changing regulation behavior.
+                "regulation_target_import_w": (
+                    regulation_power_result.metadata.get("target_import_w")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_effective_deadband_w": (
+                    regulation_power_result.metadata.get("effective_deadband_w")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_error_w": (
+                    regulation_power_result.metadata.get("error_w")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_near_zero_active": (
+                    regulation_power_result.metadata.get("near_zero_active")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_near_zero_reason": (
+                    regulation_power_result.metadata.get("near_zero_reason")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_near_zero_trim_w": (
+                    regulation_power_result.metadata.get("near_zero_trim_w")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_economic_target_active": (
+                    regulation_power_result.metadata.get("economic_target_active")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_economic_target_reason": (
+                    regulation_power_result.metadata.get("economic_target_reason")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_economic_effective_target_import_w": (
+                    regulation_power_result.metadata.get(
+                        "economic_effective_target_import_w"
+                    )
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
                 "regulation_profile_limited": bool(
                     regulation_power_result.profile_limited
                 ),
