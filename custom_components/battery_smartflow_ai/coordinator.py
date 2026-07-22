@@ -5849,6 +5849,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         DEFAULT_REGULATION_V42_ENABLED,
                     )
                 ),
+                
+                # V4.3.0-dev5.8:
+                # Charge-binding diagnostics for learned-planning price gating.
+                "charge_commit_phase_debug": self._persist.get(
+                    "charge_commit_phase"
+                ),
+                "charge_commit_optimal_start_debug": self._persist.get(
+                    "charge_commit_optimal_start"
+                ),
+                "charge_commit_latest_start_debug": self._persist.get(
+                    "charge_commit_latest_start"
+                ),
+                "charge_commit_deadline_debug": self._persist.get(
+                    "charge_commit_deadline"
+                ),
+                "charge_commit_acceptable_price_eur_kwh_debug": self._persist.get(
+                    "charge_commit_acceptable_price_eur_kwh"
+                ),
 
                 # SF800Pro passthrough / arbiter debug
                 "pv_houseload_passthrough_enabled": bool(
