@@ -1966,6 +1966,10 @@ class DecisionEngine:
 
     def _profile_for_discharge(self, profile: dict) -> dict:
         mapped = dict(profile)
+        mapped["TARGET_IMPORT_W"] = profile.get(
+            "DISCHARGE_TARGET_IMPORT_W",
+            profile.get("TARGET_IMPORT_W"),
+        )
         mapped["DEADBAND_W"] = profile.get("DISCHARGE_DEADBAND_W", profile.get("DEADBAND_W"))
         mapped["KP_UP"] = profile.get("DISCHARGE_KP_UP", profile.get("KP_UP"))
         mapped["KP_DOWN"] = profile.get("DISCHARGE_KP_DOWN", profile.get("KP_DOWN"))
