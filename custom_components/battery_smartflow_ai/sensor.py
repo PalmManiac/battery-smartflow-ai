@@ -1142,6 +1142,21 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
             "mode_write_last_success": details.get(
                 "mode_write_last_success"
             ),
+            "charge_commit_phase_debug": details.get(
+                "charge_commit_phase_debug"
+            ),
+            "charge_commit_optimal_start_debug": details.get(
+                "charge_commit_optimal_start_debug"
+            ),
+            "charge_commit_latest_start_debug": details.get(
+                "charge_commit_latest_start_debug"
+            ),
+            "charge_commit_deadline_debug": details.get(
+                "charge_commit_deadline_debug"
+            ),
+            "charge_commit_acceptable_price_eur_kwh_debug": details.get(
+                "charge_commit_acceptable_price_eur_kwh_debug"
+            ),
         }
 
     def _build_charge_source_allocation_attributes(self) -> dict:
