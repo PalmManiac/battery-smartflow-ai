@@ -324,6 +324,27 @@ class LearnedPlanningRule(BaseRule):
         )
         if required_kwh <= 0.0:
             return None
+            
+        # V4.3.0-dev5.8:
+        # The learned planner calculates the actual battery energy that is
+        # missing until its planning deadline. Convert that energy need into
+        # the SoC target of the charge binding instead of always charging to
+        # the configured maximum SoC.
+        #
+        # required_charge_energy_kwh is already limited by the planner to the
+        # physically chargeable energy up to soc_max.
+        required_soc_pct = (
+            float(required_kwh)
+            / float(ctx.battery_capacity_kwh)
+        ) * 100.0
+
+        learned_target_soc = min(
+            float(ctx.soc_max),
+            max(
+                float(ctx.soc),
+                float(ctx.soc) + required_soc_pct,
+            ),
+        )
 
         if decision_reason == "learned_charge_window_no_charge_needed":
             return None
@@ -390,7 +411,7 @@ class LearnedPlanningRule(BaseRule):
                     charge_w=charge_w,
                     discharge_w=0.0,
                     reason=reason,
-                    target_soc=ctx.soc_max,
+                    target_soc=learned_target_soc,
                 ),
             )
 
