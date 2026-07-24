@@ -950,6 +950,64 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         base_decision: DecisionResult,
         commit: ChargeCommitState,
     ) -> DecisionResult:
+        """Keep a charge binding alive without reserving the whole system.
+
+        V4.3.0-dev5.8.1:
+        A waiting AC charge binding only postpones its own grid charging.
+        It must not suppress profitable discharge, PV passthrough or a real
+        emergency charge.
+
+        The binding itself remains active and may start later when its original
+        learned price condition is reached.
+        """
+
+        action = str(base_decision.action or "")
+        reason = str(base_decision.reason or "")
+
+        # Real PV surplus may continue charging while the learned AC part waits.
+        if (
+            reason == "pv_surplus_charge"
+            and action == "charge"
+            and str(base_decision.ac_mode or "") == "input"
+            and float(base_decision.charge_w or 0.0) > 0.0
+        ):
+            return base_decision
+
+        # A waiting future charge must never suppress an emergency charge.
+        if action == "emergency":
+            return base_decision
+
+        # Economic discharge and technical passthrough remain independent from
+        # the waiting AC charge binding.
+        if (
+            action in ("discharge", "passthrough")
+            and str(base_decision.ac_mode or "") == "output"
+            and float(base_decision.discharge_w or 0.0) > 0.0
+        ):
+            return base_decision
+
+        # Other AC/grid charge decisions stay postponed while the learned binding
+        # is explicitly waiting for its original price condition.
+        return DecisionResult(
+            action="idle",
+            ac_mode="output",
+            charge_w=0.0,
+            discharge_w=0.0,
+            reason="charge_commit_waiting_price",
+            target_soc=commit.target_soc,
+            current_peak_threshold=(
+                base_decision.current_peak_threshold
+            ),
+            current_valley_threshold=(
+                base_decision.current_valley_threshold
+            ),
+            economic_discharge_threshold=(
+                base_decision.economic_discharge_threshold
+            ),
+            effective_discharge_threshold=(
+                base_decision.effective_discharge_threshold
+            ),
+        )
         """Keep a charge binding alive without requesting grid charging.
 
         Real PV surplus may still charge the battery while the AC part waits.
