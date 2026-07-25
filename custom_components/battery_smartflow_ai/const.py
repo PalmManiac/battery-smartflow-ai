@@ -429,6 +429,7 @@ CHARGE_COMMIT_ABORT_REASON_ENUMS = [
     "max_soc_reached",
     "target_unreachable_battery_full",
     "target_nearly_reached_discharge_window",
+    "deadline_passed",
     "battery_full",
     "price_window_expired",
     "price_condition_lost",
