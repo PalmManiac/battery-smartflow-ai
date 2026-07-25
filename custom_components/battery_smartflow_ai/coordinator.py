@@ -163,6 +163,13 @@ CHARGE_COMMIT_PRICE_VALID_MINUTES = 20
 # Prevents a charge binding from flickering exactly at the discharge threshold.
 STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH = 0.005
 
+# V4.3.0-dev5.8.3:
+# Treat a strategic AC charge target as practically reached when the battery
+# is close to the target but has continuously stopped accepting charge.
+CHARGE_COMMIT_BMS_STALL_TARGET_GAP_PCT = 3.0
+CHARGE_COMMIT_BMS_STALL_MAX_CHARGE_W = 25.0
+CHARGE_COMMIT_BMS_STALL_SECONDS = 300.0
+
 CHARGE_COMMIT_PLANNING_REASONS = {
     "planning_latest_start",
     "planning_forecast_poor",
@@ -443,6 +450,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "charge_commit_allow_pv_blend": True,
             "charge_commit_abort_reason": "none",
             "charge_commit_price_eur_kwh": None,
+
+            # V4.3.0-dev5.8.3:
+            # Start time of a continuously detected BMS/full-charge stall.
+            "charge_commit_bms_stall_started_at": None,
 
             # debug
             "debug": "init",
@@ -790,6 +801,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             abort_reason or "none"
         )
         self._persist["charge_commit_price_eur_kwh"] = None
+        self._persist["charge_commit_bms_stall_started_at"] = None
 
 
     def _price_commit_valid_until(
@@ -868,6 +880,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         price_now: float | None,
         effective_discharge_threshold: float | None,
         automatic_peak_reserve_allowed: bool,
+        battery_charge_w: float,
     ) -> str:
         if not commit.active:
             return "none"
@@ -902,6 +915,71 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if effective_target_soc >= float(soc_max) - 0.2:
                 return "max_soc_reached"
             return "target_soc_reached"
+            
+        # V4.3.0-dev5.8.3:
+        # Some batteries stop accepting AC charge shortly before the reported SoC
+        # reaches the requested target. Without an escape hatch the charge binding
+        # would keep INPUT active indefinitely.
+        #
+        # Only treat this as an effectively completed target when:
+        # - the binding is really active/forced, never while merely waiting
+        # - less than 3 percentage points remain
+        # - the binding is still requesting meaningful charge power
+        # - the configured battery AC-power sensor is valid
+        # - measured battery charge stays <= 25 W continuously for 5 minutes
+        target_gap = max(
+            0.0,
+            float(effective_target_soc) - float(soc),
+        )
+
+        battery_power_sensor_valid = (
+            _to_float(
+                self._state(self.entities.battery_ac_power),
+                None,
+            )
+            is not None
+        )
+
+        bms_stall_candidate = bool(
+            str(commit.phase or "") in ("active", "forced")
+            and float(effective_target_soc) >= (
+                float(soc_max) - CHARGE_COMMIT_BMS_STALL_TARGET_GAP_PCT
+            )
+            and target_gap <= CHARGE_COMMIT_BMS_STALL_TARGET_GAP_PCT
+            and float(commit.requested_power_w or 0.0) > 50.0
+            and battery_power_sensor_valid
+            and float(battery_charge_w or 0.0)
+            <= CHARGE_COMMIT_BMS_STALL_MAX_CHARGE_W
+        )
+
+        if bms_stall_candidate:
+            stall_started_at = self._parse_commit_dt(
+                self._persist.get(
+                    "charge_commit_bms_stall_started_at"
+                )
+            )
+
+            if stall_started_at is None:
+                self._persist[
+                    "charge_commit_bms_stall_started_at"
+                ] = dt_util.as_utc(now).isoformat()
+
+            else:
+                stall_seconds = max(
+                    0.0,
+                    (
+                        dt_util.as_utc(now)
+                        - dt_util.as_utc(stall_started_at)
+                    ).total_seconds(),
+                )
+
+                if stall_seconds >= CHARGE_COMMIT_BMS_STALL_SECONDS:
+                    return "target_unreachable_battery_full"
+
+        else:
+            # Any meaningful charge recovery, larger target gap, waiting phase or
+            # invalid sensor immediately cancels the pending full-BMS detection.
+            self._persist["charge_commit_bms_stall_started_at"] = None
 
         # V4.3.0-dev2.2:
         # Do not abort an AC-Ladebindung only because a fixed validity timestamp
@@ -988,40 +1066,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Other AC/grid charge decisions stay postponed while the learned binding
         # is explicitly waiting for its original price condition.
-        return DecisionResult(
-            action="idle",
-            ac_mode="output",
-            charge_w=0.0,
-            discharge_w=0.0,
-            reason="charge_commit_waiting_price",
-            target_soc=commit.target_soc,
-            current_peak_threshold=(
-                base_decision.current_peak_threshold
-            ),
-            current_valley_threshold=(
-                base_decision.current_valley_threshold
-            ),
-            economic_discharge_threshold=(
-                base_decision.economic_discharge_threshold
-            ),
-            effective_discharge_threshold=(
-                base_decision.effective_discharge_threshold
-            ),
-        )
-        """Keep a charge binding alive without requesting grid charging.
-
-        Real PV surplus may still charge the battery while the AC part waits.
-        """
-
-        if (
-            str(base_decision.reason or "")
-            == "pv_surplus_charge"
-            and str(base_decision.action or "") == "charge"
-            and str(base_decision.ac_mode or "") == "input"
-            and float(base_decision.charge_w or 0.0) > 0.0
-        ):
-            return base_decision
-
         return DecisionResult(
             action="idle",
             ac_mode="output",
@@ -1134,6 +1178,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         price_now: float | None,
         effective_discharge_threshold: float | None,
         automatic_peak_reserve_allowed: bool,
+        battery_charge_w: float,
     ) -> DecisionResult:
         """Start, hold or stop a strategic AC charge commit.
 
@@ -1177,12 +1222,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 automatic_peak_reserve_allowed=bool(
                     automatic_peak_reserve_allowed
                 ),
+                battery_charge_w=float(battery_charge_w or 0.0),
             )
 
             if abort_reason != "none":
                 completed = abort_reason in {
                     "max_soc_reached",
                     "target_soc_reached",
+                    "target_unreachable_battery_full",
                 }
 
                 self._clear_charge_commit(
@@ -4449,6 +4496,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         False,
                     )
                 ),
+                battery_charge_w=float(battery_charge_w or 0.0),
             )
 
             # V4.3.0-dev5.6.3:
