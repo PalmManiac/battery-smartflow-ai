@@ -170,6 +170,12 @@ CHARGE_COMMIT_BMS_STALL_TARGET_GAP_PCT = 3.0
 CHARGE_COMMIT_BMS_STALL_MAX_CHARGE_W = 25.0
 CHARGE_COMMIT_BMS_STALL_SECONDS = 300.0
 
+# V4.3.0-dev5.8.4:
+# An active strategic charge may be considered economically complete when
+# the battery is already very close to its near-full target and the current
+# electricity price has entered the profitable discharge range.
+CHARGE_COMMIT_DISCHARGE_WINDOW_TARGET_GAP_PCT = 3.0
+
 CHARGE_COMMIT_PLANNING_REASONS = {
     "planning_latest_start",
     "planning_forecast_poor",
@@ -916,6 +922,50 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return "max_soc_reached"
             return "target_soc_reached"
             
+        # V4.3.0-dev5.8.4:
+        # Once an active charge is practically complete, do not keep buying expensive
+        # grid energy while the same energy could already be discharged profitably.
+        #
+        # This is deliberately narrow:
+        # - waiting bindings are harmless since Dev5.8.1 and remain alive
+        # - forced bindings must still reach their required energy target
+        # - only near-full targets participate, so lower learned targets cannot
+        #   repeatedly complete and immediately recreate themselves
+        current_price = _to_float(price_now, None)
+        discharge_threshold = _to_float(
+            effective_discharge_threshold,
+            None,
+        )
+
+        target_gap = max(
+            0.0,
+            float(effective_target_soc) - float(soc),
+        )
+
+        target_is_near_max = bool(
+            float(effective_target_soc)
+            >= (
+                float(soc_max)
+                - CHARGE_COMMIT_DISCHARGE_WINDOW_TARGET_GAP_PCT
+            )
+        )
+
+        profitable_discharge_window = bool(
+            current_price is not None
+            and discharge_threshold is not None
+            and float(discharge_threshold) > 0.0
+            and float(current_price) >= float(discharge_threshold)
+        )
+
+        if (
+            str(commit.phase or "") == "active"
+            and target_is_near_max
+            and target_gap
+            <= CHARGE_COMMIT_DISCHARGE_WINDOW_TARGET_GAP_PCT
+            and profitable_discharge_window
+        ):
+            return "target_nearly_reached_discharge_window"
+            
         # V4.3.0-dev5.8.3:
         # Some batteries stop accepting AC charge shortly before the reported SoC
         # reaches the requested target. Without an escape hatch the charge binding
@@ -1230,6 +1280,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "max_soc_reached",
                     "target_soc_reached",
                     "target_unreachable_battery_full",
+                    "target_nearly_reached_discharge_window",
                 }
 
                 self._clear_charge_commit(
