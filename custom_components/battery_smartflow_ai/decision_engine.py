@@ -14,6 +14,11 @@ AiMode = Literal["automatic", "summer", "winter", "manual"]
 ZendureMode = Literal["input", "output"]
 ActionType = Literal["idle", "charge", "discharge", "emergency", "passthrough"]
 
+# V4.3.0-dev5.8.2:
+# Strategic learned/classic planning is no longer started for the final
+# few percentage points below the configured maximum SoC.
+PLANNING_NEAR_MAX_SOC_MARGIN_PCT = 3.0
+
 
 @dataclass
 class PricePoint:
