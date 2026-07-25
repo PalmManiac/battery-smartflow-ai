@@ -300,7 +300,12 @@ class LearnedPlanningRule(BaseRule):
         if not engine._automatic_planning_context_allows(ctx):
             return None
 
-        if ctx.soc >= ctx.soc_max:
+        # V4.3.0-dev5.8.2:
+        # Do not create tiny strategic AC charge windows when the battery is
+        # already practically full. PV surplus charging remains unaffected.
+        if float(ctx.soc) >= (
+            float(ctx.soc_max) - PLANNING_NEAR_MAX_SOC_MARGIN_PCT
+        ):
             return None
 
         if ctx.price_now is None or not ctx.price_points:
@@ -2065,7 +2070,9 @@ class DecisionEngine:
             not self._automatic_planning_context_allows(ctx)
             or not ctx.price_points
             or ctx.price_now is None
-            or ctx.soc >= ctx.soc_max
+            or float(ctx.soc) >= (
+                float(ctx.soc_max) - PLANNING_NEAR_MAX_SOC_MARGIN_PCT
+            )
             or ctx.battery_capacity_kwh <= 0
             or ctx.max_charge_w <= 0
         ):
