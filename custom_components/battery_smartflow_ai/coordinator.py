@@ -1031,14 +1031,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # invalid sensor immediately cancels the pending full-BMS detection.
             self._persist["charge_commit_bms_stall_started_at"] = None
 
-        # V4.3.0-dev2.2:
-        # Do not abort an AC-Ladebindung only because a fixed validity timestamp
-        # has expired. PV surplus or a short price-window timeout must not cancel
-        # a strategic AC charge while the target SoC has not been reached.
+        # V4.3.0-dev5.8.5:
+        # A learned charge binding exists to provide the required energy by its
+        # planning deadline. Once that deadline has passed, the old binding no
+        # longer has a valid strategic purpose and must not keep INPUT active.
         #
-        # A real price-condition abort can be added later, but it must compare the
-        # current price against the original charge condition instead of using a
-        # fixed timeout.
+        # The stored deadline belongs to the original binding snapshot and is not
+        # refreshed by later learned-plan recalculations.
+        if (
+            commit.deadline is not None
+            and dt_util.as_utc(now) >= dt_util.as_utc(commit.deadline)
+        ):
+            return "deadline_passed"
 
         return "none"
 
