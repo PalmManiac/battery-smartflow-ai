@@ -549,7 +549,6 @@
         "state": {
           "none": "Aucun blocage hors réseau",
           "offgrid_load_active_blocks_ac_charge": "Prise îlot active – charge réseau bloquée",
-          "offgrid_load_support": "Prise îlot active – alimentation par batterie/PV",
 		  "offgrid_load_support": "Prise Off-Grid active – alimentation par batterie/PV"
         }
       },
@@ -670,7 +669,6 @@
           "pv_charge_blocked_by_discharge_protection": "Charge PV bloquée car la décharge est encore bloquée par la protection SoC/cellule",
           "learned_charge_window_deadline_too_close_start_now": "Planification apprise : deadline trop proche, démarrer maintenant",
 		  "offgrid_load_active_blocks_ac_charge": "Prise îlot active : charge réseau automatique bloquée",
-          "offgrid_load_support": "Prise îlot active : alimentation par batterie/PV",
 		  "offgrid_load_support": "Prise Off-Grid active : alimentation par batterie/PV",
 		  "summer_peak_reserve_charge": "Automatique été : sécurisation de la période de prix élevé",
           "summer_peak_reserve_hold": "Automatique été : réserve de batterie conservée pour un pic de prix ultérieur"
