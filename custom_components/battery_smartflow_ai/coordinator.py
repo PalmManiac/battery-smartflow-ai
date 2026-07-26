@@ -6003,13 +6003,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     or 0.0
                 ),
-                "regulation_v42_option_enabled": bool(
-                    self.entry.options.get(
-                        SETTING_REGULATION_V42_ENABLED,
-                        DEFAULT_REGULATION_V42_ENABLED,
-                    )
-                ),
-                
                 # V4.3.0-dev5.8:
                 # Charge-binding diagnostics for learned-planning price gating.
                 "charge_commit_phase_debug": self._persist.get(
