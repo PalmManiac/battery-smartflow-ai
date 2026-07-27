@@ -116,6 +116,7 @@ from .const import (
 )
 from .device_profiles import DEVICE_PROFILES, merge_profile_with_overrides
 from .decision_engine import (
+    compute_pv_attributable_export_w,
     DecisionContext,
     DecisionEngine,
     DecisionResult,
@@ -2496,6 +2497,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         grid_export_w: float,
         pv_w: float,
         pv_charge_start_export_w: float,
+        battery_discharge_w: float = 0.0,
+        previous_discharge_w: float = 0.0,
+        additional_battery_discharge_w: float = 0.0,
     ) -> tuple[int, int, bool]:
         start_counter = int(self._persist.get("pv_charge_start_counter", 0) or 0)
         stop_counter = int(self._persist.get("pv_charge_stop_counter", 0) or 0)
@@ -2514,19 +2518,54 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         export_w = max(0.0, float(grid_export_w or 0.0))
         import_w = max(0.0, float(grid_import_w or 0.0))
 
-        has_start_surplus = export_w >= start_threshold
-        has_hold_surplus = export_w >= hold_export_threshold
+        # Dev6:
+        # Export caused by OUTPUT regulation, discharge keepalive or an additional
+        # battery is not PV surplus. Only the remaining source-attributable export
+        # may advance or hold the PV charge latch.
+        pv_attributable_export_w = compute_pv_attributable_export_w(
+            grid_export_w=export_w,
+            battery_discharge_w=battery_discharge_w,
+            previous_discharge_w=previous_discharge_w,
+            additional_battery_discharge_w=(
+                additional_battery_discharge_w
+            ),
+        )
+        battery_discharge_source_active = bool(
+            max(
+                0.0,
+                float(battery_discharge_w or 0.0),
+                float(previous_discharge_w or 0.0),
+                float(additional_battery_discharge_w or 0.0),
+            )
+            > 25.0
+        )
+        battery_source_dominates_export = bool(
+            battery_discharge_source_active
+            and pv_attributable_export_w <= weak_export_threshold
+        )
+
+        has_start_surplus = (
+            pv_attributable_export_w >= start_threshold
+        )
+        has_hold_surplus = (
+            pv_attributable_export_w >= hold_export_threshold
+        )
         import_is_small = import_w <= small_import_tolerance_w
 
         real_weakness = (
             import_w >= hard_import_threshold_w
-            and export_w <= weak_export_threshold
+            and pv_attributable_export_w <= weak_export_threshold
         )
 
         if latched:
             start_counter = 0
 
-            if real_weakness:
+            if battery_source_dominates_export:
+                # A stale/false latch must also release when export stays high
+                # solely because OUTPUT is still discharging. Count this stronger
+                # source conflict twice so it clears within four update cycles.
+                stop_counter += 2
+            elif real_weakness:
                 stop_counter += 1
             elif has_hold_surplus or import_is_small:
                 stop_counter = 0
@@ -3747,12 +3786,39 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 DEFAULT_PV_CHARGE_START_EXPORT_W,
             )
 
+            battery_raw = self._state(self.entities.battery_ac_power)
+            battery_power = _to_float(battery_raw, 0.0)
+            battery_power = float(battery_power or 0.0)
+
+            battery_discharge_w = max(0.0, battery_power)
+            battery_charge_w = max(0.0, -battery_power)
+
+            pv_attributable_export_w = compute_pv_attributable_export_w(
+                grid_export_w=float(grid_export or 0.0),
+                battery_discharge_w=float(battery_discharge_w),
+                previous_discharge_w=float(
+                    self._persist.get("prev_discharge_w", 0.0)
+                    or 0.0
+                ),
+                additional_battery_discharge_w=float(
+                    additional_battery_discharge_w or 0.0
+                ),
+            )
+
             pv_charge_start_counter, pv_charge_stop_counter, pv_charge_latched = (
                 self._update_pv_charge_hysteresis(
                     grid_import_w=float(grid_import or 0.0),
                     grid_export_w=float(grid_export or 0.0),
                     pv_w=float(pv_w or 0.0),
                     pv_charge_start_export_w=float(pv_charge_start_export_w),
+                    battery_discharge_w=float(battery_discharge_w),
+                    previous_discharge_w=float(
+                        self._persist.get("prev_discharge_w", 0.0)
+                        or 0.0
+                    ),
+                    additional_battery_discharge_w=float(
+                        additional_battery_discharge_w or 0.0
+                    ),
                 )
             )
 
@@ -3768,13 +3834,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 engine_health = "no_price_data"
             elif price_now is None:
                 engine_health = "no_current_price"
-
-            battery_raw = self._state(self.entities.battery_ac_power)
-            battery_power = _to_float(battery_raw, 0.0)
-            battery_power = float(battery_power or 0.0)
-
-            battery_discharge_w = max(0.0, battery_power)
-            battery_charge_w = max(0.0, -battery_power)
 
             house_load = max(
                 0.0,
@@ -3994,6 +4053,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 grid_export_w=float(grid_export),
                 pv_w=float(pv_w),
                 house_load_w=float(house_load),
+                battery_discharge_w=float(battery_discharge_w),
                 price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
@@ -4120,6 +4180,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             ctx.forecast_wait_block_counter = int(
                 self._persist.get("forecast_wait_block_counter", 0)
+            )
+
+            learned_planning_blocks_competing_grid_charge = bool(
+                self._engine._learned_planning_waits_for_window(ctx)
             )
 
             decision = self._engine.evaluate(ctx)
@@ -5379,6 +5443,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 grid_export_w=float(grid_export),
                 pv_w=float(pv_w),
                 house_load_w=float(house_load),
+                battery_discharge_w=float(battery_discharge_w),
                 price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
@@ -6117,6 +6182,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
 
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
+                "pv_attributable_export_w": round(
+                    float(pv_attributable_export_w),
+                    1,
+                ),
                 "pv_charge_latched": bool(pv_charge_latched),
                 "pv_charge_start_counter": int(self._persist.get("pv_charge_start_counter", 0)),
                 "pv_charge_stop_counter": int(self._persist.get("pv_charge_stop_counter", 0)),
@@ -6200,6 +6269,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "learned_planning_mode": learned_charge_plan.mode,
                 "learned_planning_blocking_reason": learned_charge_plan.blocking_reason,
                 "learned_planning_decision_reason": learned_charge_plan.decision_reason,
+                "learned_planning_blocks_competing_grid_charge": bool(
+                    learned_planning_blocks_competing_grid_charge
+                ),
                 "learned_planning_history_days": int(learned_readiness.history_days),
                 "learned_planning_usable_days": int(learned_readiness.usable_days),
                 "learned_planning_night_window_days": int(learned_readiness.night_window_days),
