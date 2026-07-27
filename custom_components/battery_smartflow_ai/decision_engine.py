@@ -20,6 +20,33 @@ ActionType = Literal["idle", "charge", "discharge", "emergency", "passthrough"]
 PLANNING_NEAR_MAX_SOC_MARGIN_PCT = 3.0
 
 
+def compute_pv_attributable_export_w(
+    grid_export_w: float,
+    battery_discharge_w: float = 0.0,
+    previous_discharge_w: float = 0.0,
+    additional_battery_discharge_w: float = 0.0,
+) -> float:
+    """Return grid export that cannot be explained by battery discharge."""
+
+    export_w = max(0.0, float(grid_export_w or 0.0))
+    main_battery_export_w = max(
+        0.0,
+        float(battery_discharge_w or 0.0),
+        float(previous_discharge_w or 0.0),
+    )
+    additional_battery_export_w = max(
+        0.0,
+        float(additional_battery_discharge_w or 0.0),
+    )
+
+    return max(
+        0.0,
+        export_w
+        - main_battery_export_w
+        - additional_battery_export_w,
+    )
+
+
 @dataclass
 class PricePoint:
     start: datetime
@@ -62,6 +89,7 @@ class DecisionContext:
     prev_charge_w: float
 
     battery_capacity_kwh: float
+    battery_discharge_w: float = 0.0
 
     additional_battery_charge_w: float = 0.0
     additional_battery_discharge_w: float = 0.0
@@ -293,35 +321,12 @@ class LearnedPlanningRule(BaseRule):
         - completely inactive unless learned_planning_enabled is True
         - only uses plans with status ready/active
         - only handles learned wait/charge decisions
-        - classic planning remains fallback
+        - classic planning remains fallback until a usable learned plan exists
         """
-        if not bool(getattr(ctx, "learned_planning_enabled", False)):
+        if not engine._learned_planning_has_usable_charge_need(ctx):
             return None
 
         plan = getattr(ctx, "learned_charge_plan", None)
-        if plan is None:
-            return None
-
-        if not engine._automatic_planning_context_allows(ctx):
-            return None
-
-        # V4.3.0-dev5.8.2:
-        # Do not create tiny strategic AC charge windows when the battery is
-        # already practically full. PV surplus charging remains unaffected.
-        if float(ctx.soc) >= (
-            float(ctx.soc_max) - PLANNING_NEAR_MAX_SOC_MARGIN_PCT
-        ):
-            return None
-
-        if ctx.price_now is None or not ctx.price_points:
-            return None
-
-        if ctx.battery_capacity_kwh <= 0 or ctx.max_charge_w <= 0:
-            return None
-
-        if float(ctx.additional_battery_charge_w or 0.0) > 0.0:
-            return None
-
         status = str(getattr(plan, "status", "") or "")
         mode = str(getattr(plan, "mode", "") or "")
         decision_reason = str(getattr(plan, "decision_reason", "") or "")
@@ -360,9 +365,11 @@ class LearnedPlanningRule(BaseRule):
             return None
 
         if mode == "wait" or decision_reason == "learned_charge_window_wait":
-            # Learned waiting must not suppress classic immediate charging rules.
-            # If the learned planner only wants to wait, continue with the normal
-            # planning / valley / forecast rules below.
+            # A valid learned plan deliberately reserves a later, cheaper charge
+            # window. The individual competing grid-charge rules consult
+            # _learned_planning_waits_for_window() and remain inactive while this
+            # rule itself falls through so PV, passthrough and profitable discharge
+            # can still be evaluated.
             return None
 
         if mode == "charge" or decision_reason in (
@@ -425,6 +432,9 @@ class PlanningRule(BaseRule):
 
 class VeryCheapRule(BaseRule):
     def evaluate(self, engine, ctx):
+        if engine._learned_planning_controls_grid_charge(ctx):
+            return None
+
         if ctx.ai_mode not in ("automatic", "winter"):
             return None
 
@@ -464,6 +474,9 @@ class VeryCheapRule(BaseRule):
 
 class ValleyBoostRule(BaseRule):
     def evaluate(self, engine, ctx):
+        if engine._learned_planning_waits_for_window(ctx):
+            return None
+
         if engine._pv_morning_transition_active(ctx):
             return None
 
@@ -532,6 +545,9 @@ class ValleyBoostRule(BaseRule):
 
 class ValleyOpportunityRule(BaseRule):
     def evaluate(self, engine, ctx):
+        if engine._learned_planning_waits_for_window(ctx):
+            return None
+
         if engine._pv_morning_transition_active(ctx):
             return None
 
@@ -643,6 +659,9 @@ class AutomaticSummerPeakReserveRule(BaseRule):
     """
 
     def evaluate(self, engine, ctx):
+        if engine._learned_planning_waits_for_window(ctx):
+            return None
+
         if not engine._automatic_summer_peak_reserve_enabled(ctx):
             return None
 
@@ -731,7 +750,23 @@ class PvRule(BaseRule):
         prev_discharge_w = float(ctx.prev_discharge_w or 0.0)
         start_export_threshold = float(ctx.pv_charge_start_export_w or 0.0)
 
-        has_direct_surplus = export_w >= start_export_threshold
+        pv_attributable_export_w = engine._pv_attributable_export_w(ctx)
+        has_direct_surplus = (
+            pv_attributable_export_w >= start_export_threshold
+        )
+        battery_discharge_source_active = bool(
+            max(
+                0.0,
+                float(ctx.battery_discharge_w or 0.0),
+                float(ctx.prev_discharge_w or 0.0),
+                float(ctx.additional_battery_discharge_w or 0.0),
+            )
+            > 25.0
+        )
+        source_verified_hold_surplus = bool(
+            pv_attributable_export_w
+            >= max(20.0, start_export_threshold * 0.50)
+        )
 
         protection_active = (
             engine._low_soc_protection_strict(ctx)
@@ -802,6 +837,10 @@ class PvRule(BaseRule):
         keepalive_charge = (
             charge_already_active
             and not stop_due_to_weakness
+            and (
+                not battery_discharge_source_active
+                or source_verified_hold_surplus
+            )
         )
 
         if not start_allowed and not keepalive_charge:
@@ -1147,6 +1186,105 @@ class DecisionEngine:
             and ctx.automatic_discharge_allowed
         )
 
+    def _learned_planning_waits_for_window(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return whether a usable learned plan deliberately waits.
+
+        A ready learned plan has already evaluated the required energy, charge
+        duration, complete price curve and deadline. While it waits for its
+        selected window, simpler grid-charge rules must not start an earlier
+        charge binding. This is only a grid-charge constraint: emergency/manual
+        charge, real PV surplus, passthrough and economic discharge remain free.
+        """
+
+        if not self._learned_planning_has_usable_charge_need(ctx):
+            return False
+
+        plan = getattr(ctx, "learned_charge_plan", None)
+        status = str(getattr(plan, "status", "") or "")
+        mode = str(getattr(plan, "mode", "") or "")
+        decision_reason = str(
+            getattr(plan, "decision_reason", "") or ""
+        )
+
+        return bool(
+            status in ("ready", "active")
+            and (
+                mode == "wait"
+                or decision_reason == "learned_charge_window_wait"
+            )
+        )
+
+    def _learned_planning_has_usable_charge_need(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return whether learned planning has an actionable energy plan."""
+
+        if not bool(getattr(ctx, "learned_planning_enabled", False)):
+            return False
+
+        plan = getattr(ctx, "learned_charge_plan", None)
+        if plan is None:
+            return False
+
+        if not self._automatic_planning_context_allows(ctx):
+            return False
+
+        # Dev5.8.2 remains authoritative: do not reserve tiny strategic grid
+        # charges for the final percentage points below maximum SoC.
+        if float(ctx.soc) >= (
+            float(ctx.soc_max) - PLANNING_NEAR_MAX_SOC_MARGIN_PCT
+        ):
+            return False
+
+        if (
+            ctx.price_now is None
+            or not ctx.price_points
+            or ctx.battery_capacity_kwh <= 0
+            or ctx.max_charge_w <= 0
+            or float(ctx.additional_battery_charge_w or 0.0) > 0.0
+        ):
+            return False
+
+        status = str(getattr(plan, "status", "") or "")
+        required_kwh = float(
+            getattr(plan, "required_charge_energy_kwh", 0.0) or 0.0
+        )
+
+        return bool(
+            status in ("ready", "active")
+            and required_kwh > 0.0
+        )
+
+    def _learned_planning_controls_grid_charge(
+        self,
+        ctx: DecisionContext,
+    ) -> bool:
+        """Return whether learned planning owns the current grid-charge choice."""
+
+        if not self._learned_planning_has_usable_charge_need(ctx):
+            return False
+
+        plan = getattr(ctx, "learned_charge_plan", None)
+        mode = str(getattr(plan, "mode", "") or "")
+        decision_reason = str(
+            getattr(plan, "decision_reason", "") or ""
+        )
+
+        return bool(
+            mode in ("wait", "charge")
+            or decision_reason
+            in {
+                "learned_charge_window_wait",
+                "learned_charge_window_active",
+                "learned_charge_window_latest_start_reached",
+                "learned_charge_window_deadline_too_close_start_now",
+            }
+        )
+
     def _discharge_protection_active(self, ctx: DecisionContext) -> bool:
         return bool(
             ctx.discharge_blocked_by_soc_min
@@ -1164,7 +1302,7 @@ class DecisionEngine:
         real active discharge.
         """
 
-        export_w = float(ctx.grid_export_w or 0.0)
+        export_w = self._pv_attributable_export_w(ctx)
         import_w = float(ctx.grid_import_w or 0.0)
         prev_discharge_w = float(ctx.prev_discharge_w or 0.0)
         start_export_threshold = float(ctx.pv_charge_start_export_w or 80.0)
@@ -1189,6 +1327,29 @@ class DecisionEngine:
         # No real active discharge, only idle/old keepalive:
         # PV surplus should block starting or keeping economic discharge.
         return True
+
+    def _pv_attributable_export_w(self, ctx: DecisionContext) -> float:
+        """Return export that cannot be explained by battery discharge.
+
+        Grid export alone is not proof of PV surplus while OUTPUT is active:
+        regulation overshoot or a small discharge keepalive can create the same
+        signal. Subtract the strongest available main-battery discharge signal
+        and any configured additional-battery discharge before PV logic may use
+        the remaining export.
+        """
+
+        return compute_pv_attributable_export_w(
+            grid_export_w=float(ctx.grid_export_w or 0.0),
+            battery_discharge_w=float(
+                ctx.battery_discharge_w or 0.0
+            ),
+            previous_discharge_w=float(
+                ctx.prev_discharge_w or 0.0
+            ),
+            additional_battery_discharge_w=float(
+                ctx.additional_battery_discharge_w or 0.0
+            ),
+        )
         
     def _pv_power_is_relevant_for_charging(self, ctx: DecisionContext) -> bool:
         """Return True when current PV should keep priority over optional grid charge.
@@ -1207,7 +1368,7 @@ class DecisionEngine:
 
         pv_w = max(0.0, float(ctx.pv_w or 0.0))
         house_load_w = max(0.0, float(ctx.house_load_w or 0.0))
-        export_w = max(0.0, float(ctx.grid_export_w or 0.0))
+        export_w = self._pv_attributable_export_w(ctx)
         import_w = max(0.0, float(ctx.grid_import_w or 0.0))
         prev_charge_w = max(0.0, float(ctx.prev_charge_w or 0.0))
 
@@ -1295,7 +1456,7 @@ class DecisionEngine:
         if ctx.soc >= ctx.soc_max:
             return False
 
-        export_w = float(ctx.grid_export_w or 0.0)
+        export_w = self._pv_attributable_export_w(ctx)
         import_w = float(ctx.grid_import_w or 0.0)
         pv_w = float(ctx.pv_w or 0.0)
         house_load_w = float(ctx.house_load_w or 0.0)
@@ -2071,6 +2232,9 @@ class DecisionEngine:
         return False
 
     def _evaluate_adaptive_planning(self, ctx: DecisionContext) -> Optional[DecisionResult]:
+        if self._learned_planning_waits_for_window(ctx):
+            return None
+
         if (
             not self._automatic_planning_context_allows(ctx)
             or not ctx.price_points
