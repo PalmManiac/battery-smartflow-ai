@@ -146,6 +146,12 @@ from .regulation_power_controller import (
     build_regulation_power_config,
 )
 from .device_command import DeviceCommandBuilder
+from .command_effectiveness import (
+    CommandEffectivenessConfig,
+    CommandEffectivenessState,
+    evaluate_command_effectiveness,
+    record_effectiveness_retry,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -339,6 +345,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         
         self._device_command_builder = DeviceCommandBuilder()
+        self._command_effectiveness_config = CommandEffectivenessConfig()
 
         self._store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._persist: dict[str, Any] = {
@@ -433,6 +440,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "regulation_discharge_latch_started_ts": None,
             "regulation_passthrough_latch_started_ts": None,
             "regulation_skipped_write_reason": "none",
+
+            # V4.3.0-dev6.2:
+            # Bounded recovery when the active Number value still looks correct
+            # but the battery no longer applies the INPUT/OUTPUT command.
+            "command_effectiveness_direction": "none",
+            "command_effectiveness_mismatch_cycles": 0,
+            "command_effectiveness_retry_count": 0,
+            "command_effectiveness_last_retry_at": None,
+            "command_effectiveness_status": "inactive",
+            "command_effectiveness_reason": "not_evaluated",
+            "command_effectiveness_target_w": 0.0,
+            "command_effectiveness_measured_w": 0.0,
+            "command_effectiveness_retry_forced": False,
             
             # V4.3.0-dev5.6:
             # Strategic AC charge binding with explicit runtime phase.
@@ -2383,6 +2403,103 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or "none"
             ),
         )
+
+    def _get_command_effectiveness_state(self) -> CommandEffectivenessState:
+        """Build the bounded command-recovery state from persisted values."""
+
+        last_retry_at = None
+        last_retry_raw = self._persist.get(
+            "command_effectiveness_last_retry_at"
+        )
+        if last_retry_raw:
+            try:
+                last_retry_at = dt_util.parse_datetime(str(last_retry_raw))
+            except Exception:
+                last_retry_at = None
+
+        direction = str(
+            self._persist.get("command_effectiveness_direction", "none")
+            or "none"
+        )
+        if direction not in ("input", "output"):
+            direction = "none"
+
+        return CommandEffectivenessState(
+            direction=direction,
+            mismatch_cycles=int(
+                self._persist.get(
+                    "command_effectiveness_mismatch_cycles",
+                    0,
+                )
+                or 0
+            ),
+            retry_count=int(
+                self._persist.get(
+                    "command_effectiveness_retry_count",
+                    0,
+                )
+                or 0
+            ),
+            last_retry_at=last_retry_at,
+        )
+
+    def _store_command_effectiveness_result(self, result: Any) -> None:
+        """Persist command-effectiveness state and diagnostics."""
+
+        state = result.state
+        self._persist["command_effectiveness_direction"] = state.direction
+        self._persist["command_effectiveness_mismatch_cycles"] = int(
+            state.mismatch_cycles
+        )
+        self._persist["command_effectiveness_retry_count"] = int(
+            state.retry_count
+        )
+        self._persist["command_effectiveness_last_retry_at"] = (
+            state.last_retry_at.isoformat()
+            if state.last_retry_at is not None
+            else None
+        )
+        self._persist["command_effectiveness_status"] = str(result.status)
+        self._persist["command_effectiveness_reason"] = str(result.reason)
+        self._persist["command_effectiveness_target_w"] = float(
+            result.target_w
+        )
+        self._persist["command_effectiveness_measured_w"] = float(
+            result.measured_w
+        )
+        self._persist["command_effectiveness_retry_forced"] = bool(
+            result.retry_direction is not None
+        )
+
+    def _record_command_effectiveness_retry(
+        self,
+        *,
+        now: datetime,
+        direction: str,
+    ) -> None:
+        """Record a recovery write after its service call succeeded."""
+
+        state = record_effectiveness_retry(
+            now=dt_util.as_utc(now),
+            direction=direction,
+            previous=self._get_command_effectiveness_state(),
+        )
+
+        self._persist["command_effectiveness_direction"] = state.direction
+        self._persist["command_effectiveness_mismatch_cycles"] = 0
+        self._persist["command_effectiveness_retry_count"] = int(
+            state.retry_count
+        )
+        self._persist["command_effectiveness_last_retry_at"] = (
+            state.last_retry_at.isoformat()
+            if state.last_retry_at is not None
+            else None
+        )
+        self._persist["command_effectiveness_status"] = "retry_sent"
+        self._persist["command_effectiveness_reason"] = (
+            "active_command_repeated"
+        )
+        self._persist["command_effectiveness_retry_forced"] = True
         
     def _update_regulation_runtime_state(
         self,
@@ -3804,7 +3921,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             battery_raw = self._state(self.entities.battery_ac_power)
-            battery_power = _to_float(battery_raw, 0.0)
+            battery_power_value = _to_float(battery_raw, None)
+            battery_ac_power_sensor_valid = battery_power_value is not None
+            battery_power = (
+                float(battery_power_value)
+                if battery_power_value is not None
+                else 0.0
+            )
             battery_power = float(battery_power or 0.0)
 
             battery_discharge_w = max(0.0, battery_power)
@@ -5149,6 +5272,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 current_ac_mode=self._state(self.entities.ac_mode),
                 last_input_limit_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 last_output_limit_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
+                current_input_limit_w=_to_float(
+                    self._state(self.entities.input_limit),
+                    None,
+                ),
+                current_output_limit_w=_to_float(
+                    self._state(self.entities.output_limit),
+                    None,
+                ),
             )
 
             legacy_ac_mode = (
@@ -5195,6 +5326,98 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ac_mode = legacy_ac_mode
                 in_w = legacy_in_w
                 out_w = legacy_out_w
+
+            current_ac_mode = str(
+                self._state(self.entities.ac_mode) or ""
+            )
+
+            if use_regulation_v42_command:
+                active_command_write_pending = bool(
+                    (
+                        ac_mode == ZENDURE_MODE_INPUT
+                        and regulation_device_command.should_write_input
+                    )
+                    or (
+                        ac_mode == ZENDURE_MODE_OUTPUT
+                        and regulation_device_command.should_write_output
+                    )
+                )
+            else:
+                active_target_w = (
+                    in_w
+                    if ac_mode == ZENDURE_MODE_INPUT
+                    else out_w
+                )
+                active_cache_key = (
+                    "last_set_input_w"
+                    if ac_mode == ZENDURE_MODE_INPUT
+                    else "last_set_output_w"
+                )
+                active_entity_id = (
+                    self.entities.input_limit
+                    if ac_mode == ZENDURE_MODE_INPUT
+                    else self.entities.output_limit
+                )
+                active_cached_w = float(
+                    self._persist.get(active_cache_key, 0.0) or 0.0
+                )
+                active_entity_w = _to_float(
+                    self._state(active_entity_id),
+                    None,
+                )
+                active_command_write_pending = bool(
+                    current_ac_mode != str(ac_mode)
+                    or int(round(active_cached_w, 0))
+                    != int(round(active_target_w, 0))
+                    or (
+                        active_entity_w is not None
+                        and abs(
+                            float(active_entity_w)
+                            - float(active_target_w)
+                        )
+                        >= 1.0
+                    )
+                )
+
+            command_effectiveness_result = evaluate_command_effectiveness(
+                now=dt_util.as_utc(now),
+                requested_mode=str(ac_mode),
+                input_target_w=float(in_w),
+                output_target_w=float(out_w),
+                battery_charge_w=float(battery_charge_w),
+                battery_discharge_w=float(battery_discharge_w),
+                battery_sensor_valid=bool(
+                    battery_ac_power_sensor_valid
+                ),
+                grid_import_w=float(grid_import or 0.0),
+                current_ac_mode=current_ac_mode,
+                active_command_write_pending=bool(
+                    active_command_write_pending
+                ),
+                previous=self._get_command_effectiveness_state(),
+                config=self._command_effectiveness_config,
+            )
+            self._store_command_effectiveness_result(
+                command_effectiveness_result
+            )
+
+            effectiveness_retry_direction = (
+                command_effectiveness_result.retry_direction
+            )
+
+            if use_regulation_v42_command:
+                if effectiveness_retry_direction == "input":
+                    regulation_device_command.should_write_input = True
+                    regulation_device_command.skipped = False
+                    regulation_device_command.skip_reason = "none"
+                elif effectiveness_retry_direction == "output":
+                    regulation_device_command.should_write_output = True
+                    regulation_device_command.skipped = False
+                    regulation_device_command.skip_reason = "none"
+
+                regulation_device_command.metadata[
+                    "effectiveness_retry_direction"
+                ] = effectiveness_retry_direction
                 
             self._update_regulation_runtime_state(
                 now=now,
@@ -5278,9 +5501,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     # change cannot be skipped merely because the Number entity
                     # still displays the same watt value as an earlier cycle.
                     await self._set_input_limit(in_w, force=True)
+                    if effectiveness_retry_direction == "input":
+                        self._record_command_effectiveness_retry(
+                            now=now,
+                            direction="input",
+                        )
 
                 if regulation_device_command.should_write_output:
                     await self._set_output_limit(out_w, force=True)
+                    if effectiveness_retry_direction == "output":
+                        self._record_command_effectiveness_retry(
+                            now=now,
+                            direction="output",
+                        )
 
             else:
                 direction_changed = (
@@ -5291,13 +5524,29 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if ac_mode == ZENDURE_MODE_INPUT:
                     await self._set_input_limit(
                         in_w,
-                        force=direction_changed,
+                        force=bool(
+                            direction_changed
+                            or effectiveness_retry_direction == "input"
+                        ),
                     )
+                    if effectiveness_retry_direction == "input":
+                        self._record_command_effectiveness_retry(
+                            now=now,
+                            direction="input",
+                        )
                 else:
                     await self._set_output_limit(
                         out_w,
-                        force=direction_changed,
+                        force=bool(
+                            direction_changed
+                            or effectiveness_retry_direction == "output"
+                        ),
                     )
+                    if effectiveness_retry_direction == "output":
+                        self._record_command_effectiveness_retry(
+                            now=now,
+                            direction="output",
+                        )
 
             is_charging = ac_mode == ZENDURE_MODE_INPUT and in_w > 0.0
 
@@ -5659,6 +5908,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     and float(charge_pv_part_w or 0.0) > 0.0
                 ),
                 "battery_ac_power_raw": battery_power,
+                "battery_ac_power_sensor_valid": bool(
+                    battery_ac_power_sensor_valid
+                ),
                 "battery_charge_w_est": battery_charge_w,
                 "battery_discharge_w_est": battery_discharge_w,
                 "discharge_blocked_by_soc_min": discharge_blocked_by_soc_min,
@@ -5795,6 +6047,70 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "output_write_last_success_w": self._persist.get(
                     "output_write_last_success_w"
+                ),
+
+                # V4.3.0-dev6.2:
+                # Bounded recovery diagnostics for a lost active command.
+                "command_effectiveness_direction": str(
+                    self._persist.get(
+                        "command_effectiveness_direction",
+                        "none",
+                    )
+                ),
+                "command_effectiveness_status": str(
+                    self._persist.get(
+                        "command_effectiveness_status",
+                        "inactive",
+                    )
+                ),
+                "command_effectiveness_reason": str(
+                    self._persist.get(
+                        "command_effectiveness_reason",
+                        "not_evaluated",
+                    )
+                ),
+                "command_effectiveness_target_w": float(
+                    self._persist.get(
+                        "command_effectiveness_target_w",
+                        0.0,
+                    )
+                    or 0.0
+                ),
+                "command_effectiveness_measured_w": float(
+                    self._persist.get(
+                        "command_effectiveness_measured_w",
+                        0.0,
+                    )
+                    or 0.0
+                ),
+                "command_effectiveness_mismatch_cycles": int(
+                    self._persist.get(
+                        "command_effectiveness_mismatch_cycles",
+                        0,
+                    )
+                    or 0
+                ),
+                "command_effectiveness_retry_count": int(
+                    self._persist.get(
+                        "command_effectiveness_retry_count",
+                        0,
+                    )
+                    or 0
+                ),
+                "command_effectiveness_last_retry_at": self._persist.get(
+                    "command_effectiveness_last_retry_at"
+                ),
+                "command_effectiveness_retry_forced": bool(
+                    self._persist.get(
+                        "command_effectiveness_retry_forced",
+                        False,
+                    )
+                ),
+                "command_effectiveness_max_retries": int(
+                    self._command_effectiveness_config.max_retries
+                ),
+                "command_effectiveness_retry_cooldown_s": float(
+                    self._command_effectiveness_config.retry_cooldown_s
                 ),
 
                 # V4.2.0 regulation execution switch / comparison
