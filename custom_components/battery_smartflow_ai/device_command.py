@@ -35,6 +35,10 @@ class DeviceCommandBuilder:
     - Directional commands are sent only through the active power entity.
       Current Zendure-HA versions include mode and opposite-limit zeroing in
       that command; a separate zero write would turn it into a stop command.
+
+    V4.3.0-dev6.2:
+    - The active Number entity is part of the write decision. A stale internal
+      cache can no longer hide a real entity-state mismatch.
     """
 
     def __init__(self, config: DeviceCommandConfig | None = None) -> None:
@@ -49,6 +53,8 @@ class DeviceCommandBuilder:
         current_ac_mode: str | None,
         last_input_limit_w: float = 0.0,
         last_output_limit_w: float = 0.0,
+        current_input_limit_w: float | None = None,
+        current_output_limit_w: float | None = None,
     ) -> DeviceCommand:
         resolved_mode = arbiter.resolved_mode
 
@@ -60,6 +66,7 @@ class DeviceCommandBuilder:
                 current_ac_mode=current_ac_mode,
                 last_input_limit_w=last_input_limit_w,
                 last_output_limit_w=last_output_limit_w,
+                current_input_limit_w=current_input_limit_w,
             )
 
         if resolved_mode in ("output", "ramp_down_output"):
@@ -70,6 +77,7 @@ class DeviceCommandBuilder:
                 current_ac_mode=current_ac_mode,
                 last_input_limit_w=last_input_limit_w,
                 last_output_limit_w=last_output_limit_w,
+                current_output_limit_w=current_output_limit_w,
             )
 
         if resolved_mode == "ramp_down_input":
@@ -80,6 +88,7 @@ class DeviceCommandBuilder:
                 current_ac_mode=current_ac_mode,
                 last_input_limit_w=last_input_limit_w,
                 last_output_limit_w=last_output_limit_w,
+                current_input_limit_w=current_input_limit_w,
             )
 
         if resolved_mode == "hold":
@@ -112,6 +121,7 @@ class DeviceCommandBuilder:
         current_ac_mode: str | None,
         last_input_limit_w: float,
         last_output_limit_w: float,
+        current_input_limit_w: float | None,
     ) -> DeviceCommand:
         input_limit_w = max(0.0, float(power.final_power_w or 0.0))
 
@@ -128,6 +138,10 @@ class DeviceCommandBuilder:
             )
             or self._zero_write_needed(
                 old_value=last_output_limit_w,
+            )
+            or self._live_value_differs(
+                expected_value=input_limit_w,
+                current_value=current_input_limit_w,
             )
         )
 
@@ -162,6 +176,7 @@ class DeviceCommandBuilder:
                 "current_ac_mode": current_ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "current_input_limit_w": current_input_limit_w,
                 "opposite_limit_zeroed_by_active_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
@@ -178,6 +193,7 @@ class DeviceCommandBuilder:
         current_ac_mode: str | None,
         last_input_limit_w: float,
         last_output_limit_w: float,
+        current_output_limit_w: float | None,
     ) -> DeviceCommand:
         output_limit_w = max(0.0, float(power.final_power_w or 0.0))
 
@@ -194,6 +210,10 @@ class DeviceCommandBuilder:
             )
             or self._zero_write_needed(
                 old_value=last_input_limit_w,
+            )
+            or self._live_value_differs(
+                expected_value=output_limit_w,
+                current_value=current_output_limit_w,
             )
         )
 
@@ -228,6 +248,7 @@ class DeviceCommandBuilder:
                 "current_ac_mode": current_ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "current_output_limit_w": current_output_limit_w,
                 "opposite_limit_zeroed_by_active_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
@@ -384,5 +405,18 @@ class DeviceCommandBuilder:
         old_value: float,
     ) -> bool:
         return abs(float(old_value or 0.0)) >= float(
+            self.config.min_power_write_delta_w
+        )
+
+    def _live_value_differs(
+        self,
+        *,
+        expected_value: float,
+        current_value: float | None,
+    ) -> bool:
+        if current_value is None:
+            return False
+
+        return abs(float(expected_value) - float(current_value)) >= float(
             self.config.min_power_write_delta_w
         )
