@@ -1826,7 +1826,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["last_set_mode"] = requested_mode
         self._persist["mode_write_last_success"] = requested_mode
 
-    async def _set_input_limit(self, watts: float) -> None:
+    async def _set_input_limit(
+        self,
+        watts: float,
+        *,
+        force: bool = False,
+    ) -> None:
         """Write the effective INPUT limit reliably.
 
         V4.3.0-dev5.7:
@@ -1865,7 +1870,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["input_write_entity_state_w"] = entity_value
 
         # Skip only when both our cache and the real Number entity agree.
-        if cache_matches and entity_matches:
+        if cache_matches and entity_matches and not force:
             self._persist["input_write_skipped"] = True
             self._persist["input_write_skip_reason"] = (
                 "cache_and_entity_match"
@@ -1887,9 +1892,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         # Update only after Home Assistant accepted the service call.
         self._persist["last_set_input_w"] = val
+        # Zendure-HA handles an inputLimit write as a complete INPUT command and
+        # includes outputLimit=0. Keep the local regulation cache aligned
+        # without issuing a second, relay-triggering outputLimit=0 command.
+        self._persist["last_set_output_w"] = 0
         self._persist["input_write_last_success_w"] = val
 
-    async def _set_output_limit(self, watts: float) -> None:
+    async def _set_output_limit(
+        self,
+        watts: float,
+        *,
+        force: bool = False,
+    ) -> None:
         """Write the effective OUTPUT limit reliably.
 
         V4.3.0-dev5.7:
@@ -1924,7 +1938,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._persist["output_write_entity_state_w"] = entity_value
 
-        if cache_matches and entity_matches:
+        if cache_matches and entity_matches and not force:
             self._persist["output_write_skipped"] = True
             self._persist["output_write_skip_reason"] = (
                 "cache_and_entity_match"
@@ -1945,6 +1959,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         self._persist["last_set_output_w"] = val
+        # Zendure-HA handles an outputLimit write as a complete OUTPUT command
+        # and includes inputLimit=0.
+        self._persist["last_set_input_w"] = 0
         self._persist["output_write_last_success_w"] = val
 
     def _get_setting(self, key: str, default: float) -> float:
@@ -5233,8 +5250,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # After the neutral stop command has been sent, subsequent standby cycles
                 # remain passive and do not fight external control.
                 if manual_standby_active_charge:
-                    await self._set_input_limit(0.0)
-                    await self._set_output_limit(0.0)
+                    # Stop the active INPUT side once, then leave the neutral
+                    # display mode in OUTPUT. Do not follow it with a redundant
+                    # outputLimit=0 command.
+                    await self._set_input_limit(0.0, force=True)
                     await self._set_ac_mode(ZENDURE_MODE_OUTPUT)
 
                     self._persist["last_set_input_w"] = 0
@@ -5254,19 +5273,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     await self._set_ac_mode(ac_mode)
 
                 if regulation_device_command.should_write_input:
-                    await self._set_input_limit(in_w)
+                    # DeviceCommandBuilder already applied the write tolerance.
+                    # Force the selected active-side command so a direction
+                    # change cannot be skipped merely because the Number entity
+                    # still displays the same watt value as an earlier cycle.
+                    await self._set_input_limit(in_w, force=True)
 
                 if regulation_device_command.should_write_output:
-                    await self._set_output_limit(out_w)
+                    await self._set_output_limit(out_w, force=True)
 
             else:
-                if ac_mode == ZENDURE_MODE_INPUT:
-                    if self._persist.get("last_set_output_w", 0) != 0:
-                        await self._set_output_limit(0)
-
+                direction_changed = (
+                    str(self._state(self.entities.ac_mode) or "")
+                    != str(ac_mode)
+                )
                 await self._set_ac_mode(ac_mode)
-                await self._set_input_limit(in_w)
-                await self._set_output_limit(out_w)
+                if ac_mode == ZENDURE_MODE_INPUT:
+                    await self._set_input_limit(
+                        in_w,
+                        force=direction_changed,
+                    )
+                else:
+                    await self._set_output_limit(
+                        out_w,
+                        force=direction_changed,
+                    )
 
             is_charging = ac_mode == ZENDURE_MODE_INPUT and in_w > 0.0
 
