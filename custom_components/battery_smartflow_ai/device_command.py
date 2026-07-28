@@ -28,11 +28,13 @@ class DeviceCommandBuilder:
     It only translates the resolved technical mode and final power into the
     command shape needed by the Home Assistant/Zendure entities.
 
-    V4.2.0:
+    V4.3.0-dev6.1:
     - Mode changes are always written.
     - Relevant power changes are written.
     - Small power changes are skipped.
-    - The opposite limit is only zeroed when necessary.
+    - Directional commands are sent only through the active power entity.
+      Current Zendure-HA versions include mode and opposite-limit zeroing in
+      that command; a separate zero write would turn it into a stop command.
     """
 
     def __init__(self, config: DeviceCommandConfig | None = None) -> None:
@@ -115,18 +117,24 @@ class DeviceCommandBuilder:
 
         should_write_mode = current_ac_mode != "input"
 
-        # On mode switch, write the active side even if the watt value is close.
-        # Otherwise use the normal write tolerance.
-        should_write_input = should_write_mode or self._power_changed_enough(
-            new_value=input_limit_w,
-            old_value=last_input_limit_w,
+        # The active number write is the complete directional command in
+        # Zendure-HA. Repeat it on a mode switch or when our opposite-side cache
+        # is stale, even if the active watt value itself is unchanged.
+        should_write_input = (
+            should_write_mode
+            or self._power_changed_enough(
+                new_value=input_limit_w,
+                old_value=last_input_limit_w,
+            )
+            or self._zero_write_needed(
+                old_value=last_output_limit_w,
+            )
         )
 
-        # In INPUT mode the output side must be zero. Write it only if needed,
-        # except on a real mode switch where we zero it proactively.
-        should_write_output = should_write_mode or self._zero_write_needed(
-            old_value=last_output_limit_w,
-        )
+        # Do not write outputLimit=0 separately. Zendure-HA already includes
+        # outputLimit=0 in every inputLimit command. A second zero write is
+        # interpreted as a full stop (smartMode=0).
+        should_write_output = False
 
         skipped = (
             not should_write_mode
@@ -154,6 +162,7 @@ class DeviceCommandBuilder:
                 "current_ac_mode": current_ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "opposite_limit_zeroed_by_active_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
                 ),
@@ -174,18 +183,24 @@ class DeviceCommandBuilder:
 
         should_write_mode = current_ac_mode != "output"
 
-        # On mode switch, write the active side even if the watt value is close.
-        # Otherwise use the normal write tolerance.
-        should_write_output = should_write_mode or self._power_changed_enough(
-            new_value=output_limit_w,
-            old_value=last_output_limit_w,
+        # The active number write is the complete directional command in
+        # Zendure-HA. Repeat it on a mode switch or when our opposite-side cache
+        # is stale, even if the active watt value itself is unchanged.
+        should_write_output = (
+            should_write_mode
+            or self._power_changed_enough(
+                new_value=output_limit_w,
+                old_value=last_output_limit_w,
+            )
+            or self._zero_write_needed(
+                old_value=last_input_limit_w,
+            )
         )
 
-        # In OUTPUT mode the input side must be zero. Write it only if needed,
-        # except on a real mode switch where we zero it proactively.
-        should_write_input = should_write_mode or self._zero_write_needed(
-            old_value=last_input_limit_w,
-        )
+        # Do not write inputLimit=0 separately. Zendure-HA already includes
+        # inputLimit=0 in every outputLimit command. A second zero write is
+        # interpreted as a full stop (smartMode=0).
+        should_write_input = False
 
         skipped = (
             not should_write_mode
@@ -213,6 +228,7 @@ class DeviceCommandBuilder:
                 "current_ac_mode": current_ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "opposite_limit_zeroed_by_active_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
                 ),
@@ -245,11 +261,20 @@ class DeviceCommandBuilder:
 
         should_write_mode = current_ac_mode not in ("input", "output")
 
-        should_write_input = self._zero_write_needed(
-            old_value=last_input_limit_w,
+        has_power_to_stop = (
+            self._zero_write_needed(old_value=last_input_limit_w)
+            or self._zero_write_needed(old_value=last_output_limit_w)
         )
-        should_write_output = self._zero_write_needed(
-            old_value=last_output_limit_w,
+
+        # Stop once through the currently active side. Its zero command already
+        # clears both limits in Zendure-HA.
+        should_write_input = bool(
+            ac_mode == "input"
+            and (should_write_mode or has_power_to_stop)
+        )
+        should_write_output = bool(
+            ac_mode == "output"
+            and (should_write_mode or has_power_to_stop)
         )
 
         skipped = (
@@ -279,6 +304,7 @@ class DeviceCommandBuilder:
                 "hold_ac_mode": ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "single_stop_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
                 ),
@@ -299,18 +325,15 @@ class DeviceCommandBuilder:
 
         should_write_mode = current_ac_mode != ac_mode
 
-        # Idle must reliably zero both sides if there is still a relevant limit.
-        should_write_input = self._zero_write_needed(
-            old_value=last_input_limit_w,
-        )
-        should_write_output = self._zero_write_needed(
-            old_value=last_output_limit_w,
+        has_power_to_stop = (
+            self._zero_write_needed(old_value=last_input_limit_w)
+            or self._zero_write_needed(old_value=last_output_limit_w)
         )
 
-        # If switching to neutral OUTPUT, write the mode and zero both sides.
-        if should_write_mode:
-            should_write_input = True
-            should_write_output = True
+        # Neutral idle is always represented by one outputLimit=0 command.
+        # That command clears both sides and keeps the device in OUTPUT mode.
+        should_write_input = False
+        should_write_output = bool(should_write_mode or has_power_to_stop)
 
         skipped = (
             not should_write_mode
@@ -338,6 +361,7 @@ class DeviceCommandBuilder:
                 "current_ac_mode": current_ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "single_stop_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
                 ),
