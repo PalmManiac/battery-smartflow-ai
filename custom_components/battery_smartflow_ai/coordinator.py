@@ -4327,6 +4327,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             decision = self._engine.evaluate(ctx)
+            strategy_selection = self._engine.last_strategy_selection
 
             if not use_regulation_v42_command:
                 decision = self._sf800_apply_mode_arbiter(
@@ -5032,6 +5033,63 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
             strategy_intent.metadata.update(
                 {
+                    # V4.3.0-dev7:
+                    # Keep the full strategic candidate selection internally
+                    # visible even when a later safety, charge-binding or
+                    # technical handover adjusts the selected DecisionResult.
+                    "strategy_candidate_count": int(
+                        strategy_selection.get(
+                            "candidate_count",
+                            0,
+                        )
+                    ),
+                    "strategy_eligible_candidate_count": int(
+                        strategy_selection.get(
+                            "eligible_candidate_count",
+                            0,
+                        )
+                    ),
+                    "strategy_selected_rule": str(
+                        strategy_selection.get(
+                            "selected_rule",
+                            "unknown",
+                        )
+                    ),
+                    "strategy_selected_reason": str(
+                        strategy_selection.get(
+                            "selected_reason",
+                            "idle",
+                        )
+                    ),
+                    "strategy_selected_state": str(
+                        strategy_selection.get(
+                            "selected_state",
+                            "idle_ready",
+                        )
+                    ),
+                    "strategy_selected_priority": int(
+                        strategy_selection.get(
+                            "selected_priority",
+                            0,
+                        )
+                    ),
+                    "strategy_selection_override_reason": (
+                        "none"
+                        if str(
+                            strategy_selection.get(
+                                "selected_reason",
+                                "idle",
+                            )
+                        )
+                        == str(decision.reason or "idle")
+                        else str(decision.reason or "idle")
+                    ),
+                    "strategy_candidates": list(
+                        strategy_selection.get(
+                            "candidates",
+                            [],
+                        )
+                    ),
                     "pv_handover_policy": str(
                         strategy_intent.pv_handover_policy
                     ),
@@ -5211,6 +5269,54 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             source_reason = str(strategy_meta.get("source_reason", decision.reason or "idle"))
             source_action = str(strategy_meta.get("source_action", decision.action or "idle"))
             source_ac_mode = str(strategy_meta.get("source_ac_mode", decision.ac_mode or "output"))
+            strategy_candidate_count = int(
+                strategy_meta.get(
+                    "strategy_candidate_count",
+                    0,
+                )
+            )
+            strategy_eligible_candidate_count = int(
+                strategy_meta.get(
+                    "strategy_eligible_candidate_count",
+                    0,
+                )
+            )
+            strategy_selected_rule = str(
+                strategy_meta.get(
+                    "strategy_selected_rule",
+                    "unknown",
+                )
+            )
+            strategy_selected_reason = str(
+                strategy_meta.get(
+                    "strategy_selected_reason",
+                    "idle",
+                )
+            )
+            strategy_selected_state = str(
+                strategy_meta.get(
+                    "strategy_selected_state",
+                    "idle_ready",
+                )
+            )
+            strategy_selected_priority = int(
+                strategy_meta.get(
+                    "strategy_selected_priority",
+                    0,
+                )
+            )
+            strategy_selection_override_reason = str(
+                strategy_meta.get(
+                    "strategy_selection_override_reason",
+                    "none",
+                )
+            )
+            strategy_candidates = list(
+                strategy_meta.get(
+                    "strategy_candidates",
+                    [],
+                )
+            )
             
             charge_commit_active = bool(self._persist.get("charge_commit_active", False))
             charge_commit_type = str(self._persist.get("charge_commit_type", "none") or "none")
@@ -6794,6 +6900,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "strategic_reason": strategic_reason,
                 "technical_reason": technical_reason,
                 "strategy_priority": strategy_priority,
+                "strategy_candidate_count": strategy_candidate_count,
+                "strategy_eligible_candidate_count": (
+                    strategy_eligible_candidate_count
+                ),
+                "strategy_selected_rule": strategy_selected_rule,
+                "strategy_selected_reason": strategy_selected_reason,
+                "strategy_selected_state": strategy_selected_state,
+                "strategy_selected_priority": strategy_selected_priority,
+                "strategy_selection_override_reason": (
+                    strategy_selection_override_reason
+                ),
+                "strategy_candidates": strategy_candidates,
                 "source_reason": source_reason,
                 "source_action": source_action,
                 "source_ac_mode": source_ac_mode,
@@ -6952,6 +7070,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "strategic_reason": strategic_reason,
                 "technical_reason": technical_reason,
                 "strategy_priority": strategy_priority,
+                "strategy_candidate_count": strategy_candidate_count,
+                "strategy_eligible_candidate_count": (
+                    strategy_eligible_candidate_count
+                ),
+                "strategy_selected_rule": strategy_selected_rule,
+                "strategy_selected_reason": strategy_selected_reason,
+                "strategy_selected_state": strategy_selected_state,
+                "strategy_selected_priority": strategy_selected_priority,
+                "strategy_selection_override_reason": (
+                    strategy_selection_override_reason
+                ),
+                "strategy_candidates": strategy_candidates,
                 "source_reason": source_reason,
                 "source_action": source_action,
                 "source_ac_mode": source_ac_mode,
