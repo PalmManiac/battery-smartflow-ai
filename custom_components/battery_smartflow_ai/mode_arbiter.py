@@ -330,13 +330,16 @@ class ModeArbiter:
                 self.config.offgrid_max_internal_supply_w
             ),
             "offgrid_load_active_w": float(self.config.offgrid_load_active_w),
-            "offgrid_load_blocks_ac_charge": bool(
-                self.config.offgrid_load_blocks_ac_charge
-            ),
+            "offgrid_load_blocks_ac_charge": False,
+            "offgrid_strategy_policy": "independent_observation",
             "offgrid_input_affects_energy_balance": bool(
                 self.config.offgrid_input_affects_energy_balance
             ),
         }
+
+        # V4.3.0-dev8:
+        # Off-Grid load is diagnostic context only. It is not a reason to block
+        # INPUT, force OUTPUT or interfere with an active AC charge binding.
 
         # Hard discharge protection must override active output holds.
         # This is intentionally checked before force intents and before
@@ -401,55 +404,6 @@ class ModeArbiter:
                     **metadata,
                     "additional_battery_discharge_w": float(
                         additional_battery_discharge_w or 0.0
-                    ),
-                },
-            )
-
-        # Off-Grid correction:
-        # Active island socket load must block automatic/economic INPUT charging.
-        # Only true protection or manual charging may override Off-Grid load.
-        #
-        # Learned planning, price planning, valley charging and very-cheap
-        # charging are deliberately not priorities here, because they can cause
-        # Zendure to pull AC power for the Off-Grid load and charge the battery
-        # at the same time.
-        priority_charge_reasons = {
-            "emergency_latched_charge",
-            "cell_voltage_emergency_charge",
-            "manual_charge",
-        }
-
-        priority_charge_intents = {
-            "emergency_charge",
-            "manual_charge",
-        }
-
-        if (
-            bool(self.config.offgrid_load_blocks_ac_charge)
-            and bool(offgrid_load_active)
-            and requested_mode == "input"
-            and str(intent.intent or "") not in priority_charge_intents
-            and str(intent.reason or "") not in priority_charge_reasons
-        ):
-            return ModeArbiterResult(
-                requested_mode=requested_mode,
-                resolved_mode="hold",
-                allowed=False,
-                reason="offgrid_load_active_blocks_ac_charge",
-                active_regulation_state=runtime.active_regulation_state,
-                active_hold_remaining_s=0.0,
-                cooldown_remaining_s=0.0,
-                metadata={
-                    **metadata,
-                    "offgrid_power_w": float(offgrid_power_w or 0.0),
-                    "offgrid_mode": str(offgrid_mode or "not_configured"),
-                    "offgrid_load_active": bool(offgrid_load_active),
-                    "offgrid_source_active": bool(offgrid_source_active),
-                    "offgrid_load_active_w": float(
-                        self.config.offgrid_load_active_w
-                    ),
-                    "offgrid_max_internal_supply_w": float(
-                        self.config.offgrid_max_internal_supply_w
                     ),
                 },
             )
