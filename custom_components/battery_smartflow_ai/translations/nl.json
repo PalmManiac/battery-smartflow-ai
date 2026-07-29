@@ -164,7 +164,9 @@
           "EXPORT_GUARD_W": "Exportbeveiliging",
           "KEEPALIVE_MIN_DEFICIT_W": "Keepalive minimumtekort",
           "KEEPALIVE_MIN_OUTPUT_W": "Keepalive minimumvermogen",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Ontladen opnieuw vrijgeven boven SoC-minimum"
+          "SOC_DISCHARGE_RESUME_MARGIN": "Ontladen opnieuw vrijgeven boven SoC-minimum",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Minimale PV voor PV-doorvoer",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Minimale huislast voor PV-doorvoer"
         },
         "data_description": {
           "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica.",
@@ -172,7 +174,9 @@
           "EXPORT_GUARD_W": "Extra veiligheidsreserve tegen ongewenste teruglevering. Hogere waarden maken de regeling voorzichtiger.",
           "KEEPALIVE_MIN_DEFICIT_W": "Minimumtekort vanaf waar ontladen actief wordt gehouden. Helpt tegen flapperen bij zeer kleine lasten.",
           "KEEPALIVE_MIN_OUTPUT_W": "Minimaal ontlaadvermogen om ontladen stabiel actief te houden. Voorkomt onnodig in- en uitschakelen.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Extra SoC-afstand boven het ingestelde minimum-SoC die bereikt moet worden voordat ontladen na een SoC-blokkering opnieuw wordt vrijgegeven. Voorkomt flapperen tussen laden en ontladen bij lage accustand, vooral ’s ochtends bij wisselende PV-opbrengst."
+          "SOC_DISCHARGE_RESUME_MARGIN": "Extra SoC-afstand boven het ingestelde minimum-SoC die bereikt moet worden voordat ontladen na een SoC-blokkering opnieuw wordt vrijgegeven. Voorkomt flapperen tussen laden en ontladen bij lage accustand, vooral ’s ochtends bij wisselende PV-opbrengst.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Gemeten minimaal PV-vermogen voor normale PV-doorvoer. De MPPT-herstart bij een volle accu werkt onafhankelijk van deze meting.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Minimale huislast voor normale PV-doorvoer. Lagere waarden zijn geschikt voor woningen met een kleine basislast."
         }
       },
       "charge": {
@@ -548,6 +552,7 @@
         "name": "Off-grid regelreden",
         "state": {
           "none": "Geen off-grid blokkering",
+          "offgrid_load_observed": "Eilandstopcontact actief – afzonderlijk verwerkt",
           "offgrid_load_active_blocks_ac_charge": "Eilandstopcontact actief – netladen geblokkeerd",
 		  "offgrid_load_support": "Eilandstopcontact actief – gevoed door batterij/PV"
         }
