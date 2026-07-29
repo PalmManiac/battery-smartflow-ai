@@ -616,9 +616,7 @@ class PvHouseLoadPassthroughRule(BaseRule):
         if not engine._pv_houseload_passthrough_enabled(ctx):
             return None
 
-        if ctx.ai_mode == "summer" or (
-            ctx.ai_mode == "automatic" and ctx.season == "summer"
-        ):
+        if ctx.ai_mode == "summer":
             return None
 
         if not bool(ctx.pv_houseload_passthrough_active):
@@ -725,12 +723,6 @@ class PvRule(BaseRule):
             return None
 
         if ctx.soc >= ctx.soc_max:
-            return None
-
-        if (
-            engine._pv_houseload_passthrough_enabled(ctx)
-            and bool(ctx.pv_houseload_passthrough_active)
-        ):
             return None
 
         export_w = float(ctx.grid_export_w or 0.0)
