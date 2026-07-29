@@ -164,7 +164,9 @@
           "EXPORT_GUARD_W": "Protection export",
           "KEEPALIVE_MIN_DEFICIT_W": "Déficit minimal keepalive",
           "KEEPALIVE_MIN_OUTPUT_W": "Puissance minimale keepalive",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Réactivation de décharge au-dessus du SoC minimal"
+          "SOC_DISCHARGE_RESUME_MARGIN": "Réactivation de décharge au-dessus du SoC minimal",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "PV minimal pour le passage direct",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Charge maison minimale pour le passage direct"
         },
         "data_description": {
           "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et d’autres logiques liées au PV.",
@@ -172,7 +174,9 @@
           "EXPORT_GUARD_W": "Réserve de sécurité supplémentaire contre l’export involontaire. Des valeurs plus élevées rendent la régulation plus prudente.",
           "KEEPALIVE_MIN_DEFICIT_W": "Déficit minimal à partir duquel la décharge est maintenue active. Aide contre les oscillations à très faible charge.",
           "KEEPALIVE_MIN_OUTPUT_W": "Puissance minimale de décharge pour maintenir la décharge stable. Évite les commutations marche/arrêt inutiles.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Écart SoC supplémentaire au-dessus du SoC minimal configuré, nécessaire avant de réautoriser la décharge après un blocage SoC. Évite les oscillations entre charge et décharge près du minimum batterie, surtout le matin avec une production PV fluctuante."
+          "SOC_DISCHARGE_RESUME_MARGIN": "Écart SoC supplémentaire au-dessus du SoC minimal configuré, nécessaire avant de réautoriser la décharge après un blocage SoC. Évite les oscillations entre charge et décharge près du minimum batterie, surtout le matin avec une production PV fluctuante.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Puissance PV mesurée minimale pour le passage direct normal. Le redémarrage MPPT à batterie pleine fonctionne indépendamment de cette mesure.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Charge maison minimale pour le passage direct PV normal. Une valeur plus basse convient aux faibles charges de base."
         }
       },
       "charge": {
@@ -548,6 +552,7 @@
         "name": "Raison de régulation hors réseau",
         "state": {
           "none": "Aucun blocage hors réseau",
+          "offgrid_load_observed": "Prise îlot active – prise en compte séparément",
           "offgrid_load_active_blocks_ac_charge": "Prise îlot active – charge réseau bloquée",
 		  "offgrid_load_support": "Prise Off-Grid active – alimentation par batterie/PV"
         }
