@@ -209,11 +209,10 @@ class EmergencyRule(BaseRule):
 
 class AdditionalBatteryBlockRule(BaseRule):
     def evaluate(self, engine, ctx):
-        if float(ctx.additional_battery_charge_w or 0.0) > 0.0:
-            return engine._idle_result(
-                ctx,
-                reason="additional_battery_charging_block",
-            )
+        # V4.3.0-dev7:
+        # Directional additional-battery blockers are applied after all
+        # candidates have been collected. Returning terminal idle here would
+        # suppress valid same-direction charging or discharging strategies.
         return None
 
 
@@ -365,12 +364,14 @@ class LearnedPlanningRule(BaseRule):
             return None
 
         if mode == "wait" or decision_reason == "learned_charge_window_wait":
-            # A valid learned plan deliberately reserves a later, cheaper charge
-            # window. The individual competing grid-charge rules consult
-            # _learned_planning_waits_for_window() and remain inactive while this
-            # rule itself falls through so PV, passthrough and profitable discharge
-            # can still be evaluated.
-            return None
+            # A waiting learned plan is a real HOLD candidate. The central
+            # candidate selector rejects only competing grid-charge candidates;
+            # PV charging, passthrough and economic discharge may still win with
+            # their higher active priority.
+            return engine._idle_result(
+                ctx,
+                reason="learned_charge_window_wait",
+            )
 
         if mode == "charge" or decision_reason in (
             "learned_charge_window_active",
@@ -432,9 +433,6 @@ class PlanningRule(BaseRule):
 
 class VeryCheapRule(BaseRule):
     def evaluate(self, engine, ctx):
-        if engine._learned_planning_controls_grid_charge(ctx):
-            return None
-
         if ctx.ai_mode not in ("automatic", "winter"):
             return None
 
@@ -474,9 +472,6 @@ class VeryCheapRule(BaseRule):
 
 class ValleyBoostRule(BaseRule):
     def evaluate(self, engine, ctx):
-        if engine._learned_planning_waits_for_window(ctx):
-            return None
-
         if engine._pv_morning_transition_active(ctx):
             return None
 
@@ -545,9 +540,6 @@ class ValleyBoostRule(BaseRule):
 
 class ValleyOpportunityRule(BaseRule):
     def evaluate(self, engine, ctx):
-        if engine._learned_planning_waits_for_window(ctx):
-            return None
-
         if engine._pv_morning_transition_active(ctx):
             return None
 
@@ -659,9 +651,6 @@ class AutomaticSummerPeakReserveRule(BaseRule):
     """
 
     def evaluate(self, engine, ctx):
-        if engine._learned_planning_waits_for_window(ctx):
-            return None
-
         if not engine._automatic_summer_peak_reserve_enabled(ctx):
             return None
 
@@ -1046,6 +1035,16 @@ class ManualRule(BaseRule):
 
 class DecisionEngine:
     def __init__(self):
+        self._collecting_candidates = False
+        self._last_strategy_selection: dict[str, Any] = {
+            "candidate_count": 0,
+            "eligible_candidate_count": 0,
+            "selected_rule": "fallback",
+            "selected_reason": "idle",
+            "selected_state": "idle_ready",
+            "selected_priority": 200,
+            "candidates": [],
+        }
         self._rules = [
             EmergencyRule(),
             AdditionalBatteryBlockRule(),
@@ -1107,6 +1106,12 @@ class DecisionEngine:
         self,
         ctx: DecisionContext,
     ) -> DecisionResult | None:
+        # V4.3.0-dev7 collects the actual charging candidate first and applies
+        # the directional blocker centrally. This lets a valid discharging
+        # candidate continue instead of turning the whole cycle into idle.
+        if self._collecting_candidates:
+            return None
+
         if not self._additional_battery_discharge_blocks_charge(ctx):
             return None
 
@@ -1114,6 +1119,78 @@ class DecisionEngine:
             ctx,
             reason="additional_battery_discharging_block",
         )
+
+    @property
+    def last_strategy_selection(self) -> dict[str, Any]:
+        """Return diagnostics for the most recent candidate selection."""
+
+        return {
+            **self._last_strategy_selection,
+            "candidates": [
+                dict(candidate)
+                for candidate in self._last_strategy_selection.get(
+                    "candidates",
+                    [],
+                )
+            ],
+        }
+
+    def _candidate_rejection_reason(
+        self,
+        ctx: DecisionContext,
+        strategy: Any,
+        result: DecisionResult,
+    ) -> str | None:
+        """Return a directional or planning rejection reason for a candidate."""
+
+        state = str(getattr(strategy.state, "value", strategy.state))
+        requested_mode = str(strategy.requested_mode or "idle")
+        requested_power_w = strategy.requested_power_w
+        active_direction = bool(
+            result.action != "idle"
+            or requested_power_w is None
+            or float(requested_power_w or 0.0) > 0.0
+        )
+
+        protection_states = {
+            "protection",
+            "emergency_charge",
+        }
+
+        if state not in protection_states and active_direction:
+            if (
+                requested_mode == "output"
+                and float(ctx.additional_battery_charge_w or 0.0) > 0.0
+            ):
+                return "additional_battery_charging_block"
+
+            if (
+                requested_mode == "input"
+                and self._additional_battery_discharge_blocks_charge(ctx)
+            ):
+                return "additional_battery_discharging_block"
+
+        if (
+            self._learned_planning_waits_for_window(ctx)
+            and state
+            in {
+                "ac_charge_planned",
+                "ac_charge_price",
+                "ac_charge_reserve",
+            }
+        ):
+            return "learned_charge_window_wait"
+
+        return None
+
+    def _strategy_for_candidate(self, result: DecisionResult) -> Any:
+        """Convert a rule result through the canonical V4.3 strategy adapter."""
+
+        # Local import avoids the existing module-load cycle:
+        # strategy_adapter still accepts the legacy DecisionResult model.
+        from .strategy_adapter import decision_to_strategy_decision
+
+        return decision_to_strategy_decision(result)
 
     def _profile_flag(self, ctx: DecisionContext, key: str, default: bool = False) -> bool:
         try:
@@ -1245,7 +1322,6 @@ class DecisionEngine:
             or not ctx.price_points
             or ctx.battery_capacity_kwh <= 0
             or ctx.max_charge_w <= 0
-            or float(ctx.additional_battery_charge_w or 0.0) > 0.0
         ):
             return False
 
@@ -1257,32 +1333,6 @@ class DecisionEngine:
         return bool(
             status in ("ready", "active")
             and required_kwh > 0.0
-        )
-
-    def _learned_planning_controls_grid_charge(
-        self,
-        ctx: DecisionContext,
-    ) -> bool:
-        """Return whether learned planning owns the current grid-charge choice."""
-
-        if not self._learned_planning_has_usable_charge_need(ctx):
-            return False
-
-        plan = getattr(ctx, "learned_charge_plan", None)
-        mode = str(getattr(plan, "mode", "") or "")
-        decision_reason = str(
-            getattr(plan, "decision_reason", "") or ""
-        )
-
-        return bool(
-            mode in ("wait", "charge")
-            or decision_reason
-            in {
-                "learned_charge_window_wait",
-                "learned_charge_window_active",
-                "learned_charge_window_latest_start_reached",
-                "learned_charge_window_deadline_too_close_start_now",
-            }
         )
 
     def _discharge_protection_active(self, ctx: DecisionContext) -> bool:
@@ -2356,12 +2406,207 @@ class DecisionEngine:
         return None
 
     def evaluate(self, ctx: DecisionContext) -> DecisionResult:
-        for rule in self._rules:
-            result = rule.evaluate(self, ctx)
-            if result:
-                return result
+        """Evaluate every admissible rule and select the highest priority.
 
-        return self._idle_result(
-            ctx,
-            reason="idle",
-        )
+        Rule order remains the deterministic tie-breaker only. It no longer
+        decides which strategy wins before the V4.3 priority model is applied.
+        """
+
+        raw_candidates: list[tuple[int, str, DecisionResult]] = []
+
+        self._collecting_candidates = True
+        try:
+            for index, rule in enumerate(self._rules):
+                result = rule.evaluate(self, ctx)
+                if result is not None:
+                    raw_candidates.append(
+                        (
+                            index,
+                            rule.__class__.__name__,
+                            result,
+                        )
+                    )
+        finally:
+            self._collecting_candidates = False
+
+        if not raw_candidates:
+            raw_candidates.append(
+                (
+                    len(self._rules),
+                    "SafeIdleFallback",
+                    self._idle_result(
+                        ctx,
+                        reason="idle",
+                    ),
+                )
+            )
+
+        evaluated: list[dict[str, Any]] = []
+
+        for index, rule_name, result in raw_candidates:
+            strategy = self._strategy_for_candidate(result)
+            rejection_reason = self._candidate_rejection_reason(
+                ctx,
+                strategy,
+                result,
+            )
+
+            evaluated.append(
+                {
+                    "index": int(index),
+                    "rule": rule_name,
+                    "result": result,
+                    "strategy": strategy,
+                    "state": str(
+                        getattr(
+                            strategy.state,
+                            "value",
+                            strategy.state,
+                        )
+                    ),
+                    "reason": str(result.reason or "idle"),
+                    "priority": int(strategy.priority),
+                    "requested_mode": str(
+                        strategy.requested_mode or "idle"
+                    ),
+                    "rejection_reason": rejection_reason,
+                }
+            )
+
+        eligible = [
+            candidate
+            for candidate in evaluated
+            if candidate["rejection_reason"] is None
+        ]
+
+        eligible_active = [
+            candidate
+            for candidate in eligible
+            if int(candidate["priority"]) > 300
+        ]
+
+        directional_rejections = [
+            candidate
+            for candidate in evaluated
+            if candidate["rejection_reason"]
+            in {
+                "additional_battery_charging_block",
+                "additional_battery_discharging_block",
+            }
+        ]
+
+        # A directional blocker becomes terminal safe idle only when it has
+        # actually rejected an active candidate and no valid active strategy in
+        # the other direction remains. This prevents blanket idle behavior.
+        if directional_rejections and not eligible_active:
+            blocker_reason = str(
+                directional_rejections[0]["rejection_reason"]
+            )
+            blocker_result = self._idle_result(
+                ctx,
+                reason=blocker_reason,
+            )
+            blocker_strategy = self._strategy_for_candidate(
+                blocker_result
+            )
+            selected = {
+                "index": len(self._rules) + 1,
+                "rule": "DirectionalBlocker",
+                "result": blocker_result,
+                "strategy": blocker_strategy,
+                "state": str(
+                    getattr(
+                        blocker_strategy.state,
+                        "value",
+                        blocker_strategy.state,
+                    )
+                ),
+                "reason": blocker_reason,
+                "priority": int(blocker_strategy.priority),
+                "requested_mode": str(
+                    blocker_strategy.requested_mode or "idle"
+                ),
+                "rejection_reason": None,
+            }
+            eligible.append(selected)
+            evaluated.append(selected)
+        elif eligible:
+            # max() is stable for equal keys, so the earlier rule remains the
+            # deterministic tie-breaker without overriding higher priorities.
+            selected = max(
+                eligible,
+                key=lambda candidate: int(candidate["priority"]),
+            )
+        else:
+            fallback_result = self._idle_result(
+                ctx,
+                reason="idle",
+            )
+            fallback_strategy = self._strategy_for_candidate(
+                fallback_result
+            )
+            selected = {
+                "index": len(self._rules) + 2,
+                "rule": "SafeIdleFallback",
+                "result": fallback_result,
+                "strategy": fallback_strategy,
+                "state": str(
+                    getattr(
+                        fallback_strategy.state,
+                        "value",
+                        fallback_strategy.state,
+                    )
+                ),
+                "reason": "idle",
+                "priority": int(fallback_strategy.priority),
+                "requested_mode": "idle",
+                "rejection_reason": None,
+            }
+            eligible.append(selected)
+            evaluated.append(selected)
+
+        candidate_diagnostics: list[dict[str, Any]] = []
+
+        for candidate in evaluated:
+            if candidate is selected:
+                status = "selected"
+                selection_reason = "highest_priority"
+            elif candidate["rejection_reason"] is not None:
+                status = "rejected"
+                selection_reason = str(
+                    candidate["rejection_reason"]
+                )
+            else:
+                status = "not_selected"
+                selection_reason = (
+                    "lower_priority"
+                    if int(candidate["priority"])
+                    < int(selected["priority"])
+                    else "rule_order_tiebreak"
+                )
+
+            candidate_diagnostics.append(
+                {
+                    "rule": str(candidate["rule"]),
+                    "state": str(candidate["state"]),
+                    "reason": str(candidate["reason"]),
+                    "priority": int(candidate["priority"]),
+                    "requested_mode": str(
+                        candidate["requested_mode"]
+                    ),
+                    "status": status,
+                    "selection_reason": selection_reason,
+                }
+            )
+
+        self._last_strategy_selection = {
+            "candidate_count": len(evaluated),
+            "eligible_candidate_count": len(eligible),
+            "selected_rule": str(selected["rule"]),
+            "selected_reason": str(selected["reason"]),
+            "selected_state": str(selected["state"]),
+            "selected_priority": int(selected["priority"]),
+            "candidates": candidate_diagnostics,
+        }
+
+        return selected["result"]
