@@ -91,7 +91,9 @@
           "EXPORT_GUARD_W": "Export-Schutz",
           "KEEPALIVE_MIN_DEFICIT_W": "Keepalive Mindestdefizit",
           "KEEPALIVE_MIN_OUTPUT_W": "Keepalive Mindestleistung",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Entlade-Wiederfreigabe oberhalb SoC-Minimum"
+          "SOC_DISCHARGE_RESUME_MARGIN": "Entlade-Wiederfreigabe oberhalb SoC-Minimum",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "PV-Durchfluss Mindest-PV",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "PV-Durchfluss Mindest-Hauslast"
         },
         "data_description": {
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
@@ -99,7 +101,9 @@
           "EXPORT_GUARD_W": "Zusätzliche Schutzreserve gegen ungewollte Einspeisung. Höhere Werte machen die Regelung vorsichtiger.",
           "KEEPALIVE_MIN_DEFICIT_W": "Mindestdefizit, ab dem die Entladung aktiv gehalten wird. Hilft gegen Flattern bei sehr kleinen Lasten.",
           "KEEPALIVE_MIN_OUTPUT_W": "Mindest-Entladeleistung zum stabilen Aktivhalten der Entladung. Verhindert unnötiges Ein- und Ausschalten.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Zusätzlicher SoC-Abstand oberhalb des eingestellten Mindest-SoC, der erreicht werden muss, bevor die Entladung nach einer SoC-Sperre wieder freigegeben wird. Verhindert Flattern zwischen Laden und Entladen bei knappem Akkustand, besonders morgens bei schwankender PV-Leistung."
+          "SOC_DISCHARGE_RESUME_MARGIN": "Zusätzlicher SoC-Abstand oberhalb des eingestellten Mindest-SoC, der erreicht werden muss, bevor die Entladung nach einer SoC-Sperre wieder freigegeben wird. Verhindert Flattern zwischen Laden und Entladen bei knappem Akkustand, besonders morgens bei schwankender PV-Leistung.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Gemessene Mindest-PV-Leistung für den normalen PV-Durchfluss. Die Voll-Akku-Wiederanlaufhilfe arbeitet unabhängig von diesem Messwert.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Mindest-Hauslast für den normalen PV-Durchfluss. Niedrigere Werte eignen sich für Haushalte mit kleiner Grundlast."
         }
       },
       "charge": {
