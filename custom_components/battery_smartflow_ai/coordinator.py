@@ -921,8 +921,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if float(additional_battery_discharge_w or 0.0) > 50.0:
             return "additional_battery_discharging_blocks_charge"
 
-        if bool(offgrid_load_active):
-            return "offgrid_load_blocks_ac_charge"
+        # V4.3.0-dev8:
+        # A continuously used island socket is an independent device path.
+        # Its load must neither abort nor pause a valid AC charge binding.
 
         if self._strategic_ac_charge_price_conflict(
             reason=str(commit.source_reason or ""),
@@ -2797,6 +2798,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         profile: dict[str, Any],
         soc: float,
         soc_min: float,
+        soc_max: float,
         pv_w: float,
         house_load_w: float,
         grid_import_w: float,
@@ -2807,6 +2809,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cell_voltage_discharge_blocked: bool,
         cell_voltage_emergency_active: bool,
         additional_battery_charge_w: float,
+        pv_charge_latched: bool,
     ) -> tuple[bool, float, str]:
         enabled = bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False))
 
@@ -2831,6 +2834,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         stop_reason = "none"
         target_w = 0.0
+        forced = False
+        forced_prev = bool(
+            self._persist.get(
+                "pv_houseload_passthrough_forced",
+                False,
+            )
+        )
 
         protection_active = bool(
             discharge_blocked_by_soc_min
@@ -2863,7 +2873,69 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             house_val = max(0.0, float(house_load_w or 0.0))
             export_val = max(0.0, float(grid_export_w or 0.0))
             import_val = max(0.0, float(grid_import_w or 0.0))
-            pv_charge_latched = bool(self._persist.get("sf800_pv_charge_latched", False))
+            min_output_w = max(
+                60.0,
+                float(
+                    profile.get(
+                        "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W",
+                        80.0,
+                    )
+                    or 80.0
+                ),
+            )
+
+            daylight_available = bool(
+                pv_val >= max(20.0, min_pv_w * 0.25)
+            )
+            sun_state = self.hass.states.get("sun.sun")
+            if sun_state is not None:
+                daylight_available = bool(
+                    str(sun_state.state or "") == "above_horizon"
+                )
+                if not daylight_available:
+                    try:
+                        daylight_available = bool(
+                            float(
+                                sun_state.attributes.get(
+                                    "elevation",
+                                    -90.0,
+                                )
+                            )
+                            > 0.0
+                        )
+                    except (TypeError, ValueError):
+                        daylight_available = False
+
+            mppt_clips_without_output = bool(
+                profile.get(
+                    "MPPT_CLIPS_WITHOUT_OUTPUT",
+                    False,
+                )
+            )
+            full_soc_threshold = max(
+                float(soc_min),
+                float(soc_max) - 1.0,
+            )
+            full_soc_release_threshold = max(
+                float(soc_min),
+                float(soc_max) - 2.0,
+            )
+            battery_near_full = bool(
+                float(soc) >= full_soc_release_threshold
+            )
+            forced = bool(
+                mppt_clips_without_output
+                and daylight_available
+                and float(max_output_w or 0.0) >= 60.0
+                and house_val >= 60.0
+                and (
+                    float(soc) >= full_soc_threshold
+                    or (
+                        forced_prev
+                        and float(soc) >= full_soc_release_threshold
+                    )
+                )
+            )
 
             raw_target_w = min(
                 pv_val,
@@ -2898,7 +2970,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except Exception:
                     hold_active = False
 
-            if active:
+            if forced:
+                if not active:
+                    self._persist[
+                        "pv_houseload_passthrough_started_ts"
+                    ] = dt_util.as_utc(now).isoformat()
+
+                active = True
+                export_counter = 0
+                target_w = min(
+                    house_val,
+                    float(max_output_w or 0.0),
+                    max(
+                        pv_val + 20.0,
+                        min_output_w,
+                    ),
+                )
+                stop_reason = "full_battery_pv_passthrough"
+
+            elif mppt_clips_without_output and not battery_near_full:
+                active = False
+                export_counter = 0
+                target_w = 0.0
+                stop_reason = "battery_not_near_full"
+
+            elif active:
                 if not enough_pv:
                     if hold_active:
                         stop_reason = "hold_pv_low"
@@ -2935,7 +3031,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 export_counter = 0
 
                 if (
-                    not pv_charge_latched
+                    not bool(pv_charge_latched)
                     and enough_pv
                     and enough_house_load
                     and useful_target
@@ -2973,6 +3069,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
         self._persist["pv_houseload_passthrough_active"] = bool(active)
+        self._persist["pv_houseload_passthrough_forced"] = bool(forced)
         self._persist["pv_houseload_passthrough_export_counter"] = int(export_counter)
         self._persist["pv_houseload_passthrough_target_w"] = float(target_w or 0.0)
         self._persist["pv_houseload_passthrough_stop_reason"] = str(stop_reason)
@@ -4133,14 +4230,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             manual_mode_active = ai_mode == AI_MODE_MANUAL
 
-            if manual_mode_active or use_regulation_v42_command:
-                sf800_stop_reason = (
-                    "manual_mode"
-                    if manual_mode_active
-                    else "improved_regulation_active"
-                )
+            if manual_mode_active:
+                sf800_stop_reason = "manual_mode"
 
                 self._persist["pv_houseload_passthrough_active"] = False
+                self._persist["pv_houseload_passthrough_forced"] = False
                 self._persist["pv_houseload_passthrough_started_ts"] = None
                 self._persist["pv_houseload_passthrough_export_counter"] = 0
                 self._persist["pv_houseload_passthrough_target_w"] = 0.0
@@ -4150,11 +4244,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["sf800_pv_charge_started_ts"] = None
                 self._persist["sf800_pv_charge_stop_counter"] = 0
 
-                self._persist["sf800_mode_arbiter_state"] = (
-                    "disabled"
-                    if manual_mode_active
-                    else "improved_regulation_active"
-                )
+                self._persist["sf800_mode_arbiter_state"] = "disabled"
                 self._persist["sf800_mode_arbiter_reason"] = sf800_stop_reason
 
                 pv_houseload_passthrough_active = False
@@ -4167,6 +4257,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         profile=profile,
                         soc=float(soc),
                         soc_min=float(soc_min),
+                        soc_max=float(soc_max),
                         pv_w=float(pv_w),
                         house_load_w=float(house_load),
                         grid_import_w=float(grid_import or 0.0),
@@ -4177,6 +4268,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
                         cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
                         additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
+                        pv_charge_latched=bool(pv_charge_latched),
                     )
                 )
 
@@ -4413,86 +4505,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     
             soc_limit = self._get_soc_limit()
 
-            # Beta10/Beta11 Off-Grid correction:
-            # When the island socket has an active load, automatic/economic
-            # grid charging must not continue. Otherwise Zendure can use AC for
-            # the Off-Grid load and even charge the battery at the same time.
-            #
-            # Only true protection/manual charge reasons may override Off-Grid
-            # load support. Learned planning, price planning, valley charging
-            # and very-cheap charging are deliberately NOT priority here.
-            offgrid_priority_charge_reasons = {
-                "emergency_latched_charge",
-                "cell_voltage_emergency_charge",
-                "manual_charge",
-            }
+            # V4.3.0-dev8:
+            # Off-Grid load remains visible in diagnostics but no longer
+            # rewrites the selected INPUT/OUTPUT strategy. The device itself
+            # supplies the island socket independently from the AC house path.
 
-            offgrid_priority_charge_active = bool(
-                decision.ac_mode == "input"
-                and float(decision.charge_w or 0.0) > 0.0
-                and str(decision.reason or "") in offgrid_priority_charge_reasons
-            )
-
-            offgrid_support_allowed = bool(
-                bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
-                and bool(offgrid_load_active)
-                and not offgrid_priority_charge_active
-                and ai_mode != AI_MODE_MANUAL
-                and not bool(discharge_blocked_by_soc_min)
-                and not bool(cell_voltage_discharge_blocked)
-                and not bool(cell_voltage_emergency_active)
-                and soc_limit != 2
-                and float(soc) > float(soc_min)
-            )
-
-            if offgrid_support_allowed:
-                offgrid_max_internal_supply_w = float(
-                    profile.get("OFFGRID_MAX_INTERNAL_SUPPLY_W", max_discharge)
-                    or max_discharge
-                )
-
-                offgrid_target_w = min(
-                    float(offgrid_power_w or 0.0),
-                    float(max_discharge),
-                    float(offgrid_max_internal_supply_w),
-                )
-
-                offgrid_min_output_w = max(
-                    float(profile.get("KEEPALIVE_MIN_OUTPUT_W", 60.0) or 60.0),
-                    float(profile.get("OFFGRID_LOAD_ACTIVE_W", 50.0) or 50.0),
-                )
-
-                if offgrid_target_w >= float(
-                    profile.get("OFFGRID_LOAD_ACTIVE_W", 50.0) or 50.0
-                ):
-                    decision.charge_w = 0.0
-                    decision.discharge_w = max(
-                        float(offgrid_target_w),
-                        float(offgrid_min_output_w),
-                    )
-
-                    # Use a real discharge action so the strategy adapter and
-                    # V4.2 regulation chain clearly request OUTPUT. The reason
-                    # still marks this as technical Off-Grid support, not as
-                    # economic/price discharge.
-                    decision.action = "discharge"
-                    decision.ac_mode = "output"
-                    decision.reason = "offgrid_load_support"
-
-            elif (
-                not use_regulation_v42_command
-                and bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
-                and bool(offgrid_load_active)
-                and decision.ac_mode == "input"
-                and float(decision.charge_w or 0.0) > 0.0
-                and str(decision.reason or "") not in offgrid_priority_charge_reasons
-            ):
-                decision.charge_w = 0.0
-                decision.discharge_w = 0.0
-                decision.action = "idle"
-                decision.ac_mode = "output"
-                decision.reason = "offgrid_load_active_blocks_ac_charge"
-            
             if soc_limit == 1 and decision.ac_mode == "input" and float(decision.charge_w or 0.0) > 0:
                 decision.charge_w = 0.0
                 decision.action = "idle"
@@ -6549,6 +6566,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "pv_houseload_passthrough_applied": (
                     decision.reason == "pv_house_load_passthrough"
                 ),
+                "pv_houseload_passthrough_forced": bool(
+                    self._persist.get(
+                        "pv_houseload_passthrough_forced",
+                        False,
+                    )
+                ),
+                "pv_houseload_passthrough_mppt_clip_capable": bool(
+                    profile.get(
+                        "MPPT_CLIPS_WITHOUT_OUTPUT",
+                        False,
+                    )
+                ),
                 "pv_houseload_passthrough_target_w": float(
                     pv_houseload_passthrough_target_w
                 ),
@@ -6609,30 +6638,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "offgrid_source_active": bool(offgrid_source_active),
                 "offgrid_load_active_w": float(offgrid_load_active_w),
                 "offgrid_rule_reason": (
-                    "offgrid_load_support"
-                    if decision.reason == "offgrid_load_support"
-                    else "offgrid_load_active_blocks_ac_charge"
+                    "offgrid_load_observed"
                     if bool(offgrid_load_active)
-                    and bool(profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False))
                     else "none"
                 ),
                 "offgrid_max_internal_supply_w": float(
                     profile.get("OFFGRID_MAX_INTERNAL_SUPPLY_W", 0.0) or 0.0
                 ),
-                "offgrid_load_blocks_ac_charge": bool(
-                    profile.get("OFFGRID_LOAD_BLOCKS_AC_CHARGE", False)
-                ),
+                "offgrid_load_blocks_ac_charge": False,
+                "offgrid_strategy_policy": "independent_observation",
                 "offgrid_input_affects_energy_balance": bool(
                     profile.get("OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE", False)
                 ),
-                "offgrid_support_active": bool(
-                    decision.reason == "offgrid_load_support"
-                ),
-                "offgrid_support_target_w": (
-                    float(decision.discharge_w or 0.0)
-                    if decision.reason == "offgrid_load_support"
-                    else 0.0
-                ),
+                "offgrid_support_active": False,
+                "offgrid_support_target_w": 0.0,
 
                 "pv_charge_start_export_w": float(pv_charge_start_export_w),
                 "pv_attributable_export_w": round(
