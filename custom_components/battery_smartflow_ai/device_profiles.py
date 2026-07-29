@@ -57,6 +57,22 @@ PROFILE_OVERRIDE_FIELDS = {
         "unit": "%",
         "icon": "mdi:battery-sync",
     },
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": {
+        "label": "PV-Durchfluss Mindest-PV",
+        "min": 20.0,
+        "max": 300.0,
+        "step": 5.0,
+        "unit": "W",
+        "icon": "mdi:solar-power-variant-outline",
+    },
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": {
+        "label": "PV-Durchfluss Mindest-Hauslast",
+        "min": 20.0,
+        "max": 300.0,
+        "step": 5.0,
+        "unit": "W",
+        "icon": "mdi:home-lightning-bolt-outline",
+    },
     "CHARGE_DEADBAND_W": {
         "label": "Laden Deadband",
         "min": 0.0,
@@ -198,6 +214,7 @@ V42_LATCH_HOLD_DEFAULTS = {
 
 V42_DEFAULT_CAPABILITIES = {
     "SUPPORTS_PASSTHROUGH": False,
+    "MPPT_CLIPS_WITHOUT_OUTPUT": False,
     "OUTPUT_ZERO_IS_NEUTRAL": True,
     "INPUT_KEEPALIVE_SAFE": True,
     "REQUIRES_STABLE_EXPORT_FOR_INPUT": False,
@@ -207,6 +224,7 @@ V42_DEFAULT_CAPABILITIES = {
 
 V42_SF800PRO_CAPABILITIES = {
     "SUPPORTS_PASSTHROUGH": True,
+    "MPPT_CLIPS_WITHOUT_OUTPUT": True,
     "OUTPUT_ZERO_IS_NEUTRAL": True,
     "INPUT_KEEPALIVE_SAFE": False,
     "REQUIRES_STABLE_EXPORT_FOR_INPUT": True,
@@ -466,7 +484,7 @@ SF2400AC_PROFILE = {
     "SUPPORTS_OFFGRID_INPUT": True,
     "OFFGRID_MAX_INTERNAL_SUPPLY_W": 2400.0,
     "OFFGRID_LOAD_ACTIVE_W": 50.0,
-    "OFFGRID_LOAD_BLOCKS_AC_CHARGE": True,
+    "OFFGRID_LOAD_BLOCKS_AC_CHARGE": False,
     "OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE": False,
 }
 
@@ -521,7 +539,7 @@ SF2400ACPLUS_PROFILE = {
     "SUPPORTS_OFFGRID_INPUT": True,
     "OFFGRID_MAX_INTERNAL_SUPPLY_W": 2400.0,
     "OFFGRID_LOAD_ACTIVE_W": 50.0,
-    "OFFGRID_LOAD_BLOCKS_AC_CHARGE": True,
+    "OFFGRID_LOAD_BLOCKS_AC_CHARGE": False,
     "OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE": False,
 }
 
@@ -576,7 +594,7 @@ SF2400PRO_PROFILE = {
     "SUPPORTS_OFFGRID_INPUT": True,
     "OFFGRID_MAX_INTERNAL_SUPPLY_W": 2400.0,
     "OFFGRID_LOAD_ACTIVE_W": 50.0,
-    "OFFGRID_LOAD_BLOCKS_AC_CHARGE": True,
+    "OFFGRID_LOAD_BLOCKS_AC_CHARGE": False,
     "OFFGRID_INPUT_AFFECTS_ENERGY_BALANCE": False,
 }
 
