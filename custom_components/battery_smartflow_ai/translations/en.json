@@ -164,7 +164,9 @@
           "EXPORT_GUARD_W": "Export guard",
           "KEEPALIVE_MIN_DEFICIT_W": "Keepalive minimum deficit",
           "KEEPALIVE_MIN_OUTPUT_W": "Keepalive minimum output",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Discharge re-enable margin above SoC minimum"
+          "SOC_DISCHARGE_RESUME_MARGIN": "Discharge re-enable margin above SoC minimum",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "PV passthrough minimum PV",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "PV passthrough minimum house load"
         },
         "data_description": {
           "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative summer/winter thresholds and other PV-related logic.",
@@ -172,7 +174,9 @@
           "EXPORT_GUARD_W": "Additional safety reserve against unwanted export. Higher values make control more cautious.",
           "KEEPALIVE_MIN_DEFICIT_W": "Minimum deficit from which discharging is kept active. Helps prevent flapping at very small loads.",
           "KEEPALIVE_MIN_OUTPUT_W": "Minimum discharge power to keep discharging stable. Prevents unnecessary on/off switching.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Additional SoC distance above the configured minimum SoC that must be reached before discharging is re-enabled after an SoC block. Prevents flapping between charging and discharging near the battery minimum, especially in the morning with fluctuating PV power."
+          "SOC_DISCHARGE_RESUME_MARGIN": "Additional SoC distance above the configured minimum SoC that must be reached before discharging is re-enabled after an SoC block. Prevents flapping between charging and discharging near the battery minimum, especially in the morning with fluctuating PV power.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Measured minimum PV power for normal PV passthrough. Full-battery MPPT restart works independently of this measurement.",
+          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Minimum house load for normal PV passthrough. Lower values support homes with a small base load."
         }
       },
       "charge": {
@@ -548,6 +552,7 @@
         "name": "Off-grid control reason",
         "state": {
           "none": "No off-grid blocker",
+          "offgrid_load_observed": "Island socket active – accounted for separately",
           "offgrid_load_active_blocks_ac_charge": "Island socket active – grid charging blocked",
           "offgrid_load_support": "Island socket active – supplied by battery/PV"
         }
