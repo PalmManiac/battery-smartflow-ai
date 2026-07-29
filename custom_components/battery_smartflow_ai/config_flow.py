@@ -738,7 +738,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             merged_options = self._build_merged_options(user_input)
             return self.async_create_entry(title="", data=merged_options)
 
-        options_schema = vol.Schema(
+        general_schema_fields = dict(
             {
                 vol.Optional(CONF_INSTALLED_PV_WP): selector.NumberSelector(
                     selector.NumberSelectorConfig(
@@ -797,6 +797,36 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             }
         )
 
+        if bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False)):
+            general_schema_fields.update(
+                {
+                    vol.Optional(
+                        "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W"
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=20.0,
+                            max=300.0,
+                            step=5.0,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="W",
+                        )
+                    ),
+                    vol.Optional(
+                        "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W"
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=20.0,
+                            max=300.0,
+                            step=5.0,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="W",
+                        )
+                    ),
+                }
+            )
+
+        options_schema = vol.Schema(general_schema_fields)
+
         suggested_values = {
             CONF_INSTALLED_PV_WP: self.config_entry.options.get(
                 CONF_INSTALLED_PV_WP,
@@ -826,6 +856,30 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 profile.get("SOC_DISCHARGE_RESUME_MARGIN", 3.0),
             ),
         }
+
+        if bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False)):
+            suggested_values.update(
+                {
+                    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": (
+                        current_overrides.get(
+                            "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W",
+                            profile.get(
+                                "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W",
+                                120.0,
+                            ),
+                        )
+                    ),
+                    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": (
+                        current_overrides.get(
+                            "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W",
+                            profile.get(
+                                "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W",
+                                120.0,
+                            ),
+                        )
+                    ),
+                }
+            )
 
         return self.async_show_form(
             step_id="general",
