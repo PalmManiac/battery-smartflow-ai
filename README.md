@@ -719,18 +719,16 @@ separat ausgewählt.
 
 ---
 
-## 4️⃣ Expertenmodus und verbesserte Leistungsregelung
-
-<img src="docs/images/conf_06_expert.png" width="600">
+## 4️⃣ Expertenmodus
 
 Im Expertenmenü findest du:
 
 * Lernbasierte Ladefenster-Planung
-* Verbesserte V4.2-Leistungsregelung
 * Zellspannungs-Schutz
 * Erweiterte Diagnosen
 
-Die verbesserte V4.2-Leistungsregelung kann jederzeit aktiviert oder deaktiviert werden.
+Die verbesserte Leistungsregelung ist ab V4.3.0-Dev8.1 für alle Installationen
+verbindlich aktiv und muss nicht mehr gesondert eingeschaltet werden.
 
 ---
 
@@ -783,7 +781,8 @@ Der Profil-Editor erlaubt fortgeschrittenen Nutzern, ausgewählte Parameter dire
 
 # 🔁 Verbesserte V4.2-Leistungsregelung
 
-V4.2 führt eine optionale verbesserte technische Regelkette ein:
+Die verbesserte technische Regelkette ist ab V4.3.0-Dev8.1 der verbindliche
+Befehlsweg:
 
 **Decision Engine → StrategyIntent → ModeArbiter → PowerController → DeviceCommand**
 
@@ -805,8 +804,6 @@ Das verbessert das Verhalten bei:
 * OUTPUT-Überschwingen
 * Regelung nahe 0 W
 * empfindlicheren kleineren Systemen wie 800-W-Klassen
-
-Die verbesserte Regelung ist optional und kann im Expertenmenü aktiviert werden.
 
 ---
 
