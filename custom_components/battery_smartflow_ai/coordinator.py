@@ -64,7 +64,6 @@ from .const import (
     SETTING_PV_CHARGE_START_EXPORT_W,
     SETTING_FORECAST_BASE_LOAD,
     SETTING_LEARNED_PLANNING_ENABLED,
-    SETTING_REGULATION_V42_ENABLED,
     # defaults
     DEFAULT_SOC_MIN,
     DEFAULT_SOC_MAX,
@@ -89,7 +88,6 @@ from .const import (
     DEFAULT_PV_CHARGE_START_EXPORT_W,
     DEFAULT_FORECAST_BASE_LOAD,
     DEFAULT_LEARNED_PLANNING_ENABLED,
-    DEFAULT_REGULATION_V42_ENABLED,
     # modes
     AI_MODE_AUTOMATIC,
     AI_MODE_SUMMER,
@@ -154,11 +152,6 @@ from .command_effectiveness import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
-# V4.2.0 development switch:
-# False = legacy command path is used, V4.2 chain only diagnostic
-# True  = V4.2 regulation command path actively controls mode/input/output
-USE_REGULATION_V42_COMMAND_DEV = False
 
 STORE_VERSION = 1
 PV_SURPLUS_DISPLAY_HOLD_S = 60
@@ -424,9 +417,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "sf800_passthrough_prev_output_w": 0.0,
             "sf800_passthrough_smoothed_target_w": 0.0,
             
-            # V4.2.0 regulation execution switch
-            "use_regulation_v42_command": False,
-
             # V4.2.0 regulation runtime state
             "regulation_last_resolved_mode": "idle",
             "regulation_last_requested_mode": "idle",
@@ -3901,18 +3891,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             )
 
-            regulation_v42_option_enabled = bool(
-                self.entry.options.get(
-                    SETTING_REGULATION_V42_ENABLED,
-                    DEFAULT_REGULATION_V42_ENABLED,
-                )
-            )
-
-            use_regulation_v42_command = bool(
-                USE_REGULATION_V42_COMMAND_DEV
-                or regulation_v42_option_enabled
-                or self._persist.get("use_regulation_v42_command", False)
-            )
+            # V4.3.0-dev8.1:
+            # The improved regulation chain is now the mandatory command path.
+            # Existing stored option values are deliberately ignored and
+            # removed by config-entry migration.
+            use_regulation_v42_command = True
 
             ai_mode = str(self.runtime_mode.get("ai_mode", AI_MODE_AUTOMATIC))
             manual_action = str(self.runtime_mode.get("manual_action", MANUAL_STANDBY))
@@ -6238,11 +6221,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 # V4.2.0 regulation execution switch / comparison
                 "regulation_v42_command_enabled": bool(use_regulation_v42_command),
-                "regulation_v42_command_dev_switch": bool(USE_REGULATION_V42_COMMAND_DEV),
-                "regulation_v42_option_enabled": bool(regulation_v42_option_enabled),
-                "regulation_v42_command_persist_switch": bool(
-                    self._persist.get("use_regulation_v42_command", False)
-                ),
                 "regulation_legacy_set_mode": legacy_ac_mode,
                 "regulation_legacy_set_input_w": int(round(legacy_in_w, 0)),
                 "regulation_legacy_set_output_w": int(round(legacy_out_w, 0)),
