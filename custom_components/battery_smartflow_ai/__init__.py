@@ -40,17 +40,34 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old config entries to new version."""
-    if entry.version == 1:
-        new_data = {**entry.data}
+    new_version = int(entry.version)
+    new_data = dict(entry.data)
+    new_options = dict(entry.options)
 
+    if new_version == 1:
         # Falls pack_capacity_kwh noch nicht existiert → Default setzen
         if "pack_capacity_kwh" not in new_data:
             new_data["pack_capacity_kwh"] = 2.88
+        new_version = 2
 
+    if new_version == 2:
+        # V4.3.0-dev8.1:
+        # The improved power regulation is now the only active command path.
+        # Remove the obsolete user switch, including stored False values from
+        # existing installations.
+        new_options.pop("regulation_v42_enabled", None)
+        new_version = 3
+
+    if (
+        new_version != entry.version
+        or new_data != dict(entry.data)
+        or new_options != dict(entry.options)
+    ):
         hass.config_entries.async_update_entry(
             entry,
             data=new_data,
-            version=2,
+            options=new_options,
+            version=new_version,
         )
 
     return True
