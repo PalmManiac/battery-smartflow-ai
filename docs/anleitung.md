@@ -1876,14 +1876,14 @@ Für empfindliche Systeme sind kleinere Schritte oft besser.
 
 ## 7.5 Expertenmodus
 
-![Expertenmodus](images/conf_06_expert.png)
-
 Im Expertenmodus können erweiterte Funktionen aktiviert werden:
 
 * Expertenmodus selbst
 * lernbasierte Ladefenster-Planung
-* verbesserte V4.2-Leistungsregelung
 * Zellspannungs-Schutz
+
+Die verbesserte Leistungsregelung ist ab V4.3.0-Dev8.1 für alle
+Installationen verbindlich aktiv und keine einstellbare Expertenoption mehr.
 
 ---
 
@@ -1898,22 +1898,6 @@ Aktiviert den erweiterten Bereich für zusätzliche Schutz- und Diagnosefunktion
 Wenn aktiviert, nutzt Battery SmartFlow AI die Lernplanung automatisch, sobald genug Daten vorhanden sind.
 
 Bis dahin bleibt klassische Planung aktiv.
-
----
-
-### Verbesserte Leistungsregelung verwenden
-
-Aktiviert den neuen V4.2-Regelkreis.
-
-Diese Funktion kann bei Problemen jederzeit wieder deaktiviert werden.
-
-Empfohlen für:
-
-* stabilere PV-Ladung
-* weniger INPUT-/OUTPUT-Flattern
-* bessere Reaktion auf Lastwechsel
-* stabilere SF800Pro-/SF800Pro2-ähnliche Systeme
-* Off-Grid-Unterstützung
 
 ---
 
@@ -2397,7 +2381,6 @@ Empfohlen:
 * aktueller Strompreis
 * PV-Prognose optional
 * Lernplanung aktiviert
-* verbesserte V4.2-Leistungsregelung aktiviert
 * passendes Geräteprofil
 
 ---
@@ -2612,7 +2595,7 @@ Zusätzlich hilfreich:
 * verwendetes Geräteprofil
 * Betriebsmodus
 * Version von Battery SmartFlow AI
-* ob verbesserte Leistungsregelung aktiviert ist
+* Diagnosewert `regulation_v42_command_enabled`
 * ob Off-Grid konfiguriert ist
 * ob Zusatzakku-Sensoren konfiguriert sind
 
