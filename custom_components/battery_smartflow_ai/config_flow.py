@@ -52,11 +52,9 @@ from .const import (
     SETTING_CELL_VOLTAGE_CUTOFF,
     SETTING_CELL_VOLTAGE_RESUME,
     SETTING_LEARNED_PLANNING_ENABLED,
-    SETTING_REGULATION_V42_ENABLED,
     DEFAULT_CELL_VOLTAGE_WARNING,
     DEFAULT_CELL_VOLTAGE_CUTOFF,
     DEFAULT_CELL_VOLTAGE_RESUME,
-    DEFAULT_REGULATION_V42_ENABLED,
     DEFAULT_LEARNED_PLANNING_ENABLED,
 )
 
@@ -145,7 +143,7 @@ def _validate_feed_in_tariff(value: Any) -> float:
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Battery SmartFlow AI."""
 
-    VERSION = 2
+    VERSION = 3
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
@@ -695,11 +693,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 user_input[SETTING_LEARNED_PLANNING_ENABLED]
             )
             
-        if SETTING_REGULATION_V42_ENABLED in user_input:
-            merged_options[SETTING_REGULATION_V42_ENABLED] = bool(
-                user_input[SETTING_REGULATION_V42_ENABLED]
-            )
-
         for key in LOWEST_CELL_VOLTAGE_CONFIG_KEYS:
             if key in user_input:
                 if user_input.get(key):
@@ -1078,7 +1071,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Optional(CONF_EXPERT_MODE_ENABLED): selector.BooleanSelector(),
                 vol.Optional(SETTING_LEARNED_PLANNING_ENABLED): selector.BooleanSelector(),
-                vol.Optional(SETTING_REGULATION_V42_ENABLED): selector.BooleanSelector(),
             }
         )
 
@@ -1090,10 +1082,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             SETTING_LEARNED_PLANNING_ENABLED: preview.get(
                 SETTING_LEARNED_PLANNING_ENABLED,
                 DEFAULT_LEARNED_PLANNING_ENABLED,
-            ),
-            SETTING_REGULATION_V42_ENABLED: preview.get(
-                SETTING_REGULATION_V42_ENABLED,
-                DEFAULT_REGULATION_V42_ENABLED,
             ),
         }
 
