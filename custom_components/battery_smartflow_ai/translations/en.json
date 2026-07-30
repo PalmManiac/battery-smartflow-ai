@@ -217,16 +217,14 @@
       },
       "expert": {
         "title": "Edit control profile – Expert mode",
-        "description": "Advanced protection, diagnostic, planning and regulation functions. Learned charge-window planning is used automatically once enough learning data is available. It can be disabled here if needed. The improved power regulation can be enabled here or disabled again if problems occur. Cell-voltage protection requires expert mode to be enabled first.",
+        "description": "Advanced protection, diagnostic and planning functions. Learned charge-window planning is used automatically once enough learning data is available. It can be disabled here if needed. Cell-voltage protection requires expert mode to be enabled first.",
         "data": {
           "expert_mode_enabled": "Enable expert mode",
-          "learned_planning_enabled": "Use learned charge-window planning",
-          "regulation_v42_enabled": "Use improved power regulation"
+          "learned_planning_enabled": "Use learned charge-window planning"
         },
         "data_description": {
           "expert_mode_enabled": "Enables the advanced expert area for additional protection and diagnostic functions.",
-          "learned_planning_enabled": "When enabled, Battery SmartFlow AI automatically uses learned charge-window planning once enough learning data is available. Until then, classic planning remains active. When disabled, classic planning is always used.",
-          "regulation_v42_enabled": "Enables the new technical power regulation with grid history, more stable mode approval and smoothed power control. Can be disabled again at any time if problems occur."
+          "learned_planning_enabled": "When enabled, Battery SmartFlow AI automatically uses learned charge-window planning once enough learning data is available. Until then, classic planning remains active. When disabled, classic planning is always used."
         }
       },
       "expert_cell_voltage": {
