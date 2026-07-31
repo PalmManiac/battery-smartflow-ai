@@ -285,13 +285,12 @@ class AutomaticStrategy:
         This is a strategic context permission, not the final discharge
         decision. DecisionEngine still checks the real price threshold,
         market window, SoC and all protection conditions.
+
+        V4.3.0-dev8.3:
+        Reserve weighting remains available for planning and diagnostics, but
+        it must not create an additional hidden discharge floor above the
+        configured minimum SoC.
         """
-
-        if reserve_reason == "reserve_critical":
-            return False, "reserve_critical_blocks_discharge"
-
-        if float(reserve_weight) >= 0.90:
-            return False, "reserve_weight_blocks_discharge"
 
         if (
             pv_reason == "pv_covers_house_load"
