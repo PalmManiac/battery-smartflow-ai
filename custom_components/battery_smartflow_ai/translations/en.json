@@ -657,6 +657,7 @@
           "learned_charge_window_not_ready": "Learned charge planning not ready yet",
           "learned_charge_window_wait": "Learned charge planning waits for optimal charge window",
           "learned_charge_window_active": "Learned charge window active",
+          "charge_commit_active": "AC charge binding active",
           "learned_charge_window_latest_start_reached": "Learned planning: latest start time reached",
           "learned_charge_window_no_charge_needed": "Learned planning: no recharge required",
           "valley_opportunity_charge": "Price valley used because real PV is barely available",
