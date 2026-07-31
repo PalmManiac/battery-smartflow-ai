@@ -657,6 +657,7 @@
           "learned_charge_window_not_ready": "Planification de charge apprise pas encore prête",
           "learned_charge_window_wait": "La planification apprise attend la fenêtre de charge optimale",
           "learned_charge_window_active": "Fenêtre de charge apprise active",
+          "charge_commit_active": "Engagement de charge CA actif",
           "learned_charge_window_latest_start_reached": "Planification apprise : dernier démarrage atteint",
           "learned_charge_window_no_charge_needed": "Planification apprise : aucune recharge nécessaire",
           "valley_opportunity_charge": "Creux de prix utilisé car le PV réel est à peine disponible",
