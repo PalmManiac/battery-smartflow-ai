@@ -1228,8 +1228,15 @@ class DecisionEngine:
         forecast, deadline, energy-need, SoC or protection checks.
         """
 
-        if ctx.ai_mode != "automatic":
+        # V4.3.0-dev8.2:
+        # Strategic grid-charge planning belongs exclusively to Automatic.
+        # Keep the legacy winter key compatible until it is removed, but never
+        # let learned or classic planning start INPUT in Autarky or Manual.
+        if ctx.ai_mode == "winter":
             return True
+
+        if ctx.ai_mode != "automatic":
+            return False
 
         return bool(
             ctx.automatic_strategy_active
