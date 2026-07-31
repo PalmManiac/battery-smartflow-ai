@@ -657,6 +657,7 @@
           "learned_charge_window_not_ready": "Lerende laadplanning nog niet gereed",
           "learned_charge_window_wait": "Lerende laadplanning wacht op optimaal laadvenster",
           "learned_charge_window_active": "Lerend laadvenster actief",
+          "charge_commit_active": "AC-laadbinding actief",
           "learned_charge_window_latest_start_reached": "Lerende planning: laatste startmoment bereikt",
           "learned_charge_window_no_charge_needed": "Lerende planning: geen bijlading nodig",
           "valley_opportunity_charge": "Prijsdal gebruikt omdat er praktisch geen echte PV beschikbaar is",
