@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.3.0-dev8.1"
+INTEGRATION_VERSION = "4.3.0-dev8.2"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -435,6 +435,7 @@ CHARGE_COMMIT_ABORT_REASON_ENUMS = [
     "sensor_invalid",
     "additional_battery_discharging_blocks_charge",
     "offgrid_load_blocks_ac_charge",
+    "autarky_mode_selected",
     "manual_mode_selected",
     "user_disabled_automatic",
     "device_error",
