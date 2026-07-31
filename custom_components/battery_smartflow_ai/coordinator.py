@@ -902,6 +902,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not commit.active:
             return "none"
 
+        if ai_mode == AI_MODE_SUMMER:
+            return "autarky_mode_selected"
+
         if ai_mode == AI_MODE_MANUAL:
             return "manual_mode_selected"
 
