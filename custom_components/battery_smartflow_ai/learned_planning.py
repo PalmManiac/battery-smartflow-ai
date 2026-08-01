@@ -94,6 +94,8 @@ class LearningChargePowerSample:
 
     ts: datetime
     power_w: float
+    commanded_power_w: float | None = None
+    charge_cap_w: float | None = None
     
 
 @dataclass
@@ -147,6 +149,7 @@ class LearnedChargePlan:
     max_chargeable_energy_kwh: float = 0.0
 
     effective_charge_power_w: float = 0.0
+    requested_charge_power_w: float = 0.0
     effective_window_slots: int = 0
     effective_window_minutes: int = 0
 
@@ -616,7 +619,12 @@ def learned_typical_charge_power_w(
 ) -> float | None:
     """Estimate a realistic learned AC charge power from recent charge samples.
 
-    Uses the median to avoid spikes and short unstable phases.
+    Uses the sustained upper range to estimate the reachable power without
+    letting one isolated measurement spike become authoritative.
+
+    Only technically unthrottled phases are eligible. Older versions learned
+    every measured charge value, including a value that BSFAI had limited
+    itself. That made the learned value a self-reinforcing power cap.
     """
 
     if not samples:
@@ -634,9 +642,17 @@ def learned_typical_charge_power_w(
             continue
 
         power = float(sample.power_w or 0.0)
+        commanded_power = float(sample.commanded_power_w or 0.0)
+        charge_cap = float(sample.charge_cap_w or 0.0)
 
         # Ignore tiny keepalive / soft-start / noise values.
         if power < MIN_LEARNED_CHARGE_POWER_SAMPLE_W:
+            continue
+
+        # A measured value only describes the technically reachable charge
+        # power when BSFAI requested practically the full current limit.
+        # Legacy samples do not carry this proof and are intentionally ignored.
+        if charge_cap <= 0.0 or commanded_power < charge_cap * 0.90:
             continue
 
         values.append(power)
@@ -644,7 +660,10 @@ def learned_typical_charge_power_w(
     if len(values) < MIN_LEARNED_CHARGE_POWER_SAMPLES:
         return None
 
-    return round(float(statistics.median(values)), 1)
+    values.sort()
+    upper_sample_count = max(2, int(math.ceil(len(values) * 0.25)))
+    upper_values = values[-upper_sample_count:]
+    return round(float(statistics.median(upper_values)), 1)
     
 
 def effective_charge_power_w(
@@ -652,6 +671,12 @@ def effective_charge_power_w(
     learned_typical_charge_power_w: float | None,
     current_effective_charge_cap_w: float,
 ) -> float:
+    """Return the conservative charge-power estimate used for scheduling.
+
+    This value may use learned measurements, but it must never become the
+    device command. The actual request is calculated separately from the
+    remaining energy and the selected price window.
+    """
     candidates = [
         max(0.0, float(profile_charge_limit_w or 0.0)),
         max(0.0, float(current_effective_charge_cap_w or 0.0)),
@@ -664,6 +689,81 @@ def effective_charge_power_w(
 
     power = min(v for v in candidates if v > 0) if any(v > 0 for v in candidates) else 0.0
     return max(0.0, float(power))
+
+
+def available_charge_power_w(
+    profile_charge_limit_w: float,
+    current_effective_charge_cap_w: float,
+) -> float:
+    """Return the physical/configured ceiling for an AC charge request."""
+
+    candidates = [
+        max(0.0, float(profile_charge_limit_w or 0.0)),
+        max(0.0, float(current_effective_charge_cap_w or 0.0)),
+    ]
+    positive = [value for value in candidates if value > 0.0]
+    return min(positive) if positive else 0.0
+
+
+def required_window_slots(
+    required_charge_energy_kwh: float,
+    available_charge_power_w_value: float,
+) -> int:
+    """Return the core slot count needed at the available charge ceiling."""
+
+    if required_charge_energy_kwh <= 0.0:
+        return 0
+
+    available_kw = float(available_charge_power_w_value or 0.0) / 1000.0
+    if available_kw <= 0.0:
+        return 0
+
+    minutes = (float(required_charge_energy_kwh) / available_kw) * 60.0
+    return max(1, int(math.ceil(minutes / SLOT_MINUTES)))
+
+
+def requested_charge_power_w(
+    required_charge_energy_kwh: float,
+    now: datetime,
+    window_start: datetime | None,
+    window_end: datetime | None,
+    available_charge_power_w_value: float,
+) -> float:
+    """Calculate the request needed to finish inside the remaining core window."""
+
+    available_power = max(
+        0.0,
+        float(available_charge_power_w_value or 0.0),
+    )
+    required_kwh = max(0.0, float(required_charge_energy_kwh or 0.0))
+
+    if available_power <= 0.0 or required_kwh <= 0.0:
+        return 0.0
+
+    if window_end is None:
+        return available_power
+
+    now_local = _as_local(now)
+    end_local = _as_local(window_end)
+
+    if window_start is not None and now_local < _as_local(window_start):
+        effective_start = _as_local(window_start)
+    else:
+        effective_start = now_local
+
+    remaining_hours = max(
+        0.0,
+        (end_local - effective_start).total_seconds() / 3600.0,
+    )
+
+    if remaining_hours <= 0.0:
+        return available_power
+
+    required_power = (required_kwh / remaining_hours) * 1000.0
+    return min(
+        available_power,
+        max(MIN_EFFECTIVE_CHARGE_POWER_W, required_power),
+    )
 
 
 def compute_window_slots(
@@ -906,6 +1006,10 @@ def build_learned_charge_plan(
         learned_typical_charge_power_w=learned_typical_charge_power_w,
         current_effective_charge_cap_w=current_effective_charge_cap_w,
     )
+    available_power_w = available_charge_power_w(
+        profile_charge_limit_w=profile_charge_limit_w,
+        current_effective_charge_cap_w=current_effective_charge_cap_w,
+    )
 
     if required_kwh <= 0.0:
         return LearnedChargePlan(
@@ -922,6 +1026,7 @@ def build_learned_charge_plan(
             required_charge_energy_kwh=0.0,
             max_chargeable_energy_kwh=round(chargeable_kwh, 3),
             effective_charge_power_w=round(eff_power_w, 1),
+            requested_charge_power_w=0.0,
             planning_deadline=deadline,
             deadline_reason=deadline_reason,
             decision_reason=LEARNED_REASON_NOT_READY if diagnostics_only else LEARNED_REASON_NO_CHARGE_NEEDED,
@@ -932,7 +1037,11 @@ def build_learned_charge_plan(
         effective_charge_power_w_value=eff_power_w,
     )
 
-    if window_slots <= 0 or eff_power_w < MIN_EFFECTIVE_CHARGE_POWER_W:
+    if (
+        window_slots <= 0
+        or eff_power_w < MIN_EFFECTIVE_CHARGE_POWER_W
+        or available_power_w < MIN_EFFECTIVE_CHARGE_POWER_W
+    ):
         return LearnedChargePlan(
             status=readiness.status,
             mode=LEARNED_MODE_CLASSIC_FALLBACK,
@@ -945,6 +1054,7 @@ def build_learned_charge_plan(
             required_charge_energy_kwh=round(required_kwh, 3),
             max_chargeable_energy_kwh=round(chargeable_kwh, 3),
             effective_charge_power_w=round(eff_power_w, 1),
+            requested_charge_power_w=0.0,
             effective_window_slots=int(window_slots),
             effective_window_minutes=int(window_minutes),
             planning_deadline=deadline,
@@ -952,11 +1062,19 @@ def build_learned_charge_plan(
             decision_reason=LEARNED_REASON_NOT_READY,
         )
 
+    # The learned value remains a conservative scheduling estimate. The core
+    # economic window, however, is sized with the actually available limit so
+    # a self-learned low value cannot stretch the cheap window and cap INPUT.
+    core_window_slots = required_window_slots(
+        required_charge_energy_kwh=required_kwh,
+        available_charge_power_w_value=available_power_w,
+    )
+
     start, end, score, weights, selected_prices, optimizer_reason = optimize_charge_window(
         now=now,
         deadline=deadline,
         price_points=price_points,
-        window_slots=window_slots,
+        window_slots=core_window_slots,
     )
     
     deadline_local = _as_local(deadline)
@@ -977,6 +1095,20 @@ def build_learned_charge_plan(
         )
 
     now_local = _as_local(now)
+
+    power_window_end = (
+        min(_as_local(end), deadline_local)
+        if end is not None
+        else deadline_local
+    )
+
+    requested_power_w = requested_charge_power_w(
+        required_charge_energy_kwh=required_kwh,
+        now=now_local,
+        window_start=start,
+        window_end=power_window_end,
+        available_charge_power_w_value=available_power_w,
+    )
 
     if optimizer_reason == LEARNED_REASON_DEADLINE_TOO_CLOSE_START_NOW:
         mode = LEARNED_MODE_CHARGE
@@ -1017,6 +1149,7 @@ def build_learned_charge_plan(
         required_charge_energy_kwh=round(required_kwh, 3),
         max_chargeable_energy_kwh=round(chargeable_kwh, 3),
         effective_charge_power_w=round(eff_power_w, 1),
+        requested_charge_power_w=round(requested_power_w, 1),
         effective_window_slots=int(window_slots),
         effective_window_minutes=int(window_minutes),
         planning_deadline=deadline,
