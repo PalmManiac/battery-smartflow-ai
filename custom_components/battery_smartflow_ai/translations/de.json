@@ -272,7 +272,6 @@
         "state": {
           "automatic": "Automatik",
           "summer": "Autarkie",
-          "winter": "Winter",
           "manual": "Manuell"
         }
       },
@@ -371,7 +370,7 @@
           "valley_opportunity": "Opportunistische Tal-Ladung",
           "valley_opportunity_mixed": "Opportunistische Tal-Ladung bei gemischter Prognose",
           "learned_planning": "Lernbasierte Ladefenster-Planung",
-		  "summer_peak_reserve": "Sommer-Peak-Reserve"
+		  "reserve": "Strategische Peakreserve"
         }
       },
 	  "automatic_weighting": {
@@ -645,7 +644,7 @@
           "expensive_discharge": "Entladen wegen hohem Strompreis",
           "very_expensive_force_discharge": "Zwangsentladung wegen extremer Preisspitze",
           "emergency_latched_charge": "Notladung aktiv (verriegelt)",
-          "summer_cover_deficit": "Sommer: Hauslast decken",
+          "summer_cover_deficit": "Autarkie: Hauslast decken",
           "pv_surplus_charge": "PV-Überschuss laden",
           "soc_min_enforced": "Entladung gestoppt (SoC-Minimum erreicht)",
           "pv_house_load_passthrough": "SF800Pro: PV-Hauslast-Passthrough aktiv",
@@ -684,8 +683,13 @@
           "cell_voltage_emergency_charge": "Notladung aktiv (Zellspannung kritisch)",
           "pv_charge_blocked_by_discharge_protection": "PV-Ladung blockiert, da Entladung noch durch SoC-/Zellschutz gesperrt ist",
           "learned_charge_window_deadline_too_close_start_now": "Lernplanung: Deadline zu nah, Start jetzt",
-		  "summer_peak_reserve_charge": "Automatik-Sommer: Hochpreisfenster absichern",
-          "summer_peak_reserve_hold": "Automatik-Sommer: Akku-Reserve für spätere Preisspitze halten"
+          "soc_invalid": "Sicherer Leerlauf: Akku-SoC ungültig",
+          "grid_sensor_invalid": "Sicherer Leerlauf: Netzsensordaten fehlen",
+          "soc_limits_invalid": "Sicherer Leerlauf: konfigurierte SoC-Grenzen ungültig",
+          "power_limits_invalid": "Sicherer Leerlauf: konfigurierte Leistungsgrenzen ungültig",
+          "cell_voltage_sensor_invalid": "Entladung blockiert: Zellspannungssensor nicht verfügbar",
+		  "summer_peak_reserve_charge": "Automatik: Hochpreisfenster absichern",
+          "summer_peak_reserve_hold": "Automatik: Akku-Reserve für spätere Preisspitze halten"
         }
       },
       "next_planned_action": {
@@ -747,7 +751,7 @@
           "planning_forecast_reality_override": "Planung: reale PV schwächer als Prognose",
           "valley_opportunity_charge": "Talpreis-Gelegenheitsladung",
           "valley_opportunity_charge_mixed_forecast": "Talpreis-Gelegenheitsladung bei gemischter Prognose",
-          "summer_peak_reserve_charge": "Automatik-Sommer: Hochpreisfenster absichern"
+          "summer_peak_reserve_charge": "Automatik: Hochpreisfenster absichern"
         }
       },
       "charge_price_applied": {
