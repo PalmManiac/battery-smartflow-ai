@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.3.0-dev8.3"
+INTEGRATION_VERSION = "4.3.0-dev9"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -151,15 +151,24 @@ GRID_MODE_SPLIT = "split"
 # Runtime select modes (internal values remain EN)
 # ==================================================
 AI_MODE_AUTOMATIC = "automatic"
-AI_MODE_SUMMER = "summer"      # legacy internal key, UI label = Autarkie
-AI_MODE_WINTER = "winter"      # legacy only, normalized to automatic
+AI_MODE_SUMMER = "summer"      # stable internal key, UI label = Autarkie
+AI_MODE_WINTER = "winter"      # migration-only legacy key
 AI_MODE_MANUAL = "manual"
 
 # Active selectable modes.
 # Do not include winter anymore. Stored/legacy winter values are normalized
 # to automatic in the coordinator.
 AI_MODES = [AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_MANUAL]
-LEGACY_AI_MODES = [AI_MODE_WINTER]
+
+
+def normalize_ai_mode(mode: str | None) -> str:
+    """Normalize persisted legacy or invalid operating-mode values."""
+
+    if mode == AI_MODE_WINTER:
+        return AI_MODE_AUTOMATIC
+    if mode in AI_MODES:
+        return str(mode)
+    return AI_MODE_AUTOMATIC
 
 MANUAL_STANDBY = "standby"
 MANUAL_CHARGE = "charge"
@@ -341,7 +350,7 @@ CHARGE_STRATEGY_ENUMS = [
     "planning_forecast_poor",
     "planning_forecast_mixed",
     "planning_reality_override",
-    "summer_peak_reserve",
+    "reserve",
     "valley_boost",
     "valley_boost_mixed",
     "very_cheap",
@@ -388,21 +397,6 @@ VISIBLE_STATE_ENUMS = [
     "waiting_for_charge_window",
     "waiting_blocked",
     "hold",
-]
-
-TECHNICAL_REASON_ENUMS = [
-    "none",
-    "mode_hold_active",
-    "input_after_output_block_active",
-    "output_after_input_block_active",
-    "pv_charge_min_hold_active",
-    "discharge_min_hold_active",
-    "passthrough_min_hold_active",
-    "ramp_down_output",
-    "inside_deadband",
-    "increase_output_to_reduce_import",
-    "decrease_output_to_avoid_export",
-    "skipped_unchanged_command",
 ]
 
 # ==================================================
