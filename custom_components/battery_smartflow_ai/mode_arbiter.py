@@ -145,20 +145,12 @@ def build_mode_arbiter_config(profile: dict[str, Any]) -> ModeArbiterConfig:
         pv_charge_latch_min_hold_s=_profile_float(
             profile,
             "PV_CHARGE_LATCH_MIN_HOLD_S",
-            _profile_float(
-                profile,
-                "PV_CHARGE_LATCH_HOLD_SECONDS",
-                DEFAULT_PV_CHARGE_LATCH_MIN_HOLD_S,
-            ),
+            DEFAULT_PV_CHARGE_LATCH_MIN_HOLD_S,
         ),
         pv_charge_exit_import_cycles=_profile_int(
             profile,
             "PV_CHARGE_EXIT_IMPORT_CYCLES",
-            _profile_int(
-                profile,
-                "PV_CHARGE_LATCH_STOP_CYCLES",
-                DEFAULT_PV_CHARGE_EXIT_IMPORT_CYCLES,
-            ),
+            DEFAULT_PV_CHARGE_EXIT_IMPORT_CYCLES,
         ),
         discharge_latch_min_hold_s=_profile_float(
             profile,
