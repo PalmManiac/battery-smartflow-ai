@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 import unittest
 
 from support import bootstrap
@@ -21,7 +22,16 @@ from custom_components.battery_smartflow_ai.const import (  # noqa: E402
 from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E402
     DecisionContext,
     DecisionEngine,
+    LearnedPlanningRule,
     PricePoint,
+)
+from custom_components.battery_smartflow_ai.learned_planning import (  # noqa: E402
+    LearnedSlotModel,
+    LearningChargePowerSample,
+    LearningReadiness,
+    build_learned_charge_plan,
+    learned_typical_charge_power_w,
+    requested_charge_power_w,
 )
 from custom_components.battery_smartflow_ai.strategy_adapter import (  # noqa: E402
     decision_to_strategy_decision,
@@ -330,6 +340,127 @@ class Dev6ToDev8RegressionScenarios(unittest.TestCase):
             },
         )
         self.assertEqual(result.action, "discharge")
+
+
+class Dev9Point1ChargePowerScenarios(unittest.TestCase):
+    def test_remaining_cheap_window_raises_charge_power(self) -> None:
+        requested = requested_charge_power_w(
+            required_charge_energy_kwh=1.16,
+            now=NOW,
+            window_start=NOW,
+            window_end=NOW + timedelta(minutes=30),
+            available_charge_power_w_value=2400.0,
+        )
+
+        self.assertEqual(requested, 2320.0)
+
+    def test_learned_rule_uses_request_instead_of_learned_estimate(self) -> None:
+        plan = SimpleNamespace(
+            status="active",
+            mode="charge",
+            decision_reason="learned_charge_window_active",
+            required_charge_energy_kwh=1.16,
+            effective_charge_power_w=1161.0,
+            requested_charge_power_w=2320.0,
+        )
+
+        result = LearnedPlanningRule().evaluate(
+            DecisionEngine(),
+            context(
+                max_charge_w=2400.0,
+                battery_capacity_kwh=5.76,
+                learned_planning_enabled=True,
+                learned_charge_plan=plan,
+            ),
+        )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.charge_w, 2320.0)
+
+    def test_complete_plan_separates_estimate_from_power_request(self) -> None:
+        model = LearnedSlotModel(
+            slot_kwh=[0.05] * 96,
+            slot_sample_count=[7] * 96,
+            data_coverage=1.0,
+            history_days=7,
+            usable_days=7,
+            night_window_days=7,
+            morning_window_days=7,
+            evening_window_days=7,
+        )
+        readiness = LearningReadiness(
+            status="ready",
+            history_days=7,
+            usable_days=7,
+            night_window_days=7,
+            morning_window_days=7,
+            evening_window_days=7,
+            data_coverage=1.0,
+        )
+
+        plan = build_learned_charge_plan(
+            model=model,
+            readiness=readiness,
+            now=NOW,
+            price_points=price_points(),
+            forecast=None,
+            total_battery_capacity_kwh=5.76,
+            current_soc=5.0,
+            soc_min=5.0,
+            soc_max=100.0,
+            profile_charge_limit_w=2400.0,
+            current_effective_charge_cap_w=2400.0,
+            learned_typical_charge_power_w=1161.0,
+        )
+
+        self.assertEqual(plan.mode, "charge")
+        self.assertEqual(plan.effective_charge_power_w, 1161.0)
+        self.assertGreater(plan.requested_charge_power_w, 1161.0)
+        self.assertLessEqual(plan.requested_charge_power_w, 2400.0)
+
+    def test_only_unthrottled_samples_define_reachable_power(self) -> None:
+        legacy_limited = [
+            LearningChargePowerSample(
+                ts=NOW - timedelta(minutes=index),
+                power_w=1161.0,
+            )
+            for index in range(8)
+        ]
+        unthrottled = [
+            LearningChargePowerSample(
+                ts=NOW - timedelta(minutes=20 + index),
+                power_w=2300.0,
+                commanded_power_w=2400.0,
+                charge_cap_w=2400.0,
+            )
+            for index in range(4)
+        ]
+
+        learned = learned_typical_charge_power_w(
+            samples=legacy_limited + unthrottled,
+            now=NOW,
+        )
+
+        self.assertEqual(learned, 2300.0)
+
+    def test_learning_uses_sustained_upper_power_not_taper_median(self) -> None:
+        measured_values = [900.0] * 12 + [2250.0, 2280.0, 2300.0, 2320.0]
+        samples = [
+            LearningChargePowerSample(
+                ts=NOW - timedelta(minutes=index),
+                power_w=power_w,
+                commanded_power_w=2400.0,
+                charge_cap_w=2400.0,
+            )
+            for index, power_w in enumerate(measured_values)
+        ]
+
+        learned = learned_typical_charge_power_w(
+            samples=samples,
+            now=NOW,
+        )
+
+        self.assertEqual(learned, 2290.0)
 
 
 if __name__ == "__main__":
