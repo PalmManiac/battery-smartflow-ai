@@ -1381,6 +1381,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         commit=commit,
                     )
 
+                # Dev9.1: A binding restored from Dev9 may still contain the
+                # self-limited learned value (for example 1161 W). Refresh an
+                # active/forced learned binding directly from the newly
+                # calculated energy/window request, even when the base decision
+                # temporarily exposes another reason.
+                replanned_power_w = _to_float(
+                    getattr(
+                        learned_charge_plan,
+                        "requested_charge_power_w",
+                        None,
+                    ),
+                    None,
+                )
+                if replanned_power_w is not None and replanned_power_w > 0.0:
+                    commit.requested_power_w = min(
+                        float(replanned_power_w),
+                        float(max_charge_w),
+                    )
+                    commit.updated_at = now_utc
+                    self._store_charge_commit(commit)
+
             # If the same charge reason is still present, refresh power and
             # price-window timeout for optional price commits.
             if reason in CHARGE_COMMIT_SOURCE_REASONS:
@@ -2210,7 +2231,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return samples
         
     def _cleanup_learned_charge_power_samples(self, now: datetime) -> None:
-        """Keep only recent learned charge-power samples."""
+        """Keep only recent, technically unthrottled charge-power samples."""
 
         cutoff = dt_util.as_utc(now) - timedelta(days=ROLLING_DAYS)
 
@@ -2235,10 +2256,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if power_w < MIN_LEARNED_CHARGE_POWER_SAMPLE_W:
                     continue
 
+                commanded_power_w = float(
+                    item.get("commanded_power_w") or 0.0
+                )
+                charge_cap_w = float(item.get("charge_cap_w") or 0.0)
+
+                # Drop legacy/self-throttled samples. They cannot prove the
+                # maximum charge power the battery would have accepted.
+                if (
+                    charge_cap_w <= 0.0
+                    or commanded_power_w < charge_cap_w * 0.90
+                ):
+                    continue
+
                 cleaned.append(
                     {
                         "ts": ts_utc.isoformat(),
                         "power_w": round(power_w, 1),
+                        "commanded_power_w": round(commanded_power_w, 1),
+                        "charge_cap_w": round(charge_cap_w, 1),
                     }
                 )
             except Exception:
@@ -2252,6 +2288,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         *,
         decision: DecisionResult,
         battery_charge_w: float,
+        max_charge_w: float,
     ) -> None:
         """Store a charge-power sample from real charging phases.
 
@@ -2267,6 +2304,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         measured_charge_w = max(0.0, float(battery_charge_w or 0.0))
         commanded_charge_w = max(0.0, float(decision.charge_w or 0.0))
+        charge_cap_w = max(0.0, float(max_charge_w or 0.0))
+
+        # Only a practically unthrottled request can reveal the technically
+        # reachable charge speed. This breaks the former 1161 W feedback loop.
+        if charge_cap_w <= 0.0 or commanded_charge_w < charge_cap_w * 0.90:
+            return
 
         # Prefer real measured AC charge power. If the battery power sensor does
         # not provide a negative charging value, fall back to the command.
@@ -2279,6 +2322,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             {
                 "ts": dt_util.as_utc(now).isoformat(),
                 "power_w": round(charge_power_w, 1),
+                "commanded_power_w": round(commanded_charge_w, 1),
+                "charge_cap_w": round(charge_cap_w, 1),
             }
         )
 
@@ -2307,10 +2352,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if power_w < MIN_LEARNED_CHARGE_POWER_SAMPLE_W:
                     continue
 
+                commanded_power_w = _to_float(
+                    item.get("commanded_power_w"),
+                    None,
+                )
+                charge_cap_w = _to_float(
+                    item.get("charge_cap_w"),
+                    None,
+                )
+
                 samples.append(
                     LearningChargePowerSample(
                         ts=dt_util.as_utc(ts),
                         power_w=power_w,
+                        commanded_power_w=commanded_power_w,
+                        charge_cap_w=charge_cap_w,
                     )
                 )
             except Exception:
@@ -4818,6 +4874,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 now,
                 decision=decision,
                 battery_charge_w=float(battery_charge_w),
+                max_charge_w=float(max_charge),
             )
             
             strategy_intent = decision_to_strategy_intent(
