@@ -271,8 +271,7 @@
         "name": "Operating mode",
         "state": {
           "automatic": "Automatic",
-          "summer": "Summer",
-          "winter": "Winter",
+          "summer": "Autarky",
           "manual": "Manual"
         }
       },
@@ -371,7 +370,7 @@
           "valley_opportunity": "Opportunistic valley charging",
           "valley_opportunity_mixed": "Opportunistic valley charging with mixed forecast",
           "learned_planning": "Learned charge-window planning",
-		  "summer_peak_reserve": "Summer peak reserve"
+		  "reserve": "Strategic peak reserve"
         }
       },
       "learned_planning_status": {
@@ -635,7 +634,7 @@
           "expensive_discharge": "Discharging due to high electricity price",
           "very_expensive_force_discharge": "Forced discharge due to extreme price peak",
           "emergency_latched_charge": "Emergency charge active (latched)",
-          "summer_cover_deficit": "Summer: cover house load",
+          "summer_cover_deficit": "Autarky: cover house load",
           "pv_surplus_charge": "Charge PV surplus",
           "soc_min_enforced": "Discharge stopped (SoC minimum reached)",
           "pv_house_load_passthrough": "SF800Pro: PV house-load passthrough active",
@@ -672,10 +671,15 @@
           "cell_voltage_emergency_charge": "Emergency charge active (cell voltage critical)",
           "pv_charge_blocked_by_discharge_protection": "PV charging blocked because discharging is still blocked by SoC/cell protection",
           "learned_charge_window_deadline_too_close_start_now": "Learned planning: deadline too close, start now",
+          "soc_invalid": "Safe idle: battery SoC is invalid",
+          "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
+          "power_limits_invalid": "Safe idle: configured power limits are invalid",
+          "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
 		      "offgrid_load_active_blocks_ac_charge": "Island socket active: automatic grid charging blocked",
           "offgrid_load_support": "Island socket active: supplied by battery/PV",
-		      "summer_peak_reserve_charge": "Automatic summer: securing high-price window",
-          "summer_peak_reserve_hold": "Automatic summer: holding battery reserve for later price peak"
+		      "summer_peak_reserve_charge": "Automatic: securing high-price window",
+          "summer_peak_reserve_hold": "Automatic: holding battery reserve for later price peak"
         }
       },
       "next_planned_action": {
@@ -737,7 +741,7 @@
           "planning_forecast_reality_override": "Planning: real PV below forecast",
           "valley_opportunity_charge": "Valley opportunity charge",
           "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge with mixed forecast",
-          "summer_peak_reserve_charge": "Automatic summer: securing high-price window"
+          "summer_peak_reserve_charge": "Automatic: securing high-price window"
         }
       },
       "charge_price_applied": {
