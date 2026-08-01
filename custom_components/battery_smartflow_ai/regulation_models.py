@@ -115,12 +115,7 @@ class StrategyIntent:
 
 @dataclass
 class StrategyContext:
-    """High-level context produced by the automatic strategy layer.
-
-    V4.3.0-dev5.0:
-    The context is diagnostic-only. The DecisionEngine does not consume these
-    weights yet, so this first step must not change strategic behavior.
-    """
+    """High-level context consumed by the unified automatic strategy."""
 
     active: bool = False
 
