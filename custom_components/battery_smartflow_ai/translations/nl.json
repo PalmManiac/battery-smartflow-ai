@@ -271,8 +271,7 @@
         "name": "Bedrijfsmodus",
         "state": {
           "automatic": "Automatisch",
-          "summer": "Zomer",
-          "winter": "Winter",
+          "summer": "Autarkie",
           "manual": "Handmatig"
         }
       },
@@ -371,7 +370,7 @@
           "valley_opportunity": "Opportunistisch dal laden",
           "valley_opportunity_mixed": "Opportunistisch dal laden bij gemengde prognose",
           "learned_planning": "Lerende laadvensterplanning",
-		  "summer_peak_reserve": "Zomer-piekreserve"
+		  "reserve": "Strategische piekreserve"
         }
       },
       "learned_planning_status": {
@@ -635,7 +634,7 @@
           "expensive_discharge": "Ontladen wegens hoge stroomprijs",
           "very_expensive_force_discharge": "Geforceerd ontladen wegens extreme prijspiek",
           "emergency_latched_charge": "Noodladen actief (vergrendeld)",
-          "summer_cover_deficit": "Zomer: huislast dekken",
+          "summer_cover_deficit": "Autarkie: huislast dekken",
           "pv_surplus_charge": "PV-overschot laden",
           "soc_min_enforced": "Ontladen gestopt (SoC-minimum bereikt)",
           "pv_house_load_passthrough": "SF800Pro: PV-huislast-passthrough actief",
@@ -672,10 +671,15 @@
           "cell_voltage_emergency_charge": "Noodladen actief (celspanning kritiek)",
           "pv_charge_blocked_by_discharge_protection": "PV-laden geblokkeerd omdat ontladen nog door SoC-/celbescherming is geblokkeerd",
           "learned_charge_window_deadline_too_close_start_now": "Lerende planning: deadline te dichtbij, nu starten",
+          "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
+          "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
+          "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
+          "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
 		  "offgrid_load_active_blocks_ac_charge": "Eilandstopcontact actief: automatisch netladen geblokkeerd",
 		  "offgrid_load_support": "Eilandstopcontact actief: gevoed door batterij/PV",
-		  "summer_peak_reserve_charge": "Automatische zomer: hoogprijsvenster veiligstellen",
-          "summer_peak_reserve_hold": "Automatische zomer: batterijreserve vasthouden voor latere prijspiek"
+		  "summer_peak_reserve_charge": "Automatisch: hoogprijsvenster veiligstellen",
+          "summer_peak_reserve_hold": "Automatisch: batterijreserve vasthouden voor latere prijspiek"
         }
       },
       "next_planned_action": {
@@ -737,7 +741,7 @@
           "planning_forecast_reality_override": "Planning: werkelijke PV lager dan prognose",
           "valley_opportunity_charge": "Opportunistische dalprijs-lading",
           "valley_opportunity_charge_mixed_forecast": "Opportunistische dalprijs-lading met gemengde prognose",
-          "summer_peak_reserve_charge": "Automatische zomer: hoogprijsvenster veiligstellen"
+          "summer_peak_reserve_charge": "Automatisch: hoogprijsvenster veiligstellen"
         }
       },
       "charge_price_applied": {
