@@ -91,8 +91,8 @@ from .const import (
     # modes
     AI_MODE_AUTOMATIC,
     AI_MODE_SUMMER,
-    AI_MODE_WINTER,
     AI_MODE_MANUAL,
+    normalize_ai_mode,
     MANUAL_STANDBY,
     # statuses
     STATUS_OK,
@@ -154,7 +154,7 @@ from .command_effectiveness import (
 _LOGGER = logging.getLogger(__name__)
 
 STORE_VERSION = 1
-PV_SURPLUS_DISPLAY_HOLD_S = 60
+ACTIVE_STATUS_DISPLAY_HOLD_S = 60
 
 CHARGE_COMMIT_PRICE_VALID_MINUTES = 20
 
@@ -234,9 +234,8 @@ def _to_float(v: Any, default: float | None = None) -> float | None:
 def _clamp_season_counter(value: Any) -> int:
     """Limit the season hysteresis counter to a sane range.
 
-    The counter is only used as hysteresis for the automatic summer/winter
-    detection. It must not grow indefinitely, otherwise Automatic mode can get
-    stuck in winter or summer for a very long time after months of operation.
+    The counter is only used as hysteresis for the seasonal diagnostic context.
+    It must not grow indefinitely after months of operation.
     """
     try:
         counter = int(value or 0)
@@ -385,11 +384,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "pv_charge_stop_counter": 0,
             "pv_charge_latched": False,
             
-            # V4.2.3-Beta2:
-            # Display-only hold for weak PV surplus transitions. This reduces visible
-            # idle <-> pv_surplus_charge flicker without changing the real command path.
-            "pv_surplus_display_hold_until": None,
-            "pv_surplus_display_hold_reason": "none",
+            # Unified display-only status hysteresis.
+            "active_status_display_hold_until": None,
+            "active_status_display_action": "",
+            "active_status_display_mode": "",
+            "active_status_display_reason": "",
+            "active_status_display_hold_reason": "none",
 
             # Forecast / reality override
             "forecast_wait_block_counter": 0,
@@ -405,13 +405,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "pv_houseload_passthrough_export_counter": 0,
             "pv_houseload_passthrough_target_w": 0.0,
             "pv_houseload_passthrough_stop_reason": "none",
-
-            # SF800Pro PV charge latch / mode arbiter
-            "sf800_pv_charge_latched": False,
-            "sf800_pv_charge_started_ts": None,
-            "sf800_pv_charge_stop_counter": 0,
-            "sf800_mode_arbiter_state": "none",
-            "sf800_mode_arbiter_reason": "none",
 
             # SF800Pro passthrough output smoothing
             "sf800_passthrough_prev_output_w": 0.0,
@@ -499,26 +492,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if "runtime_mode" in data and isinstance(data["runtime_mode"], dict):
                 self.runtime_mode.update(data["runtime_mode"])
                 
-            self.runtime_mode["ai_mode"] = self._normalize_ai_mode(
+            self.runtime_mode["ai_mode"] = normalize_ai_mode(
                 self.runtime_mode.get("ai_mode")
             )
+
+            for legacy_key in (
+                "pv_surplus_display_hold_until",
+                "pv_surplus_display_hold_reason",
+                "sf800_pv_charge_latched",
+                "sf800_pv_charge_started_ts",
+                "sf800_pv_charge_stop_counter",
+                "sf800_mode_arbiter_state",
+                "sf800_mode_arbiter_reason",
+            ):
+                self._persist.pop(legacy_key, None)
 
     async def _save(self) -> None:
         self._persist["runtime_mode"] = dict(self.runtime_mode)
         await self._store.async_save(self._persist)
-        
-    def _normalize_ai_mode(self, mode: str | None) -> str:
-        """Normalize legacy/invalid AI modes.
-
-        V4.3:
-        - winter is legacy and becomes automatic
-        - summer remains the internal key for UI Autarkie
-        """
-        if mode == AI_MODE_WINTER:
-            return AI_MODE_AUTOMATIC
-        if mode in (AI_MODE_AUTOMATIC, AI_MODE_SUMMER, AI_MODE_MANUAL):
-            return str(mode)
-        return AI_MODE_AUTOMATIC
         
     def _charge_pricing_reason(self, decision_reason: str | None) -> str:
         """Return the reason that should be used for charge price attribution.
@@ -1249,11 +1240,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         automatic_peak_reserve_allowed: bool,
         battery_charge_w: float,
     ) -> DecisionResult:
-        """Start, hold or stop a strategic AC charge commit.
-
-        This is intentionally placed above StrategyIntent creation so both the
-        legacy command path and the V4.2 regulation path see the same decision.
-        """
+        """Start, hold or stop a strategic AC charge binding."""
         reason = str(decision.reason or "idle")
         now_utc = dt_util.as_utc(now)
 
@@ -1710,7 +1697,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return "normal"
 
     def set_ai_mode(self, mode: str) -> None:
-        self.runtime_mode["ai_mode"] = self._normalize_ai_mode(mode)
+        self.runtime_mode["ai_mode"] = normalize_ai_mode(mode)
 
     def set_manual_action(self, action: str) -> None:
         self.runtime_mode["manual_action"] = action
@@ -2333,12 +2320,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return samples
         
     def _get_regulation_runtime_state(self) -> RegulationRuntimeState:
-        """Build transient regulation runtime state from persisted values.
-
-        V4.2.0 transition:
-        This is diagnostic-only for now. Later this state will become the
-        authoritative runtime state for ModeArbiter/PowerController/Command.
-        """
+        """Build the authoritative regulation runtime state."""
 
         def _parse_dt(value):
             if not value:
@@ -3069,244 +3051,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return bool(active), float(target_w or 0.0), str(stop_reason)
 
-    def _is_sf800_pv_houseload_passthrough_enabled(self, profile: dict[str, Any]) -> bool:
-        return bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False))
-
-    def _sf800_hold_active(
-        self,
-        now,
-        started_ts_raw: str | None,
-        hold_seconds: float,
-    ) -> bool:
-        if not started_ts_raw:
-            return False
-
-        try:
-            started = dt_util.parse_datetime(str(started_ts_raw))
-            if started is None:
-                return False
-
-            elapsed = (
-                dt_util.as_utc(now) - dt_util.as_utc(started)
-            ).total_seconds()
-
-            return elapsed < float(hold_seconds)
-        except Exception:
-            return False
-
-    def _sf800_update_pv_charge_latch(
-        self,
-        now,
-        profile: dict[str, Any],
-        decision: DecisionResult,
-        grid_import_w: float,
-        grid_export_w: float,
-        pv_charge_start_export_w: float,
-        protection_active: bool,
-    ) -> tuple[bool, str]:
-        enabled = self._is_sf800_pv_houseload_passthrough_enabled(profile)
-        if not enabled:
-            self._persist["sf800_pv_charge_latched"] = False
-            self._persist["sf800_pv_charge_started_ts"] = None
-            self._persist["sf800_pv_charge_stop_counter"] = 0
-            return False, "disabled"
-
-        latched = bool(self._persist.get("sf800_pv_charge_latched", False))
-        started_ts = self._persist.get("sf800_pv_charge_started_ts")
-        stop_counter = int(self._persist.get("sf800_pv_charge_stop_counter", 0) or 0)
-
-        hold_seconds = float(profile.get("PV_CHARGE_LATCH_HOLD_SECONDS", 300.0) or 300.0)
-        stop_cycles = int(profile.get("PV_CHARGE_LATCH_STOP_CYCLES", 18) or 18)
-
-        export_w = max(0.0, float(grid_export_w or 0.0))
-        import_w = max(0.0, float(grid_import_w or 0.0))
-        start_threshold = float(pv_charge_start_export_w or 0.0)
-
-        hold_active = self._sf800_hold_active(now, started_ts, hold_seconds)
-
-        decision_is_pv_charge = (
-            decision.ac_mode == "input"
-            and float(decision.charge_w or 0.0) > 0.0
-            and decision.reason == "pv_surplus_charge"
-        )
-
-        if protection_active:
-            latched = False
-            started_ts = None
-            stop_counter = 0
-            reason = "protection_active"
-
-        elif decision_is_pv_charge:
-            if not latched:
-                started_ts = dt_util.as_utc(now).isoformat()
-            latched = True
-            stop_counter = 0
-            reason = "pv_charge_decision"
-
-        elif latched:
-            weak_pv_charge_conditions = (
-                export_w < max(10.0, start_threshold * 0.15)
-                and import_w > 140.0
-            )
-
-            if hold_active:
-                reason = "hold_active"
-            elif weak_pv_charge_conditions:
-                stop_counter += 1
-                reason = "weakness_counting"
-                if stop_counter >= stop_cycles:
-                    latched = False
-                    started_ts = None
-                    stop_counter = 0
-                    reason = "weakness_stop"
-            else:
-                stop_counter = 0
-                reason = "latched"
-
-        else:
-            reason = "not_latched"
-
-        self._persist["sf800_pv_charge_latched"] = bool(latched)
-        self._persist["sf800_pv_charge_started_ts"] = started_ts
-        self._persist["sf800_pv_charge_stop_counter"] = int(stop_counter)
-
-        return bool(latched), str(reason)
-
-    def _sf800_apply_mode_arbiter(
-        self,
-        now,
-        profile: dict[str, Any],
-        decision: DecisionResult,
-        pv_w: float,
-        house_load_w: float,
-        grid_import_w: float,
-        grid_export_w: float,
-        max_discharge_w: float,
-        pv_charge_start_export_w: float,
-        discharge_blocked_by_soc_min: bool,
-        cell_voltage_discharge_blocked: bool,
-        cell_voltage_emergency_active: bool,
-        additional_battery_charge_w: float,
-    ) -> DecisionResult:
-        enabled = self._is_sf800_pv_houseload_passthrough_enabled(profile)
-        if not enabled:
-            self._persist["sf800_mode_arbiter_state"] = "disabled"
-            self._persist["sf800_mode_arbiter_reason"] = "disabled"
-            return decision
-
-        protection_active = bool(
-            discharge_blocked_by_soc_min
-            or cell_voltage_discharge_blocked
-            or cell_voltage_emergency_active
-            or float(additional_battery_charge_w or 0.0) > 0.0
-        )
-
-        pv_charge_latched, pv_charge_latch_reason = self._sf800_update_pv_charge_latch(
-            now=now,
-            profile=profile,
-            decision=decision,
-            grid_import_w=float(grid_import_w or 0.0),
-            grid_export_w=float(grid_export_w or 0.0),
-            pv_charge_start_export_w=float(pv_charge_start_export_w),
-            protection_active=protection_active,
-        )
-
-        passthrough_active = bool(
-            self._persist.get("pv_houseload_passthrough_active", False)
-        )
-        passthrough_target_w = float(
-            self._persist.get("pv_houseload_passthrough_target_w", 0.0) or 0.0
-        )
-
-        decision_is_true_priority_charge = (
-            decision.ac_mode == "input"
-            and float(decision.charge_w or 0.0) > 0.0
-            and decision.reason
-            in {
-                "very_cheap_force_charge",
-                "emergency_latched_charge",
-                "cell_voltage_emergency_charge",
-                "manual_charge",
-            }
-        )
-        
-        decision_is_manual_priority_discharge = (
-            decision.ac_mode == "output"
-            and float(decision.discharge_w or 0.0) > 0.0
-            and decision.reason
-            in {
-                "manual_discharge",
-                "manual_constant_discharge",
-            }
-        )
-
-        if protection_active:
-            self._persist["sf800_mode_arbiter_state"] = "protection"
-            self._persist["sf800_mode_arbiter_reason"] = "protection_active"
-            return decision
-
-        if decision_is_true_priority_charge:
-            self._persist["sf800_mode_arbiter_state"] = "priority_charge"
-            self._persist["sf800_mode_arbiter_reason"] = decision.reason
-            return decision
-
-        if decision_is_manual_priority_discharge:
-            self._persist["sf800_mode_arbiter_state"] = "manual_priority_discharge"
-            self._persist["sf800_mode_arbiter_reason"] = decision.reason
-
-            # Clear SF800Pro latches that could otherwise override manual discharge.
-            self._persist["pv_houseload_passthrough_active"] = False
-            self._persist["pv_houseload_passthrough_started_ts"] = None
-            self._persist["pv_houseload_passthrough_export_counter"] = 0
-            self._persist["pv_houseload_passthrough_target_w"] = 0.0
-            self._persist["pv_houseload_passthrough_stop_reason"] = "manual_priority_discharge"
-
-            self._persist["sf800_pv_charge_latched"] = False
-            self._persist["sf800_pv_charge_started_ts"] = None
-            self._persist["sf800_pv_charge_stop_counter"] = 0
-
-            return decision
-
-        if pv_charge_latched:
-            if decision.reason == "pv_house_load_passthrough":
-                self._persist["sf800_mode_arbiter_state"] = "pv_charge_latched"
-                self._persist["sf800_mode_arbiter_reason"] = (
-                    f"blocked_passthrough_{pv_charge_latch_reason}"
-                )
-                return DecisionResult(
-                    action="charge",
-                    ac_mode="input",
-                    charge_w=max(80.0, float(decision.charge_w or 0.0)),
-                    discharge_w=0.0,
-                    reason="pv_surplus_charge",
-                    target_soc=decision.target_soc,
-                )
-
-            if decision.ac_mode == "input":
-                self._persist["sf800_mode_arbiter_state"] = "pv_charge_latched"
-                self._persist["sf800_mode_arbiter_reason"] = pv_charge_latch_reason
-                return decision
-
-        if passthrough_active and passthrough_target_w > 0.0:
-            self._persist["sf800_mode_arbiter_state"] = "passthrough_latched"
-            self._persist["sf800_mode_arbiter_reason"] = "hold_output"
-
-            return DecisionResult(
-                action="passthrough",
-                ac_mode="output",
-                charge_w=0.0,
-                discharge_w=min(
-                    float(passthrough_target_w),
-                    float(max_discharge_w),
-                ),
-                reason="pv_house_load_passthrough",
-                target_soc=decision.target_soc,
-            )
-
-        self._persist["sf800_mode_arbiter_state"] = "normal"
-        self._persist["sf800_mode_arbiter_reason"] = "normal_decision"
-        return decision
-
     def _update_discharge_resume_hysteresis(
         self,
         soc: float,
@@ -3349,7 +3093,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["cell_voltage_resume_threshold"] = float(resume)
 
         if global_lowest_cell_voltage is None:
-            return blocked
+            self._persist["cell_voltage_discharge_blocked"] = True
+            return True
 
         cell_v = float(global_lowest_cell_voltage)
 
@@ -3747,9 +3492,78 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return "valley_opportunity_mixed"
             
         if reason == "summer_peak_reserve_charge":
-            return "summer_peak_reserve"
+            return "reserve"
 
         return "none"
+
+    async def _enter_safe_idle(
+        self,
+        *,
+        reason: str,
+        raw_values: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Stop the active command and expose a deterministic safe-idle state."""
+
+        current_mode = str(
+            self._state(self.entities.ac_mode)
+            or self._persist.get("last_set_mode")
+            or ""
+        )
+        last_input_w = float(
+            self._persist.get("last_set_input_w", 0.0) or 0.0
+        )
+        last_output_w = float(
+            self._persist.get("last_set_output_w", 0.0) or 0.0
+        )
+
+        if current_mode == ZENDURE_MODE_INPUT or last_input_w > 0.0:
+            await self._set_input_limit(0.0, force=True)
+        elif current_mode == ZENDURE_MODE_OUTPUT or last_output_w > 0.0:
+            await self._set_output_limit(0.0, force=True)
+
+        self._persist["last_set_input_w"] = 0
+        self._persist["last_set_output_w"] = 0
+        self._persist["prev_charge_w"] = 0.0
+        self._persist["prev_discharge_w"] = 0.0
+        self._persist["power_state"] = "idle"
+        self._persist["next_action_time"] = None
+        self._persist["regulation_active_state"] = "none"
+        self._persist["regulation_last_requested_mode"] = "idle"
+        self._persist["regulation_last_resolved_mode"] = "idle"
+        self._persist["regulation_skipped_write_reason"] = reason
+        self._persist["debug"] = reason.upper()
+        self._persist["last_ts"] = dt_util.utcnow().isoformat()
+        await self._save()
+
+        details = {
+            **raw_values,
+            "strategy_state": "idle_safe",
+            "visible_state": "safe_idle",
+            "strategic_reason": reason,
+            "technical_reason": reason,
+            "strategy_priority": 800,
+            "regulation_command_path": "unified",
+        }
+
+        return {
+            "status": STATUS_SENSOR_INVALID,
+            "ai_status": AI_STATUS_STANDBY,
+            "recommendation": RECO_STANDBY,
+            "debug": reason.upper(),
+            "details": details,
+            "decision_reason": reason,
+            "next_action_time": None,
+            "next_action_state": "none",
+            "device_profile": self.device_profile_key,
+            "season_mode": self._persist.get("season_mode", "winter"),
+            "fault_level_status": "warning",
+            "engine_health": reason,
+            "strategy_state": "idle_safe",
+            "visible_state": "safe_idle",
+            "strategic_reason": reason,
+            "technical_reason": reason,
+            "strategy_priority": 800,
+        }
 
     async def _async_update_data(self) -> dict[str, Any]:
         try:
@@ -3762,26 +3576,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             soc = _to_float(self._state(self.entities.soc), None)
             pv = _to_float(self._state(self.entities.pv), None)
 
-            if soc is None or pv is None:
-                return {
-                    "status": STATUS_SENSOR_INVALID,
-                    "ai_status": AI_STATUS_STANDBY,
-                    "recommendation": RECO_STANDBY,
-                    "debug": "SENSOR_INVALID",
-                    "details": {
+            if soc is None or not 0.0 <= float(soc) <= 100.0:
+                return await self._enter_safe_idle(
+                    reason="soc_invalid",
+                    raw_values={
                         "soc_raw": self._state(self.entities.soc),
                         "pv_raw": self._state(self.entities.pv),
                     },
-                    "decision_reason": "sensor_invalid",
-                    "next_action_time": None,
-                    "next_action_state": "none",
-                    "device_profile": self.device_profile_key,
-                    "season_mode": self._persist.get("season_mode", "winter"),
-                    "fault_level_status": "normal",
-                }
+                )
 
             soc = float(soc)
-            pv_w = float(pv)
+            pv_sensor_valid = pv is not None
+            pv_w = float(pv or 0.0)
 
             battery_capacity_kwh = self._get_battery_capacity()
 
@@ -3872,6 +3678,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             max_charge = min(float(max_charge), profile_max_in)
             max_discharge = min(float(max_discharge), profile_max_out)
 
+            soc_limits_valid = bool(
+                0.0 <= float(soc_min) < float(soc_max) <= 100.0
+            )
+            power_limits_valid = bool(
+                float(max_charge) > 0.0
+                and float(max_discharge) > 0.0
+                and float(profile_max_in) > 0.0
+                and float(profile_max_out) > 0.0
+            )
+
             expensive = self._get_setting(SETTING_PRICE_THRESHOLD, DEFAULT_PRICE_THRESHOLD)
             very_expensive = self._get_setting(
                 SETTING_VERY_EXPENSIVE_THRESHOLD,
@@ -3894,13 +3710,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             )
 
-            # V4.3.0-dev8.1:
-            # The improved regulation chain is now the mandatory command path.
-            # Existing stored option values are deliberately ignored and
-            # removed by config-entry migration.
-            use_regulation_v42_command = True
-
-            ai_mode = str(self.runtime_mode.get("ai_mode", AI_MODE_AUTOMATIC))
+            ai_mode = normalize_ai_mode(
+                self.runtime_mode.get("ai_mode", AI_MODE_AUTOMATIC)
+            )
+            self.runtime_mode["ai_mode"] = ai_mode
             manual_action = str(self.runtime_mode.get("manual_action", MANUAL_STANDBY))
             
             # V4.3.0-dev5.7:
@@ -3929,10 +3742,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_handover_policy = "default"
                 load_coverage_priority = False
 
-            grid_import, grid_export = self._get_grid()
-            if grid_import is None or grid_export is None:
-                grid_import = 0.0
-                grid_export = 0.0
+            grid_sensor_configured = self.entities.grid_mode != GRID_MODE_NONE
+            grid_import_raw, grid_export_raw = self._get_grid()
+            grid_sensor_valid = bool(
+                grid_sensor_configured
+                and grid_import_raw is not None
+                and grid_export_raw is not None
+            )
+            grid_import = float(grid_import_raw or 0.0)
+            grid_export = float(grid_export_raw or 0.0)
                 
             grid_history_state = self._grid_history.update(
                 grid_import_w=float(grid_import or 0.0),
@@ -3967,10 +3785,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["pv_charge_latched"] = False
                 self._persist["pv_charge_start_counter"] = 0
                 self._persist["pv_charge_stop_counter"] = 0
-
-                self._persist["sf800_pv_charge_latched"] = False
-                self._persist["sf800_pv_charge_started_ts"] = None
-                self._persist["sf800_pv_charge_stop_counter"] = 0
 
             daily_avg_price = None
             daily_min_price = None
@@ -4053,7 +3867,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     very_cheap_price = None
 
             engine_health = "ok"
-            if not price_points:
+            if not grid_sensor_valid:
+                engine_health = "grid_sensor_invalid"
+            elif not pv_sensor_valid:
+                engine_health = "pv_sensor_invalid"
+            elif not price_points:
                 engine_health = "no_price_data"
             elif price_now is None:
                 engine_health = "no_current_price"
@@ -4226,13 +4044,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["pv_houseload_passthrough_target_w"] = 0.0
                 self._persist["pv_houseload_passthrough_stop_reason"] = sf800_stop_reason
 
-                self._persist["sf800_pv_charge_latched"] = False
-                self._persist["sf800_pv_charge_started_ts"] = None
-                self._persist["sf800_pv_charge_stop_counter"] = 0
-
-                self._persist["sf800_mode_arbiter_state"] = "disabled"
-                self._persist["sf800_mode_arbiter_reason"] = sf800_stop_reason
-
                 pv_houseload_passthrough_active = False
                 pv_houseload_passthrough_target_w = 0.0
                 pv_houseload_passthrough_stop_reason = sf800_stop_reason
@@ -4377,6 +4188,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "not_evaluated",
                     )
                 ),
+                grid_sensor_configured=bool(grid_sensor_configured),
+                grid_sensor_valid=bool(grid_sensor_valid),
+                pv_sensor_valid=bool(pv_sensor_valid),
+                soc_limits_valid=bool(soc_limits_valid),
+                power_limits_valid=bool(power_limits_valid),
             )
 
             base_required_kwh = (
@@ -4407,26 +4223,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             decision = self._engine.evaluate(ctx)
             strategy_selection = self._engine.last_strategy_selection
 
-            if not use_regulation_v42_command:
-                decision = self._sf800_apply_mode_arbiter(
-                    now=now,
-                    profile=profile,
-                    decision=decision,
-                    pv_w=float(pv_w),
-                    house_load_w=float(house_load),
-                    grid_import_w=float(grid_import or 0.0),
-                    grid_export_w=float(grid_export or 0.0),
-                    max_discharge_w=float(max_discharge),
-                    pv_charge_start_export_w=float(pv_charge_start_export_w),
-                    discharge_blocked_by_soc_min=bool(discharge_blocked_by_soc_min),
-                    cell_voltage_discharge_blocked=bool(cell_voltage_discharge_blocked),
-                    cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
-                    additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
-                )
-            else:
-                self._persist["sf800_mode_arbiter_state"] = "improved_regulation_active"
-                self._persist["sf800_mode_arbiter_reason"] = "legacy_sf800_arbiter_bypassed"
-
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
             low_soc_pv_charge_requires_export = bool(
                 profile.get("LOW_SOC_PV_CHARGE_REQUIRES_EXPORT", False)
@@ -4452,42 +4248,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     decision.action = "idle"
                     decision.ac_mode = "output"
                     decision.reason = "pv_charge_blocked_by_discharge_protection"
-                    
-            # Legacy safety only:
-            # In the V4.2 command path, PV charge must remain a pv_charge intent so the
-            # ModeArbiter and PowerController can reduce INPUT smoothly instead of forcing
-            # idle/input 0 W and creating a charge sawtooth.
-            if (
-                not use_regulation_v42_command
-                and decision.ac_mode == "input"
-                and float(decision.charge_w or 0.0) > 0.0
-                and decision.reason == "pv_surplus_charge"
-            ):
-                export_w = max(0.0, float(grid_export or 0.0))
-                import_w = max(0.0, float(grid_import or 0.0))
-
-                weak_export_threshold_w = max(10.0, float(pv_charge_start_export_w) * 0.25)
-                real_import_threshold_w = max(
-                    40.0,
-                    float(profile.get("TARGET_IMPORT_W", 10.0) or 10.0)
-                    + float(profile.get("CHARGE_DEADBAND_W", profile.get("DEADBAND_W", 30.0)) or 30.0),
-                )
-
-                if export_w < weak_export_threshold_w and import_w > real_import_threshold_w:
-                    decision.charge_w = 0.0
-                    decision.discharge_w = 0.0
-                    decision.action = "idle"
-                    decision.ac_mode = "output"
-                    decision.reason = "pv_charge_blocked_no_stable_export"
-
-                    self._persist["pv_charge_latched"] = False
-                    self._persist["pv_charge_start_counter"] = 0
-                    self._persist["pv_charge_stop_counter"] = 0
-
-                    # Keep local diagnostic variables in sync for this same update cycle.
-                    pv_charge_latched = False
-                    pv_charge_start_counter = 0
-                    pv_charge_stop_counter = 0
                     
             soc_limit = self._get_soc_limit()
 
@@ -4523,11 +4283,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
-                decision.reason = "cell_voltage_cutoff_block"
+                decision.reason = (
+                    "cell_voltage_sensor_invalid"
+                    if cell_voltage_status == "sensor_invalid"
+                    else "cell_voltage_cutoff_block"
+                )
 
-            # V4.3.0-dev5.2:
             # Keep active discharge stable without coupling Automatic mode to
-            # the legacy summer/winter season branch.
+            # the seasonal diagnostic context.
             #
             # - Explicit Autarkie mode keeps the existing house-load coverage.
             # - Automatic only keeps an already active economic discharge while
@@ -4693,8 +4456,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             original_decision_reason = str(decision.reason or "")
 
             if (
-                use_regulation_v42_command
-                and ai_mode != AI_MODE_MANUAL
+                ai_mode != AI_MODE_MANUAL
                 and str(regulation_runtime.active_regulation_state)
                 == "pv_charge_active"
                 and bool(pv_charge_latched)
@@ -4728,11 +4490,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             else:
                 self._persist["regulation_pv_charge_latch_continue_reason"] = "none"
+
+            critical_data_reason = str(decision.reason or "") in {
+                "sensor_invalid",
+                "soc_invalid",
+                "grid_sensor_invalid",
+                "soc_limits_invalid",
+                "power_limits_invalid",
+                "cell_voltage_sensor_invalid",
+            }
+
+            if critical_data_reason:
+                if bool(self._persist.get("charge_commit_active", False)):
+                    self._clear_charge_commit(
+                        str(decision.reason or "sensor_invalid")
+                    )
+
+                return await self._enter_safe_idle(
+                    reason=str(decision.reason or "sensor_invalid"),
+                    raw_values={
+                        "soc": float(soc),
+                        "pv_w": float(pv_w),
+                        "pv_sensor_valid": bool(pv_sensor_valid),
+                        "deficit": float(grid_import),
+                        "surplus": float(grid_export),
+                        "grid_sensor_configured": bool(
+                            grid_sensor_configured
+                        ),
+                        "grid_sensor_valid": bool(grid_sensor_valid),
+                        "soc_limits_valid": bool(soc_limits_valid),
+                        "power_limits_valid": bool(power_limits_valid),
+                    },
+                )
                 
-            # V4.3.0-dev2:
-            # Strategic AC charge commit. Must run before prev_charge/prev_discharge
-            # tracking and before StrategyIntent creation, so both the legacy command path
-            # and the V4.2 regulation chain see the committed charge decision.
+            # The strategic AC charge binding runs before power tracking and
+            # StrategyIntent creation so the unified regulation sees it.
             decision = self._apply_charge_commit(
                 now=now,
                 decision=decision,
@@ -5340,7 +5132,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist.get("charge_commit_allow_pv_blend", True)
             )
 
-            # Hard discharge permission for the V4.2 regulation chain.
+            # Hard discharge permission for the unified regulation chain.
             # The DecisionEngine decision is already sanitized above, but the
             # ModeArbiter may still have an active discharge/passthrough latch
             # from a previous cycle. This explicit flag prevents such technical
@@ -5391,102 +5183,48 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
             )
 
-            legacy_ac_mode = (
+            technical_reason = (
+                str(strategic_reason)
+                if strategy_state == "idle_safe"
+                else str(
+                    regulation_device_command.reason
+                    or mode_arbiter_result.reason
+                    or regulation_power_result.reason
+                    or "none"
+                )
+            )
+            strategy_intent.metadata["technical_reason"] = technical_reason
+
+            ac_mode = (
                 ZENDURE_MODE_INPUT
-                if decision.ac_mode == "input"
+                if regulation_device_command.ac_mode == "input"
                 else ZENDURE_MODE_OUTPUT
             )
-            legacy_in_w = (
-                float(decision.charge_w)
-                if legacy_ac_mode == ZENDURE_MODE_INPUT
+            in_w = (
+                float(regulation_device_command.input_limit_w)
+                if ac_mode == ZENDURE_MODE_INPUT
                 else 0.0
             )
-            legacy_out_w = (
-                float(decision.discharge_w)
-                if legacy_ac_mode == ZENDURE_MODE_OUTPUT
+            out_w = (
+                float(regulation_device_command.output_limit_w)
+                if ac_mode == ZENDURE_MODE_OUTPUT
                 else 0.0
             )
-            
-            # Safety fallback: never use V4.2 command path if command generation failed
-            # or produced an unexpected mode.
-            if use_regulation_v42_command and regulation_device_command.ac_mode not in (
-                "input",
-                "output",
-            ):
-                use_regulation_v42_command = False
-
-            if use_regulation_v42_command:
-                ac_mode = (
-                    ZENDURE_MODE_INPUT
-                    if regulation_device_command.ac_mode == "input"
-                    else ZENDURE_MODE_OUTPUT
-                )
-                in_w = (
-                    float(regulation_device_command.input_limit_w)
-                    if ac_mode == ZENDURE_MODE_INPUT
-                    else 0.0
-                )
-                out_w = (
-                    float(regulation_device_command.output_limit_w)
-                    if ac_mode == ZENDURE_MODE_OUTPUT
-                    else 0.0
-                )
-            else:
-                ac_mode = legacy_ac_mode
-                in_w = legacy_in_w
-                out_w = legacy_out_w
 
             current_ac_mode = str(
                 self._state(self.entities.ac_mode) or ""
             )
 
-            if use_regulation_v42_command:
-                active_command_write_pending = bool(
-                    (
-                        ac_mode == ZENDURE_MODE_INPUT
-                        and regulation_device_command.should_write_input
-                    )
-                    or (
-                        ac_mode == ZENDURE_MODE_OUTPUT
-                        and regulation_device_command.should_write_output
-                    )
+            active_command_write_pending = bool(
+                (
+                    ac_mode == ZENDURE_MODE_INPUT
+                    and regulation_device_command.should_write_input
                 )
-            else:
-                active_target_w = (
-                    in_w
-                    if ac_mode == ZENDURE_MODE_INPUT
-                    else out_w
+                or (
+                    ac_mode == ZENDURE_MODE_OUTPUT
+                    and regulation_device_command.should_write_output
                 )
-                active_cache_key = (
-                    "last_set_input_w"
-                    if ac_mode == ZENDURE_MODE_INPUT
-                    else "last_set_output_w"
-                )
-                active_entity_id = (
-                    self.entities.input_limit
-                    if ac_mode == ZENDURE_MODE_INPUT
-                    else self.entities.output_limit
-                )
-                active_cached_w = float(
-                    self._persist.get(active_cache_key, 0.0) or 0.0
-                )
-                active_entity_w = _to_float(
-                    self._state(active_entity_id),
-                    None,
-                )
-                active_command_write_pending = bool(
-                    current_ac_mode != str(ac_mode)
-                    or int(round(active_cached_w, 0))
-                    != int(round(active_target_w, 0))
-                    or (
-                        active_entity_w is not None
-                        and abs(
-                            float(active_entity_w)
-                            - float(active_target_w)
-                        )
-                        >= 1.0
-                    )
-                )
+            )
 
             command_effectiveness_result = evaluate_command_effectiveness(
                 now=dt_util.as_utc(now),
@@ -5514,31 +5252,26 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 command_effectiveness_result.retry_direction
             )
 
-            if use_regulation_v42_command:
-                if effectiveness_retry_direction == "input":
-                    regulation_device_command.should_write_input = True
-                    regulation_device_command.skipped = False
-                    regulation_device_command.skip_reason = "none"
-                elif effectiveness_retry_direction == "output":
-                    regulation_device_command.should_write_output = True
-                    regulation_device_command.skipped = False
-                    regulation_device_command.skip_reason = "none"
+            if effectiveness_retry_direction == "input":
+                regulation_device_command.should_write_input = True
+                regulation_device_command.skipped = False
+                regulation_device_command.skip_reason = "none"
+            elif effectiveness_retry_direction == "output":
+                regulation_device_command.should_write_output = True
+                regulation_device_command.skipped = False
+                regulation_device_command.skip_reason = "none"
 
-                regulation_device_command.metadata[
-                    "effectiveness_retry_direction"
-                ] = effectiveness_retry_direction
+            regulation_device_command.metadata[
+                "effectiveness_retry_direction"
+            ] = effectiveness_retry_direction
                 
             self._update_regulation_runtime_state(
                 now=now,
                 requested_mode=str(mode_arbiter_result.requested_mode),
                 resolved_mode=str(mode_arbiter_result.resolved_mode),
                 active_state=str(mode_arbiter_result.active_regulation_state),
-                command_skipped=bool(regulation_device_command.skipped) if use_regulation_v42_command else False,
-                command_skip_reason=(
-                    str(regulation_device_command.skip_reason)
-                    if use_regulation_v42_command
-                    else "legacy_active"
-                ),
+                command_skipped=bool(regulation_device_command.skipped),
+                command_skip_reason=str(regulation_device_command.skip_reason),
                 current_ac_mode=self._state(self.entities.ac_mode),
                 command_ac_mode=str(ac_mode),
                 profile=profile,
@@ -5600,7 +5333,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "manual_standby_no_command"
                     )
 
-            elif use_regulation_v42_command:
+            else:
                 if regulation_device_command.should_write_mode:
                     await self._set_ac_mode(ac_mode)
 
@@ -5618,39 +5351,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 if regulation_device_command.should_write_output:
                     await self._set_output_limit(out_w, force=True)
-                    if effectiveness_retry_direction == "output":
-                        self._record_command_effectiveness_retry(
-                            now=now,
-                            direction="output",
-                        )
-
-            else:
-                direction_changed = (
-                    str(self._state(self.entities.ac_mode) or "")
-                    != str(ac_mode)
-                )
-                await self._set_ac_mode(ac_mode)
-                if ac_mode == ZENDURE_MODE_INPUT:
-                    await self._set_input_limit(
-                        in_w,
-                        force=bool(
-                            direction_changed
-                            or effectiveness_retry_direction == "input"
-                        ),
-                    )
-                    if effectiveness_retry_direction == "input":
-                        self._record_command_effectiveness_retry(
-                            now=now,
-                            direction="input",
-                        )
-                else:
-                    await self._set_output_limit(
-                        out_w,
-                        force=bool(
-                            direction_changed
-                            or effectiveness_retry_direction == "output"
-                        ),
-                    )
                     if effectiveness_retry_direction == "output":
                         self._record_command_effectiveness_retry(
                             now=now,
@@ -5726,30 +5426,53 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 self._persist["next_action_time"] = None
                 
-            # V4.2.3-Beta2:
-            # Display-only stabilization for weak PV surplus phases.
-            #
-            # The command decision must remain unchanged. This only stabilizes the
-            # externally visible status/diagnostic values when PV surplus charging has just
-            # been active and the DecisionEngine briefly returns idle in a marginal PV phase.
+            # Dev9 display-only status hysteresis.
+            # The command decision remains authoritative. A single neutral cycle
+            # may keep the last active user-facing status for up to one minute,
+            # but hard blockers and safe-idle reasons are shown immediately.
             display_decision = decision
-
             now_utc = dt_util.as_utc(now)
+            display_hold_eligible = bool(
+                ai_mode != AI_MODE_MANUAL
+                and decision.action in {"charge", "discharge", "passthrough"}
+                and str(decision.reason or "")
+                not in {
+                    "emergency_latched_charge",
+                    "cell_voltage_emergency_charge",
+                }
+            )
 
-            if str(decision.reason or "") == "pv_surplus_charge":
-                self._persist["pv_surplus_display_hold_until"] = (
-                    now_utc + timedelta(seconds=PV_SURPLUS_DISPLAY_HOLD_S)
+            if display_hold_eligible:
+                self._persist["active_status_display_hold_until"] = (
+                    now_utc
+                    + timedelta(seconds=ACTIVE_STATUS_DISPLAY_HOLD_S)
                 ).isoformat()
-                self._persist["pv_surplus_display_hold_reason"] = "pv_surplus_active"
+                self._persist["active_status_display_action"] = str(
+                    decision.action
+                )
+                self._persist["active_status_display_mode"] = str(
+                    decision.ac_mode
+                )
+                self._persist["active_status_display_reason"] = str(
+                    decision.reason
+                )
+                self._persist["active_status_display_hold_reason"] = "active"
 
             elif (
                 decision.action == "idle"
                 and str(decision.reason or "") in ("idle", "state_idle", "standby")
                 and ai_mode != AI_MODE_MANUAL
+                and engine_health
+                in {
+                    "pv_sensor_invalid",
+                    "no_price_data",
+                    "no_current_price",
+                }
             ):
-                hold_raw = self._persist.get("pv_surplus_display_hold_until")
+                hold_raw = self._persist.get(
+                    "active_status_display_hold_until"
+                )
                 hold_active = False
-
                 if hold_raw:
                     try:
                         hold_dt = dt_util.parse_datetime(str(hold_raw))
@@ -5759,51 +5482,65 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     except Exception:
                         hold_active = False
 
-                pv_w_now = max(0.0, float(pv_w or 0.0))
-                house_load_now = max(0.0, float(house_load or 0.0))
-                grid_import_now = max(0.0, float(grid_import or 0.0))
-                grid_export_now = max(0.0, float(grid_export or 0.0))
-
-                start_export_threshold = max(0.0, float(pv_charge_start_export_w or 0.0))
-
-                pv_still_plausible = (
-                    grid_export_now >= max(10.0, start_export_threshold * 0.15)
-                    or (
-                        pv_w_now >= max(180.0, house_load_now * 0.80)
-                        and grid_import_now <= max(120.0, start_export_threshold)
-                    )
-                )
-
                 no_hard_blocker = (
-                    float(soc) < float(soc_max)
-                    and not bool(additional_battery_discharge_active)
+                    bool(soc_limits_valid)
+                    and bool(power_limits_valid)
+                    and bool(grid_sensor_valid)
                     and not bool(cell_voltage_emergency_active)
-                    and not bool(discharge_blocked_by_soc_min)
-                    and not bool(cell_voltage_discharge_blocked)
                 )
 
-                if hold_active and pv_still_plausible and no_hard_blocker:
+                held_reason = str(
+                    self._persist.get(
+                        "active_status_display_reason",
+                        "",
+                    )
+                    or ""
+                )
+                held_action = str(
+                    self._persist.get(
+                        "active_status_display_action",
+                        "",
+                    )
+                    or ""
+                )
+                held_mode = str(
+                    self._persist.get(
+                        "active_status_display_mode",
+                        "",
+                    )
+                    or ""
+                )
+
+                if (
+                    hold_active
+                    and no_hard_blocker
+                    and held_action in {"charge", "discharge", "passthrough"}
+                    and held_mode in {"input", "output"}
+                    and held_reason
+                ):
                     display_decision = DecisionResult(
-                        action="charge",
-                        ac_mode=decision.ac_mode,
+                        action=held_action,
+                        ac_mode=held_mode,
                         charge_w=0.0,
                         discharge_w=0.0,
-                        reason="pv_surplus_charge",
+                        reason=held_reason,
                         target_soc=decision.target_soc,
                         current_peak_threshold=decision.current_peak_threshold,
                         current_valley_threshold=decision.current_valley_threshold,
                         economic_discharge_threshold=decision.economic_discharge_threshold,
                         effective_discharge_threshold=decision.effective_discharge_threshold,
                     )
-                    self._persist["pv_surplus_display_hold_reason"] = "display_hold"
+                    self._persist[
+                        "active_status_display_hold_reason"
+                    ] = "display_hold"
                 else:
-                    self._persist["pv_surplus_display_hold_reason"] = "none"
+                    self._persist[
+                        "active_status_display_hold_reason"
+                    ] = "none"
 
             else:
-                # Any real non-idle/non-PV decision, e.g. price discharge or planned charge,
-                # must not be hidden by the PV display hold.
-                self._persist["pv_surplus_display_hold_until"] = None
-                self._persist["pv_surplus_display_hold_reason"] = "none"
+                self._persist["active_status_display_hold_until"] = None
+                self._persist["active_status_display_hold_reason"] = "none"
 
             ai_status = self._map_ai_status(
                 ai_mode=ai_mode,
@@ -5938,6 +5675,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "not_evaluated",
                     )
                 ),
+                grid_sensor_configured=bool(grid_sensor_configured),
+                grid_sensor_valid=bool(grid_sensor_valid),
+                pv_sensor_valid=bool(pv_sensor_valid),
+                soc_limits_valid=bool(soc_limits_valid),
+                power_limits_valid=bool(power_limits_valid),
             )
 
             transparency_result = self._engine._with_thresholds(
@@ -5965,8 +5707,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             details = {
                 "soc": soc,
                 "pv_w": pv_w,
+                "pv_sensor_valid": bool(pv_sensor_valid),
                 "deficit": float(grid_import),
                 "surplus": float(grid_export),
+                "grid_sensor_configured": bool(grid_sensor_configured),
+                "grid_sensor_valid": bool(grid_sensor_valid),
+                "soc_limits_valid": bool(soc_limits_valid),
+                "power_limits_valid": bool(power_limits_valid),
                 "house_load": int(round(house_load, 0)),
                 
                 # V4.2.0 regulation / grid history diagnostics
@@ -6222,31 +5969,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._command_effectiveness_config.retry_cooldown_s
                 ),
 
-                # V4.2.0 regulation execution switch / comparison
-                "regulation_v42_command_enabled": bool(use_regulation_v42_command),
-                "regulation_legacy_set_mode": legacy_ac_mode,
-                "regulation_legacy_set_input_w": int(round(legacy_in_w, 0)),
-                "regulation_legacy_set_output_w": int(round(legacy_out_w, 0)),
-                "regulation_command_diff_mode": (
-                    str(regulation_device_command.ac_mode) != str(legacy_ac_mode)
-                ),
-                "regulation_command_diff_input_w": round(
-                    float(regulation_device_command.input_limit_w) - float(legacy_in_w),
-                    2,
-                ),
-                "regulation_command_diff_output_w": round(
-                    float(regulation_device_command.output_limit_w) - float(legacy_out_w),
-                    2,
-                ),
-                "regulation_command_matches_legacy": (
-                    str(regulation_device_command.ac_mode) == str(legacy_ac_mode)
-                    and abs(
-                        float(regulation_device_command.input_limit_w) - float(legacy_in_w)
-                    ) < 1.0
-                    and abs(
-                        float(regulation_device_command.output_limit_w) - float(legacy_out_w)
-                    ) < 1.0
-                ),
+                "regulation_command_path": "unified",
                 
                 "ai_mode": ai_mode,
                 "manual_action": manual_action,
@@ -6570,18 +6293,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "pv_houseload_passthrough_hold_seconds": float(
                     profile.get("PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS", 0.0)
-                ),
-                "sf800_pv_charge_latched": bool(
-                    self._persist.get("sf800_pv_charge_latched", False)
-                ),
-                "sf800_pv_charge_stop_counter": int(
-                    self._persist.get("sf800_pv_charge_stop_counter", 0)
-                ),
-                "sf800_mode_arbiter_state": str(
-                    self._persist.get("sf800_mode_arbiter_state", "none")
-                ),
-                "sf800_mode_arbiter_reason": str(
-                    self._persist.get("sf800_mode_arbiter_reason", "none")
                 ),
                 "sf800_passthrough_prev_output_w": float(
                     self._persist.get("sf800_passthrough_prev_output_w", 0.0) or 0.0
@@ -6979,7 +6690,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             return {
-                "status": STATUS_OK,
+                "status": (
+                    STATUS_SENSOR_INVALID
+                    if strategic_reason
+                    in {
+                        "sensor_invalid",
+                        "soc_invalid",
+                        "grid_sensor_invalid",
+                        "soc_limits_invalid",
+                        "power_limits_invalid",
+                        "cell_voltage_sensor_invalid",
+                    }
+                    else STATUS_OK
+                ),
                 "ai_status": ai_status,
                 "recommendation": recommendation,
                 "debug": "OK",
@@ -6993,8 +6716,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if ai_mode == AI_MODE_MANUAL
                     else "summer"
                     if ai_mode == AI_MODE_SUMMER
-                    else "winter"
-                    if ai_mode == AI_MODE_WINTER
                     else self._persist.get("season_mode", "winter")
                 ),
                 "fault_level_status": "normal",
