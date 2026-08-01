@@ -386,7 +386,7 @@ class LearnedPlanningRule(BaseRule):
             "learned_charge_window_deadline_too_close_start_now",
         ):
             planned_power_w = float(
-                getattr(plan, "effective_charge_power_w", 0.0) or 0.0
+                getattr(plan, "requested_charge_power_w", 0.0) or 0.0
             )
 
             if planned_power_w <= 0.0:
