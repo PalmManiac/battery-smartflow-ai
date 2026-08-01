@@ -37,6 +37,10 @@ CHARGE_COMMIT_ACTIVE_REASON = "charge_commit_active"
 
 IDLE_SAFE_REASONS = {
     "sensor_invalid",
+    "soc_invalid",
+    "grid_sensor_invalid",
+    "soc_limits_invalid",
+    "power_limits_invalid",
     "additional_battery_charging_block",
     "additional_battery_discharging_block",
     "pv_charge_blocked_by_discharge_protection",
@@ -44,6 +48,16 @@ IDLE_SAFE_REASONS = {
     "soc_limit_lower",
     "soc_min_resume_block",
     "cell_voltage_cutoff_block",
+    "cell_voltage_sensor_invalid",
+}
+
+CRITICAL_DATA_REASONS = {
+    "sensor_invalid",
+    "soc_invalid",
+    "grid_sensor_invalid",
+    "soc_limits_invalid",
+    "power_limits_invalid",
+    "cell_voltage_sensor_invalid",
 }
 
 PROTECTION_REASONS = {
@@ -71,11 +85,7 @@ def _base_metadata(
 
 
 def decision_to_strategy_decision(decision: DecisionResult) -> StrategyDecision:
-    """Convert old DecisionResult into the V4.3 strategic model.
-
-    V4.3-dev1 does not change the old DecisionEngine behavior yet.
-    It only adds structured strategy metadata.
-    """
+    """Convert the Decision Engine result into the strategic model."""
     reason = str(decision.reason or "idle")
     action = str(decision.action or "idle")
     ac_mode = str(decision.ac_mode or "output")
@@ -209,7 +219,11 @@ def decision_to_strategy_decision(decision: DecisionResult) -> StrategyDecision:
     if reason in IDLE_SAFE_REASONS:
         return StrategyDecision(
             state=StrategicState.IDLE_SAFE,
-            visible_state=VisibleState.WAITING_BLOCKED,
+            visible_state=(
+                VisibleState.SAFE_IDLE
+                if reason in CRITICAL_DATA_REASONS
+                else VisibleState.WAITING_BLOCKED
+            ),
             requested_mode="idle",
             requested_power_w=0.0,
             strategic_reason=reason,
@@ -306,7 +320,7 @@ def decision_to_strategy_decision(decision: DecisionResult) -> StrategyDecision:
             visible_state=VisibleState.RESERVE_CHARGE,
             requested_mode="input",
             requested_power_w=charge_w,
-            strategic_reason=reason,
+            strategic_reason="reserve_charge",
             source_reason=reason,
             source_action=action,
             source_ac_mode=ac_mode,
@@ -380,7 +394,7 @@ def decision_to_strategy_decision(decision: DecisionResult) -> StrategyDecision:
             visible_state=VisibleState.LOAD_COVERAGE,
             requested_mode="output",
             requested_power_w=None,
-            strategic_reason=reason,
+            strategic_reason="load_coverage",
             source_reason=reason,
             source_action=action,
             source_ac_mode=ac_mode,
@@ -542,11 +556,7 @@ def strategy_decision_to_intent(
     pv_handover_policy: str = "default",
     load_coverage_priority: bool = False,
 ) -> StrategyIntent:
-    """Convert V4.3 StrategyDecision back into existing StrategyIntent.
-
-    The technical V4.2 regulation chain still uses the old intent names.
-    V4.3-dev1 adds the new strategy semantics in metadata.
-    """
+    """Convert a strategy decision into the unified regulation intent."""
     if strategy.state == StrategicState.EMERGENCY_CHARGE:
         intent = "emergency_charge"
     elif strategy.state == StrategicState.MANUAL_CHARGE:
