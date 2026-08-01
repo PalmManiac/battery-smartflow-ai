@@ -804,31 +804,26 @@ Battery SmartFlow AI liest diesen Modus nur.
 
 ### Verhalten bei aktiver Off-Grid-Last
 
-Wenn eine Off-Grid-Last aktiv ist, kann Battery SmartFlow AI automatische AC-Ladung blockieren.
-
-Grund:
-
-> Zendure soll die Inselsteckdose möglichst aus PV/Akku versorgen und nicht gleichzeitig über AC Leistung ziehen oder den Akku zusätzlich laden.
-
-Battery SmartFlow AI kann dazu den technischen Zustand verwenden:
+Eine aktive Off-Grid-Last wird unabhängig von der AC-Strategie beobachtet:
 
 ```text
-offgrid_load_support
+offgrid_load_observed
 ```
 
 Das bedeutet:
 
 * Off-Grid-Last erkannt
-* automatische Netzladung wird blockiert
-* OUTPUT wird als technischer Versorgungspfad genutzt
+* die gültige Lade- oder Entladestrategie bleibt bestehen
+* kleine und dauerhafte Insel-Lasten blockieren AC-Ladung nicht pauschal
 * SoC- und Zellschutz bleiben aktiv
-* manuelle oder echte Notladung bleibt erlaubt
+* Notladung und manuelle Vorgaben behalten ihre Priorität
 
 ---
 
-### Was darf Off-Grid überstimmen?
+### Was beeinflusst Off-Grid?
 
-Bei aktiver Off-Grid-Last werden automatische Ladegründe blockiert, zum Beispiel:
+Off-Grid-Leistung fließt in Energiebilanz und Diagnose ein. Sie überstimmt
+keine gültigen Kandidaten für:
 
 * Preisladung
 * Tal-Ladung
@@ -836,23 +831,13 @@ Bei aktiver Off-Grid-Last werden automatische Ladegründe blockiert, zum Beispie
 * geplante Netzladung
 * sehr-billig-Ladung
 
-Weiterhin erlaubt bleiben:
-
-* Notladung
-* Zellspannungs-Notladung
-* manuelles Laden
-
 ---
 
 ### Einschränkung
 
-Die Off-Grid-Logik ist bewusst konservativ.
-
-Wenn eine Off-Grid-Last aktiv ist, wird automatische AC-Ladung blockiert – auch bei sehr kleiner Last.
-
-Das verhindert unerwünschtes AC-Ziehen, kann aber bei sehr kleinen Dauerlasten bedeuten, dass automatische AC-Ladung nicht startet.
-
-Eine feinere Option kann in einer späteren Version ergänzt werden.
+Battery SmartFlow AI verändert den Off-Grid-Modus des Geräts nicht. Welche
+Leistung die Inselsteckdose tatsächlich bereitstellt, bleibt von Zendure-
+Firmware, Gerätegrenzen und Gerätekonfiguration abhängig.
 
 ---
 
@@ -894,10 +879,12 @@ Er kombiniert:
 * dynamische Preise
 * PV-Prognose
 * Lernplanung
-* Saisonerkennung
+* saisonaler Kontext
 * Schutzlogik
 
-Battery SmartFlow AI entscheidet automatisch, ob gerade eher Sommer- oder Winterlogik sinnvoll ist.
+Battery SmartFlow AI bewertet alle wirtschaftlichen Strategien ganzjährig. Die
+Saisonerkennung liefert nur zusätzlichen Kontext und schaltet keine getrennte
+Sommer- oder Winterstrategie mehr um.
 
 Typische Entscheidungen:
 
@@ -911,9 +898,9 @@ Typische Entscheidungen:
 
 ---
 
-## 🔹 Sommermodus
+## 🔹 Autarkiemodus
 
-Der Sommermodus ist auf Autarkie und Hauslastdeckung ausgelegt.
+Der Autarkiemodus ist auf Autarkie und Hauslastdeckung ausgelegt.
 
 Typische Ziele:
 
@@ -923,25 +910,9 @@ Typische Ziele:
 * PV-Überschuss laden
 * Akku nicht unnötig aus dem Netz laden
 
-Im Sommermodus ist Entladung zur Hauslastdeckung besonders wichtig.
+Im Autarkiemodus ist Entladung zur Hauslastdeckung besonders wichtig.
 
 Wenn SoC-Minimum oder Entlade-Wiederfreigabe aktiv ist, kann Entladung blockiert werden. In solchen Fällen hat die Schutzlogik Vorrang.
-
----
-
-## 🔹 Wintermodus
-
-Der Wintermodus ist stärker wirtschaftlich geprägt.
-
-Typische Ziele:
-
-* günstige Preisfenster zum Laden nutzen
-* teure Preisfenster zum Entladen nutzen
-* schwache PV-Prognose berücksichtigen
-* geplante Ladefenster verwenden
-* Akku nicht sinnlos entladen, wenn kein wirtschaftlicher Vorteil besteht
-
-Der Wintermodus ist besonders sinnvoll bei dynamischen Strompreisen.
 
 ---
 
@@ -1263,7 +1234,7 @@ Sie ist die geschätzte reale Last des Haushalts.
 
 Eine korrekte Hauslast ist wichtig für:
 
-* Sommermodus
+* Autarkiemodus
 * Entladung
 * Lernplanung
 * Diagnose
@@ -1547,15 +1518,13 @@ Mögliche Gründe:
 
 ```text
 none
-offgrid_load_active_blocks_ac_charge
-offgrid_load_support
+offgrid_load_observed
 ```
 
-| Regelgrund                             | Bedeutung                                             |
-| -------------------------------------- | ----------------------------------------------------- |
-| `none`                                 | Kein Off-Grid-Blocker aktiv                           |
-| `offgrid_load_active_blocks_ac_charge` | Off-Grid-Last aktiv, automatische AC-Ladung blockiert |
-| `offgrid_load_support`                 | Inselsteckdose wird aktiv über Akku/PV unterstützt    |
+| Regelgrund                | Bedeutung                                      |
+| ------------------------- | ---------------------------------------------- |
+| `none`                    | Keine Off-Grid-Last erkannt                    |
+| `offgrid_load_observed`   | Off-Grid-Last erkannt und diagnostisch erfasst |
 
 ---
 
@@ -1693,8 +1662,7 @@ Wird zusammen mit der Packkapazität für die Gesamtkapazität verwendet.
 Auswahl zwischen:
 
 * Automatik
-* Sommer
-* Winter
+* Autarkie
 * Manuell
 
 ---
@@ -1735,7 +1703,7 @@ Der Profil-Editor ist in Bereiche aufgeteilt:
 | Allgemein     | gemeinsame Profilwerte                 |
 | Laden         | Regelwerte für INPUT/Ladeleistung      |
 | Entladen      | Regelwerte für OUTPUT/Entladeleistung  |
-| Expertenmodus | Lernplanung, V4.2-Regelung, Zellschutz |
+| Expertenmodus | Lernplanung, Leistungsregelung, Zellschutz |
 
 ---
 
@@ -2153,7 +2121,8 @@ Dabei kann es vorkommen, dass Battery SmartFlow AI wegen SoC-Minimum und Entlade
 
 Dieser Fall ist verwandt mit früheren PV-Hauslast-Passthrough-Themen, aber nicht identisch mit Off-Grid.
 
-Wenn er mit aktueller V4.2 weiterhin reproduzierbar ist, kann daraus eine spätere V4.2.1-Funktion entstehen.
+Wenn er mit der aktuellen Version weiterhin reproduzierbar ist, wird er als
+eigener gerätespezifischer Wiederanlauffall untersucht.
 
 Wichtig:
 
@@ -2238,7 +2207,7 @@ Mögliche Ursachen:
 
 Maßnahmen:
 
-* verbesserten V4.2-Regelkreis aktivieren
+* ein passendes Geräteprofil verwenden
 * korrektes Geräteprofil wählen
 * Deadband erhöhen
 * Schrittweiten reduzieren
@@ -2337,19 +2306,12 @@ Prüfe:
 
 ---
 
-## 9.9 AC-Ladung startet nicht bei aktiver Off-Grid-Last
+## 9.9 AC-Ladung bei aktiver Off-Grid-Last
 
-Das ist in V4.2 bewusst konservativ.
-
-Wenn eine Off-Grid-Last aktiv ist, blockiert Battery SmartFlow AI automatische AC-Ladung, damit die Inselsteckdose nicht unerwünscht aus AC versorgt wird.
-
-Erlaubt bleiben:
-
-* Notladung
-* Zellspannungs-Notladung
-* manuelles Laden
-
-Eine feinere Option für kleine Dauerlasten kann später ergänzt werden.
+Eine erkannte Off-Grid-Dauerlast wird diagnostisch angezeigt, blockiert eine
+ansonsten gültige automatische AC-Ladung aber nicht mehr pauschal. Schutz,
+Notladung, manuelle Vorgaben und die normale strategische Kandidatenauswahl
+bleiben maßgeblich.
 
 ---
 
@@ -2389,7 +2351,7 @@ Empfohlen:
 
 Empfohlen:
 
-* Wintermodus oder Automatik
+* Automatikmodus
 * Preisverlauf
 * aktueller Preis
 * Netzsensor
@@ -2403,13 +2365,12 @@ Empfohlen:
 
 Empfohlen:
 
-* Sommermodus oder Automatik
+* Autarkiemodus oder Automatik
 * PV-Leistungssensor
 * Netzsensor
 * PV-Ladestart-Schwelle passend setzen
 * SoC-Minimum nicht zu hoch
 * SoC-Maximum passend setzen
-* V4.2-Regelung aktivieren
 
 ---
 
@@ -2417,7 +2378,7 @@ Empfohlen:
 
 Empfohlen:
 
-* Automatik oder Wintermodus
+* Automatikmodus
 * Preisverlauf vollständig prüfen
 * Peak-Faktor passend wählen
 * Gewinnmarge nicht zu niedrig setzen
@@ -2438,7 +2399,7 @@ Bei nervösem Verhalten:
 * Ziel-Netzbezug leicht erhöhen
 * Cooldowns verlängern
 * passendes Geräteprofil wählen
-* V4.2-Regelung aktivieren
+* ein konservatives Geräteprofil verwenden
 
 ---
 
@@ -2462,7 +2423,7 @@ Empfohlen:
 
 * Off-Grid-Leistung konfigurieren
 * Off-Grid-Modus konfigurieren
-* V4.2-Regelung aktivieren
+* ein passendes Geräteprofil verwenden
 * Diagnosewerte prüfen
 * Verhalten mit und ohne AC testen
 * gerätespezifische Grenzen beachten
@@ -2515,7 +2476,7 @@ Nicht jedes Profil verwendet alle Werte gleich.
 
 ---
 
-## V4.2-Regelparameter
+## Regelparameter der einheitlichen Regelkette
 
 | Parameter                            | Bedeutung                                   |
 | ------------------------------------ | ------------------------------------------- |
@@ -2578,7 +2539,7 @@ offgrid_power_w
 offgrid_mode
 offgrid_load_active
 offgrid_rule_reason
-regulation_v42_command_enabled
+regulation_command_path
 regulation_strategy_intent
 regulation_requested_mode
 regulation_resolved_mode
@@ -2595,7 +2556,7 @@ Zusätzlich hilfreich:
 * verwendetes Geräteprofil
 * Betriebsmodus
 * Version von Battery SmartFlow AI
-* Diagnosewert `regulation_v42_command_enabled`
+* Diagnosewert `regulation_command_path`
 * ob Off-Grid konfiguriert ist
 * ob Zusatzakku-Sensoren konfiguriert sind
 
