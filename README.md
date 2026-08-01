@@ -64,20 +64,20 @@ Goal:
 
 ---
 
-# 🧠 Core functions / V4.2 architecture
+# 🧠 Core functions / unified architecture
 
 * Adaptive peak detection for expensive price windows
 * Price pre-planning with valley detection
 * Learned charge-window planning based on historic household consumption
 * Optional PV forecast integration
 * Dynamic grid regulation instead of simple full-power switching
-* Improved V4.2 power regulation with grid history, mode arbitration and smoothed power control
+* Unified power regulation with grid history, mode arbitration and smoothed power control
 * Device profiles per Zendure model
 * Profile editor for charge/discharge tuning
 * Hard-sync with real Zendure AC mode
 * Transparency and diagnostic sensors
 * Profit / savings calculation
-* Seasonal logic (summer/winter/automatic)
+* Season-neutral automatic strategy with seasonal context
 * Optional additional battery detection
 * Optional off-grid / island socket support
 * Optional cell-voltage protection
@@ -228,18 +228,15 @@ separately.
 
 ---
 
-## 4️⃣ Expert mode and improved regulation
-
-<img src="docs/images/conf_06_expert.png" width="600">
+## 4️⃣ Expert mode
 
 The expert menu provides access to:
 
 * Learned charge-window planning
-* Improved V4.2 power regulation
 * Cell-voltage protection
 * Advanced diagnostics
 
-The improved V4.2 power regulation can be enabled or disabled at any time.
+The unified power regulation is the mandatory command path for all installations.
 
 ---
 
@@ -290,9 +287,9 @@ The profile editor allows advanced users to tune selected parameters directly fr
 
 ---
 
-# 🔁 Improved V4.2 power regulation
+# 🔁 Unified power regulation
 
-V4.2 introduces an optional improved technical regulation chain:
+Battery SmartFlow AI uses one authoritative technical regulation chain:
 
 **Decision Engine → StrategyIntent → ModeArbiter → PowerController → DeviceCommand**
 
@@ -486,13 +483,9 @@ Note: Details about the calculation are in the **manual**.
 
 Combines price, PV, forecast, learned planning and load data.
 
-## Summer
+## Autarky
 
 Focus on autonomy and covering household load.
-
-## Winter
-
-Focus on economic efficiency, price planning and controlled charging/discharging.
 
 ## Manual
 
@@ -555,20 +548,20 @@ Ziel:
 
 ---
 
-# 🧠 Kernfunktionen / V4.2 Architektur
+# 🧠 Kernfunktionen / einheitliche Architektur
 
 * Adaptive Peak-Erkennung für teure Preisfenster
 * Preis-Vorplanung mit Tal-Erkennung
 * Lernbasierte Ladefenster-Planung anhand historischer Hauslast
 * Optionale PV-Prognoseintegration
 * Dynamische Netzregelung statt einfacher Vollgas-Schaltung
-* Verbesserte V4.2-Leistungsregelung mit Netz-Historie, stabilerer Modusfreigabe und geglätteter Leistungssteuerung
+* Einheitliche Leistungsregelung mit Netz-Historie, stabilerer Modusfreigabe und geglätteter Leistungssteuerung
 * Geräteprofile pro Zendure-Modell
 * Profil-Editor für Lade-/Entlade-Tuning
 * Hard-Sync mit realem Zendure AC-Modus
 * Transparenz- und Diagnose-Sensoren
 * Gewinn-/Ersparnis-Berechnung
-* Saisonale Logik (Sommer/Winter/Automatik)
+* Saisonneutrale Automatik mit saisonalem Kontext
 * Optionale Zusatzakku-Erkennung
 * Optionale Off-Grid-/Inselsteckdosen-Unterstützung
 * Optionaler Zellspannungs-Schutz
@@ -779,7 +772,7 @@ Der Profil-Editor erlaubt fortgeschrittenen Nutzern, ausgewählte Parameter dire
 
 ---
 
-# 🔁 Verbesserte V4.2-Leistungsregelung
+# 🔁 Einheitliche Leistungsregelung
 
 Die verbesserte technische Regelkette ist ab V4.3.0-Dev8.1 der verbindliche
 Befehlsweg:
@@ -974,13 +967,9 @@ Hinweis: Details zur Berechnung stehen in der **Anleitung**.
 
 Kombiniert Preis, PV, Prognose, Lernplanung und Lastdaten.
 
-## Sommer
+## Autarkie
 
 Autarkie-Fokus und Hauslastdeckung.
-
-## Winter
-
-Wirtschaftlichkeits-Fokus, Preisplanung und kontrolliertes Laden/Entladen.
 
 ## Manuell
 
