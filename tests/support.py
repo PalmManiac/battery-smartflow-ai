@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 import sys
@@ -58,4 +58,5 @@ def bootstrap() -> None:
     ha_dt.parse_datetime = lambda value: datetime.fromisoformat(value)
     ha_dt.as_local = lambda value: value
     ha_dt.as_utc = lambda value: value
+    ha_dt.get_default_time_zone = lambda: timezone.utc
     _install_module("homeassistant.util.dt", ha_dt)
