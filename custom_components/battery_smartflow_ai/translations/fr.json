@@ -271,8 +271,7 @@
         "name": "Mode de fonctionnement",
         "state": {
           "automatic": "Automatique",
-          "summer": "Été",
-          "winter": "Hiver",
+          "summer": "Autarcie",
           "manual": "Manuel"
         }
       },
@@ -371,7 +370,7 @@
           "valley_opportunity": "Charge opportuniste dans creux",
           "valley_opportunity_mixed": "Charge opportuniste dans creux avec prévision mixte",
           "learned_planning": "Planification apprise des fenêtres de charge",
-		  "summer_peak_reserve": "Réserve de pic d’été"
+		  "reserve": "Réserve stratégique de pointe"
         }
       },
       "learned_planning_status": {
@@ -635,7 +634,7 @@
           "expensive_discharge": "Décharge à cause d’un prix élevé",
           "very_expensive_force_discharge": "Décharge forcée à cause d’un pic de prix extrême",
           "emergency_latched_charge": "Charge d’urgence active (verrouillée)",
-          "summer_cover_deficit": "Été : couvrir la charge maison",
+          "summer_cover_deficit": "Autarcie : couvrir la charge maison",
           "pv_surplus_charge": "Charger le surplus PV",
           "soc_min_enforced": "Décharge arrêtée (SoC minimum atteint)",
           "pv_house_load_passthrough": "SF800Pro : passthrough PV vers charge maison actif",
@@ -672,10 +671,15 @@
           "cell_voltage_emergency_charge": "Charge d’urgence active (tension cellule critique)",
           "pv_charge_blocked_by_discharge_protection": "Charge PV bloquée car la décharge est encore bloquée par la protection SoC/cellule",
           "learned_charge_window_deadline_too_close_start_now": "Planification apprise : deadline trop proche, démarrer maintenant",
+          "soc_invalid": "Veille sûre : SoC de la batterie invalide",
+          "grid_sensor_invalid": "Veille sûre : données du capteur réseau indisponibles",
+          "soc_limits_invalid": "Veille sûre : limites SoC configurées invalides",
+          "power_limits_invalid": "Veille sûre : limites de puissance configurées invalides",
+          "cell_voltage_sensor_invalid": "Décharge bloquée : capteur de tension cellule indisponible",
 		  "offgrid_load_active_blocks_ac_charge": "Prise îlot active : charge réseau automatique bloquée",
 		  "offgrid_load_support": "Prise Off-Grid active : alimentation par batterie/PV",
-		  "summer_peak_reserve_charge": "Automatique été : sécurisation de la période de prix élevé",
-          "summer_peak_reserve_hold": "Automatique été : réserve de batterie conservée pour un pic de prix ultérieur"
+		  "summer_peak_reserve_charge": "Automatique : sécurisation de la période de prix élevé",
+          "summer_peak_reserve_hold": "Automatique : réserve de batterie conservée pour un pic de prix ultérieur"
         }
       },
       "next_planned_action": {
@@ -737,7 +741,7 @@
           "planning_forecast_reality_override": "Planification : PV réel inférieur à la prévision",
           "valley_opportunity_charge": "Charge opportuniste en période de prix bas",
           "valley_opportunity_charge_mixed_forecast": "Charge opportuniste en période de prix bas avec prévision mixte",
-          "summer_peak_reserve_charge": "Automatique été : sécurisation de la période de prix élevé"
+          "summer_peak_reserve_charge": "Automatique : sécurisation de la période de prix élevé"
         }
       },
       "charge_price_applied": {
