@@ -337,7 +337,11 @@
         "name": "Active device profile"
       },
       "adaptive_peak_active": {
-        "name": "Adaptive peak detected"
+        "name": "Adaptive peak detected",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "forecast_status": {
         "name": "Forecast status",
@@ -519,10 +523,18 @@
         "name": "Global lowest cell voltage"
       },
       "cell_voltage_emergency_active": {
-        "name": "Cell-voltage emergency charge active"
+        "name": "Cell-voltage emergency charge active",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "cell_voltage_discharge_blocked": {
-        "name": "Discharge blocked by cell-voltage protection"
+        "name": "Discharge blocked by cell-voltage protection",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "cell_voltage_soc_plausibility": {
         "name": "SoC / cell voltage plausibility",
@@ -557,7 +569,11 @@
         }
       },
       "offgrid_load_active": {
-        "name": "Off-grid load active"
+        "name": "Off-grid load active",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "offgrid_rule_reason": {
         "name": "Off-grid control reason",
@@ -569,7 +585,11 @@
         }
       },
       "offgrid_source_active": {
-        "name": "Off-grid source active"
+        "name": "Off-grid source active",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "engine_health": {
         "name": "Engine status",
@@ -755,7 +775,11 @@
         "name": "PV charge share"
       },
       "charge_mixed_price_active": {
-        "name": "Mixed price active"
+        "name": "Mixed price active",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "avg_charge_price": {
         "name": "Avg. battery charge price"
@@ -806,25 +830,191 @@
         }
       },
       "strategic_reason": {
-        "name": "Strategic reason"
+        "name": "Strategic reason",
+        "state": {
+          "none": "No reason",
+          "idle": "Idle",
+          "state_idle": "Idle",
+          "standby": "Ready",
+          "no_strategy_needed": "No strategy required",
+          "sensor_invalid": "Invalid sensor data",
+          "soc_invalid": "Safe idle: battery SoC is invalid",
+          "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
+          "power_limits_invalid": "Safe idle: configured power limits are invalid",
+          "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV surplus charging",
+          "pv_export_confirmed": "PV export confirmed",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "technical_reason": {
-        "name": "Technical reason"
+        "name": "Technical reason",
+        "state": {
+          "none": "No reason",
+          "sensor_invalid": "Invalid sensor data",
+          "soc_invalid": "Safe idle: battery SoC is invalid",
+          "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
+          "power_limits_invalid": "Safe idle: configured power limits are invalid",
+          "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
+          "hold_no_power_change": "Hold no power change",
+          "idle_zero_power": "Idle zero power",
+          "manual_constant_output_step_limited": "Manual constant output step limited",
+          "passthrough_output_step_limited": "Passthrough output step limited",
+          "output_inside_deadband": "Output inside deadband",
+          "output_increase_to_reduce_import": "Output increase to reduce import",
+          "output_fast_increase_to_reduce_import": "Output fast increase to reduce import",
+          "output_decrease_to_avoid_export": "Output decrease to avoid export",
+          "output_fast_decrease_to_avoid_export": "Output fast decrease to avoid export",
+          "output_inside_deadband_near_zero_persistent_import_trim": "Output inside deadband near zero persistent import trim",
+          "output_increase_to_reduce_import_near_zero_persistent_import_trim": "Output increase to reduce import near zero persistent import trim",
+          "output_fast_increase_to_reduce_import_near_zero_persistent_import_trim": "Output fast increase to reduce import near zero persistent import trim",
+          "output_decrease_to_avoid_export_near_zero_persistent_import_trim": "Output decrease to avoid export near zero persistent import trim",
+          "output_fast_decrease_to_avoid_export_near_zero_persistent_import_trim": "Output fast decrease to avoid export near zero persistent import trim",
+          "output_inside_deadband_discharge_keepalive": "Output inside deadband discharge keepalive",
+          "output_decrease_to_avoid_export_discharge_keepalive": "Output decrease to avoid export discharge keepalive",
+          "output_fast_decrease_to_avoid_export_discharge_keepalive": "Output fast decrease to avoid export discharge keepalive",
+          "pv_input_inside_deadband": "Pv input inside deadband",
+          "pv_input_increase_from_export": "Pv input increase from export",
+          "pv_input_fast_increase_from_export": "Pv input fast increase from export",
+          "pv_input_decrease_to_avoid_import": "Pv input decrease to avoid import",
+          "pv_input_fast_decrease_to_avoid_import": "Pv input fast decrease to avoid import",
+          "pv_input_inside_deadband_current_grid_cap": "PV input in deadband, limited by current grid",
+          "pv_input_increase_from_export_current_grid_cap": "Pv input increase from export current grid cap",
+          "pv_input_fast_increase_from_export_current_grid_cap": "Pv input fast increase from export current grid cap",
+          "pv_input_decrease_to_avoid_import_current_grid_cap": "Pv input decrease to avoid import current grid cap",
+          "pv_input_fast_decrease_to_avoid_import_current_grid_cap": "Pv input fast decrease to avoid import current grid cap",
+          "manual_charge_fixed_input_power": "Manual charge fixed input power",
+          "planned_charge_fixed_input_power": "Planned charge fixed input power",
+          "emergency_charge_fixed_input_power": "Emergency charge fixed input power",
+          "ramp_down_output_step_limited": "Ramp down output step limited",
+          "ramp_down_input_step_limited": "Ramp down input step limited"
+        }
       },
       "strategy_priority": {
         "name": "Strategy priority"
       },
       "source_reason": {
-        "name": "Source reason"
+        "name": "Source reason",
+        "state": {
+          "none": "No reason",
+          "idle": "Idle",
+          "state_idle": "Idle",
+          "standby": "Ready",
+          "no_strategy_needed": "No strategy required",
+          "sensor_invalid": "Invalid sensor data",
+          "soc_invalid": "Safe idle: battery SoC is invalid",
+          "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
+          "power_limits_invalid": "Safe idle: configured power limits are invalid",
+          "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV surplus charging",
+          "pv_export_confirmed": "PV export confirmed",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "source_action": {
-        "name": "Source action"
+        "name": "Source action",
+        "state": {
+          "idle": "Idle",
+          "charge": "Charge",
+          "discharge": "Discharge",
+          "emergency": "Emergency charge",
+          "passthrough": "Passthrough"
+        }
       },
       "source_ac_mode": {
-        "name": "Source AC mode"
+        "name": "Source AC mode",
+        "state": {
+          "input": "Input",
+          "output": "Output"
+        }
       },
       "charge_commit_active": {
-        "name": "AC charge binding active"
+        "name": "AC charge binding active",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "charge_commit_type": {
         "name": "AC charge binding type",
@@ -839,10 +1029,120 @@
         }
       },
       "charge_commit_reason": {
-        "name": "AC charge binding reason"
+        "name": "AC charge binding reason",
+        "state": {
+          "none": "No reason",
+          "idle": "Idle",
+          "state_idle": "Idle",
+          "standby": "Ready",
+          "no_strategy_needed": "No strategy required",
+          "sensor_invalid": "Invalid sensor data",
+          "soc_invalid": "Safe idle: battery SoC is invalid",
+          "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
+          "power_limits_invalid": "Safe idle: configured power limits are invalid",
+          "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV surplus charging",
+          "pv_export_confirmed": "PV export confirmed",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "charge_commit_source_reason": {
-        "name": "AC charge binding trigger"
+        "name": "AC charge binding trigger",
+        "state": {
+          "none": "No reason",
+          "idle": "Idle",
+          "state_idle": "Idle",
+          "standby": "Ready",
+          "no_strategy_needed": "No strategy required",
+          "sensor_invalid": "Invalid sensor data",
+          "soc_invalid": "Safe idle: battery SoC is invalid",
+          "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
+          "power_limits_invalid": "Safe idle: configured power limits are invalid",
+          "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV surplus charging",
+          "pv_export_confirmed": "PV export confirmed",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "charge_commit_target_soc": {
         "name": "AC charge binding target SoC"
@@ -882,7 +1182,11 @@
         "name": "AC charge binding power"
       },
       "charge_commit_allow_pv_blend": {
-        "name": "PV share allowed for AC charge binding"
+        "name": "PV share allowed for AC charge binding",
+        "state": {
+          "no": "No",
+          "yes": "Yes"
+        }
       },
       "charge_source_allocation": {
         "name": "Charge-source allocation",
