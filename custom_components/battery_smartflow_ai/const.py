@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.3.0-beta1"
+INTEGRATION_VERSION = "4.3.0-beta2"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -138,6 +138,9 @@ DEVICE_PROFILE_SF2400AC = "SF2400AC"
 DEVICE_PROFILE_SF2400PRO = "SF2400Pro"
 DEVICE_PROFILE_SF800PRO = "SF800Pro"
 DEVICE_PROFILE_SF1600AC = "SF1600AC"
+DEVICE_PROFILE_SF3000MIXACPLUS = "SF3000MixAC+"
+DEVICE_PROFILE_SF4000MIXACPLUS = "SF4000MixAC+"
+DEVICE_PROFILE_SF4000MIXPRO = "SF4000MixPro"
 DEVICE_PROFILE_HYPER2000 = "Hyper 2000"
 DEVICE_PROFILE_HUB2000 = "HUB 2000"
 
@@ -397,6 +400,176 @@ VISIBLE_STATE_ENUMS = [
     "waiting_for_charge_window",
     "waiting_blocked",
     "hold",
+]
+
+BOOLEAN_STATE_ENUMS = ["no", "yes"]
+
+SOURCE_ACTION_ENUMS = [
+    "idle",
+    "charge",
+    "discharge",
+    "emergency",
+    "passthrough",
+]
+
+SOURCE_AC_MODE_ENUMS = ["input", "output"]
+
+# Stable strategy/decision reasons exposed by the V4.3 adapter. These values
+# remain language-independent recorder states and are translated by HA.
+STRATEGY_REASON_ENUMS = [
+    "none",
+    "idle",
+    "state_idle",
+    "standby",
+    "no_strategy_needed",
+    "sensor_invalid",
+    "soc_invalid",
+    "grid_sensor_invalid",
+    "soc_limits_invalid",
+    "power_limits_invalid",
+    "cell_voltage_sensor_invalid",
+    "additional_battery_charging_block",
+    "additional_battery_discharging_block",
+    "pv_charge_blocked_by_discharge_protection",
+    "pv_charge_blocked_no_stable_export",
+    "soc_limit_upper",
+    "soc_limit_lower",
+    "soc_min_resume_block",
+    "cell_voltage_cutoff_block",
+    "emergency_latched_charge",
+    "cell_voltage_emergency_charge",
+    "manual_charge",
+    "manual_constant_discharge",
+    "manual_discharge",
+    "manual_idle",
+    "charge_commit_active",
+    "charge_commit_waiting_price",
+    "strategic_ac_charge_blocked_price_conflict",
+    "learned_charge_window_active",
+    "learned_charge_window_latest_start_reached",
+    "learned_charge_window_deadline_too_close_start_now",
+    "learned_charge_window_wait",
+    "learned_charge_window_no_charge_needed",
+    "planning_latest_start",
+    "planning_forecast_poor",
+    "planning_forecast_mixed",
+    "planning_forecast_reality_override",
+    "very_cheap_force_charge",
+    "valley_boost_charge",
+    "valley_boost_charge_mixed_forecast",
+    "valley_opportunity_charge",
+    "valley_opportunity_charge_mixed_forecast",
+    "summer_peak_reserve_charge",
+    "summer_peak_reserve_hold",
+    "pv_surplus_charge",
+    "pv_export_confirmed",
+    "pv_house_load_passthrough",
+    "offgrid_load_support",
+    "offgrid_load_active_blocks_ac_charge",
+    "summer_cover_deficit",
+    "adaptive_peak_discharge",
+    "very_expensive_force_discharge",
+    "price_based_discharge",
+]
+
+DECISION_REASON_ENUMS = [
+    "standby",
+    "state_idle",
+    "state_enter_discharge",
+    "state_discharging",
+    "state_enter_charge",
+    "state_charging",
+    "expensive_discharge",
+    "very_expensive_force_discharge",
+    "emergency_latched_charge",
+    "summer_cover_deficit",
+    "pv_surplus_charge",
+    "soc_min_enforced",
+    "pv_house_load_passthrough",
+    "soc_limit_upper",
+    "soc_limit_lower",
+    "manual_mode",
+    "manual_standby",
+    "manual_charge",
+    "manual_discharge",
+    "manual_constant_discharge",
+    "manual_idle",
+    "idle",
+    "adaptive_peak_discharge",
+    "price_based_discharge",
+    "valley_boost_charge",
+    "planning_latest_start",
+    "planning_forecast_poor",
+    "planning_forecast_mixed",
+    "learned_charge_window_not_ready",
+    "learned_charge_window_wait",
+    "learned_charge_window_active",
+    "charge_commit_active",
+    "learned_charge_window_latest_start_reached",
+    "learned_charge_window_no_charge_needed",
+    "valley_opportunity_charge",
+    "valley_opportunity_charge_mixed_forecast",
+    "valley_boost_charge_mixed_forecast",
+    "planning_forecast_reality_override",
+    "very_cheap_force_charge",
+    "additional_battery_charging_block",
+    "additional_battery_discharging_block",
+    "offgrid_load_active_blocks_ac_charge",
+    "offgrid_load_support",
+    "soc_min_resume_block",
+    "cell_voltage_cutoff_block",
+    "cell_voltage_emergency_charge",
+    "pv_charge_blocked_by_discharge_protection",
+    "learned_charge_window_deadline_too_close_start_now",
+    "soc_invalid",
+    "grid_sensor_invalid",
+    "soc_limits_invalid",
+    "power_limits_invalid",
+    "cell_voltage_sensor_invalid",
+    "summer_peak_reserve_charge",
+    "summer_peak_reserve_hold",
+]
+
+TECHNICAL_REASON_ENUMS = [
+    "none",
+    "sensor_invalid",
+    "soc_invalid",
+    "grid_sensor_invalid",
+    "soc_limits_invalid",
+    "power_limits_invalid",
+    "cell_voltage_sensor_invalid",
+    "hold_no_power_change",
+    "idle_zero_power",
+    "manual_constant_output_step_limited",
+    "passthrough_output_step_limited",
+    "output_inside_deadband",
+    "output_increase_to_reduce_import",
+    "output_fast_increase_to_reduce_import",
+    "output_decrease_to_avoid_export",
+    "output_fast_decrease_to_avoid_export",
+    "output_inside_deadband_near_zero_persistent_import_trim",
+    "output_increase_to_reduce_import_near_zero_persistent_import_trim",
+    "output_fast_increase_to_reduce_import_near_zero_persistent_import_trim",
+    "output_decrease_to_avoid_export_near_zero_persistent_import_trim",
+    "output_fast_decrease_to_avoid_export_near_zero_persistent_import_trim",
+    "output_inside_deadband_discharge_keepalive",
+    "output_decrease_to_avoid_export_discharge_keepalive",
+    "output_fast_decrease_to_avoid_export_discharge_keepalive",
+    "pv_input_inside_deadband",
+    "pv_input_increase_from_export",
+    "pv_input_fast_increase_from_export",
+    "pv_input_decrease_to_avoid_import",
+    "pv_input_fast_decrease_to_avoid_import",
+    "pv_input_inside_deadband_current_grid_cap",
+    "pv_input_increase_from_export_current_grid_cap",
+    "pv_input_fast_increase_from_export_current_grid_cap",
+    "pv_input_decrease_to_avoid_import_current_grid_cap",
+    "pv_input_fast_decrease_to_avoid_import_current_grid_cap",
+    "manual_charge_fixed_input_power",
+    "planned_charge_fixed_input_power",
+    "emergency_charge_fixed_input_power",
+    "ramp_down_output_step_limited",
+    "ramp_down_input_step_limited",
 ]
 
 # ==================================================
