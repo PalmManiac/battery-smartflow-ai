@@ -1,5 +1,8 @@
 {
   "config": {
+    "error": {
+      "grid_split_missing": "Avec deux capteurs, l’importation et l’exportation réseau doivent être sélectionnées."
+    },
     "step": {
       "reconfigure": {
         "title": "Reconfigurer Battery SmartFlow AI",
@@ -373,6 +376,16 @@
 		  "reserve": "Réserve stratégique de pointe"
         }
       },
+      "automatic_weighting": {
+        "name": "Pondération automatique",
+        "state": {
+          "inactive": "Inactive",
+          "pv_oriented": "Orientée PV",
+          "balanced": "Équilibrée",
+          "price_oriented": "Orientée prix",
+          "reserve_oriented": "Orientée réserve"
+        }
+      },
       "learned_planning_status": {
         "name": "Planification de charge : état d’apprentissage",
         "state": {
@@ -425,6 +438,7 @@
           "no_deadline": "Aucune deadline valide",
           "no_charge_needed": "Aucune recharge nécessaire",
           "invalid_search_space": "Aucun espace de recherche valide",
+          "effective_charge_power_too_low": "Puissance de charge disponible trop faible",
           "deadline_too_close_start_now": "Deadline trop proche, démarrer maintenant",
           "latest_start_reached": "Dernier démarrage atteint"
         }
@@ -682,16 +696,6 @@
           "summer_peak_reserve_hold": "Automatique : réserve de batterie conservée pour un pic de prix ultérieur"
         }
       },
-      "next_planned_action": {
-        "name": "Prochaine action planifiée",
-        "state": {
-          "none": "Aucune action",
-          "charge": "Charge planifiée",
-          "discharge": "Décharge planifiée",
-          "wait": "Attendre",
-          "emergency": "Charge d’urgence"
-        }
-      },
       "next_action_state": {
         "name": "Prochaine action",
         "state": {
@@ -710,9 +714,6 @@
       },
       "next_action_time": {
         "name": "Heure de démarrage de la prochaine action"
-      },
-      "ai_debug": {
-        "name": "Debug IA"
       },
       "house_load": {
         "name": "Charge maison"
@@ -761,6 +762,139 @@
       },
       "profit_eur": {
         "name": "Économies / gain (total)"
+      },
+      "strategy_state": {
+        "name": "État de la stratégie",
+        "state": {
+          "protection": "Protection active",
+          "emergency_charge": "Charge d’urgence",
+          "manual_charge": "Charge manuelle",
+          "manual_discharge": "Décharge manuelle",
+          "manual_idle": "Veille manuelle",
+          "ac_charge_committed": "Engagement de charge CA actif",
+          "ac_charge_planned": "Charge CA planifiée",
+          "ac_charge_price": "Charge CA basée sur le prix",
+          "ac_charge_learned": "Charge CA basée sur l’apprentissage",
+          "ac_charge_reserve": "Charge CA pour réserve de pointe",
+          "pv_surplus_charge": "Charge du surplus PV",
+          "load_coverage": "Couverture de la charge domestique",
+          "economic_discharge": "Décharge économique",
+          "offgrid_support": "Assistance hors réseau",
+          "passthrough": "Transfert PV vers la charge domestique",
+          "hold": "Maintien de l’état",
+          "idle_ready": "Prêt",
+          "idle_safe": "Veille sécurisée"
+        }
+      },
+      "visible_state": {
+        "name": "État visible",
+        "state": {
+          "ready": "Prêt",
+          "safe_idle": "Veille sécurisée",
+          "protection_active": "Protection active",
+          "emergency_charge": "Charge d’urgence",
+          "manual": "Fonctionnement manuel",
+          "grid_charge": "Charge réseau",
+          "pv_charge": "Charge PV",
+          "reserve_charge": "Charge de réserve",
+          "autarky_cover": "Couverture domestique en autonomie",
+          "load_coverage": "Couverture de la charge domestique",
+          "economic_discharge": "Décharge économique",
+          "waiting_for_charge_window": "En attente d’une fenêtre de charge",
+          "waiting_blocked": "En attente – actuellement bloqué",
+          "hold": "Maintien de l’état"
+        }
+      },
+      "strategic_reason": {
+        "name": "Motif stratégique"
+      },
+      "technical_reason": {
+        "name": "Motif technique"
+      },
+      "strategy_priority": {
+        "name": "Priorité de la stratégie"
+      },
+      "source_reason": {
+        "name": "Motif source"
+      },
+      "source_action": {
+        "name": "Action source"
+      },
+      "source_ac_mode": {
+        "name": "Mode CA source"
+      },
+      "charge_commit_active": {
+        "name": "Engagement de charge CA actif"
+      },
+      "charge_commit_type": {
+        "name": "Type d’engagement de charge CA",
+        "state": {
+          "none": "Aucun engagement de charge",
+          "planning": "Planification",
+          "learned": "Planification apprise",
+          "very_cheap": "Très bon marché",
+          "valley": "Prix creux",
+          "opportunity": "Opportunité",
+          "reserve": "Réserve"
+        }
+      },
+      "charge_commit_reason": {
+        "name": "Motif de l’engagement de charge CA"
+      },
+      "charge_commit_source_reason": {
+        "name": "Déclencheur de l’engagement de charge CA"
+      },
+      "charge_commit_target_soc": {
+        "name": "SoC cible de l’engagement de charge CA"
+      },
+      "charge_commit_started_at": {
+        "name": "Engagement de charge démarré"
+      },
+      "charge_commit_valid_until": {
+        "name": "Engagement de charge valide jusqu’à"
+      },
+      "charge_commit_abort_reason": {
+        "name": "Motif d’arrêt de l’engagement de charge CA",
+        "state": {
+          "none": "Aucun arrêt",
+          "target_soc_reached": "SoC cible atteint",
+          "max_soc_reached": "SoC maximal atteint",
+          "target_unreachable_battery_full": "Cible pratiquement atteinte : la batterie n’accepte plus de puissance de charge",
+          "target_nearly_reached_discharge_window": "Cible économiquement suffisante : fenêtre de décharge active",
+          "deadline_passed": "Échéance de planification dépassée",
+          "battery_full": "Batterie pleine",
+          "price_window_expired": "Fenêtre de prix expirée",
+          "price_condition_lost": "Condition de prix non remplie",
+          "protection_cutoff": "Protection active",
+          "cell_voltage_cutoff": "Protection de tension cellule active",
+          "soc_invalid": "SoC invalide",
+          "sensor_invalid": "Données capteur invalides",
+          "additional_battery_discharging_blocks_charge": "Batterie supplémentaire en décharge : charge bloquée",
+          "offgrid_load_blocks_ac_charge": "Prise îlot active : charge réseau bloquée",
+          "autarky_mode_selected": "Mode autonomie sélectionné",
+          "manual_mode_selected": "Mode manuel sélectionné",
+          "user_disabled_automatic": "Mode automatique désactivé",
+          "device_error": "Erreur de l’appareil",
+          "unsafe_measurements": "Mesures non sûres"
+        }
+      },
+      "charge_commit_requested_power_w": {
+        "name": "Puissance de l’engagement de charge CA"
+      },
+      "charge_commit_allow_pv_blend": {
+        "name": "Part PV autorisée pour l’engagement de charge CA"
+      },
+      "charge_source_allocation": {
+        "name": "Répartition des sources de charge",
+        "state": {
+          "no_active_charge_binding": "Aucun engagement de charge actif",
+          "no_charge_target": "Aucune cible de charge",
+          "pv_blend_disabled": "Mélange PV désactivé",
+          "grid_only_no_pv_surplus": "Charge réseau uniquement",
+          "pv_covers_total_charge_target": "Le PV couvre la cible de charge",
+          "mixed_charge_grid_limit_reached": "Charge mixte avec limite réseau atteinte",
+          "mixed_pv_grid_charge": "Charge mixte PV et réseau"
+        }
       }
     }
   }
