@@ -1,5 +1,8 @@
 {
   "config": {
+    "error": {
+      "grid_split_missing": "Bij gebruik van twee sensoren moeten zowel netafname als netteruglevering zijn geselecteerd."
+    },
     "step": {
       "reconfigure": {
         "title": "Battery SmartFlow AI opnieuw configureren",
@@ -373,6 +376,16 @@
 		  "reserve": "Strategische piekreserve"
         }
       },
+      "automatic_weighting": {
+        "name": "Automatische weging",
+        "state": {
+          "inactive": "Niet actief",
+          "pv_oriented": "PV-gericht",
+          "balanced": "Evenwichtig",
+          "price_oriented": "Prijsgericht",
+          "reserve_oriented": "Reservegericht"
+        }
+      },
       "learned_planning_status": {
         "name": "Laadplanning: leerstatus",
         "state": {
@@ -425,6 +438,7 @@
           "no_deadline": "Geen geldige deadline",
           "no_charge_needed": "Geen bijlading nodig",
           "invalid_search_space": "Geen geldige zoekruimte",
+          "effective_charge_power_too_low": "Beschikbaar laadvermogen te laag",
           "deadline_too_close_start_now": "Deadline te dichtbij, nu starten",
           "latest_start_reached": "Laatste startmoment bereikt"
         }
@@ -682,16 +696,6 @@
           "summer_peak_reserve_hold": "Automatisch: batterijreserve vasthouden voor latere prijspiek"
         }
       },
-      "next_planned_action": {
-        "name": "Geplande volgende actie",
-        "state": {
-          "none": "Geen actie",
-          "charge": "Gepland laden",
-          "discharge": "Gepland ontladen",
-          "wait": "Wachten",
-          "emergency": "Noodladen"
-        }
-      },
       "next_action_state": {
         "name": "Volgende actie",
         "state": {
@@ -710,9 +714,6 @@
       },
       "next_action_time": {
         "name": "Starttijd volgende actie"
-      },
-      "ai_debug": {
-        "name": "AI-debug"
       },
       "house_load": {
         "name": "Huislast"
@@ -761,6 +762,139 @@
       },
       "profit_eur": {
         "name": "Besparing / winst (totaal)"
+      },
+      "strategy_state": {
+        "name": "Strategiestatus",
+        "state": {
+          "protection": "Beveiliging actief",
+          "emergency_charge": "Noodladen",
+          "manual_charge": "Handmatig laden",
+          "manual_discharge": "Handmatig ontladen",
+          "manual_idle": "Handmatige stand-by",
+          "ac_charge_committed": "AC-laadbinding actief",
+          "ac_charge_planned": "Geplande AC-lading",
+          "ac_charge_price": "Prijsgebaseerde AC-lading",
+          "ac_charge_learned": "Zelflerende AC-lading",
+          "ac_charge_reserve": "AC-lading voor piekreserve",
+          "pv_surplus_charge": "PV-overschot laden",
+          "load_coverage": "Huishoudelijk verbruik dekken",
+          "economic_discharge": "Economisch ontladen",
+          "offgrid_support": "Off-grid-ondersteuning",
+          "passthrough": "PV-doorvoer naar huislast",
+          "hold": "Status vasthouden",
+          "idle_ready": "Gereed",
+          "idle_safe": "Veilige stand-by"
+        }
+      },
+      "visible_state": {
+        "name": "Zichtbare status",
+        "state": {
+          "ready": "Gereed",
+          "safe_idle": "Veilige stand-by",
+          "protection_active": "Beveiliging actief",
+          "emergency_charge": "Noodladen",
+          "manual": "Handmatige werking",
+          "grid_charge": "Netladen",
+          "pv_charge": "PV-laden",
+          "reserve_charge": "Reserveladen",
+          "autarky_cover": "Autarkie: huishoudelijk verbruik dekken",
+          "load_coverage": "Huishoudelijk verbruik dekken",
+          "economic_discharge": "Economisch ontladen",
+          "waiting_for_charge_window": "Wachten op laadvenster",
+          "waiting_blocked": "Wachten – momenteel geblokkeerd",
+          "hold": "Status vasthouden"
+        }
+      },
+      "strategic_reason": {
+        "name": "Strategische reden"
+      },
+      "technical_reason": {
+        "name": "Technische reden"
+      },
+      "strategy_priority": {
+        "name": "Strategieprioriteit"
+      },
+      "source_reason": {
+        "name": "Bronreden"
+      },
+      "source_action": {
+        "name": "Bronactie"
+      },
+      "source_ac_mode": {
+        "name": "AC-bronmodus"
+      },
+      "charge_commit_active": {
+        "name": "AC-laadbinding actief"
+      },
+      "charge_commit_type": {
+        "name": "Type AC-laadbinding",
+        "state": {
+          "none": "Geen laadbinding",
+          "planning": "Planning",
+          "learned": "Zelflerende planning",
+          "very_cheap": "Zeer goedkoop",
+          "valley": "Dalprijs",
+          "opportunity": "Gelegenheid",
+          "reserve": "Reserve"
+        }
+      },
+      "charge_commit_reason": {
+        "name": "Reden van AC-laadbinding"
+      },
+      "charge_commit_source_reason": {
+        "name": "Aanleiding voor AC-laadbinding"
+      },
+      "charge_commit_target_soc": {
+        "name": "Doel-SoC van AC-laadbinding"
+      },
+      "charge_commit_started_at": {
+        "name": "Laadbinding gestart"
+      },
+      "charge_commit_valid_until": {
+        "name": "Laadbinding geldig tot"
+      },
+      "charge_commit_abort_reason": {
+        "name": "Afbreekreden van AC-laadbinding",
+        "state": {
+          "none": "Niet afgebroken",
+          "target_soc_reached": "Doel-SoC bereikt",
+          "max_soc_reached": "Maximale SoC bereikt",
+          "target_unreachable_battery_full": "Laaddoel praktisch bereikt: batterij neemt geen laadvermogen meer op",
+          "target_nearly_reached_discharge_window": "Laaddoel economisch voldoende bereikt: ontlaadvenster actief",
+          "deadline_passed": "Planningstermijn verstreken",
+          "battery_full": "Batterij vol",
+          "price_window_expired": "Prijsvenster verlopen",
+          "price_condition_lost": "Prijsvoorwaarde niet meer vervuld",
+          "protection_cutoff": "Beveiliging actief",
+          "cell_voltage_cutoff": "Celspanningsbeveiliging actief",
+          "soc_invalid": "SoC ongeldig",
+          "sensor_invalid": "Sensorgegevens ongeldig",
+          "additional_battery_discharging_blocks_charge": "Extra batterij ontlaadt: laden geblokkeerd",
+          "offgrid_load_blocks_ac_charge": "Eilandstopcontact actief: netladen geblokkeerd",
+          "autarky_mode_selected": "Autarkiemodus geselecteerd",
+          "manual_mode_selected": "Handmatige modus geselecteerd",
+          "user_disabled_automatic": "Automatische modus uitgeschakeld",
+          "device_error": "Apparaatfout",
+          "unsafe_measurements": "Onveilige meetwaarden"
+        }
+      },
+      "charge_commit_requested_power_w": {
+        "name": "Vermogen van AC-laadbinding"
+      },
+      "charge_commit_allow_pv_blend": {
+        "name": "PV-aandeel toegestaan voor AC-laadbinding"
+      },
+      "charge_source_allocation": {
+        "name": "Verdeling van laadbronnen",
+        "state": {
+          "no_active_charge_binding": "Geen actieve laadbinding",
+          "no_charge_target": "Geen laaddoel",
+          "pv_blend_disabled": "PV-bijmenging uitgeschakeld",
+          "grid_only_no_pv_surplus": "Alleen netladen",
+          "pv_covers_total_charge_target": "PV dekt het laaddoel",
+          "mixed_charge_grid_limit_reached": "Gemengd laden met netlimiet bereikt",
+          "mixed_pv_grid_charge": "Gemengd laden via PV en net"
+        }
       }
     }
   }
