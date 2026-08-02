@@ -134,6 +134,12 @@ from .learned_planning import (
 )
 from .grid_history import GridHistory, build_grid_history_config
 from .charge_source_allocator import ChargeSourceAllocator
+from .charge_economics import (
+    add_charge_evidence,
+    classify_charge_pricing,
+    pricing_from_charge_evidence,
+    recent_charge_evidence,
+)
 from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
@@ -361,6 +367,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "trade_charged_kwh": 0.0,
             "trade_cycle_below_soc_min": False,
             "prev_soc": None,
+            "pending_charge_price_evidence": None,
 
             "avg_charge_price": None,
             "charged_kwh": 0.0,
@@ -3162,104 +3169,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["cell_voltage_discharge_blocked"] = blocked
         return blocked
 
-    def _classify_charge_source(
-        self,
-        delta_kwh: float,
-        grid_import_w: float,
-        grid_export_w: float,
-        decision_charge_w: float,
-        decision_ac_mode: str,
-        price_now: float | None,
-        feed_in_tariff: float,
-        battery_charge_w: float,
-        decision_reason: str | None = None,
-    ) -> tuple[bool, float, str, float, float]:
-        """Classify the economic source of a battery charge delta.
-
-        V4.2.4:
-        If PV surplus and AC/grid charging happen at the same time, use a weighted
-        mixed charge price:
-          - grid part: current grid price
-          - PV part: feed-in tariff / PV opportunity value
-
-        The calculation is anchored on the measured battery charge power where
-        available, so house load is implicitly accounted for by grid_import_w.
-        """
-
-        if delta_kwh <= 0:
-            return False, 0.0, "no_charge_delta", 0.0, 0.0
-
-        if decision_ac_mode != "input":
-            return False, 0.0, "not_in_input_mode", 0.0, 0.0
-
-        charge_cmd_w = max(0.0, float(decision_charge_w or 0.0))
-        measured_charge_w = max(0.0, float(battery_charge_w or 0.0))
-        charge_w = measured_charge_w if measured_charge_w > 30.0 else charge_cmd_w
-
-        if charge_w <= 0.0:
-            return False, 0.0, "no_charge_command", 0.0, 0.0
-
-        import_w = max(0.0, float(grid_import_w or 0.0))
-        export_w = max(0.0, float(grid_export_w or 0.0))
-
-        pv_price = max(0.0, float(feed_in_tariff or 0.0))
-
-        price_driven_charge_reasons = {
-            "very_cheap_force_charge",
-            "valley_boost_charge",
-            "valley_boost_charge_mixed_forecast",
-            "planning_latest_start",
-            "planning_forecast_poor",
-            "planning_forecast_mixed",
-            "planning_forecast_reality_override",
-            "valley_opportunity_charge",
-            "valley_opportunity_charge_mixed_forecast",
-            "summer_peak_reserve_charge",
-        }
-
-        # Clear export means PV is still available after house load and battery
-        # charging. Treat the charge as PV/opportunity-cost based.
-        if export_w >= 40.0:
-            return False, pv_price, "pv_surplus_export", 0.0, charge_w
-
-        # If there is no meaningful grid import, this is PV/opportunity-cost based.
-        if import_w <= 60.0:
-            return False, pv_price, "pv_or_free_low_import", 0.0, charge_w
-
-        if price_now is None:
-            return False, pv_price, "price_missing_assume_pv_opportunity", 0.0, charge_w
-
-        # Mixed charge:
-        # Grid import during INPUT is the plausible grid share of the battery charge.
-        # Any remaining measured battery charge power is treated as PV contribution.
-        grid_part_w = min(import_w, charge_w)
-        pv_part_w = max(0.0, charge_w - grid_part_w)
-
-        mixed_price = (
-            (grid_part_w * float(price_now)) + (pv_part_w * pv_price)
-        ) / charge_w
-
-        if grid_part_w > 0.0 and pv_part_w > 0.0:
-            source = "mixed_grid_pv_charge"
-        elif grid_part_w > 0.0:
-            source = (
-                str(decision_reason)
-                if decision_reason in price_driven_charge_reasons
-                else "grid_charge"
-            )
-        else:
-            source = "pv_opportunity_charge"
-
-        is_grid_charge = grid_part_w > max(60.0, charge_w * 0.10)
-
-        return (
-            bool(is_grid_charge),
-            float(mixed_price),
-            str(source),
-            float(grid_part_w),
-            float(pv_part_w),
-        )
-
     def _parse_price_points(self, now) -> list[PricePoint]:
         if not self.entities.price_export:
             return []
@@ -4073,6 +3982,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["trade_avg_charge_price"] = 0.0
                 self._persist["trade_charged_kwh"] = 0.0
                 self._persist["trade_cycle_below_soc_min"] = True
+                self._persist["pending_charge_price_evidence"] = None
             elif float(soc) > float(soc_min):
                 self._persist["trade_cycle_below_soc_min"] = False
 
@@ -4627,99 +4537,128 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # charge_commit_active, but the price logic needs e.g. valley_opportunity_charge.
             charge_pricing_reason = self._charge_pricing_reason(decision.reason)
 
+            stored_commit_price = _to_float(
+                self._persist.get("charge_commit_price_eur_kwh"),
+                None,
+            )
+            pricing_price_now = (
+                float(price_now)
+                if price_now is not None
+                else stored_commit_price
+            )
+
+            current_charge_pricing = classify_charge_pricing(
+                grid_import_w=float(grid_import or 0.0),
+                grid_export_w=float(grid_export or 0.0),
+                decision_charge_w=float(decision.charge_w or 0.0),
+                decision_ac_mode=str(decision.ac_mode),
+                price_now=pricing_price_now,
+                feed_in_tariff=float(feed_in_tariff),
+                battery_charge_w=float(battery_charge_w),
+                decision_reason=charge_pricing_reason,
+            )
+
+            sample_duration_seconds = float(UPDATE_INTERVAL)
+            try:
+                previous_update = dt_util.parse_datetime(
+                    str(self._persist.get("last_ts") or "")
+                )
+                if previous_update is not None:
+                    sample_duration_seconds = max(
+                        1.0,
+                        (now - dt_util.as_utc(previous_update)).total_seconds(),
+                    )
+            except Exception:
+                sample_duration_seconds = float(UPDATE_INTERVAL)
+
+            pending_charge_evidence = recent_charge_evidence(
+                self._persist.get("pending_charge_price_evidence"),
+                now=now,
+            )
+
+            if current_charge_pricing.active:
+                pending_charge_evidence = add_charge_evidence(
+                    pending_charge_evidence,
+                    pricing=current_charge_pricing,
+                    duration_seconds=sample_duration_seconds,
+                    now=now,
+                )
+
             if delta_kwh > 0:
                 is_below_soc_min_cycle = bool(
                     self._persist.get("trade_cycle_below_soc_min", False)
                 )
-                (
-                    is_grid_charge,
-                    applied_price,
-                    charge_source,
-                    charge_grid_part_w,
-                    charge_pv_part_w,
-                ) = self._classify_charge_source(
-                    delta_kwh=float(delta_kwh),
-                    grid_import_w=float(grid_import or 0.0),
-                    grid_export_w=float(grid_export or 0.0),
-                    decision_charge_w=float(decision.charge_w or 0.0),
-                    decision_ac_mode=str(decision.ac_mode),
-                    price_now=price_now,
-                    feed_in_tariff=float(feed_in_tariff),
-                    battery_charge_w=float(battery_charge_w),
-                    decision_reason=charge_pricing_reason,
+                delta_charge_pricing = pricing_from_charge_evidence(
+                    pending_charge_evidence,
+                    now=now,
                 )
-                charge_price_applied = float(applied_price)
+                if delta_charge_pricing is None:
+                    delta_charge_pricing = current_charge_pricing
 
-                if not is_below_soc_min_cycle:
-                    charged_kwh = float(self._persist.get("trade_charged_kwh", 0.0) or 0.0)
-                    avg_price = self._persist.get("trade_avg_charge_price")
+                if delta_charge_pricing.active:
+                    is_grid_charge = bool(
+                        delta_charge_pricing.is_grid_charge
+                    )
+                    charge_price_applied = float(
+                        delta_charge_pricing.price_eur_kwh
+                    )
+                    charge_source = str(delta_charge_pricing.source)
+                    charge_grid_part_w = float(
+                        delta_charge_pricing.grid_part_w
+                    )
+                    charge_pv_part_w = float(
+                        delta_charge_pricing.pv_part_w
+                    )
 
-                    new_total_kwh = charged_kwh + float(delta_kwh)
+                    if not is_below_soc_min_cycle:
+                        charged_kwh = float(
+                            self._persist.get("trade_charged_kwh", 0.0)
+                            or 0.0
+                        )
+                        avg_price = self._persist.get(
+                            "trade_avg_charge_price"
+                        )
+                        applied_price = float(
+                            delta_charge_pricing.price_eur_kwh
+                        )
+                        new_total_kwh = charged_kwh + float(delta_kwh)
 
-                    if new_total_kwh > 0:
-                        if avg_price is None:
-                            new_avg = float(applied_price)
+                        if new_total_kwh > 0:
+                            if avg_price is None:
+                                new_avg = applied_price
+                            else:
+                                new_avg = (
+                                    float(avg_price) * charged_kwh
+                                    + applied_price * float(delta_kwh)
+                                ) / new_total_kwh
                         else:
-                            new_avg = (
-                                (float(avg_price) * charged_kwh + float(applied_price) * float(delta_kwh))
-                                / new_total_kwh
-                            )
-                    else:
-                        new_avg = 0.0
+                            new_avg = 0.0
 
-                    self._persist["trade_charged_kwh"] = new_total_kwh
-                    self._persist["trade_avg_charge_price"] = new_avg
-                    
-            # V4.3.0-dev2.3:
-            # Display-only fallback for active AC charging / AC-Ladebindung.
-            #
-            # The real charge price history is updated only when delta_kwh > 0.
-            # This block only keeps the diagnostic sensors stable while charging is
-            # currently requested but the battery energy counter has not advanced yet.
-            if (
-                charge_price_applied is None
-                and str(decision.ac_mode) == "input"
-                and float(decision.charge_w or 0.0) > 0.0
-            ):
-                preview_reason = self._charge_pricing_reason(decision.reason)
-                preview_reason = str(preview_reason or "")
+                        self._persist["trade_charged_kwh"] = new_total_kwh
+                        self._persist["trade_avg_charge_price"] = new_avg
 
-                stored_commit_price = _to_float(
-                    self._persist.get("charge_commit_price_eur_kwh"),
-                    None,
+                # The pending samples describe the energy represented by this
+                # SoC increase. Begin a fresh evidence window afterwards.
+                pending_charge_evidence = None
+
+            elif delta_kwh < 0:
+                # Never carry charge evidence across a discharge interval.
+                pending_charge_evidence = None
+
+            elif current_charge_pricing.active:
+                # Show the opportunity/grid price immediately, while the
+                # economic energy ledger still waits for a real SoC increase.
+                is_grid_charge = bool(current_charge_pricing.is_grid_charge)
+                charge_price_applied = float(
+                    current_charge_pricing.price_eur_kwh
                 )
+                charge_source = str(current_charge_pricing.source)
+                charge_grid_part_w = float(current_charge_pricing.grid_part_w)
+                charge_pv_part_w = float(current_charge_pricing.pv_part_w)
 
-                preview_price = None
-                if price_now is not None:
-                    preview_price = float(price_now)
-                elif stored_commit_price is not None:
-                    preview_price = float(stored_commit_price)
-
-                if preview_price is not None:
-                    charge_price_applied = float(preview_price)
-
-                    if preview_reason in {
-                        "very_cheap_force_charge",
-                        "valley_boost_charge",
-                        "valley_boost_charge_mixed_forecast",
-                        "valley_opportunity_charge",
-                        "valley_opportunity_charge_mixed_forecast",
-                        "planning_latest_start",
-                        "planning_forecast_poor",
-                        "planning_forecast_mixed",
-                        "planning_forecast_reality_override",
-                        "learned_charge_window_active",
-                        "learned_charge_window_latest_start_reached",
-                        "learned_charge_window_deadline_too_close_start_now",
-                        "summer_peak_reserve_charge",
-                    }:
-                        charge_source = preview_reason
-                    else:
-                        charge_source = "grid_charge"
-
-                    charge_grid_part_w = float(decision.charge_w or 0.0)
-                    charge_pv_part_w = 0.0
-                    is_grid_charge = True
+            self._persist[
+                "pending_charge_price_evidence"
+            ] = pending_charge_evidence
                     
             # V4.3.0-dev5.2.1:
             # Bootstrap the economic charge-price basis during a confirmed
