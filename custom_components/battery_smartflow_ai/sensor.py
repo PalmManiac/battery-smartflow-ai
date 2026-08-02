@@ -88,6 +88,7 @@ LEARNED_PLANNING_BLOCKING_REASON_ENUMS = [
     "no_deadline",
     "no_charge_needed",
     "invalid_search_space",
+    "effective_charge_power_too_low",
     "deadline_too_close_start_now",
     "latest_start_reached",
 ]
