@@ -1,5 +1,8 @@
 {
   "config": {
+    "error": {
+      "grid_split_missing": "Bei \"Zwei Sensoren\" müssen Netzbezug und Netzeinspeisung beide ausgewählt werden."
+    },
     "step": {
       "reconfigure": {
         "title": "Battery SmartFlow AI neu konfigurieren",
@@ -435,6 +438,7 @@
           "no_deadline": "Keine gültige Deadline",
           "no_charge_needed": "Keine Nachladung erforderlich",
           "invalid_search_space": "Kein gültiger Suchraum",
+          "effective_charge_power_too_low": "Verfügbare Ladeleistung zu gering",
           "deadline_too_close_start_now": "Deadline zu nah, sofort starten",
           "latest_start_reached": "Spätester Startzeitpunkt erreicht"
         }
@@ -692,16 +696,6 @@
           "summer_peak_reserve_hold": "Automatik: Akku-Reserve für spätere Preisspitze halten"
         }
       },
-      "next_planned_action": {
-        "name": "Geplante nächste Aktion",
-        "state": {
-          "none": "Keine Aktion geplant",
-          "charge": "Geplantes Laden",
-          "discharge": "Geplante Entladung",
-          "wait": "Warten",
-          "emergency": "Notladung"
-        }
-      },
       "next_action_state": {
         "name": "Nächste Aktion",
         "state": {
@@ -720,9 +714,6 @@
       },
       "next_action_time": {
         "name": "Startzeit nächste Aktion"
-      },
-      "ai_debug": {
-        "name": "KI-Debug"
       },
       "house_load": {
         "name": "Hauslast"
@@ -772,11 +763,47 @@
       "profit_eur": {
         "name": "Ersparnis / Gewinn (gesamt)"
       },
-	  "strategy_state": {
-        "name": "Strategiezustand"
+      "strategy_state": {
+        "name": "Strategiezustand",
+        "state": {
+          "protection": "Schutz aktiv",
+          "emergency_charge": "Notladung",
+          "manual_charge": "Manuelles Laden",
+          "manual_discharge": "Manuelles Entladen",
+          "manual_idle": "Manuelle Bereitschaft",
+          "ac_charge_committed": "AC-Ladebindung aktiv",
+          "ac_charge_planned": "Geplante AC-Ladung",
+          "ac_charge_price": "Preisbasierte AC-Ladung",
+          "ac_charge_learned": "Lernbasierte AC-Ladung",
+          "ac_charge_reserve": "AC-Ladung für Peakreserve",
+          "pv_surplus_charge": "PV-Überschussladung",
+          "load_coverage": "Hauslastdeckung",
+          "economic_discharge": "Wirtschaftliche Entladung",
+          "offgrid_support": "Off-Grid-Unterstützung",
+          "passthrough": "PV-Hauslast-Durchfluss",
+          "hold": "Zustand halten",
+          "idle_ready": "Bereit",
+          "idle_safe": "Sicherer Leerlauf"
+        }
       },
       "visible_state": {
-        "name": "Sichtbarer Zustand"
+        "name": "Sichtbarer Zustand",
+        "state": {
+          "ready": "Bereit",
+          "safe_idle": "Sicherer Leerlauf",
+          "protection_active": "Schutz aktiv",
+          "emergency_charge": "Notladung",
+          "manual": "Manueller Betrieb",
+          "grid_charge": "Netzladung",
+          "pv_charge": "PV-Ladung",
+          "reserve_charge": "Reserveladung",
+          "autarky_cover": "Autarkie-Hauslastdeckung",
+          "load_coverage": "Hauslastdeckung",
+          "economic_discharge": "Wirtschaftliche Entladung",
+          "waiting_for_charge_window": "Warten auf Ladefenster",
+          "waiting_blocked": "Warten – derzeit blockiert",
+          "hold": "Zustand halten"
+        }
       },
       "strategic_reason": {
         "name": "Strategischer Grund"
@@ -802,7 +829,7 @@
       "charge_commit_type": {
         "name": "Art der AC-Ladebindung",
         "state": {
-          "none": "Kein Commit",
+          "none": "Keine Ladebindung",
           "planning": "Planung",
           "learned": "Lernplanung",
           "very_cheap": "Sehr günstig",
