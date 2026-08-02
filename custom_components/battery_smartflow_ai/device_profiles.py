@@ -592,6 +592,38 @@ SF2400PRO_PROFILE = {
 }
 
 
+# SolarFlow Mix family (limits confirmed by a device owner in discussion #200).
+# These models are pure AC-coupled battery storage systems without a direct PV
+# input. They therefore inherit the neutral SF2400AC behavior rather than the
+# special SF800Pro/Pro2 or SF2400Pro reactions. Only confirmed hardware limits
+# are overridden here.
+SF3000MIXACPLUS_PROFILE = {
+    **SF2400AC_PROFILE,
+    "label": "Zendure SolarFlow 3000 Mix AC+",
+    "MAX_INPUT_W": 3000.0,
+    "MAX_OUTPUT_W": 3000.0,
+    "OFFGRID_MAX_INTERNAL_SUPPLY_W": 3680.0,
+}
+
+
+SF4000MIXACPLUS_PROFILE = {
+    **SF2400AC_PROFILE,
+    "label": "Zendure SolarFlow 4000 Mix AC+",
+    "MAX_INPUT_W": 4000.0,
+    "MAX_OUTPUT_W": 4000.0,
+    "OFFGRID_MAX_INTERNAL_SUPPLY_W": 3680.0,
+}
+
+
+SF4000MIXPRO_PROFILE = {
+    **SF2400AC_PROFILE,
+    "label": "Zendure SolarFlow 4000 Mix Pro",
+    "MAX_INPUT_W": 4000.0,
+    "MAX_OUTPUT_W": 4000.0,
+    "OFFGRID_MAX_INTERNAL_SUPPLY_W": 3680.0,
+}
+
+
 SF1600AC_PROFILE = {
     # --- UI ---
     "label": "Zendure SF1600AC+",
@@ -763,6 +795,9 @@ DEVICE_PROFILES = {
     "SF2400AC": SF2400AC_PROFILE,
     "SF2400AC+": SF2400ACPLUS_PROFILE,
     "SF2400Pro": SF2400PRO_PROFILE,
+    "SF3000MixAC+": SF3000MIXACPLUS_PROFILE,
+    "SF4000MixAC+": SF4000MIXACPLUS_PROFILE,
+    "SF4000MixPro": SF4000MIXPRO_PROFILE,
     "SF1600AC": SF1600AC_PROFILE,
     "Hyper 2000": HYPER2000_PROFILE,
     "HUB 2000": HUB2000_PROFILE,
