@@ -1,5 +1,8 @@
 {
   "config": {
+    "error": {
+      "grid_split_missing": "When using two sensors, both grid import and grid export must be selected."
+    },
     "step": {
       "reconfigure": {
         "title": "Reconfigure Battery SmartFlow AI",
@@ -373,6 +376,16 @@
 		  "reserve": "Strategic peak reserve"
         }
       },
+      "automatic_weighting": {
+        "name": "Automatic weighting",
+        "state": {
+          "inactive": "Inactive",
+          "pv_oriented": "PV-oriented",
+          "balanced": "Balanced",
+          "price_oriented": "Price-oriented",
+          "reserve_oriented": "Reserve-oriented"
+        }
+      },
       "learned_planning_status": {
         "name": "Charge planning: Learning status",
         "state": {
@@ -425,6 +438,7 @@
           "no_deadline": "No valid deadline",
           "no_charge_needed": "No recharge required",
           "invalid_search_space": "No valid search space",
+          "effective_charge_power_too_low": "Available charge power too low",
           "deadline_too_close_start_now": "Deadline too close, start now",
           "latest_start_reached": "Latest start time reached"
         }
@@ -682,16 +696,6 @@
           "summer_peak_reserve_hold": "Automatic: holding battery reserve for later price peak"
         }
       },
-      "next_planned_action": {
-        "name": "Planned next action",
-        "state": {
-          "none": "No action",
-          "charge": "Planned charging",
-          "discharge": "Planned discharge",
-          "wait": "Wait",
-          "emergency": "Emergency charging"
-        }
-      },
       "next_action_state": {
         "name": "Next action",
         "state": {
@@ -710,9 +714,6 @@
       },
       "next_action_time": {
         "name": "Next action start time"
-      },
-      "ai_debug": {
-        "name": "AI debug"
       },
       "house_load": {
         "name": "House load"
@@ -761,6 +762,139 @@
       },
       "profit_eur": {
         "name": "Savings / profit (total)"
+      },
+      "strategy_state": {
+        "name": "Strategy state",
+        "state": {
+          "protection": "Protection active",
+          "emergency_charge": "Emergency charging",
+          "manual_charge": "Manual charging",
+          "manual_discharge": "Manual discharging",
+          "manual_idle": "Manual standby",
+          "ac_charge_committed": "AC charge binding active",
+          "ac_charge_planned": "Planned AC charging",
+          "ac_charge_price": "Price-based AC charging",
+          "ac_charge_learned": "Learned AC charging",
+          "ac_charge_reserve": "AC charging for peak reserve",
+          "pv_surplus_charge": "PV surplus charging",
+          "load_coverage": "House-load coverage",
+          "economic_discharge": "Economic discharging",
+          "offgrid_support": "Off-grid support",
+          "passthrough": "PV house-load passthrough",
+          "hold": "Holding state",
+          "idle_ready": "Ready",
+          "idle_safe": "Safe idle"
+        }
+      },
+      "visible_state": {
+        "name": "Visible state",
+        "state": {
+          "ready": "Ready",
+          "safe_idle": "Safe idle",
+          "protection_active": "Protection active",
+          "emergency_charge": "Emergency charging",
+          "manual": "Manual operation",
+          "grid_charge": "Grid charging",
+          "pv_charge": "PV charging",
+          "reserve_charge": "Reserve charging",
+          "autarky_cover": "Autarky house-load coverage",
+          "load_coverage": "House-load coverage",
+          "economic_discharge": "Economic discharging",
+          "waiting_for_charge_window": "Waiting for charge window",
+          "waiting_blocked": "Waiting – currently blocked",
+          "hold": "Holding state"
+        }
+      },
+      "strategic_reason": {
+        "name": "Strategic reason"
+      },
+      "technical_reason": {
+        "name": "Technical reason"
+      },
+      "strategy_priority": {
+        "name": "Strategy priority"
+      },
+      "source_reason": {
+        "name": "Source reason"
+      },
+      "source_action": {
+        "name": "Source action"
+      },
+      "source_ac_mode": {
+        "name": "Source AC mode"
+      },
+      "charge_commit_active": {
+        "name": "AC charge binding active"
+      },
+      "charge_commit_type": {
+        "name": "AC charge binding type",
+        "state": {
+          "none": "No charge binding",
+          "planning": "Planning",
+          "learned": "Learned planning",
+          "very_cheap": "Very cheap",
+          "valley": "Valley price",
+          "opportunity": "Opportunity",
+          "reserve": "Reserve"
+        }
+      },
+      "charge_commit_reason": {
+        "name": "AC charge binding reason"
+      },
+      "charge_commit_source_reason": {
+        "name": "AC charge binding trigger"
+      },
+      "charge_commit_target_soc": {
+        "name": "AC charge binding target SoC"
+      },
+      "charge_commit_started_at": {
+        "name": "Charge binding started"
+      },
+      "charge_commit_valid_until": {
+        "name": "Charge binding valid until"
+      },
+      "charge_commit_abort_reason": {
+        "name": "AC charge binding abort reason",
+        "state": {
+          "none": "No abort",
+          "target_soc_reached": "Target SoC reached",
+          "max_soc_reached": "Maximum SoC reached",
+          "target_unreachable_battery_full": "Charge target effectively reached: battery no longer accepts charging power",
+          "target_nearly_reached_discharge_window": "Charge target economically sufficient: discharge window active",
+          "deadline_passed": "Planning deadline passed",
+          "battery_full": "Battery full",
+          "price_window_expired": "Price window expired",
+          "price_condition_lost": "Price condition no longer met",
+          "protection_cutoff": "Protection active",
+          "cell_voltage_cutoff": "Cell-voltage protection active",
+          "soc_invalid": "SoC invalid",
+          "sensor_invalid": "Sensor data invalid",
+          "additional_battery_discharging_blocks_charge": "Additional battery discharging: charging blocked",
+          "offgrid_load_blocks_ac_charge": "Island socket active: grid charging blocked",
+          "autarky_mode_selected": "Autarky mode selected",
+          "manual_mode_selected": "Manual mode selected",
+          "user_disabled_automatic": "Automatic mode disabled",
+          "device_error": "Device error",
+          "unsafe_measurements": "Unsafe measurements"
+        }
+      },
+      "charge_commit_requested_power_w": {
+        "name": "AC charge binding power"
+      },
+      "charge_commit_allow_pv_blend": {
+        "name": "PV share allowed for AC charge binding"
+      },
+      "charge_source_allocation": {
+        "name": "Charge-source allocation",
+        "state": {
+          "no_active_charge_binding": "No active charge binding",
+          "no_charge_target": "No charge target",
+          "pv_blend_disabled": "PV blending disabled",
+          "grid_only_no_pv_surplus": "Grid charging only",
+          "pv_covers_total_charge_target": "PV covers the charge target",
+          "mixed_charge_grid_limit_reached": "Mixed charging with grid limit reached",
+          "mixed_pv_grid_charge": "Mixed PV and grid charging"
+        }
       }
     }
   }
