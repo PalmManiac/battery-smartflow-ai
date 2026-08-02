@@ -337,7 +337,11 @@
         "name": "Actief apparaatprofiel"
       },
       "adaptive_peak_active": {
-        "name": "Adaptieve piek herkend"
+        "name": "Adaptieve piek herkend",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "forecast_status": {
         "name": "Prognosestatus",
@@ -519,10 +523,18 @@
         "name": "Globale laagste celspanning"
       },
       "cell_voltage_emergency_active": {
-        "name": "Celspanning noodladen actief"
+        "name": "Celspanning noodladen actief",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "cell_voltage_discharge_blocked": {
-        "name": "Ontladen geblokkeerd door celspanningsbescherming"
+        "name": "Ontladen geblokkeerd door celspanningsbescherming",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "cell_voltage_soc_plausibility": {
         "name": "Plausibiliteit SoC / celspanning",
@@ -557,7 +569,11 @@
         }
       },
       "offgrid_load_active": {
-        "name": "Off-grid belasting actief"
+        "name": "Off-grid belasting actief",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "offgrid_rule_reason": {
         "name": "Off-grid regelreden",
@@ -569,7 +585,11 @@
         }
       },
       "offgrid_source_active": {
-        "name": "Off-grid bron actief"
+        "name": "Off-grid bron actief",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "engine_health": {
         "name": "Engine-status",
@@ -755,7 +775,11 @@
         "name": "PV-laadaandeel"
       },
       "charge_mixed_price_active": {
-        "name": "Gemengde prijs actief"
+        "name": "Gemengde prijs actief",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "avg_charge_price": {
         "name": "Gem. laadprijs batterij"
@@ -806,25 +830,191 @@
         }
       },
       "strategic_reason": {
-        "name": "Strategische reden"
+        "name": "Strategische reden",
+        "state": {
+          "none": "Geen reden",
+          "idle": "Inactief",
+          "state_idle": "Inactief",
+          "standby": "Gereed",
+          "no_strategy_needed": "Geen strategie nodig",
+          "sensor_invalid": "Sensor invalid",
+          "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
+          "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
+          "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
+          "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV-overschot laden",
+          "pv_export_confirmed": "PV-teruglevering bevestigd",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "technical_reason": {
-        "name": "Technische reden"
+        "name": "Technische reden",
+        "state": {
+          "none": "Geen reden",
+          "sensor_invalid": "Ongeldige sensorgegevens",
+          "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
+          "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
+          "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
+          "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
+          "hold_no_power_change": "Hold no power change",
+          "idle_zero_power": "Idle zero power",
+          "manual_constant_output_step_limited": "Manual constant output step limited",
+          "passthrough_output_step_limited": "Passthrough output step limited",
+          "output_inside_deadband": "Output inside deadband",
+          "output_increase_to_reduce_import": "Output increase to reduce import",
+          "output_fast_increase_to_reduce_import": "Output fast increase to reduce import",
+          "output_decrease_to_avoid_export": "Output decrease to avoid export",
+          "output_fast_decrease_to_avoid_export": "Output fast decrease to avoid export",
+          "output_inside_deadband_near_zero_persistent_import_trim": "Output inside deadband near zero persistent import trim",
+          "output_increase_to_reduce_import_near_zero_persistent_import_trim": "Output increase to reduce import near zero persistent import trim",
+          "output_fast_increase_to_reduce_import_near_zero_persistent_import_trim": "Output fast increase to reduce import near zero persistent import trim",
+          "output_decrease_to_avoid_export_near_zero_persistent_import_trim": "Output decrease to avoid export near zero persistent import trim",
+          "output_fast_decrease_to_avoid_export_near_zero_persistent_import_trim": "Output fast decrease to avoid export near zero persistent import trim",
+          "output_inside_deadband_discharge_keepalive": "Output inside deadband discharge keepalive",
+          "output_decrease_to_avoid_export_discharge_keepalive": "Output decrease to avoid export discharge keepalive",
+          "output_fast_decrease_to_avoid_export_discharge_keepalive": "Output fast decrease to avoid export discharge keepalive",
+          "pv_input_inside_deadband": "Pv input inside deadband",
+          "pv_input_increase_from_export": "Pv input increase from export",
+          "pv_input_fast_increase_from_export": "Pv input fast increase from export",
+          "pv_input_decrease_to_avoid_import": "Pv input decrease to avoid import",
+          "pv_input_fast_decrease_to_avoid_import": "Pv input fast decrease to avoid import",
+          "pv_input_inside_deadband_current_grid_cap": "PV-ingang in dode zone, begrensd door actuele netwaarde",
+          "pv_input_increase_from_export_current_grid_cap": "Pv input increase from export current grid cap",
+          "pv_input_fast_increase_from_export_current_grid_cap": "Pv input fast increase from export current grid cap",
+          "pv_input_decrease_to_avoid_import_current_grid_cap": "Pv input decrease to avoid import current grid cap",
+          "pv_input_fast_decrease_to_avoid_import_current_grid_cap": "Pv input fast decrease to avoid import current grid cap",
+          "manual_charge_fixed_input_power": "Manual charge fixed input power",
+          "planned_charge_fixed_input_power": "Planned charge fixed input power",
+          "emergency_charge_fixed_input_power": "Emergency charge fixed input power",
+          "ramp_down_output_step_limited": "Ramp down output step limited",
+          "ramp_down_input_step_limited": "Ramp down input step limited"
+        }
       },
       "strategy_priority": {
         "name": "Strategieprioriteit"
       },
       "source_reason": {
-        "name": "Bronreden"
+        "name": "Bronreden",
+        "state": {
+          "none": "Geen reden",
+          "idle": "Inactief",
+          "state_idle": "Inactief",
+          "standby": "Gereed",
+          "no_strategy_needed": "Geen strategie nodig",
+          "sensor_invalid": "Sensor invalid",
+          "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
+          "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
+          "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
+          "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV-overschot laden",
+          "pv_export_confirmed": "PV-teruglevering bevestigd",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "source_action": {
-        "name": "Bronactie"
+        "name": "Bronactie",
+        "state": {
+          "idle": "Inactief",
+          "charge": "Laden",
+          "discharge": "Ontladen",
+          "emergency": "Noodladen",
+          "passthrough": "PV-doorvoer"
+        }
       },
       "source_ac_mode": {
-        "name": "AC-bronmodus"
+        "name": "AC-bronmodus",
+        "state": {
+          "input": "Ingang",
+          "output": "Uitgang"
+        }
       },
       "charge_commit_active": {
-        "name": "AC-laadbinding actief"
+        "name": "AC-laadbinding actief",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "charge_commit_type": {
         "name": "Type AC-laadbinding",
@@ -839,10 +1029,120 @@
         }
       },
       "charge_commit_reason": {
-        "name": "Reden van AC-laadbinding"
+        "name": "Reden van AC-laadbinding",
+        "state": {
+          "none": "Geen reden",
+          "idle": "Inactief",
+          "state_idle": "Inactief",
+          "standby": "Gereed",
+          "no_strategy_needed": "Geen strategie nodig",
+          "sensor_invalid": "Sensor invalid",
+          "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
+          "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
+          "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
+          "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV-overschot laden",
+          "pv_export_confirmed": "PV-teruglevering bevestigd",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "charge_commit_source_reason": {
-        "name": "Aanleiding voor AC-laadbinding"
+        "name": "Aanleiding voor AC-laadbinding",
+        "state": {
+          "none": "Geen reden",
+          "idle": "Inactief",
+          "state_idle": "Inactief",
+          "standby": "Gereed",
+          "no_strategy_needed": "Geen strategie nodig",
+          "sensor_invalid": "Sensor invalid",
+          "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
+          "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
+          "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
+          "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
+          "additional_battery_charging_block": "Additional battery charging block",
+          "additional_battery_discharging_block": "Additional battery discharging block",
+          "pv_charge_blocked_by_discharge_protection": "Pv charge blocked by discharge protection",
+          "pv_charge_blocked_no_stable_export": "Pv charge blocked no stable export",
+          "soc_limit_upper": "Soc limit upper",
+          "soc_limit_lower": "Soc limit lower",
+          "soc_min_resume_block": "Soc min resume block",
+          "cell_voltage_cutoff_block": "Cell voltage cutoff block",
+          "emergency_latched_charge": "Emergency latched charge",
+          "cell_voltage_emergency_charge": "Cell voltage emergency charge",
+          "manual_charge": "Manual charge",
+          "manual_constant_discharge": "Manual constant discharge",
+          "manual_discharge": "Manual discharge",
+          "manual_idle": "Manual idle",
+          "charge_commit_active": "Charge commit active",
+          "charge_commit_waiting_price": "Charge commit waiting price",
+          "strategic_ac_charge_blocked_price_conflict": "Strategic ac charge blocked price conflict",
+          "learned_charge_window_active": "Learned charge window active",
+          "learned_charge_window_latest_start_reached": "Learned charge window latest start reached",
+          "learned_charge_window_deadline_too_close_start_now": "Learned charge window deadline too close start now",
+          "learned_charge_window_wait": "Learned charge window wait",
+          "learned_charge_window_no_charge_needed": "Learned charge window no charge needed",
+          "planning_latest_start": "Planning latest start",
+          "planning_forecast_poor": "Planning forecast poor",
+          "planning_forecast_mixed": "Planning forecast mixed",
+          "planning_forecast_reality_override": "Planning forecast reality override",
+          "very_cheap_force_charge": "Very cheap force charge",
+          "valley_boost_charge": "Valley boost charge",
+          "valley_boost_charge_mixed_forecast": "Valley boost charge mixed forecast",
+          "valley_opportunity_charge": "Valley opportunity charge",
+          "valley_opportunity_charge_mixed_forecast": "Valley opportunity charge mixed forecast",
+          "summer_peak_reserve_charge": "Summer peak reserve charge",
+          "summer_peak_reserve_hold": "Summer peak reserve hold",
+          "pv_surplus_charge": "PV-overschot laden",
+          "pv_export_confirmed": "PV-teruglevering bevestigd",
+          "pv_house_load_passthrough": "Pv house load passthrough",
+          "offgrid_load_support": "Offgrid load support",
+          "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "summer_cover_deficit": "Summer cover deficit",
+          "adaptive_peak_discharge": "Adaptive peak discharge",
+          "very_expensive_force_discharge": "Very expensive force discharge",
+          "price_based_discharge": "Price based discharge"
+        }
       },
       "charge_commit_target_soc": {
         "name": "Doel-SoC van AC-laadbinding"
@@ -882,7 +1182,11 @@
         "name": "Vermogen van AC-laadbinding"
       },
       "charge_commit_allow_pv_blend": {
-        "name": "PV-aandeel toegestaan voor AC-laadbinding"
+        "name": "PV-aandeel toegestaan voor AC-laadbinding",
+        "state": {
+          "no": "Nee",
+          "yes": "Ja"
+        }
       },
       "charge_source_allocation": {
         "name": "Verdeling van laadbronnen",
