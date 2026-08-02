@@ -33,6 +33,12 @@ from .const import (
     CHARGE_STRATEGY_ENUMS,
     STRATEGY_STATE_ENUMS,
     VISIBLE_STATE_ENUMS,
+    BOOLEAN_STATE_ENUMS,
+    SOURCE_ACTION_ENUMS,
+    SOURCE_AC_MODE_ENUMS,
+    STRATEGY_REASON_ENUMS,
+    DECISION_REASON_ENUMS,
+    TECHNICAL_REASON_ENUMS,
     CHARGE_COMMIT_TYPE_ENUMS,
     CHARGE_COMMIT_ABORT_REASON_ENUMS,
     AUTOMATIC_WEIGHTING_ENUMS,
@@ -211,6 +217,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="strategic_reason",
         translation_key="strategic_reason",
         runtime_key="strategic_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=STRATEGY_REASON_ENUMS,
         icon="mdi:head-question-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -218,6 +226,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="technical_reason",
         translation_key="technical_reason",
         runtime_key="technical_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=TECHNICAL_REASON_ENUMS,
         icon="mdi:cog-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -232,6 +242,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="source_reason",
         translation_key="source_reason",
         runtime_key="source_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=STRATEGY_REASON_ENUMS,
         icon="mdi:source-branch",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -240,6 +252,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="source_action",
         translation_key="source_action",
         runtime_key="source_action",
+        device_class=SensorDeviceClass.ENUM,
+        options=SOURCE_ACTION_ENUMS,
         icon="mdi:play-box-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -248,6 +262,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="source_ac_mode",
         translation_key="source_ac_mode",
         runtime_key="source_ac_mode",
+        device_class=SensorDeviceClass.ENUM,
+        options=SOURCE_AC_MODE_ENUMS,
         icon="mdi:swap-horizontal",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -256,6 +272,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="charge_commit_active",
         translation_key="charge_commit_active",
         runtime_key="charge_commit_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:lock-check-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -272,6 +290,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="charge_commit_reason",
         translation_key="charge_commit_reason",
         runtime_key="charge_commit_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=STRATEGY_REASON_ENUMS,
         icon="mdi:message-text-clock-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -279,6 +299,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="charge_commit_source_reason",
         translation_key="charge_commit_source_reason",
         runtime_key="charge_commit_source_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=STRATEGY_REASON_ENUMS,
         icon="mdi:source-branch",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -329,6 +351,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="charge_commit_allow_pv_blend",
         translation_key="charge_commit_allow_pv_blend",
         runtime_key="charge_commit_allow_pv_blend",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:solar-power-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -350,6 +374,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="decision_reason",
         translation_key="decision_reason",
         runtime_key="decision_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=DECISION_REASON_ENUMS,
         icon="mdi:head-question-outline",
     ),
     ZendureSensorEntityDescription(
@@ -364,6 +390,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="adaptive_peak_active",
         translation_key="adaptive_peak_active",
         runtime_key="adaptive_peak_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:chart-line",
     ),
     ZendureSensorEntityDescription(
@@ -681,6 +709,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="offgrid_load_active",
         translation_key="offgrid_load_active",
         runtime_key="offgrid_load_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:power-plug-battery",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -697,6 +727,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="offgrid_source_active",
         translation_key="offgrid_source_active",
         runtime_key="offgrid_source_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:solar-power-variant",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -740,6 +772,8 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="charge_mixed_price_active",
         translation_key="charge_mixed_price_active",
         runtime_key="charge_mixed_price_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:scale-balance",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -797,12 +831,16 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
         key="cell_voltage_emergency_active",
         translation_key="cell_voltage_emergency_active",
         runtime_key="cell_voltage_emergency_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:battery-sync-outline",
     ),
     ZendureSensorEntityDescription(
         key="cell_voltage_discharge_blocked",
         translation_key="cell_voltage_discharge_blocked",
         runtime_key="cell_voltage_discharge_blocked",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
         icon="mdi:battery-lock",
     ),
 
@@ -888,9 +926,24 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
         if self.device_class == SensorDeviceClass.ENUM:
             val = details.get(key, data.get(key))
             options = self.entity_description.options or []
+
+            if val is None:
+                return None
+
+            if options == BOOLEAN_STATE_ENUMS and isinstance(val, bool):
+                return "yes" if val else "no"
+
+            # Empty inactive reasons are represented by the stable enum state
+            # "none" so the frontend can translate them as well.
+            if val == "" and "none" in options:
+                return "none"
+
             if val in options:
                 return val
-            return options[0] if options else None
+
+            # Unknown future enum values must never be mislabeled as the first
+            # valid state. Keep the raw value visible for diagnostics.
+            return str(val)
 
         val = details.get(key, data.get(key))
 
