@@ -57,7 +57,7 @@
           "output_limit_entity": "Entité number pour définir la puissance de décharge en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
           "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
-		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Lors d’une charge PV, elle est également intégrée au prix de charge moyen de la batterie en tant que revenu d’injection perdu. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
         }
       },
       "reconfigure_grid": {
@@ -141,7 +141,7 @@
           "output_limit_entity": "Puissance de décharge réglable en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
           "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
-		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Lors d’une charge PV, elle est également intégrée au prix de charge moyen de la batterie en tant que revenu d’injection perdu. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
         }
       }
     }
