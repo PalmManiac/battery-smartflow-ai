@@ -1,4 +1,4 @@
-"""Translation coverage tests for the Beta1 language baseline."""
+"""Translation coverage tests for the Beta2 language baseline."""
 
 from __future__ import annotations
 
