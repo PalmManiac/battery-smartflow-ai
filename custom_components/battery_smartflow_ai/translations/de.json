@@ -337,7 +337,11 @@
         "name": "Aktives Geräteprofil"
       },
       "adaptive_peak_active": {
-        "name": "Adaptiver Peak erkannt"
+        "name": "Adaptiver Peak erkannt",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
       "forecast_status": {
         "name": "Prognose-Status",
@@ -529,7 +533,11 @@
         }
       },
       "offgrid_load_active": {
-        "name": "Off-Grid-Last aktiv"
+        "name": "Off-Grid-Last aktiv",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
       "offgrid_rule_reason": {
         "name": "Regelgrund Off-Grid",
@@ -541,16 +549,28 @@
         }
       },
       "offgrid_source_active": {
-        "name": "Off-Grid-Quelle aktiv"
+        "name": "Off-Grid-Quelle aktiv",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
       "global_lowest_cell_voltage": {
         "name": "Globale niedrigste Zellspannung"
       },
       "cell_voltage_emergency_active": {
-        "name": "Zellspannungs-Notladung aktiv"
+        "name": "Zellspannungs-Notladung aktiv",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
       "cell_voltage_discharge_blocked": {
-        "name": "Entladung durch Zellspannungs-Schutz blockiert"
+        "name": "Entladung durch Zellspannungs-Schutz blockiert",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
       "cell_voltage_soc_plausibility": {
         "name": "Plausibilität SoC / Zellspannung",
@@ -755,7 +775,11 @@
         "name": "Ladeanteil PV"
       },
       "charge_mixed_price_active": {
-        "name": "Mischpreis aktiv"
+        "name": "Mischpreis aktiv",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
       "avg_charge_price": {
         "name": "Ø Ladepreis Akku"
@@ -806,25 +830,191 @@
         }
       },
       "strategic_reason": {
-        "name": "Strategischer Grund"
+        "name": "Strategischer Grund",
+        "state": {
+          "none": "Kein Grund",
+          "idle": "Leerlauf",
+          "state_idle": "Leerlauf",
+          "standby": "Bereit",
+          "no_strategy_needed": "Keine Strategie erforderlich",
+          "sensor_invalid": "Sensordaten ungültig",
+          "soc_invalid": "Sicherer Leerlauf: Akku-SoC ungültig",
+          "grid_sensor_invalid": "Sicherer Leerlauf: Netzsensordaten fehlen",
+          "soc_limits_invalid": "Sicherer Leerlauf: SoC-Grenzen ungültig",
+          "power_limits_invalid": "Sicherer Leerlauf: Leistungsgrenzen ungültig",
+          "cell_voltage_sensor_invalid": "Zellspannungssensor nicht verfügbar",
+          "additional_battery_charging_block": "Zusatzakku lädt – Aktion blockiert",
+          "additional_battery_discharging_block": "Zusatzakku entlädt – Aktion blockiert",
+          "pv_charge_blocked_by_discharge_protection": "PV-Ladung durch Entladeschutz blockiert",
+          "pv_charge_blocked_no_stable_export": "PV-Ladung wartet auf stabile Einspeisung",
+          "soc_limit_upper": "Obere SoC-Grenze aktiv",
+          "soc_limit_lower": "Untere SoC-Grenze aktiv",
+          "soc_min_resume_block": "Warten auf SoC-Entladefreigabe",
+          "cell_voltage_cutoff_block": "Zellspannungs-Abschaltung aktiv",
+          "emergency_latched_charge": "Notladung festgehalten",
+          "cell_voltage_emergency_charge": "Notladung wegen Zellspannung",
+          "manual_charge": "Manuelles Laden",
+          "manual_constant_discharge": "Manuelles konstantes Entladen",
+          "manual_discharge": "Manuelles Entladen",
+          "manual_idle": "Manueller Bereitschaftsmodus",
+          "charge_commit_active": "AC-Ladebindung aktiv",
+          "charge_commit_waiting_price": "AC-Ladebindung wartet auf Preisfenster",
+          "strategic_ac_charge_blocked_price_conflict": "Netzladung wegen Preiskonflikt blockiert",
+          "learned_charge_window_active": "Gelerntes Ladefenster aktiv",
+          "learned_charge_window_latest_start_reached": "Spätester gelernter Start erreicht",
+          "learned_charge_window_deadline_too_close_start_now": "Gelernte Frist knapp – jetzt laden",
+          "learned_charge_window_wait": "Warten auf gelerntes Ladefenster",
+          "learned_charge_window_no_charge_needed": "Keine Ladung im gelernten Fenster nötig",
+          "planning_latest_start": "Geplante Ladung zum spätesten Start",
+          "planning_forecast_poor": "Geplante Ladung wegen schwacher PV-Prognose",
+          "planning_forecast_mixed": "Geplante Ladung bei gemischter PV-Prognose",
+          "planning_forecast_reality_override": "Geplante Ladung wegen schwacher aktueller PV",
+          "very_cheap_force_charge": "Sehr günstiger Preis – Zwangsladung",
+          "valley_boost_charge": "Talpreis-Ladung",
+          "valley_boost_charge_mixed_forecast": "Talpreis-Ladung bei gemischter Prognose",
+          "valley_opportunity_charge": "Gelegenheitsladung",
+          "valley_opportunity_charge_mixed_forecast": "Gelegenheitsladung bei gemischter Prognose",
+          "summer_peak_reserve_charge": "Sommer-Peakreserve laden",
+          "summer_peak_reserve_hold": "Sommer-Peakreserve halten",
+          "pv_surplus_charge": "PV-Überschuss laden",
+          "pv_export_confirmed": "PV-Einspeisung bestätigt",
+          "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
+          "offgrid_load_support": "Inselsteckdose versorgen",
+          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "summer_cover_deficit": "Hauslastdefizit decken",
+          "adaptive_peak_discharge": "Adaptive Peak-Entladung",
+          "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
+          "price_based_discharge": "Preisbasierte Entladung"
+        }
       },
       "technical_reason": {
-        "name": "Technischer Grund"
+        "name": "Technischer Grund",
+        "state": {
+          "none": "Kein technischer Eingriff",
+          "sensor_invalid": "Sensordaten ungültig",
+          "soc_invalid": "Akku-SoC ungültig",
+          "grid_sensor_invalid": "Netzsensordaten fehlen",
+          "soc_limits_invalid": "SoC-Grenzen ungültig",
+          "power_limits_invalid": "Leistungsgrenzen ungültig",
+          "cell_voltage_sensor_invalid": "Zellspannungssensor nicht verfügbar",
+          "hold_no_power_change": "Aktuelle Leistung halten",
+          "idle_zero_power": "Leerlauf mit 0 W",
+          "manual_constant_output_step_limited": "Konstante manuelle Entladung schrittbegrenzt",
+          "passthrough_output_step_limited": "PV-Durchfluss schrittbegrenzt",
+          "output_inside_deadband": "Ausgang innerhalb der Totzone",
+          "output_increase_to_reduce_import": "Ausgang erhöhen, um Netzbezug zu senken",
+          "output_fast_increase_to_reduce_import": "Ausgang schnell erhöhen, um Netzbezug zu senken",
+          "output_decrease_to_avoid_export": "Ausgang senken, um Einspeisung zu vermeiden",
+          "output_fast_decrease_to_avoid_export": "Ausgang schnell senken, um Einspeisung zu vermeiden",
+          "output_inside_deadband_near_zero_persistent_import_trim": "Ausgang in Totzone mit Nullpunkt-Nachregelung",
+          "output_increase_to_reduce_import_near_zero_persistent_import_trim": "Ausgang erhöhen mit Nullpunkt-Nachregelung",
+          "output_fast_increase_to_reduce_import_near_zero_persistent_import_trim": "Ausgang schnell erhöhen mit Nullpunkt-Nachregelung",
+          "output_decrease_to_avoid_export_near_zero_persistent_import_trim": "Ausgang senken mit Nullpunkt-Nachregelung",
+          "output_fast_decrease_to_avoid_export_near_zero_persistent_import_trim": "Ausgang schnell senken mit Nullpunkt-Nachregelung",
+          "output_inside_deadband_discharge_keepalive": "Ausgang in Totzone mit Entlade-Erhaltung",
+          "output_decrease_to_avoid_export_discharge_keepalive": "Ausgang senken mit Entlade-Erhaltung",
+          "output_fast_decrease_to_avoid_export_discharge_keepalive": "Ausgang schnell senken mit Entlade-Erhaltung",
+          "pv_input_inside_deadband": "PV-Eingang innerhalb der Totzone",
+          "pv_input_increase_from_export": "PV-Eingang wegen Einspeisung erhöhen",
+          "pv_input_fast_increase_from_export": "PV-Eingang wegen Einspeisung schnell erhöhen",
+          "pv_input_decrease_to_avoid_import": "PV-Eingang senken, um Netzbezug zu vermeiden",
+          "pv_input_fast_decrease_to_avoid_import": "PV-Eingang schnell senken, um Netzbezug zu vermeiden",
+          "pv_input_inside_deadband_current_grid_cap": "PV-Eingang in Totzone, durch aktuellen Netzwert begrenzt",
+          "pv_input_increase_from_export_current_grid_cap": "PV-Eingangserhöhung durch aktuellen Netzwert begrenzt",
+          "pv_input_fast_increase_from_export_current_grid_cap": "Schnelle PV-Eingangserhöhung durch aktuellen Netzwert begrenzt",
+          "pv_input_decrease_to_avoid_import_current_grid_cap": "PV-Eingangssenkung durch aktuellen Netzwert begrenzt",
+          "pv_input_fast_decrease_to_avoid_import_current_grid_cap": "Schnelle PV-Eingangssenkung durch aktuellen Netzwert begrenzt",
+          "manual_charge_fixed_input_power": "Feste manuelle Ladeleistung",
+          "planned_charge_fixed_input_power": "Feste geplante Ladeleistung",
+          "emergency_charge_fixed_input_power": "Feste Notladeleistung",
+          "ramp_down_output_step_limited": "Ausgang kontrolliert herunterfahren",
+          "ramp_down_input_step_limited": "Eingang kontrolliert herunterfahren"
+        }
       },
       "strategy_priority": {
         "name": "Strategiepriorität"
       },
       "source_reason": {
-        "name": "Quellgrund"
+        "name": "Quellgrund",
+        "state": {
+          "none": "Kein Grund",
+          "idle": "Leerlauf",
+          "state_idle": "Leerlauf",
+          "standby": "Bereit",
+          "no_strategy_needed": "Keine Strategie erforderlich",
+          "sensor_invalid": "Sensordaten ungültig",
+          "soc_invalid": "Sicherer Leerlauf: Akku-SoC ungültig",
+          "grid_sensor_invalid": "Sicherer Leerlauf: Netzsensordaten fehlen",
+          "soc_limits_invalid": "Sicherer Leerlauf: SoC-Grenzen ungültig",
+          "power_limits_invalid": "Sicherer Leerlauf: Leistungsgrenzen ungültig",
+          "cell_voltage_sensor_invalid": "Zellspannungssensor nicht verfügbar",
+          "additional_battery_charging_block": "Zusatzakku lädt – Aktion blockiert",
+          "additional_battery_discharging_block": "Zusatzakku entlädt – Aktion blockiert",
+          "pv_charge_blocked_by_discharge_protection": "PV-Ladung durch Entladeschutz blockiert",
+          "pv_charge_blocked_no_stable_export": "PV-Ladung wartet auf stabile Einspeisung",
+          "soc_limit_upper": "Obere SoC-Grenze aktiv",
+          "soc_limit_lower": "Untere SoC-Grenze aktiv",
+          "soc_min_resume_block": "Warten auf SoC-Entladefreigabe",
+          "cell_voltage_cutoff_block": "Zellspannungs-Abschaltung aktiv",
+          "emergency_latched_charge": "Notladung festgehalten",
+          "cell_voltage_emergency_charge": "Notladung wegen Zellspannung",
+          "manual_charge": "Manuelles Laden",
+          "manual_constant_discharge": "Manuelles konstantes Entladen",
+          "manual_discharge": "Manuelles Entladen",
+          "manual_idle": "Manueller Bereitschaftsmodus",
+          "charge_commit_active": "AC-Ladebindung aktiv",
+          "charge_commit_waiting_price": "AC-Ladebindung wartet auf Preisfenster",
+          "strategic_ac_charge_blocked_price_conflict": "Netzladung wegen Preiskonflikt blockiert",
+          "learned_charge_window_active": "Gelerntes Ladefenster aktiv",
+          "learned_charge_window_latest_start_reached": "Spätester gelernter Start erreicht",
+          "learned_charge_window_deadline_too_close_start_now": "Gelernte Frist knapp – jetzt laden",
+          "learned_charge_window_wait": "Warten auf gelerntes Ladefenster",
+          "learned_charge_window_no_charge_needed": "Keine Ladung im gelernten Fenster nötig",
+          "planning_latest_start": "Geplante Ladung zum spätesten Start",
+          "planning_forecast_poor": "Geplante Ladung wegen schwacher PV-Prognose",
+          "planning_forecast_mixed": "Geplante Ladung bei gemischter PV-Prognose",
+          "planning_forecast_reality_override": "Geplante Ladung wegen schwacher aktueller PV",
+          "very_cheap_force_charge": "Sehr günstiger Preis – Zwangsladung",
+          "valley_boost_charge": "Talpreis-Ladung",
+          "valley_boost_charge_mixed_forecast": "Talpreis-Ladung bei gemischter Prognose",
+          "valley_opportunity_charge": "Gelegenheitsladung",
+          "valley_opportunity_charge_mixed_forecast": "Gelegenheitsladung bei gemischter Prognose",
+          "summer_peak_reserve_charge": "Sommer-Peakreserve laden",
+          "summer_peak_reserve_hold": "Sommer-Peakreserve halten",
+          "pv_surplus_charge": "PV-Überschuss laden",
+          "pv_export_confirmed": "PV-Einspeisung bestätigt",
+          "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
+          "offgrid_load_support": "Inselsteckdose versorgen",
+          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "summer_cover_deficit": "Hauslastdefizit decken",
+          "adaptive_peak_discharge": "Adaptive Peak-Entladung",
+          "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
+          "price_based_discharge": "Preisbasierte Entladung"
+        }
       },
       "source_action": {
-        "name": "Quellaktion"
+        "name": "Quellaktion",
+        "state": {
+          "idle": "Leerlauf",
+          "charge": "Laden",
+          "discharge": "Entladen",
+          "emergency": "Notladen",
+          "passthrough": "PV-Durchfluss"
+        }
       },
       "source_ac_mode": {
-        "name": "Quell-AC-Modus"
+        "name": "Quell-AC-Modus",
+        "state": {
+          "input": "Eingang",
+          "output": "Ausgang"
+        }
       },
       "charge_commit_active": {
-        "name": "AC-Ladebindung aktiv"
+        "name": "AC-Ladebindung aktiv",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
       "charge_commit_type": {
         "name": "Art der AC-Ladebindung",
@@ -839,10 +1029,120 @@
         }
       },
       "charge_commit_reason": {
-        "name": "Grund der AC-Ladebindung"
+        "name": "Grund der AC-Ladebindung",
+        "state": {
+          "none": "Kein Grund",
+          "idle": "Leerlauf",
+          "state_idle": "Leerlauf",
+          "standby": "Bereit",
+          "no_strategy_needed": "Keine Strategie erforderlich",
+          "sensor_invalid": "Sensordaten ungültig",
+          "soc_invalid": "Sicherer Leerlauf: Akku-SoC ungültig",
+          "grid_sensor_invalid": "Sicherer Leerlauf: Netzsensordaten fehlen",
+          "soc_limits_invalid": "Sicherer Leerlauf: SoC-Grenzen ungültig",
+          "power_limits_invalid": "Sicherer Leerlauf: Leistungsgrenzen ungültig",
+          "cell_voltage_sensor_invalid": "Zellspannungssensor nicht verfügbar",
+          "additional_battery_charging_block": "Zusatzakku lädt – Aktion blockiert",
+          "additional_battery_discharging_block": "Zusatzakku entlädt – Aktion blockiert",
+          "pv_charge_blocked_by_discharge_protection": "PV-Ladung durch Entladeschutz blockiert",
+          "pv_charge_blocked_no_stable_export": "PV-Ladung wartet auf stabile Einspeisung",
+          "soc_limit_upper": "Obere SoC-Grenze aktiv",
+          "soc_limit_lower": "Untere SoC-Grenze aktiv",
+          "soc_min_resume_block": "Warten auf SoC-Entladefreigabe",
+          "cell_voltage_cutoff_block": "Zellspannungs-Abschaltung aktiv",
+          "emergency_latched_charge": "Notladung festgehalten",
+          "cell_voltage_emergency_charge": "Notladung wegen Zellspannung",
+          "manual_charge": "Manuelles Laden",
+          "manual_constant_discharge": "Manuelles konstantes Entladen",
+          "manual_discharge": "Manuelles Entladen",
+          "manual_idle": "Manueller Bereitschaftsmodus",
+          "charge_commit_active": "AC-Ladebindung aktiv",
+          "charge_commit_waiting_price": "AC-Ladebindung wartet auf Preisfenster",
+          "strategic_ac_charge_blocked_price_conflict": "Netzladung wegen Preiskonflikt blockiert",
+          "learned_charge_window_active": "Gelerntes Ladefenster aktiv",
+          "learned_charge_window_latest_start_reached": "Spätester gelernter Start erreicht",
+          "learned_charge_window_deadline_too_close_start_now": "Gelernte Frist knapp – jetzt laden",
+          "learned_charge_window_wait": "Warten auf gelerntes Ladefenster",
+          "learned_charge_window_no_charge_needed": "Keine Ladung im gelernten Fenster nötig",
+          "planning_latest_start": "Geplante Ladung zum spätesten Start",
+          "planning_forecast_poor": "Geplante Ladung wegen schwacher PV-Prognose",
+          "planning_forecast_mixed": "Geplante Ladung bei gemischter PV-Prognose",
+          "planning_forecast_reality_override": "Geplante Ladung wegen schwacher aktueller PV",
+          "very_cheap_force_charge": "Sehr günstiger Preis – Zwangsladung",
+          "valley_boost_charge": "Talpreis-Ladung",
+          "valley_boost_charge_mixed_forecast": "Talpreis-Ladung bei gemischter Prognose",
+          "valley_opportunity_charge": "Gelegenheitsladung",
+          "valley_opportunity_charge_mixed_forecast": "Gelegenheitsladung bei gemischter Prognose",
+          "summer_peak_reserve_charge": "Sommer-Peakreserve laden",
+          "summer_peak_reserve_hold": "Sommer-Peakreserve halten",
+          "pv_surplus_charge": "PV-Überschuss laden",
+          "pv_export_confirmed": "PV-Einspeisung bestätigt",
+          "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
+          "offgrid_load_support": "Inselsteckdose versorgen",
+          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "summer_cover_deficit": "Hauslastdefizit decken",
+          "adaptive_peak_discharge": "Adaptive Peak-Entladung",
+          "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
+          "price_based_discharge": "Preisbasierte Entladung"
+        }
       },
       "charge_commit_source_reason": {
-        "name": "Auslöser der AC-Ladebindung"
+        "name": "Auslöser der AC-Ladebindung",
+        "state": {
+          "none": "Kein Grund",
+          "idle": "Leerlauf",
+          "state_idle": "Leerlauf",
+          "standby": "Bereit",
+          "no_strategy_needed": "Keine Strategie erforderlich",
+          "sensor_invalid": "Sensordaten ungültig",
+          "soc_invalid": "Sicherer Leerlauf: Akku-SoC ungültig",
+          "grid_sensor_invalid": "Sicherer Leerlauf: Netzsensordaten fehlen",
+          "soc_limits_invalid": "Sicherer Leerlauf: SoC-Grenzen ungültig",
+          "power_limits_invalid": "Sicherer Leerlauf: Leistungsgrenzen ungültig",
+          "cell_voltage_sensor_invalid": "Zellspannungssensor nicht verfügbar",
+          "additional_battery_charging_block": "Zusatzakku lädt – Aktion blockiert",
+          "additional_battery_discharging_block": "Zusatzakku entlädt – Aktion blockiert",
+          "pv_charge_blocked_by_discharge_protection": "PV-Ladung durch Entladeschutz blockiert",
+          "pv_charge_blocked_no_stable_export": "PV-Ladung wartet auf stabile Einspeisung",
+          "soc_limit_upper": "Obere SoC-Grenze aktiv",
+          "soc_limit_lower": "Untere SoC-Grenze aktiv",
+          "soc_min_resume_block": "Warten auf SoC-Entladefreigabe",
+          "cell_voltage_cutoff_block": "Zellspannungs-Abschaltung aktiv",
+          "emergency_latched_charge": "Notladung festgehalten",
+          "cell_voltage_emergency_charge": "Notladung wegen Zellspannung",
+          "manual_charge": "Manuelles Laden",
+          "manual_constant_discharge": "Manuelles konstantes Entladen",
+          "manual_discharge": "Manuelles Entladen",
+          "manual_idle": "Manueller Bereitschaftsmodus",
+          "charge_commit_active": "AC-Ladebindung aktiv",
+          "charge_commit_waiting_price": "AC-Ladebindung wartet auf Preisfenster",
+          "strategic_ac_charge_blocked_price_conflict": "Netzladung wegen Preiskonflikt blockiert",
+          "learned_charge_window_active": "Gelerntes Ladefenster aktiv",
+          "learned_charge_window_latest_start_reached": "Spätester gelernter Start erreicht",
+          "learned_charge_window_deadline_too_close_start_now": "Gelernte Frist knapp – jetzt laden",
+          "learned_charge_window_wait": "Warten auf gelerntes Ladefenster",
+          "learned_charge_window_no_charge_needed": "Keine Ladung im gelernten Fenster nötig",
+          "planning_latest_start": "Geplante Ladung zum spätesten Start",
+          "planning_forecast_poor": "Geplante Ladung wegen schwacher PV-Prognose",
+          "planning_forecast_mixed": "Geplante Ladung bei gemischter PV-Prognose",
+          "planning_forecast_reality_override": "Geplante Ladung wegen schwacher aktueller PV",
+          "very_cheap_force_charge": "Sehr günstiger Preis – Zwangsladung",
+          "valley_boost_charge": "Talpreis-Ladung",
+          "valley_boost_charge_mixed_forecast": "Talpreis-Ladung bei gemischter Prognose",
+          "valley_opportunity_charge": "Gelegenheitsladung",
+          "valley_opportunity_charge_mixed_forecast": "Gelegenheitsladung bei gemischter Prognose",
+          "summer_peak_reserve_charge": "Sommer-Peakreserve laden",
+          "summer_peak_reserve_hold": "Sommer-Peakreserve halten",
+          "pv_surplus_charge": "PV-Überschuss laden",
+          "pv_export_confirmed": "PV-Einspeisung bestätigt",
+          "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
+          "offgrid_load_support": "Inselsteckdose versorgen",
+          "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "summer_cover_deficit": "Hauslastdefizit decken",
+          "adaptive_peak_discharge": "Adaptive Peak-Entladung",
+          "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
+          "price_based_discharge": "Preisbasierte Entladung"
+        }
       },
       "charge_commit_target_soc": {
         "name": "Ziel-SoC der AC-Ladebindung"
@@ -882,7 +1182,11 @@
         "name": "Leistung der AC-Ladebindung"
       },
       "charge_commit_allow_pv_blend": {
-        "name": "PV-Anteil für AC-Ladebindung erlaubt"
+        "name": "PV-Anteil für AC-Ladebindung erlaubt",
+        "state": {
+          "no": "Nein",
+          "yes": "Ja"
+        }
       },
 	  "charge_source_allocation": {
         "name": "Ladequellen-Aufteilung",
