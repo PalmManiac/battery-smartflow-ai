@@ -134,6 +134,7 @@ from .learned_planning import (
 )
 from .grid_history import GridHistory, build_grid_history_config
 from .charge_source_allocator import ChargeSourceAllocator
+from .battery_protection import next_cell_voltage_emergency_state
 from .charge_economics import (
     add_charge_evidence,
     classify_charge_pricing,
@@ -382,6 +383,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # cell voltage
             "global_lowest_cell_voltage": None,
             "cell_voltage_status": "disabled",
+            "cell_voltage_emergency_active": False,
             "cell_voltage_discharge_blocked": False,
             "cell_voltage_resume_threshold": None,
             "cell_voltage_soc_plausibility": "not_available",
@@ -3165,6 +3167,32 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["cell_voltage_discharge_blocked"] = blocked
         return blocked
 
+    def _update_cell_voltage_emergency_hysteresis(
+        self,
+        global_lowest_cell_voltage: float | None,
+    ) -> bool:
+        active = next_cell_voltage_emergency_state(
+            previously_active=bool(
+                self._persist.get("cell_voltage_emergency_active", False)
+            ),
+            protection_enabled=self._cell_voltage_protection_enabled(),
+            lowest_cell_voltage=global_lowest_cell_voltage,
+            warning_voltage=float(
+                self._get_setting(
+                    SETTING_CELL_VOLTAGE_WARNING,
+                    DEFAULT_CELL_VOLTAGE_WARNING,
+                )
+            ),
+            resume_voltage=float(
+                self._get_setting(
+                    SETTING_CELL_VOLTAGE_RESUME,
+                    DEFAULT_CELL_VOLTAGE_RESUME,
+                )
+            ),
+        )
+        self._persist["cell_voltage_emergency_active"] = active
+        return active
+
     def _parse_price_points(self, now) -> list[PricePoint]:
         if not self.entities.price_export:
             return []
@@ -3982,15 +4010,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif float(soc) > float(soc_min):
                 self._persist["trade_cycle_below_soc_min"] = False
 
-            cell_voltage_emergency_active = bool(
-                self._cell_voltage_protection_enabled()
-                and global_lowest_cell_voltage is not None
-                and float(global_lowest_cell_voltage)
-                <= float(
-                    self._get_setting(
-                        SETTING_CELL_VOLTAGE_WARNING,
-                        DEFAULT_CELL_VOLTAGE_WARNING,
-                    )
+            cell_voltage_emergency_active = (
+                self._update_cell_voltage_emergency_hysteresis(
+                    global_lowest_cell_voltage
                 )
             )
 
