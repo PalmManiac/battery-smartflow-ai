@@ -263,7 +263,7 @@
           "lowest_cell_voltage_pack_6": "Capteur de la tension de cellule la plus basse du pack batterie 6. Cette valeur est utilisée pour l’évaluation globale de protection.",
           "cell_voltage_warning": "Seuil de tension cellule critique basse. Utilisé pour déclencher précocement la charge d’urgence ou les mesures de protection.",
           "cell_voltage_cutoff": "Limite basse stricte de tension cellule. Si elle est atteinte ou dépassée vers le bas, la décharge est bloquée.",
-          "cell_voltage_resume": "Seuil de réactivation au-dessus du blocage de décharge. La décharge n’est réautorisée qu’une fois cette tension atteinte."
+          "cell_voltage_resume": "Seuil de rétablissement au-dessus des limites d’avertissement et de coupure. Une charge d’urgence liée à la tension de cellule reste active jusqu’à ce que cette tension soit atteinte ; la décharge peut alors également être réautorisée après la protection."
         }
       }
     }
