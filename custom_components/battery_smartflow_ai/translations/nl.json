@@ -1161,6 +1161,7 @@
           "max_soc_reached": "Maximale SoC bereikt",
           "target_unreachable_battery_full": "Laaddoel praktisch bereikt: batterij neemt geen laadvermogen meer op",
           "target_nearly_reached_discharge_window": "Laaddoel economisch voldoende bereikt: ontlaadvenster actief",
+          "learned_charge_no_longer_needed": "Leerplanning vereist geen netlading meer",
           "deadline_passed": "Planningstermijn verstreken",
           "battery_full": "Batterij vol",
           "price_window_expired": "Prijsvenster verlopen",
