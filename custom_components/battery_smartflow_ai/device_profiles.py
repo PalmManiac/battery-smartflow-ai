@@ -202,7 +202,10 @@ V42_MODE_ARBITER_DEFAULTS = {
 
 V42_LATCH_HOLD_DEFAULTS = {
     "PV_CHARGE_LATCH_MIN_HOLD_S": 120.0,
-    "PV_CHARGE_EXIT_IMPORT_CYCLES": 3,
+    # Keep the technical continuation aligned with the strategic eight-cycle
+    # PV-charge stop hysteresis. Ending after only three import samples could
+    # cause INPUT/OUTPUT cycling with delayed meter data (Issue #193).
+    "PV_CHARGE_EXIT_IMPORT_CYCLES": 8,
     "DISCHARGE_LATCH_MIN_HOLD_S": 60.0,
     "DISCHARGE_EXIT_EXPORT_CYCLES": 3,
     "PASSTHROUGH_LATCH_MIN_HOLD_S": 120.0,
