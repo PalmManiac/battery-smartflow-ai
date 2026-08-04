@@ -1779,6 +1779,10 @@ Mögliche Zustände:
 
 Zeigt, ob wegen kritischer Zellspannung eine Notladung aktiv ist.
 
+Die Notladung startet beim Erreichen der Warnschwelle und bleibt bis zur
+konfigurierten Zellspannungs-Wiederfreigabe aktiv. Dadurch führen kurze
+Spannungsanstiege während des Ladens nicht zu wiederholten Ladeimpulsen.
+
 ---
 
 ## Entladung durch Zellspannungs-Schutz blockiert
