@@ -263,7 +263,7 @@
           "lowest_cell_voltage_pack_6": "Sensor für die niedrigste Zellspannung des sechsten Akku-Packs. Dieser Wert wird für die globale Schutzbewertung verwendet.",
           "cell_voltage_warning": "Schwellwert für kritische niedrige Zellspannung. Wird genutzt, um frühzeitig Notladung bzw. Schutzmaßnahmen einzuleiten.",
           "cell_voltage_cutoff": "Harte Untergrenze für die Zellspannung. Wird diese erreicht oder unterschritten, wird die Entladung gesperrt.",
-          "cell_voltage_resume": "Wiederfreigabe-Schwelle oberhalb der Entladesperre. Erst ab diesem Spannungswert wird die Entladung nach Zellspannungs-Schutz wieder freigegeben."
+          "cell_voltage_resume": "Wiederfreigabe-Schwelle oberhalb der Warn- und Abschaltgrenze. Eine Zellspannungs-Notladung bleibt bis zu diesem Spannungswert aktiv; anschließend kann auch die Entladung nach Zellspannungs-Schutz wieder freigegeben werden."
         }
       }
     }
