@@ -19,6 +19,10 @@ ActionType = Literal["idle", "charge", "discharge", "emergency", "passthrough"]
 # few percentage points below the configured maximum SoC.
 PLANNING_NEAR_MAX_SOC_MARGIN_PCT = 3.0
 
+NON_FORCED_LEARNED_CHARGE_REASONS = {
+    "learned_charge_window_active",
+}
+
 
 def compute_pv_attributable_export_w(
     grid_export_w: float,
@@ -2460,6 +2464,29 @@ class DecisionEngine:
                     "rejection_reason": rejection_reason,
                 }
             )
+
+        # V4.3.1-dev3:
+        # A normal learned charge window must not outrank an actually available
+        # economic-discharge candidate. Deadline/latest-start reasons remain
+        # eligible because those are the explicitly forced planning fallback.
+        economic_discharge_available = any(
+            candidate["rejection_reason"] is None
+            and candidate["state"] == "economic_discharge"
+            and str(candidate["result"].action or "") == "discharge"
+            for candidate in evaluated
+        )
+
+        if economic_discharge_available:
+            for candidate in evaluated:
+                if (
+                    candidate["state"] == "ac_charge_learned"
+                    and candidate["reason"]
+                    in NON_FORCED_LEARNED_CHARGE_REASONS
+                    and candidate["rejection_reason"] is None
+                ):
+                    candidate["rejection_reason"] = (
+                        "economic_discharge_window"
+                    )
 
         eligible = [
             candidate
