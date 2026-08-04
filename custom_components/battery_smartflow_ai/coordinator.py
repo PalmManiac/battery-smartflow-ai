@@ -134,6 +134,11 @@ from .learned_planning import (
 )
 from .grid_history import GridHistory, build_grid_history_config
 from .charge_source_allocator import ChargeSourceAllocator
+from .charge_commit_policy import (
+    learned_commit_is_forced,
+    learned_commit_should_yield_to_discharge,
+    learned_plan_charge_need_satisfied,
+)
 from .battery_protection import next_cell_voltage_emergency_state
 from .charge_economics import (
     add_charge_evidence,
@@ -898,6 +903,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         effective_discharge_threshold: float | None,
         automatic_peak_reserve_allowed: bool,
         battery_charge_w: float,
+        learned_charge_plan: Any | None,
     ) -> str:
         if not commit.active:
             return "none"
@@ -913,6 +919,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if float(additional_battery_discharge_w or 0.0) > 50.0:
             return "additional_battery_discharging_blocks_charge"
+
+        # V4.3.1-dev3:
+        # A learned binding is no longer valid once the current usable plan
+        # reports that no grid energy is needed. Keeping the old snapshot would
+        # otherwise preserve its former minimum request (typically 100 W), even
+        # with 0.0 kWh, zero slots and no planned start in the live plan.
+        if learned_plan_charge_need_satisfied(
+            commit_type=str(commit.commit_type or ""),
+            learned_charge_plan=learned_charge_plan,
+        ):
+            return "learned_charge_no_longer_needed"
 
         # V4.3.0-dev8:
         # A continuously used island socket is an independent device path.
@@ -1288,6 +1305,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     automatic_peak_reserve_allowed
                 ),
                 battery_charge_w=float(battery_charge_w or 0.0),
+                learned_charge_plan=learned_charge_plan,
             )
 
             if abort_reason != "none":
@@ -1296,6 +1314,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "target_soc_reached",
                     "target_unreachable_battery_full",
                     "target_nearly_reached_discharge_window",
+                    "learned_charge_no_longer_needed",
                 }
 
                 self._clear_charge_commit(
@@ -1325,36 +1344,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     commit.phase or "waiting"
                 )
 
-                latest_start_reached = bool(
-                    commit.latest_start is not None
-                    and now_utc >= dt_util.as_utc(
-                        commit.latest_start
-                    )
+                forced = learned_commit_is_forced(
+                    commit=commit,
+                    now=now_utc,
                 )
 
-                deadline_too_close = bool(
-                    str(commit.source_reason or "")
-                    == (
-                        "learned_charge_window_"
-                        "deadline_too_close_start_now"
-                    )
-                )
-
-                if (
-                    current_phase == "forced"
-                    or latest_start_reached
-                    or deadline_too_close
-                ):
+                if forced:
                     commit.phase = "forced"
 
-                elif current_phase == "active":
-                    # Once charging has started, keep the charge binding active.
-                    # A later price or planning recalculation must not pause it.
-                    commit.phase = "active"
-
                 else:
-                    # Only a still-waiting binding may use its original price
-                    # threshold to decide when AC charging starts.
                     acceptable_price = _to_float(
                         commit.acceptable_price_eur_kwh,
                         None,
@@ -1380,6 +1378,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         commit.phase = "waiting"
                     else:
                         commit.phase = "active"
+
+                # The Decision Engine has already verified that economic
+                # discharge is genuinely possible (SoC, protection, data and
+                # Automatic permissions included). A non-forced learned binding
+                # must yield instead of overriding that selected OUTPUT action.
+                if learned_commit_should_yield_to_discharge(
+                    commit=commit,
+                    now=now_utc,
+                    selected_reason=str(decision.reason or ""),
+                ):
+                    commit.phase = "waiting"
 
                 commit.updated_at = now_utc
                 self._store_charge_commit(commit)
