@@ -16,6 +16,32 @@ from .regulation_models import (
 DEFAULT_MIN_POWER_WRITE_DELTA_W = 15.0
 
 
+def clamp_number_power_request(
+    requested_w: float,
+    *,
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> int:
+    """Clamp a power request while preserving zero as the stop command.
+
+    Zendure Number entities may expose a positive live minimum such as 300 W.
+    That minimum applies to active charge/discharge commands, but not to the
+    special 0 W command used to stop the active direction.
+    """
+
+    requested = max(0.0, float(requested_w or 0.0))
+    if requested == 0.0:
+        return 0
+
+    effective = requested
+    if min_value is not None:
+        effective = max(float(min_value), effective)
+    if max_value is not None:
+        effective = min(float(max_value), effective)
+
+    return int(round(effective, 0))
+
+
 @dataclass
 class DeviceCommandConfig:
     min_power_write_delta_w: float = DEFAULT_MIN_POWER_WRITE_DELTA_W
