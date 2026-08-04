@@ -1161,6 +1161,7 @@
           "max_soc_reached": "SoC maximal atteint",
           "target_unreachable_battery_full": "Cible pratiquement atteinte : la batterie n’accepte plus de puissance de charge",
           "target_nearly_reached_discharge_window": "Cible économiquement suffisante : fenêtre de décharge active",
+          "learned_charge_no_longer_needed": "La planification apprise ne nécessite plus de charge sur le réseau",
           "deadline_passed": "Échéance de planification dépassée",
           "battery_full": "Batterie pleine",
           "price_window_expired": "Fenêtre de prix expirée",
