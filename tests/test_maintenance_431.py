@@ -9,6 +9,9 @@ from support import bootstrap
 
 bootstrap()
 
+from custom_components.battery_smartflow_ai.battery_protection import (  # noqa: E402
+    next_cell_voltage_emergency_state,
+)
 from custom_components.battery_smartflow_ai.device_command import (  # noqa: E402
     clamp_number_power_request,
 )
@@ -18,6 +21,36 @@ from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E4
 
 
 class Maintenance431Tests(unittest.TestCase):
+    def test_cell_voltage_emergency_charge_stays_latched_until_resume(self) -> None:
+        active = False
+        states = []
+
+        for cell_v in (3.11, 3.10, 3.12, 3.09, 3.15, 3.17, 3.18):
+            active = next_cell_voltage_emergency_state(
+                previously_active=active,
+                protection_enabled=True,
+                lowest_cell_voltage=cell_v,
+                warning_voltage=3.10,
+                resume_voltage=3.18,
+            )
+            states.append(active)
+
+        self.assertEqual(
+            states,
+            [False, True, True, True, True, True, False],
+        )
+
+    def test_cell_voltage_emergency_charge_resets_when_disabled(self) -> None:
+        self.assertFalse(
+            next_cell_voltage_emergency_state(
+                previously_active=True,
+                protection_enabled=False,
+                lowest_cell_voltage=3.05,
+                warning_voltage=3.10,
+                resume_voltage=3.18,
+            )
+        )
+
     def test_zero_stop_bypasses_positive_entity_minimum(self) -> None:
         self.assertEqual(
             clamp_number_power_request(
