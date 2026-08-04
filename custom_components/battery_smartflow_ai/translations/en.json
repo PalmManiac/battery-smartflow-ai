@@ -263,7 +263,7 @@
           "lowest_cell_voltage_pack_6": "Sensor for the lowest cell voltage of battery pack 6. This value is used for global protection evaluation.",
           "cell_voltage_warning": "Threshold for critically low cell voltage. Used to trigger emergency charging or protection measures early.",
           "cell_voltage_cutoff": "Hard lower limit for cell voltage. If this is reached or undercut, discharging is blocked.",
-          "cell_voltage_resume": "Re-enable threshold above the discharge cutoff. Discharging is only re-enabled after cell-voltage protection once this voltage is reached."
+          "cell_voltage_resume": "Recovery threshold above the warning and cutoff limits. A cell-voltage emergency charge remains active until this voltage is reached; discharging can then also be re-enabled after cell-voltage protection."
         }
       }
     }
