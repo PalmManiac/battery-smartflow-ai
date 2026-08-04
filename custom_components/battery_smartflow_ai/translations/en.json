@@ -1161,6 +1161,7 @@
           "max_soc_reached": "Maximum SoC reached",
           "target_unreachable_battery_full": "Charge target effectively reached: battery no longer accepts charging power",
           "target_nearly_reached_discharge_window": "Charge target economically sufficient: discharge window active",
+          "learned_charge_no_longer_needed": "Learned planning no longer requires grid charging",
           "deadline_passed": "Planning deadline passed",
           "battery_full": "Battery full",
           "price_window_expired": "Price window expired",
