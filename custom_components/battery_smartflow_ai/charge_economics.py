@@ -91,7 +91,21 @@ def classify_charge_pricing(
             pv_part_w=charge_w,
         )
 
-    if import_w <= 60.0:
+    # During active PV-surplus charging, short control/sensor delays can create
+    # a small import pulse even though nearly all battery power still comes
+    # from PV. Do not let those insignificant pulses make the applied price
+    # jump between the feed-in tariff and a mixed grid/PV price. A material
+    # grid share is still priced normally below.
+    pv_surplus_import_tolerance_w = max(
+        60.0,
+        min(100.0, charge_w * 0.10),
+    )
+    pv_surplus_dominant = bool(
+        decision_reason == "pv_surplus_charge"
+        and import_w <= pv_surplus_import_tolerance_w
+    )
+
+    if import_w <= 60.0 or pv_surplus_dominant:
         return ChargePricing(
             active=True,
             is_grid_charge=False,
