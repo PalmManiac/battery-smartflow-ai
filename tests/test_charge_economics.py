@@ -40,6 +40,69 @@ class ChargeEconomicsTests(unittest.TestCase):
         self.assertEqual(pricing.grid_part_w, 0.0)
         self.assertEqual(pricing.pv_part_w, 1760.0)
 
+    def test_pv_surplus_ignores_insignificant_import_pulse(self) -> None:
+        pricing = classify_charge_pricing(
+            grid_import_w=80.0,
+            grid_export_w=0.0,
+            decision_charge_w=1800.0,
+            decision_ac_mode="input",
+            price_now=0.31,
+            feed_in_tariff=0.122,
+            battery_charge_w=1760.0,
+            decision_reason="pv_surplus_charge",
+        )
+
+        self.assertTrue(pricing.active)
+        self.assertFalse(pricing.is_grid_charge)
+        self.assertAlmostEqual(pricing.price_eur_kwh, 0.122)
+        self.assertEqual(pricing.source, "pv_or_free_low_import")
+        self.assertEqual(pricing.grid_part_w, 0.0)
+        self.assertEqual(pricing.pv_part_w, 1760.0)
+
+    def test_price_charge_does_not_use_pv_surplus_tolerance(self) -> None:
+        pricing = classify_charge_pricing(
+            grid_import_w=80.0,
+            grid_export_w=0.0,
+            decision_charge_w=1800.0,
+            decision_ac_mode="input",
+            price_now=0.31,
+            feed_in_tariff=0.122,
+            battery_charge_w=1760.0,
+            decision_reason="valley_opportunity_charge",
+        )
+
+        self.assertTrue(pricing.active)
+        self.assertFalse(pricing.is_grid_charge)
+        self.assertEqual(pricing.source, "mixed_grid_pv_charge")
+        self.assertAlmostEqual(
+            pricing.price_eur_kwh,
+            ((80.0 * 0.31) + (1680.0 * 0.122)) / 1760.0,
+        )
+        self.assertEqual(pricing.grid_part_w, 80.0)
+        self.assertEqual(pricing.pv_part_w, 1680.0)
+
+    def test_pv_surplus_still_prices_material_grid_share(self) -> None:
+        pricing = classify_charge_pricing(
+            grid_import_w=400.0,
+            grid_export_w=0.0,
+            decision_charge_w=1800.0,
+            decision_ac_mode="input",
+            price_now=0.31,
+            feed_in_tariff=0.122,
+            battery_charge_w=1760.0,
+            decision_reason="pv_surplus_charge",
+        )
+
+        self.assertTrue(pricing.active)
+        self.assertTrue(pricing.is_grid_charge)
+        self.assertEqual(pricing.source, "mixed_grid_pv_charge")
+        self.assertAlmostEqual(
+            pricing.price_eur_kwh,
+            ((400.0 * 0.31) + (1360.0 * 0.122)) / 1760.0,
+        )
+        self.assertEqual(pricing.grid_part_w, 400.0)
+        self.assertEqual(pricing.pv_part_w, 1360.0)
+
     def test_unconfigured_tariff_preserves_zero_cost_fallback(self) -> None:
         pricing = classify_charge_pricing(
             grid_import_w=0.0,
