@@ -263,7 +263,7 @@
           "lowest_cell_voltage_pack_6": "Sensor voor de laagste celspanning van accupack 6. Deze waarde wordt gebruikt voor de globale beschermingsbeoordeling.",
           "cell_voltage_warning": "Drempelwaarde voor kritisch lage celspanning. Wordt gebruikt om vroegtijdig noodladen of beschermingsmaatregelen te starten.",
           "cell_voltage_cutoff": "Harde ondergrens voor de celspanning. Wanneer deze wordt bereikt of onderschreden, wordt ontladen geblokkeerd.",
-          "cell_voltage_resume": "Vrijgave-drempel boven de ontlaadblokkering. Pas vanaf deze spanning wordt ontladen na celspanningsbescherming opnieuw toegestaan."
+          "cell_voltage_resume": "Hersteldrempel boven de waarschuwings- en uitschakelgrens. Een noodlading wegens celspanning blijft actief totdat deze spanning is bereikt; daarna kan ook het ontladen na de celspanningsbeveiliging weer worden vrijgegeven."
         }
       }
     }
