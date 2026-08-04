@@ -149,7 +149,7 @@ from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
 )
-from .device_command import DeviceCommandBuilder
+from .device_command import DeviceCommandBuilder, clamp_number_power_request
 from .command_effectiveness import (
     CommandEffectivenessConfig,
     CommandEffectivenessState,
@@ -1748,8 +1748,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """
 
         requested = max(0.0, float(requested_w or 0.0))
-        effective = requested
-
         min_value = _to_float(
             self._attr(entity_id, "min"),
             None,
@@ -1759,13 +1757,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             None,
         )
 
-        if min_value is not None:
-            effective = max(float(min_value), effective)
-
-        if max_value is not None:
-            effective = min(float(max_value), effective)
-
-        effective_int = int(round(effective, 0))
+        effective_int = clamp_number_power_request(
+            requested,
+            min_value=min_value,
+            max_value=max_value,
+        )
         requested_int = int(round(requested, 0))
 
         self._persist[
