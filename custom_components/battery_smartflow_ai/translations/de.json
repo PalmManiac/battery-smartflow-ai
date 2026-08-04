@@ -1161,6 +1161,7 @@
           "max_soc_reached": "Maximaler SoC erreicht",
           "target_unreachable_battery_full": "Ladeziel praktisch erreicht: Akku nimmt keine Ladeleistung mehr an",
           "target_nearly_reached_discharge_window": "Ladeziel wirtschaftlich ausreichend erreicht: Entladefenster aktiv",
+          "learned_charge_no_longer_needed": "Lernplanung benötigt keine Netzladung mehr",
           "deadline_passed": "Planungsfrist abgelaufen",
           "battery_full": "Akku voll",
           "price_window_expired": "Preisfenster abgelaufen",
