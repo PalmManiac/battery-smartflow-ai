@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.3.1-dev2"
+INTEGRATION_VERSION = "4.3.1-dev3"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -592,6 +592,7 @@ CHARGE_COMMIT_ABORT_REASON_ENUMS = [
     "max_soc_reached",
     "target_unreachable_battery_full",
     "target_nearly_reached_discharge_window",
+    "learned_charge_no_longer_needed",
     "deadline_passed",
     "battery_full",
     "price_window_expired",
