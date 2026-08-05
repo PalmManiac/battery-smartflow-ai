@@ -5140,6 +5140,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 grid=grid_history_state,
                 previous_input_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
+                max_input_w=float(max_charge),
+                max_output_w=float(max_discharge),
             )
             
             regulation_device_command = self._device_command_builder.build(
@@ -5157,6 +5159,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._state(self.entities.output_limit),
                     None,
                 ),
+                max_input_w=float(max_charge),
+                max_output_w=float(max_discharge),
             )
 
             technical_reason = (
