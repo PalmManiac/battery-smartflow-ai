@@ -737,6 +737,14 @@ class ModeArbiter:
         requested_mode = intent.requested_mode
 
         if runtime.active_regulation_state == "pv_charge_active":
+            strategic_pv_latch = intent.metadata.get("pv_charge_latched")
+
+            # Issue #207:
+            # The strategic source check is authoritative. Once it has released
+            # the PV latch, the technical minimum hold must not keep INPUT alive.
+            if strategic_pv_latch is False:
+                return None
+
             stable_import_cycles = int(grid.stable_import_cycles or 0)
             exit_import_cycles = max(
                 1,
@@ -924,6 +932,30 @@ class ModeArbiter:
         metadata: dict[str, Any],
     ) -> ModeArbiterResult:
         if intent.intent == "pv_charge":
+            last_output_w = max(
+                0.0,
+                float(runtime.last_output_limit_w or 0.0),
+            )
+
+            # Issue #207:
+            # Export observed while OUTPUT is still commanded cannot authorize
+            # INPUT. First ramp the output command to zero; a later cycle must
+            # confirm that the export remains before PV charging may start.
+            if last_output_w > 0.0:
+                return ModeArbiterResult(
+                    requested_mode="input",
+                    resolved_mode="ramp_down_output",
+                    allowed=True,
+                    reason="pv_charge_wait_output_zero",
+                    active_regulation_state="discharge_active",
+                    active_hold_remaining_s=0.0,
+                    cooldown_remaining_s=0.0,
+                    metadata={
+                        **metadata,
+                        "last_output_limit_w": last_output_w,
+                    },
+                )
+
             exit_import_cycles = max(
                 1,
                 int(self.config.pv_charge_exit_import_cycles),
@@ -1010,11 +1042,6 @@ class ModeArbiter:
                 int(
                     self.config.stable_export_cycles_for_pv_charge
                 ),
-            )
-
-            last_output_w = max(
-                0.0,
-                float(runtime.last_output_limit_w or 0.0),
             )
 
             # A new PV charge must still be based on a real current export.
