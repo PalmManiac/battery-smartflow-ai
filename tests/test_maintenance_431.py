@@ -25,9 +25,19 @@ from custom_components.battery_smartflow_ai.charge_commit_policy import (  # noq
     learned_plan_charge_need_satisfied,
 )
 from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E402
+    advance_pv_charge_hysteresis,
+    compute_pv_attributable_export_w,
     DecisionContext,
     DecisionEngine,
     PricePoint,
+)
+from custom_components.battery_smartflow_ai.mode_arbiter import (  # noqa: E402
+    ModeArbiter,
+)
+from custom_components.battery_smartflow_ai.regulation_models import (  # noqa: E402
+    GridHistoryState,
+    RegulationRuntimeState,
+    StrategyIntent,
 )
 from custom_components.battery_smartflow_ai.strategy_state import (  # noqa: E402
     ChargeCommitState,
@@ -280,6 +290,189 @@ class Maintenance431Tests(unittest.TestCase):
                     ],
                     8,
                 )
+
+    def test_last_output_command_is_removed_from_pv_export(self) -> None:
+        self.assertEqual(
+            compute_pv_attributable_export_w(
+                grid_export_w=500.0,
+                battery_discharge_w=0.0,
+                previous_discharge_w=0.0,
+                last_output_w=500.0,
+            ),
+            0.0,
+        )
+
+    def test_output_caused_export_cannot_start_pv_latch(self) -> None:
+        state = (0, 0, False)
+
+        for _ in range(3):
+            state = advance_pv_charge_hysteresis(
+                start_counter=state[0],
+                stop_counter=state[1],
+                latched=state[2],
+                grid_import_w=0.0,
+                grid_export_w=500.0,
+                pv_w=0.0,
+                pv_charge_start_export_w=80.0,
+                last_output_w=500.0,
+            )
+
+        self.assertEqual(state, (0, 0, False))
+
+    def test_export_without_plausible_pv_cannot_start_normal_latch(self) -> None:
+        state = (0, 0, False)
+
+        for _ in range(3):
+            state = advance_pv_charge_hysteresis(
+                start_counter=state[0],
+                stop_counter=state[1],
+                latched=state[2],
+                grid_import_w=0.0,
+                grid_export_w=500.0,
+                pv_w=0.0,
+                pv_charge_start_export_w=80.0,
+                last_output_w=0.0,
+                mppt_clips_without_output=False,
+            )
+
+        self.assertEqual(state, (0, 0, False))
+
+    def test_real_pv_export_still_starts_normal_latch(self) -> None:
+        state = (0, 0, False)
+
+        for _ in range(2):
+            state = advance_pv_charge_hysteresis(
+                start_counter=state[0],
+                stop_counter=state[1],
+                latched=state[2],
+                grid_import_w=0.0,
+                grid_export_w=500.0,
+                pv_w=700.0,
+                pv_charge_start_export_w=80.0,
+                last_output_w=0.0,
+                mppt_clips_without_output=False,
+            )
+
+        self.assertEqual(state, (0, 0, True))
+
+    def test_false_pv_latch_exits_quickly_without_pv_source(self) -> None:
+        first_state = advance_pv_charge_hysteresis(
+            start_counter=0,
+            stop_counter=0,
+            latched=True,
+            grid_import_w=500.0,
+            grid_export_w=0.0,
+            pv_w=0.0,
+            pv_charge_start_export_w=80.0,
+        )
+        second_state = advance_pv_charge_hysteresis(
+            start_counter=first_state[0],
+            stop_counter=first_state[1],
+            latched=first_state[2],
+            grid_import_w=500.0,
+            grid_export_w=0.0,
+            pv_w=0.0,
+            pv_charge_start_export_w=80.0,
+        )
+
+        self.assertEqual(first_state, (0, 4, True))
+        self.assertEqual(second_state, (0, 0, False))
+
+    def test_sf800_mppt_export_can_confirm_pv_source(self) -> None:
+        state = (0, 0, False)
+
+        for _ in range(2):
+            state = advance_pv_charge_hysteresis(
+                start_counter=state[0],
+                stop_counter=state[1],
+                latched=state[2],
+                grid_import_w=0.0,
+                grid_export_w=100.0,
+                pv_w=0.0,
+                pv_charge_start_export_w=80.0,
+                last_output_w=0.0,
+                mppt_clips_without_output=True,
+            )
+
+        self.assertEqual(state, (0, 0, True))
+
+    def test_fast_pv_handover_waits_for_output_zero(self) -> None:
+        result = ModeArbiter().evaluate(
+            now=datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc),
+            intent=StrategyIntent(
+                intent="pv_charge",
+                requested_mode="input",
+                requested_power_w=500.0,
+                reason="pv_surplus_charge",
+                pv_handover_policy="fast",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=-500.0,
+                stable_export_cycles=3,
+            ),
+            runtime=RegulationRuntimeState(
+                last_output_limit_w=500.0,
+            ),
+            current_ac_mode=None,
+        )
+
+        self.assertEqual(result.resolved_mode, "ramp_down_output")
+        self.assertEqual(result.reason, "pv_charge_wait_output_zero")
+
+    def test_fast_pv_handover_remains_available_after_output_zero(self) -> None:
+        result = ModeArbiter().evaluate(
+            now=datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc),
+            intent=StrategyIntent(
+                intent="pv_charge",
+                requested_mode="input",
+                requested_power_w=500.0,
+                reason="pv_surplus_charge",
+                pv_handover_policy="fast",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=-500.0,
+                stable_export_cycles=3,
+            ),
+            runtime=RegulationRuntimeState(
+                last_output_limit_w=0.0,
+            ),
+            current_ac_mode=None,
+        )
+
+        self.assertEqual(result.resolved_mode, "input")
+        self.assertEqual(result.reason, "pv_charge_fast_handover")
+
+    def test_released_strategic_pv_latch_ends_technical_input_hold(self) -> None:
+        result = ModeArbiter().evaluate(
+            now=datetime(2026, 8, 5, 12, 0, tzinfo=timezone.utc),
+            intent=StrategyIntent(
+                intent="idle",
+                requested_mode="idle",
+                requested_power_w=0.0,
+                reason="idle",
+                metadata={"pv_charge_latched": False},
+            ),
+            grid=GridHistoryState(
+                grid_now_w=500.0,
+                stable_import_cycles=2,
+            ),
+            runtime=RegulationRuntimeState(
+                active_regulation_state="pv_charge_active",
+                pv_charge_latch_started_ts=datetime(
+                    2026,
+                    8,
+                    5,
+                    11,
+                    59,
+                    30,
+                    tzinfo=timezone.utc,
+                ),
+            ),
+            current_ac_mode="input",
+        )
+
+        self.assertEqual(result.resolved_mode, "idle")
+        self.assertTrue(result.allowed)
 
 
 if __name__ == "__main__":
