@@ -114,6 +114,7 @@ from .const import (
 )
 from .device_profiles import DEVICE_PROFILES, merge_profile_with_overrides
 from .decision_engine import (
+    advance_pv_charge_hysteresis,
     compute_pv_attributable_export_w,
     DecisionContext,
     DecisionEngine,
@@ -2679,95 +2680,28 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         pv_charge_start_export_w: float,
         battery_discharge_w: float = 0.0,
         previous_discharge_w: float = 0.0,
+        last_output_w: float = 0.0,
         additional_battery_discharge_w: float = 0.0,
+        mppt_clips_without_output: bool = False,
     ) -> tuple[int, int, bool]:
         start_counter = int(self._persist.get("pv_charge_start_counter", 0) or 0)
         stop_counter = int(self._persist.get("pv_charge_stop_counter", 0) or 0)
         latched = bool(self._persist.get("pv_charge_latched", False))
 
-        start_threshold = float(pv_charge_start_export_w or 0.0)
-
-        start_required_cycles = 2
-        stop_required_cycles = 8
-
-        hold_export_threshold = max(20.0, start_threshold * 0.5)
-        small_import_tolerance_w = 100.0
-        hard_import_threshold_w = 140.0
-        weak_export_threshold = max(10.0, start_threshold * 0.15)
-
-        export_w = max(0.0, float(grid_export_w or 0.0))
-        import_w = max(0.0, float(grid_import_w or 0.0))
-
-        # Dev6:
-        # Export caused by OUTPUT regulation, discharge keepalive or an additional
-        # battery is not PV surplus. Only the remaining source-attributable export
-        # may advance or hold the PV charge latch.
-        pv_attributable_export_w = compute_pv_attributable_export_w(
-            grid_export_w=export_w,
+        start_counter, stop_counter, latched = advance_pv_charge_hysteresis(
+            start_counter=start_counter,
+            stop_counter=stop_counter,
+            latched=latched,
+            grid_import_w=grid_import_w,
+            grid_export_w=grid_export_w,
+            pv_w=pv_w,
+            pv_charge_start_export_w=pv_charge_start_export_w,
             battery_discharge_w=battery_discharge_w,
             previous_discharge_w=previous_discharge_w,
-            additional_battery_discharge_w=(
-                additional_battery_discharge_w
-            ),
+            last_output_w=last_output_w,
+            additional_battery_discharge_w=additional_battery_discharge_w,
+            mppt_clips_without_output=mppt_clips_without_output,
         )
-        battery_discharge_source_active = bool(
-            max(
-                0.0,
-                float(battery_discharge_w or 0.0),
-                float(previous_discharge_w or 0.0),
-                float(additional_battery_discharge_w or 0.0),
-            )
-            > 25.0
-        )
-        battery_source_dominates_export = bool(
-            battery_discharge_source_active
-            and pv_attributable_export_w <= weak_export_threshold
-        )
-
-        has_start_surplus = (
-            pv_attributable_export_w >= start_threshold
-        )
-        has_hold_surplus = (
-            pv_attributable_export_w >= hold_export_threshold
-        )
-        import_is_small = import_w <= small_import_tolerance_w
-
-        real_weakness = (
-            import_w >= hard_import_threshold_w
-            and pv_attributable_export_w <= weak_export_threshold
-        )
-
-        if latched:
-            start_counter = 0
-
-            if battery_source_dominates_export:
-                # A stale/false latch must also release when export stays high
-                # solely because OUTPUT is still discharging. Count this stronger
-                # source conflict twice so it clears within four update cycles.
-                stop_counter += 2
-            elif real_weakness:
-                stop_counter += 1
-            elif has_hold_surplus or import_is_small:
-                stop_counter = 0
-            else:
-                stop_counter += 1
-
-            if stop_counter >= stop_required_cycles:
-                latched = False
-                stop_counter = 0
-
-        else:
-            stop_counter = 0
-
-            if has_start_surplus:
-                start_counter += 1
-            else:
-                start_counter = 0
-
-            if start_counter >= start_required_cycles:
-                latched = True
-                start_counter = 0
-                stop_counter = 0
 
         self._persist["pv_charge_start_counter"] = start_counter
         self._persist["pv_charge_stop_counter"] = stop_counter
@@ -3835,6 +3769,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist.get("prev_discharge_w", 0.0)
                     or 0.0
                 ),
+                last_output_w=float(
+                    self._persist.get("last_set_output_w", 0.0)
+                    or 0.0
+                ),
                 additional_battery_discharge_w=float(
                     additional_battery_discharge_w or 0.0
                 ),
@@ -3851,8 +3789,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         self._persist.get("prev_discharge_w", 0.0)
                         or 0.0
                     ),
+                    last_output_w=float(
+                        self._persist.get("last_set_output_w", 0.0)
+                        or 0.0
+                    ),
                     additional_battery_discharge_w=float(
                         additional_battery_discharge_w or 0.0
+                    ),
+                    mppt_clips_without_output=bool(
+                        profile.get("MPPT_CLIPS_WITHOUT_OUTPUT", False)
                     ),
                 )
             )
@@ -4076,6 +4021,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_w=float(pv_w),
                 house_load_w=float(house_load),
                 battery_discharge_w=float(battery_discharge_w),
+                last_output_w=float(
+                    self._persist.get("last_set_output_w", 0.0)
+                    or 0.0
+                ),
                 price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
@@ -4851,6 +4800,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             
             strategy_intent.metadata.update(
                 {
+                    # The technical layer must not keep a stale PV INPUT hold
+                    # after the source-aware strategic latch has released.
+                    "pv_charge_latched": bool(pv_charge_latched),
+                    "pv_charge_stop_counter": int(pv_charge_stop_counter),
                     # V4.3.0-dev7:
                     # Keep the full strategic candidate selection internally
                     # visible even when a later safety, charge-binding or
@@ -5593,6 +5546,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_w=float(pv_w),
                 house_load_w=float(house_load),
                 battery_discharge_w=float(battery_discharge_w),
+                last_output_w=float(
+                    self._persist.get("last_set_output_w", 0.0)
+                    or 0.0
+                ),
                 price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
