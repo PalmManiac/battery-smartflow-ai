@@ -238,7 +238,18 @@ class RegulationPowerController:
         grid: GridHistoryState,
         previous_input_w: float = 0.0,
         previous_output_w: float = 0.0,
+        max_input_w: float | None = None,
+        max_output_w: float | None = None,
     ) -> PowerControllerResult:
+        effective_max_input_w = self._effective_runtime_limit(
+            profile_limit_w=self.config.max_input_w,
+            runtime_limit_w=max_input_w,
+        )
+        effective_max_output_w = self._effective_runtime_limit(
+            profile_limit_w=self.config.max_output_w,
+            runtime_limit_w=max_output_w,
+        )
+
         if not arbiter.allowed:
             return PowerControllerResult(
                 raw_target_w=0.0,
@@ -277,6 +288,7 @@ class RegulationPowerController:
                 intent=intent,
                 arbiter=arbiter,
                 previous_output_w=previous_output_w,
+                max_output_w=effective_max_output_w,
             )
 
         if arbiter.resolved_mode == "ramp_down_input":
@@ -284,6 +296,7 @@ class RegulationPowerController:
                 intent=intent,
                 arbiter=arbiter,
                 previous_input_w=previous_input_w,
+                max_input_w=effective_max_input_w,
             )
 
         if arbiter.resolved_mode == "output":
@@ -292,6 +305,7 @@ class RegulationPowerController:
                 arbiter=arbiter,
                 grid=grid,
                 previous_output_w=previous_output_w,
+                max_output_w=effective_max_output_w,
             )
 
         if arbiter.resolved_mode == "input":
@@ -300,9 +314,27 @@ class RegulationPowerController:
                 arbiter=arbiter,
                 grid=grid,
                 previous_input_w=previous_input_w,
+                max_input_w=effective_max_input_w,
             )
 
         return self._idle_result(intent=intent, arbiter=arbiter)
+
+    @staticmethod
+    def _effective_runtime_limit(
+        *,
+        profile_limit_w: float,
+        runtime_limit_w: float | None,
+    ) -> float:
+        """Combine the device capability with the current user limit."""
+
+        profile_limit = max(0.0, float(profile_limit_w or 0.0))
+        if runtime_limit_w is None:
+            return profile_limit
+
+        return min(
+            profile_limit,
+            max(0.0, float(runtime_limit_w or 0.0)),
+        )
 
     def _control_grid_w(self, grid: GridHistoryState) -> float:
         """Weighted grid value for fast but smooth regulation.
@@ -683,6 +715,7 @@ class RegulationPowerController:
         arbiter: ModeArbiterResult,
         grid: GridHistoryState,
         previous_output_w: float,
+        max_output_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_output_w or 0.0))
 
@@ -719,6 +752,7 @@ class RegulationPowerController:
                     "resolved_mode": arbiter.resolved_mode,
                     "control_grid_w": round(control_grid_w, 2),
                 },
+                max_output_w=max_output_w,
             )
 
         if intent.intent == "passthrough":
@@ -736,6 +770,7 @@ class RegulationPowerController:
                     "resolved_mode": arbiter.resolved_mode,
                     "control_grid_w": round(control_grid_w, 2),
                 },
+                max_output_w=max_output_w,
             )
 
         requested = (
@@ -865,6 +900,7 @@ class RegulationPowerController:
                 **near_zero_metadata,
                 **economic_target_metadata,
             },
+            max_output_w=max_output_w,
         )
 
     def _calculate_input(
@@ -874,6 +910,7 @@ class RegulationPowerController:
         arbiter: ModeArbiterResult,
         grid: GridHistoryState,
         previous_input_w: float,
+        max_input_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_input_w or 0.0))
 
@@ -996,6 +1033,7 @@ class RegulationPowerController:
                     **economic_target_metadata,
                 },
                 max_step_down_override_w=max_step_down_override_w,
+                max_input_w=max_input_w,
             )
 
         # V4.3.0-dev5.7:
@@ -1013,7 +1051,7 @@ class RegulationPowerController:
 
             limited_target = min(
                 raw_target,
-                float(self.config.max_input_w),
+                float(max_input_w),
             )
 
             profile_limited = abs(
@@ -1036,6 +1074,7 @@ class RegulationPowerController:
                     "resolved_mode": arbiter.resolved_mode,
                     "control_grid_w": round(control_grid_w, 2),
                     "requested_power_w": round(raw_target, 2),
+                    "effective_max_input_w": round(float(max_input_w), 2),
                     "fixed_ac_charge": True,
                     "input_step_limiter_bypassed": True,
                     **economic_target_metadata,
@@ -1059,6 +1098,7 @@ class RegulationPowerController:
                 "input_step_limiter_bypassed": False,
                 **economic_target_metadata,
             },
+            max_input_w=max_input_w,
         )
 
     def _ramp_down_output(
@@ -1067,6 +1107,7 @@ class RegulationPowerController:
         intent: StrategyIntent,
         arbiter: ModeArbiterResult,
         previous_output_w: float,
+        max_output_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_output_w or 0.0))
         raw_target = 0.0
@@ -1079,6 +1120,7 @@ class RegulationPowerController:
                 "intent": intent.intent,
                 "resolved_mode": arbiter.resolved_mode,
             },
+            max_output_w=max_output_w,
         )
 
     def _ramp_down_input(
@@ -1087,6 +1129,7 @@ class RegulationPowerController:
         intent: StrategyIntent,
         arbiter: ModeArbiterResult,
         previous_input_w: float,
+        max_input_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_input_w or 0.0))
         raw_target = 0.0
@@ -1099,6 +1142,7 @@ class RegulationPowerController:
                 "intent": intent.intent,
                 "resolved_mode": arbiter.resolved_mode,
             },
+            max_input_w=max_input_w,
         )
 
     def _idle_result(
@@ -1128,11 +1172,13 @@ class RegulationPowerController:
         previous_output_w: float,
         reason: str,
         metadata: dict[str, Any],
+        max_output_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_output_w or 0.0))
         raw = max(0.0, float(raw_target_w or 0.0))
 
-        profile_limited_target = min(raw, float(self.config.max_output_w))
+        effective_max_output_w = max(0.0, float(max_output_w or 0.0))
+        profile_limited_target = min(raw, effective_max_output_w)
         profile_limited = profile_limited_target != raw
 
         if profile_limited_target > prev:
@@ -1157,7 +1203,7 @@ class RegulationPowerController:
             )
             final = prev + allowed_delta
 
-        final = max(0.0, min(final, float(self.config.max_output_w)))
+        final = max(0.0, min(final, effective_max_output_w))
 
         step_limited = abs(final - profile_limited_target) > 0.01
         applied_step = final - prev
@@ -1170,7 +1216,10 @@ class RegulationPowerController:
             profile_limited=bool(profile_limited),
             step_limited=bool(step_limited),
             reason=reason,
-            metadata=metadata,
+            metadata={
+                **metadata,
+                "effective_max_output_w": round(effective_max_output_w, 2),
+            },
         )
 
     def _limit_input_step(
@@ -1181,11 +1230,13 @@ class RegulationPowerController:
         reason: str,
         metadata: dict[str, Any],
         max_step_down_override_w: float | None = None,
+        max_input_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_input_w or 0.0))
         raw = max(0.0, float(raw_target_w or 0.0))
 
-        profile_limited_target = min(raw, float(self.config.max_input_w))
+        effective_max_input_w = max(0.0, float(max_input_w or 0.0))
+        profile_limited_target = min(raw, effective_max_input_w)
         profile_limited = profile_limited_target != raw
 
         if profile_limited_target > prev:
@@ -1207,7 +1258,7 @@ class RegulationPowerController:
             )
             final = prev + allowed_delta
 
-        final = max(0.0, min(final, float(self.config.max_input_w)))
+        final = max(0.0, min(final, effective_max_input_w))
 
         step_limited = abs(final - profile_limited_target) > 0.01
         applied_step = final - prev
@@ -1227,5 +1278,6 @@ class RegulationPowerController:
                     if max_step_down_override_w is not None
                     else None
                 ),
+                "effective_max_input_w": round(effective_max_input_w, 2),
             },
         )
