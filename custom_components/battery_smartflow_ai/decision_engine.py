@@ -28,6 +28,7 @@ def compute_pv_attributable_export_w(
     grid_export_w: float,
     battery_discharge_w: float = 0.0,
     previous_discharge_w: float = 0.0,
+    last_output_w: float = 0.0,
     additional_battery_discharge_w: float = 0.0,
 ) -> float:
     """Return grid export that cannot be explained by battery discharge."""
@@ -37,6 +38,7 @@ def compute_pv_attributable_export_w(
         0.0,
         float(battery_discharge_w or 0.0),
         float(previous_discharge_w or 0.0),
+        float(last_output_w or 0.0),
     )
     additional_battery_export_w = max(
         0.0,
@@ -49,6 +51,130 @@ def compute_pv_attributable_export_w(
         - main_battery_export_w
         - additional_battery_export_w,
     )
+
+
+def advance_pv_charge_hysteresis(
+    *,
+    start_counter: int,
+    stop_counter: int,
+    latched: bool,
+    grid_import_w: float,
+    grid_export_w: float,
+    pv_w: float,
+    pv_charge_start_export_w: float,
+    battery_discharge_w: float = 0.0,
+    previous_discharge_w: float = 0.0,
+    last_output_w: float = 0.0,
+    additional_battery_discharge_w: float = 0.0,
+    mppt_clips_without_output: bool = False,
+) -> tuple[int, int, bool]:
+    """Advance the source-aware PV charge latch by one update cycle."""
+
+    start_threshold = float(pv_charge_start_export_w or 0.0)
+
+    start_required_cycles = 2
+    stop_required_cycles = 8
+
+    hold_export_threshold = max(20.0, start_threshold * 0.5)
+    small_import_tolerance_w = 100.0
+    hard_import_threshold_w = 140.0
+    weak_export_threshold = max(10.0, start_threshold * 0.15)
+
+    export_w = max(0.0, float(grid_export_w or 0.0))
+    import_w = max(0.0, float(grid_import_w or 0.0))
+    pv_power_w = max(0.0, float(pv_w or 0.0))
+    output_command_w = max(0.0, float(last_output_w or 0.0))
+
+    pv_attributable_export_w = compute_pv_attributable_export_w(
+        grid_export_w=export_w,
+        battery_discharge_w=battery_discharge_w,
+        previous_discharge_w=previous_discharge_w,
+        last_output_w=output_command_w,
+        additional_battery_discharge_w=additional_battery_discharge_w,
+    )
+    battery_discharge_source_active = bool(
+        max(
+            0.0,
+            float(battery_discharge_w or 0.0),
+            float(previous_discharge_w or 0.0),
+            output_command_w,
+            float(additional_battery_discharge_w or 0.0),
+        )
+        > 25.0
+    )
+    battery_source_dominates_export = bool(
+        battery_discharge_source_active
+        and pv_attributable_export_w <= weak_export_threshold
+    )
+
+    minimum_plausible_pv_w = max(
+        20.0,
+        min(80.0, start_threshold * 0.25),
+    )
+    pv_source_plausible = bool(
+        pv_power_w >= minimum_plausible_pv_w
+        or (
+            mppt_clips_without_output
+            and pv_attributable_export_w >= hold_export_threshold
+        )
+    )
+    output_command_active = output_command_w > 25.0
+
+    has_start_surplus = bool(
+        not output_command_active
+        and pv_source_plausible
+        and pv_attributable_export_w >= start_threshold
+    )
+    has_hold_surplus = bool(
+        pv_source_plausible
+        and pv_attributable_export_w >= hold_export_threshold
+    )
+    import_is_small = import_w <= small_import_tolerance_w
+
+    real_weakness = bool(
+        import_w >= hard_import_threshold_w
+        and (
+            not pv_source_plausible
+            or pv_attributable_export_w <= weak_export_threshold
+        )
+    )
+
+    if latched:
+        start_counter = 0
+
+        if output_command_active or battery_source_dominates_export:
+            # A stale/false latch must release while OUTPUT is still the source
+            # of export. Count this conflict twice to clear within four cycles.
+            stop_counter += 2
+        elif not pv_source_plausible:
+            # Strong import plus no plausible PV source is unambiguous. Two
+            # cycles are enough; otherwise retain the normal debounce.
+            stop_counter += 4 if real_weakness else 1
+        elif real_weakness:
+            stop_counter += 1
+        elif has_hold_surplus or import_is_small:
+            stop_counter = 0
+        else:
+            stop_counter += 1
+
+        if stop_counter >= stop_required_cycles:
+            latched = False
+            stop_counter = 0
+
+    else:
+        stop_counter = 0
+
+        if has_start_surplus:
+            start_counter += 1
+        else:
+            start_counter = 0
+
+        if start_counter >= start_required_cycles:
+            latched = True
+            start_counter = 0
+            stop_counter = 0
+
+    return start_counter, stop_counter, latched
 
 
 @dataclass
@@ -94,6 +220,7 @@ class DecisionContext:
 
     battery_capacity_kwh: float
     battery_discharge_w: float = 0.0
+    last_output_w: float = 0.0
 
     additional_battery_charge_w: float = 0.0
     additional_battery_discharge_w: float = 0.0
@@ -750,6 +877,7 @@ class PvRule(BaseRule):
                 0.0,
                 float(ctx.battery_discharge_w or 0.0),
                 float(ctx.prev_discharge_w or 0.0),
+                float(ctx.last_output_w or 0.0),
                 float(ctx.additional_battery_discharge_w or 0.0),
             )
             > 25.0
@@ -767,7 +895,10 @@ class PvRule(BaseRule):
         # A previous 60 W discharge keepalive must not suppress PV surplus charge.
         # If there is real PV surplus, PV charging may take over even when
         # prev_discharge_w is still > 0 from the previous cycle.
-        discharge_active = prev_discharge_w > 0.0
+        discharge_active = max(
+            prev_discharge_w,
+            float(ctx.last_output_w or 0.0),
+        ) > 0.0
         if discharge_active and not engine._pv_surplus_blocks_discharge(ctx):
             return None
 
@@ -1408,6 +1539,9 @@ class DecisionEngine:
             ),
             previous_discharge_w=float(
                 ctx.prev_discharge_w or 0.0
+            ),
+            last_output_w=float(
+                ctx.last_output_w or 0.0
             ),
             additional_battery_discharge_w=float(
                 ctx.additional_battery_discharge_w or 0.0
@@ -2142,6 +2276,9 @@ class DecisionEngine:
             return False
 
         if float(ctx.prev_discharge_w or 0.0) > 0.0:
+            return False
+
+        if float(ctx.last_output_w or 0.0) > 0.0:
             return False
 
         pv_w = float(ctx.pv_w or 0.0)
