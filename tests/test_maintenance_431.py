@@ -15,6 +15,7 @@ from custom_components.battery_smartflow_ai.battery_protection import (  # noqa:
     next_cell_voltage_emergency_state,
 )
 from custom_components.battery_smartflow_ai.device_command import (  # noqa: E402
+    DeviceCommandBuilder,
     clamp_number_power_request,
 )
 from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E402
@@ -36,8 +37,14 @@ from custom_components.battery_smartflow_ai.mode_arbiter import (  # noqa: E402
 )
 from custom_components.battery_smartflow_ai.regulation_models import (  # noqa: E402
     GridHistoryState,
+    ModeArbiterResult,
+    PowerControllerResult,
     RegulationRuntimeState,
     StrategyIntent,
+)
+from custom_components.battery_smartflow_ai.regulation_power_controller import (  # noqa: E402
+    RegulationPowerConfig,
+    RegulationPowerController,
 )
 from custom_components.battery_smartflow_ai.strategy_state import (  # noqa: E402
     ChargeCommitState,
@@ -473,6 +480,144 @@ class Maintenance431Tests(unittest.TestCase):
 
         self.assertEqual(result.resolved_mode, "idle")
         self.assertTrue(result.allowed)
+
+    def test_pv_regulation_respects_user_charge_limit(self) -> None:
+        controller = RegulationPowerController(
+            RegulationPowerConfig(max_input_w=2400.0)
+        )
+        intent = StrategyIntent(
+            intent="pv_charge",
+            requested_mode="input",
+            requested_power_w=1300.0,
+            reason="pv_surplus_charge",
+        )
+        arbiter = ModeArbiterResult(
+            requested_mode="input",
+            resolved_mode="input",
+            allowed=True,
+            reason="pv_charge_active",
+        )
+        grid = GridHistoryState(
+            grid_now_w=-1000.0,
+            grid_avg_short_w=-1000.0,
+            grid_avg_medium_w=-1000.0,
+        )
+
+        previous_input_w = 1300.0
+        for _ in range(3):
+            result = controller.calculate(
+                intent=intent,
+                arbiter=arbiter,
+                grid=grid,
+                previous_input_w=previous_input_w,
+                max_input_w=1300.0,
+            )
+            self.assertEqual(result.final_power_w, 1300.0)
+            self.assertEqual(
+                result.metadata["effective_max_input_w"],
+                1300.0,
+            )
+            previous_input_w = result.final_power_w
+
+    def test_reduced_user_charge_limit_is_applied_immediately(self) -> None:
+        result = RegulationPowerController(
+            RegulationPowerConfig(max_input_w=2400.0)
+        ).calculate(
+            intent=StrategyIntent(
+                intent="pv_charge",
+                requested_mode="input",
+                requested_power_w=1300.0,
+                reason="pv_surplus_charge",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="input",
+                resolved_mode="input",
+                allowed=True,
+                reason="pv_charge_active",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=10.0,
+                grid_avg_short_w=10.0,
+                grid_avg_medium_w=10.0,
+            ),
+            previous_input_w=2400.0,
+            max_input_w=1300.0,
+        )
+
+        self.assertEqual(result.final_power_w, 1300.0)
+
+    def test_output_regulation_does_not_exceed_user_discharge_limit(self) -> None:
+        result = RegulationPowerController(
+            RegulationPowerConfig(max_output_w=2400.0)
+        ).calculate(
+            intent=StrategyIntent(
+                intent="arbitrage_discharge",
+                requested_mode="output",
+                requested_power_w=1300.0,
+                reason="price_based_discharge",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="output",
+                resolved_mode="output",
+                allowed=True,
+                reason="discharge_active",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=1000.0,
+                grid_avg_short_w=1000.0,
+                grid_avg_medium_w=1000.0,
+            ),
+            previous_output_w=1300.0,
+            max_output_w=1300.0,
+        )
+
+        self.assertEqual(result.final_power_w, 1300.0)
+        self.assertEqual(
+            result.metadata["effective_max_output_w"],
+            1300.0,
+        )
+
+    def test_final_device_command_rechecks_user_power_limits(self) -> None:
+        builder = DeviceCommandBuilder()
+        power = PowerControllerResult(final_power_w=2400.0)
+
+        input_command = builder.build(
+            intent=StrategyIntent(
+                intent="pv_charge",
+                requested_mode="input",
+                requested_power_w=2400.0,
+                reason="pv_surplus_charge",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="input",
+                resolved_mode="input",
+                allowed=True,
+                reason="pv_charge_active",
+            ),
+            power=power,
+            current_ac_mode="input",
+            max_input_w=1300.0,
+        )
+        output_command = builder.build(
+            intent=StrategyIntent(
+                intent="arbitrage_discharge",
+                requested_mode="output",
+                requested_power_w=2400.0,
+                reason="price_based_discharge",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="output",
+                resolved_mode="output",
+                allowed=True,
+                reason="discharge_active",
+            ),
+            power=power,
+            current_ac_mode="output",
+            max_output_w=1300.0,
+        )
+
+        self.assertEqual(input_command.input_limit_w, 1300.0)
+        self.assertEqual(output_command.output_limit_w, 1300.0)
 
 
 if __name__ == "__main__":
