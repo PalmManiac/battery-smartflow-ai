@@ -81,6 +81,8 @@ class DeviceCommandBuilder:
         last_output_limit_w: float = 0.0,
         current_input_limit_w: float | None = None,
         current_output_limit_w: float | None = None,
+        max_input_w: float | None = None,
+        max_output_w: float | None = None,
     ) -> DeviceCommand:
         resolved_mode = arbiter.resolved_mode
 
@@ -93,6 +95,7 @@ class DeviceCommandBuilder:
                 last_input_limit_w=last_input_limit_w,
                 last_output_limit_w=last_output_limit_w,
                 current_input_limit_w=current_input_limit_w,
+                max_input_w=max_input_w,
             )
 
         if resolved_mode in ("output", "ramp_down_output"):
@@ -104,6 +107,7 @@ class DeviceCommandBuilder:
                 last_input_limit_w=last_input_limit_w,
                 last_output_limit_w=last_output_limit_w,
                 current_output_limit_w=current_output_limit_w,
+                max_output_w=max_output_w,
             )
 
         if resolved_mode == "ramp_down_input":
@@ -115,6 +119,7 @@ class DeviceCommandBuilder:
                 last_input_limit_w=last_input_limit_w,
                 last_output_limit_w=last_output_limit_w,
                 current_input_limit_w=current_input_limit_w,
+                max_input_w=max_input_w,
             )
 
         if resolved_mode == "hold":
@@ -148,8 +153,14 @@ class DeviceCommandBuilder:
         last_input_limit_w: float,
         last_output_limit_w: float,
         current_input_limit_w: float | None,
+        max_input_w: float | None,
     ) -> DeviceCommand:
         input_limit_w = max(0.0, float(power.final_power_w or 0.0))
+        if max_input_w is not None:
+            input_limit_w = min(
+                input_limit_w,
+                max(0.0, float(max_input_w or 0.0)),
+            )
 
         should_write_mode = current_ac_mode != "input"
 
@@ -203,6 +214,7 @@ class DeviceCommandBuilder:
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
                 "current_input_limit_w": current_input_limit_w,
+                "effective_max_input_w": max_input_w,
                 "opposite_limit_zeroed_by_active_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
@@ -220,8 +232,14 @@ class DeviceCommandBuilder:
         last_input_limit_w: float,
         last_output_limit_w: float,
         current_output_limit_w: float | None,
+        max_output_w: float | None,
     ) -> DeviceCommand:
         output_limit_w = max(0.0, float(power.final_power_w or 0.0))
+        if max_output_w is not None:
+            output_limit_w = min(
+                output_limit_w,
+                max(0.0, float(max_output_w or 0.0)),
+            )
 
         should_write_mode = current_ac_mode != "output"
 
@@ -275,6 +293,7 @@ class DeviceCommandBuilder:
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
                 "current_output_limit_w": current_output_limit_w,
+                "effective_max_output_w": max_output_w,
                 "opposite_limit_zeroed_by_active_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
