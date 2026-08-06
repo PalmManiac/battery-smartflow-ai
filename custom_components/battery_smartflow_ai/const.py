@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.3.1-dev6"
+INTEGRATION_VERSION = "4.3.1-dev7"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -467,6 +467,7 @@ STRATEGY_REASON_ENUMS = [
     "offgrid_load_support",
     "offgrid_load_active_blocks_ac_charge",
     "summer_cover_deficit",
+    "load_coverage",
     "adaptive_peak_discharge",
     "very_expensive_force_discharge",
     "price_based_discharge",
@@ -570,6 +571,7 @@ TECHNICAL_REASON_ENUMS = [
     "emergency_charge_fixed_input_power",
     "ramp_down_output_step_limited",
     "ramp_down_input_step_limited",
+    "blocked_by_arbiter_pv_charge_wait_current_export",
 ]
 
 # ==================================================
