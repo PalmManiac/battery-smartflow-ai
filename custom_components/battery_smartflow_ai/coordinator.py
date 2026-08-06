@@ -3614,7 +3614,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 0.0 <= float(soc_min) < float(soc_max) <= 100.0
             )
             power_limits_valid = bool(
-                float(max_charge) > 0.0
+                float(max_charge) >= 0.0
                 and float(max_discharge) > 0.0
                 and float(profile_max_in) > 0.0
                 and float(profile_max_out) > 0.0
