@@ -4747,12 +4747,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             adaptive_peak_active = decision.reason == "adaptive_peak_discharge"
             
-            # V4.3.0-dev4.0:
-            # Calculate the provisional PV/grid split through the dedicated
-            # ChargeSourceAllocator.
-            #
-            # Diagnostic only in dev4.0. The result does not yet modify
-            # decision.charge_w or the final device command.
+            # V4.3.1-dev9:
+            # Calculate the PV/grid split for an active strategic AC charge binding.
+            # The binding target is the TOTAL battery charge target. Usable PV
+            # therefore reduces only the AC/grid share instead of being added on
+            # top of the full binding target.
             charge_source_allocation = self._charge_source_allocator.allocate(
                 charge_commit_active=bool(
                     self._persist.get("charge_commit_active", False)
@@ -4771,6 +4770,32 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 house_load_w=float(house_load or 0.0),
                 max_grid_input_w=float(max_charge),
             )
+
+            if (
+                charge_source_allocation.active
+                and bool(
+                    self._persist.get(
+                        "charge_commit_allow_pv_blend",
+                        True,
+                    )
+                )
+                and str(decision.action or "") == "charge"
+                and str(decision.ac_mode or "") == "input"
+                and (
+                    str(decision.reason or "") == "charge_commit_active"
+                    or str(decision.reason or "")
+                    in CHARGE_COMMIT_SOURCE_REASONS
+                )
+            ):
+                # Keep the binding active even when PV temporarily covers the
+                # complete target and the required AC share becomes 0 W.
+                decision.charge_w = max(
+                    0.0,
+                    float(
+                        charge_source_allocation.grid_requested_w
+                        or 0.0
+                    ),
+                )
                 
             # Store final effective previous power only after all protection and limit
             # blockers have modified the decision. Otherwise a blocked discharge can leave
