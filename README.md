@@ -557,7 +557,7 @@ Ziel:
 * Dynamische Netzregelung statt einfacher Vollgas-Schaltung
 * Einheitliche Leistungsregelung mit Netz-Historie, stabilerer Modusfreigabe und geglätteter Leistungssteuerung
 * Geräteprofile pro Zendure-Modell
-* Profil-Editor für Lade-/Entlade-Tuning
+* Übersichtlicher Einstellungsbereich für Anlagen- und Expertenoptionen
 * Hard-Sync mit realem Zendure AC-Modus
 * Transparenz- und Diagnose-Sensoren
 * Gewinn-/Ersparnis-Berechnung
