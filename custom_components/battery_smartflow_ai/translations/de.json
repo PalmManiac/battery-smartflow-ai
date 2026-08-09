@@ -149,77 +149,25 @@
   "options": {
     "step": {
       "init": {
-        "title": "Regelprofil bearbeiten",
-        "description": "Wähle den Bereich aus, den du bearbeiten möchtest. „Allgemein“ enthält gemeinsame Profilparameter, „Laden“ die Regelwerte für die Ladeleistung, „Entladen“ die Regelwerte für die Entladeleistung und „Expertenmodus“ zusätzliche Schutz- und Diagnosefunktionen.",
+        "title": "Battery SmartFlow AI einstellen",
+        "description": "Wähle den Einstellungsbereich aus. Gerätespezifische Regelwerte werden automatisch durch das ausgewählte Geräteprofil verwaltet.",
         "menu_options": {
           "general": "Allgemein",
-          "charge": "Laden",
-          "discharge": "Entladen",
           "expert": "Expertenmodus"
         }
       },
       "general": {
-        "title": "Regelprofil bearbeiten – Allgemein",
-        "description": "Allgemeine Regelparameter des aktiven Geräteprofils.",
+        "title": "Battery SmartFlow AI einstellen – Allgemein",
+        "description": "Allgemeine Anlageneinstellungen. Gerätespezifische Regelwerte bleiben Bestandteil des ausgewählten Geräteprofils.",
         "data": {
-          "installed_pv_wp": "Installierte PV-Leistung (Wp)",
-          "TARGET_IMPORT_W": "Ziel-Netzbezug",
-          "EXPORT_GUARD_W": "Export-Schutz",
-          "KEEPALIVE_MIN_DEFICIT_W": "Keepalive Mindestdefizit",
-          "KEEPALIVE_MIN_OUTPUT_W": "Keepalive Mindestleistung",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Entlade-Wiederfreigabe oberhalb SoC-Minimum",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "PV-Durchfluss Mindest-PV",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "PV-Durchfluss Mindest-Hauslast"
+          "installed_pv_wp": "Installierte PV-Leistung (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
-          "TARGET_IMPORT_W": "Zielwert für einen kleinen gewollten Netzbezug. Ein höherer Wert reduziert das Risiko ungewollter Einspeisung, erhöht aber den Netzverbrauch leicht.",
-          "EXPORT_GUARD_W": "Zusätzliche Schutzreserve gegen ungewollte Einspeisung. Höhere Werte machen die Regelung vorsichtiger.",
-          "KEEPALIVE_MIN_DEFICIT_W": "Mindestdefizit, ab dem die Entladung aktiv gehalten wird. Hilft gegen Flattern bei sehr kleinen Lasten.",
-          "KEEPALIVE_MIN_OUTPUT_W": "Mindest-Entladeleistung zum stabilen Aktivhalten der Entladung. Verhindert unnötiges Ein- und Ausschalten.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Zusätzlicher SoC-Abstand oberhalb des eingestellten Mindest-SoC, der erreicht werden muss, bevor die Entladung nach einer SoC-Sperre wieder freigegeben wird. Verhindert Flattern zwischen Laden und Entladen bei knappem Akkustand, besonders morgens bei schwankender PV-Leistung.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Gemessene Mindest-PV-Leistung für den normalen PV-Durchfluss. Die Voll-Akku-Wiederanlaufhilfe arbeitet unabhängig von diesem Messwert.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Mindest-Hauslast für den normalen PV-Durchfluss. Niedrigere Werte eignen sich für Haushalte mit kleiner Grundlast."
-        }
-      },
-      "charge": {
-        "title": "Regelprofil bearbeiten – Laden",
-        "description": "Regelparameter für das Ladeverhalten des aktiven Geräteprofils.",
-        "data": {
-          "CHARGE_DEADBAND_W": "Laden Deadband",
-          "CHARGE_KP_UP": "Laden KP Hochregeln",
-          "CHARGE_KP_DOWN": "Laden KP Runterregeln",
-          "CHARGE_MAX_STEP_UP": "Laden Max. Schritt Hochregeln",
-          "CHARGE_MAX_STEP_DOWN": "Laden Max. Schritt Runterregeln"
-        },
-        "data_description": {
-          "CHARGE_DEADBAND_W": "Toleranzbereich für die Lade-Regelung, in dem nicht nachgeregelt wird. Ein höherer Wert macht das Laden ruhiger, ein niedrigerer Wert reagiert schneller und präziser.",
-          "CHARGE_KP_UP": "Verstärkung beim Hochregeln der Ladeleistung. Höhere Werte erhöhen die Ladeleistung schneller, können aber eher zu unruhigem Verhalten führen.",
-          "CHARGE_KP_DOWN": "Verstärkung beim Runterregeln der Ladeleistung. Höhere Werte reduzieren die Ladeleistung schneller, können aber stärkere Sprünge verursachen.",
-          "CHARGE_MAX_STEP_UP": "Maximaler Leistungsschritt pro Regelzyklus beim Erhöhen der Ladeleistung. Höhere Werte machen die Lade-Regelung schneller, aber potenziell aggressiver.",
-          "CHARGE_MAX_STEP_DOWN": "Maximaler Leistungsschritt pro Regelzyklus beim Reduzieren der Ladeleistung. Höhere Werte bremsen das Laden schneller ab, können aber unruhiger wirken."
-        }
-      },
-      "discharge": {
-        "title": "Regelprofil bearbeiten – Entladen",
-        "description": "Regelparameter für das Entladeverhalten des aktiven Geräteprofils.",
-        "data": {
-          "DISCHARGE_DEADBAND_W": "Entladen Deadband",
-          "DISCHARGE_KP_UP": "Entladen KP Hochregeln",
-          "DISCHARGE_KP_DOWN": "Entladen KP Runterregeln",
-          "DISCHARGE_MAX_STEP_UP": "Entladen Max. Schritt Hochregeln",
-          "DISCHARGE_MAX_STEP_DOWN": "Entladen Max. Schritt Runterregeln"
-        },
-        "data_description": {
-          "DISCHARGE_DEADBAND_W": "Toleranzbereich für die Entlade-Regelung, in dem nicht nachgeregelt wird. Ein höherer Wert macht die Entladung ruhiger, ein niedrigerer Wert reagiert schneller und präziser.",
-          "DISCHARGE_KP_UP": "Verstärkung beim Hochregeln der Entladeleistung. Höhere Werte erhöhen die Entladeleistung schneller, können aber eher überschwingen.",
-          "DISCHARGE_KP_DOWN": "Verstärkung beim Runterregeln der Entladeleistung. Höhere Werte reduzieren die Entladeleistung schneller, können aber unruhiger wirken.",
-          "DISCHARGE_MAX_STEP_UP": "Maximaler Leistungsschritt pro Regelzyklus beim Erhöhen der Entladeleistung. Höhere Werte machen die Entlade-Regelung schneller, aber potenziell aggressiver.",
-          "DISCHARGE_MAX_STEP_DOWN": "Maximaler Leistungsschritt pro Regelzyklus beim Reduzieren der Entladeleistung. Höhere Werte bremsen die Entladung schneller ab, können aber stärker springen."
+          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet."
         }
       },
       "expert": {
-        "title": "Regelprofil bearbeiten – Expertenmodus",
+        "title": "Battery SmartFlow AI einstellen – Expertenmodus",
         "description": "Erweiterte Schutz-, Diagnose- und Planungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
         "data": {
           "expert_mode_enabled": "Expertenmodus aktivieren",
@@ -881,6 +829,7 @@
           "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
           "offgrid_load_support": "Inselsteckdose versorgen",
           "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "load_coverage": "Hauslastdeckung",
           "summer_cover_deficit": "Hauslastdefizit decken",
           "adaptive_peak_discharge": "Adaptive Peak-Entladung",
           "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
@@ -986,6 +935,7 @@
           "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
           "offgrid_load_support": "Inselsteckdose versorgen",
           "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "load_coverage": "Hauslastdeckung",
           "summer_cover_deficit": "Hauslastdefizit decken",
           "adaptive_peak_discharge": "Adaptive Peak-Entladung",
           "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
@@ -1080,6 +1030,7 @@
           "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
           "offgrid_load_support": "Inselsteckdose versorgen",
           "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "load_coverage": "Hauslastdeckung",
           "summer_cover_deficit": "Hauslastdefizit decken",
           "adaptive_peak_discharge": "Adaptive Peak-Entladung",
           "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
@@ -1138,6 +1089,7 @@
           "pv_house_load_passthrough": "PV-Durchfluss zur Hauslast",
           "offgrid_load_support": "Inselsteckdose versorgen",
           "offgrid_load_active_blocks_ac_charge": "Inselsteckdose blockiert Netzladung",
+          "load_coverage": "Hauslastdeckung",
           "summer_cover_deficit": "Hauslastdefizit decken",
           "adaptive_peak_discharge": "Adaptive Peak-Entladung",
           "very_expensive_force_discharge": "Zwangsentladung bei sehr hohem Preis",
