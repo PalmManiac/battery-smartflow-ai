@@ -108,6 +108,58 @@ def enum_translation_options() -> dict[tuple[str, str], set[str]]:
 
 
 class TranslationCoverageTests(unittest.TestCase):
+    def test_options_ui_only_exposes_user_facing_sections(self) -> None:
+        expected_steps = {
+            "init",
+            "general",
+            "expert",
+            "expert_cell_voltage",
+            "expert_cell_voltage_config",
+        }
+        files = [
+            COMPONENT / "strings.json",
+            *(TRANSLATIONS / f"{lang}.json" for lang in LANGUAGES),
+        ]
+
+        for path in files:
+            with self.subTest(file=path.name):
+                steps = load_json(path)["options"]["step"]
+                self.assertEqual(set(steps), expected_steps)
+                self.assertEqual(
+                    set(steps["init"]["menu_options"]),
+                    {"general", "expert"},
+                )
+                self.assertEqual(
+                    set(steps["general"]["data"]),
+                    {"installed_pv_wp"},
+                )
+                self.assertEqual(
+                    set(steps["general"]["data_description"]),
+                    {"installed_pv_wp"},
+                )
+
+    def test_removed_tuning_steps_are_not_reachable(self) -> None:
+        tree = ast.parse((COMPONENT / "config_flow.py").read_text(encoding="utf-8"))
+        method_names = {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        self.assertNotIn("async_step_charge", method_names)
+        self.assertNotIn("async_step_discharge", method_names)
+
+    def test_options_save_preserves_stored_profile_overrides(self) -> None:
+        tree = ast.parse((COMPONENT / "config_flow.py").read_text(encoding="utf-8"))
+        build_method = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_build_merged_options"
+        )
+        method_source = ast.unparse(build_method)
+        self.assertIn("dict(self.config_entry.options)", method_source)
+        self.assertNotIn("CONF_PROFILE_OVERRIDES", method_source)
+
     def test_all_language_files_have_the_same_keys(self) -> None:
         reference = leaf_paths(load_json(TRANSLATIONS / "de.json"))
         for language in LANGUAGES[1:]:
