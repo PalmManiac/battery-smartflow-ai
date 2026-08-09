@@ -149,77 +149,25 @@
   "options": {
     "step": {
       "init": {
-        "title": "Regelprofiel bewerken",
-        "description": "Kies welk onderdeel je wilt bewerken. “Algemeen” bevat gedeelde profielparameters, “Laden” de regelwaarden voor laadvermogen, “Ontladen” de regelwaarden voor ontlaadvermogen en “Expertmodus” aanvullende beschermings- en diagnosefuncties.",
+        "title": "Battery SmartFlow AI instellen",
+        "description": "Kies welk instellingenonderdeel je wilt bewerken. Apparaatspecifieke regelwaarden worden automatisch beheerd door het geselecteerde apparaatprofiel.",
         "menu_options": {
           "general": "Algemeen",
-          "charge": "Laden",
-          "discharge": "Ontladen",
           "expert": "Expertmodus"
         }
       },
       "general": {
-        "title": "Regelprofiel bewerken – Algemeen",
-        "description": "Algemene regelparameters van het actieve apparaatprofiel.",
+        "title": "Battery SmartFlow AI instellen – Algemeen",
+        "description": "Algemene installatie-instellingen. Apparaatspecifieke regelwaarden blijven onderdeel van het geselecteerde apparaatprofiel.",
         "data": {
-          "installed_pv_wp": "Geïnstalleerd PV-vermogen (Wp)",
-          "TARGET_IMPORT_W": "Doel-netafname",
-          "EXPORT_GUARD_W": "Exportbeveiliging",
-          "KEEPALIVE_MIN_DEFICIT_W": "Keepalive minimumtekort",
-          "KEEPALIVE_MIN_OUTPUT_W": "Keepalive minimumvermogen",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Ontladen opnieuw vrijgeven boven SoC-minimum",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Minimale PV voor PV-doorvoer",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Minimale huislast voor PV-doorvoer"
+          "installed_pv_wp": "Geïnstalleerd PV-vermogen (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica.",
-          "TARGET_IMPORT_W": "Doelwaarde voor een kleine gewenste netafname. Een hogere waarde vermindert het risico op ongewenste teruglevering, maar verhoogt het netverbruik licht.",
-          "EXPORT_GUARD_W": "Extra veiligheidsreserve tegen ongewenste teruglevering. Hogere waarden maken de regeling voorzichtiger.",
-          "KEEPALIVE_MIN_DEFICIT_W": "Minimumtekort vanaf waar ontladen actief wordt gehouden. Helpt tegen flapperen bij zeer kleine lasten.",
-          "KEEPALIVE_MIN_OUTPUT_W": "Minimaal ontlaadvermogen om ontladen stabiel actief te houden. Voorkomt onnodig in- en uitschakelen.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Extra SoC-afstand boven het ingestelde minimum-SoC die bereikt moet worden voordat ontladen na een SoC-blokkering opnieuw wordt vrijgegeven. Voorkomt flapperen tussen laden en ontladen bij lage accustand, vooral ’s ochtends bij wisselende PV-opbrengst.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Gemeten minimaal PV-vermogen voor normale PV-doorvoer. De MPPT-herstart bij een volle accu werkt onafhankelijk van deze meting.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Minimale huislast voor normale PV-doorvoer. Lagere waarden zijn geschikt voor woningen met een kleine basislast."
-        }
-      },
-      "charge": {
-        "title": "Regelprofiel bewerken – Laden",
-        "description": "Regelparameters voor het laadgedrag van het actieve apparaatprofiel.",
-        "data": {
-          "CHARGE_DEADBAND_W": "Laden deadband",
-          "CHARGE_KP_UP": "Laden KP omhoog regelen",
-          "CHARGE_KP_DOWN": "Laden KP omlaag regelen",
-          "CHARGE_MAX_STEP_UP": "Laden max. stap omhoog",
-          "CHARGE_MAX_STEP_DOWN": "Laden max. stap omlaag"
-        },
-        "data_description": {
-          "CHARGE_DEADBAND_W": "Tolerantiegebied voor de laadregeling waarin niet wordt bijgeregeld. Een hogere waarde maakt laden rustiger; een lagere waarde reageert sneller en nauwkeuriger.",
-          "CHARGE_KP_UP": "Versterking bij het verhogen van het laadvermogen. Hogere waarden verhogen sneller, maar kunnen onrustiger gedrag veroorzaken.",
-          "CHARGE_KP_DOWN": "Versterking bij het verlagen van het laadvermogen. Hogere waarden verlagen sneller, maar kunnen grotere sprongen veroorzaken.",
-          "CHARGE_MAX_STEP_UP": "Maximale vermogensstap per regelcyclus bij het verhogen van laadvermogen. Hogere waarden maken de laadregeling sneller maar mogelijk agressiever.",
-          "CHARGE_MAX_STEP_DOWN": "Maximale vermogensstap per regelcyclus bij het verlagen van laadvermogen. Hogere waarden remmen laden sneller af, maar kunnen onrustiger werken."
-        }
-      },
-      "discharge": {
-        "title": "Regelprofiel bewerken – Ontladen",
-        "description": "Regelparameters voor het ontlaadgedrag van het actieve apparaatprofiel.",
-        "data": {
-          "DISCHARGE_DEADBAND_W": "Ontladen deadband",
-          "DISCHARGE_KP_UP": "Ontladen KP omhoog regelen",
-          "DISCHARGE_KP_DOWN": "Ontladen KP omlaag regelen",
-          "DISCHARGE_MAX_STEP_UP": "Ontladen max. stap omhoog",
-          "DISCHARGE_MAX_STEP_DOWN": "Ontladen max. stap omlaag"
-        },
-        "data_description": {
-          "DISCHARGE_DEADBAND_W": "Tolerantiegebied voor de ontlaadregeling waarin niet wordt bijgeregeld. Een hogere waarde maakt ontladen rustiger; een lagere waarde reageert sneller en nauwkeuriger.",
-          "DISCHARGE_KP_UP": "Versterking bij het verhogen van het ontlaadvermogen. Hogere waarden verhogen sneller, maar kunnen sneller overschieten.",
-          "DISCHARGE_KP_DOWN": "Versterking bij het verlagen van het ontlaadvermogen. Hogere waarden verlagen sneller, maar kunnen onrustiger werken.",
-          "DISCHARGE_MAX_STEP_UP": "Maximale vermogensstap per regelcyclus bij het verhogen van ontlaadvermogen. Hogere waarden maken de ontlaadregeling sneller maar mogelijk agressiever.",
-          "DISCHARGE_MAX_STEP_DOWN": "Maximale vermogensstap per regelcyclus bij het verlagen van ontlaadvermogen. Hogere waarden remmen ontladen sneller af, maar kunnen sterker springen."
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica."
         }
       },
       "expert": {
-        "title": "Regelprofiel bewerken – Expertmodus",
+        "title": "Battery SmartFlow AI instellen – Expertmodus",
         "description": "Geavanceerde beschermings-, diagnose- en planningsfuncties. De lerende laadvensterplanning wordt automatisch gebruikt zodra voldoende leerdata beschikbaar is. Indien nodig kan deze hier worden uitgeschakeld. Voor celspanningsbescherming moet eerst de expertmodus worden geactiveerd.",
         "data": {
           "expert_mode_enabled": "Expertmodus inschakelen",
@@ -881,6 +829,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Huishoudelijk verbruik dekken",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -986,6 +935,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Huishoudelijk verbruik dekken",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -1080,6 +1030,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Huishoudelijk verbruik dekken",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -1138,6 +1089,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Huishoudelijk verbruik dekken",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
