@@ -12,7 +12,7 @@
 * [Kapitel 4 – Konfiguration der Integration](#kapitel-4--konfiguration-der-integration)
 * [Kapitel 5 – Betriebsmodi & Arbeitsweise](#kapitel-5--betriebsmodi--arbeitsweise)
 * [Kapitel 6 – Sensoren & Steuerelemente](#kapitel-6--sensoren--steuerelemente)
-* [Kapitel 7 – Regelprofil bearbeiten](#kapitel-7--regelprofil-bearbeiten)
+* [Kapitel 7 – Einstellungen bearbeiten](#kapitel-7--einstellungen-bearbeiten)
 * [Kapitel 8 – Technischer Hintergrund](#kapitel-8--technischer-hintergrund)
 * [Kapitel 9 – FAQ & typische Probleme](#kapitel-9--faq--typische-probleme)
 * [Kapitel 10 – Best Practices](#kapitel-10--best-practices--empfohlene-einstellungen)
@@ -1942,182 +1942,27 @@ Im manuellen Modus kann gewählt werden:
 
 ---
 
-# Kapitel 7 – Regelprofil bearbeiten
+# Kapitel 7 – Einstellungen bearbeiten
 
-Battery SmartFlow AI besitzt einen Profil-Editor.
+Der Einstellungsbereich enthält nur Optionen, die im normalen Betrieb bewusst
+durch den Benutzer geändert werden sollen.
 
-Damit können wichtige Regelparameter direkt über Home Assistant angepasst werden.
-
-![Regelprofil bearbeiten](images/config_05_profil_expert.png)
-
----
-
-## 7.1 Bereiche im Profil-Editor
-
-Der Profil-Editor ist in Bereiche aufgeteilt:
-
-| Bereich       | Zweck                                      |
-| ------------- | ------------------------------------------ |
-| Allgemein     | gemeinsame Profilwerte                     |
-| Laden         | Regelwerte für INPUT/Ladeleistung          |
-| Entladen      | Regelwerte für OUTPUT/Entladeleistung      |
-| Expertenmodus | Lernplanung und optionaler Zellschutz      |
+Gerätespezifische Werte für Lade- und Entladeregelung werden automatisch durch
+das ausgewählte Geräteprofil verwaltet. Bereits gespeicherte Profilanpassungen
+älterer Versionen bleiben aus Kompatibilitätsgründen erhalten, werden aber nicht
+mehr im Einstellungsdialog angeboten.
 
 ---
 
-## 7.2 Allgemein
+## 7.1 Allgemein
 
-Im Bereich **Allgemein** befinden sich gemeinsame Profilparameter.
-
-Typische Werte:
-
-* installierte PV-Leistung
-* Ziel-Netzbezug
-* Entladen Ziel-Netzbezug
-* Export-Schutz
-* Keepalive Mindestdefizit
-* Keepalive Mindestleistung
-* Entlade-Wiederfreigabe oberhalb SoC-Minimum
+Im Bereich **Allgemein** kann die installierte theoretische PV-Modulleistung der
+Anlage angepasst werden. Sie dient als Anlagenkontext für PV-bezogene
+Auswertungen.
 
 ---
 
-### Ziel-Netzbezug
-
-Ein kleiner gewollter Netzbezug kann die Regelung beruhigen.
-
-Beispiel:
-
-```text
-Ziel-Netzbezug: 10 W
-```
-
-Das bedeutet:
-
-Battery SmartFlow AI versucht nicht exakt 0 W zu treffen, sondern lässt einen kleinen Bezug zu.
-
-Das kann unnötige Einspeisung und Regelzacken reduzieren. Bei wirtschaftlich
-bewerteter PV-Ladung kann der Regler diesen Grundwert gezielt in Richtung einer
-kleinen Einspeisung verschieben.
-
----
-
-### Entladen Ziel-Netzbezug
-
-Dieser Wert legt den technischen Grundzielpunkt während aktiver Entladung fest.
-
-* positiver Wert: kleiner Netzbezug
-* `0 W`: neutraler Zielpunkt
-* negativer Wert: kleine Netzeinspeisung
-
-Das Geräteprofil enthält einen erprobten Standardwert. Zusätzlich kann die
-Wirtschaftlichkeitslogik eine leichte Einspeisung freigeben, wenn die gespeicherte
-Energie deutlich günstiger als die Einspeisevergütung ist.
-
----
-
-### Export-Schutz
-
-Der Export-Schutz ist eine zusätzliche Sicherheitsreserve gegen ungewollte Einspeisung.
-
-Ein höherer Wert macht die Regelung vorsichtiger.
-
----
-
-### Keepalive Mindestleistung
-
-Dieser Wert hält eine Entladung ab einer Mindestleistung aktiv.
-
-Zu niedrige Werte können zu Ein-/Aus-Flattern führen.
-
-Zu hohe Werte können unnötigen Bezug oder Export verursachen.
-
----
-
-## 7.3 Laden
-
-Im Bereich **Laden** befinden sich die Regelparameter für INPUT/PV-Ladung.
-
-Wichtige Werte:
-
-* Laden Deadband
-* Laden KP Hochregeln
-* Laden KP Runterregeln
-* Laden Max. Schritt Hochregeln
-* Laden Max. Schritt Runterregeln
-
----
-
-### Laden Deadband
-
-Die Deadband ist ein Toleranzbereich.
-
-Innerhalb dieses Bereichs wird nicht nachgeregelt.
-
-| Einstellung         | Wirkung                                 |
-| ------------------- | --------------------------------------- |
-| höhere Deadband     | ruhiger, weniger kleine Korrekturen     |
-| niedrigere Deadband | genauer, schneller, potenziell nervöser |
-
----
-
-### Laden KP
-
-KP bestimmt, wie stark auf Abweichungen reagiert wird.
-
-| Einstellung    | Wirkung                                      |
-| -------------- | -------------------------------------------- |
-| höherer KP     | schnellere Reaktion, mehr Risiko für Sprünge |
-| niedrigerer KP | ruhigere Reaktion, langsamere Anpassung      |
-
----
-
-### Laden Max. Schritt
-
-Begrenzt, wie stark die Ladeleistung pro Regelzyklus geändert werden darf.
-
-Kleinere Schritte machen die Regelung ruhiger.
-
----
-
-## 7.4 Entladen
-
-Im Bereich **Entladen** befinden sich die Regelparameter für OUTPUT.
-
-Wichtige Werte:
-
-* Entladen Deadband
-* Entladen KP Hochregeln
-* Entladen KP Runterregeln
-* Entladen Max. Schritt Hochregeln
-* Entladen Max. Schritt Runterregeln
-
----
-
-### Entladen Deadband
-
-Toleranzbereich für die Entladung.
-
-Ein höherer Wert kann bei nervösen Systemen helfen.
-
----
-
-### Entladen KP
-
-Bestimmt, wie stark die Entladeleistung angepasst wird.
-
-Wenn die Entladekurve stark zackt, können niedrigere KP-Werte helfen.
-
----
-
-### Entladen Max. Schritt
-
-Begrenzt die Änderung pro Regelzyklus.
-
-Für empfindliche Systeme sind kleinere Schritte oft besser.
-
----
-
-## 7.5 Expertenmodus
+## 7.2 Expertenmodus
 
 Im Expertenmodus können erweiterte Funktionen aktiviert werden:
 
@@ -2635,22 +2480,17 @@ Mögliche Ursachen:
 
 * Netzsensor liefert sprunghafte Werte
 * falsches Geräteprofil
-* zu aggressive Profilwerte
 * parallele Automationen
 * Zendure-App regelt mit
 * P1-Regelung in Zendure-Integration aktiv
-* Deadband zu klein
-* Max-Schritte zu groß
 
 Maßnahmen:
 
-* ein passendes Geräteprofil verwenden
 * korrektes Geräteprofil wählen
-* Deadband erhöhen
-* Schrittweiten reduzieren
-* Ziel-Netzbezug leicht erhöhen
 * parallele Automationen deaktivieren
 * Netzsensor prüfen
+* Zendure-App und P1-Regelung als parallele Steuerung ausschließen
+* Diagnosewerte und Geräteverlauf für eine Support-Anfrage sichern
 
 ---
 
@@ -2871,26 +2711,24 @@ Abweichung vom wirtschaftlich gewählten Zielpunkt zeigen.
 Bei nervösem Verhalten:
 
 * zunächst Geräteprofil und Netzsensor prüfen
-* Deadband erhöhen
-* Max-Schritte reduzieren
-* Ziel-Netzbezug leicht erhöhen
-* Cooldowns verlängern
-* passendes Geräteprofil wählen
-* ein konservatives Geräteprofil verwenden
+* parallele Steuerungen ausschließen
+* tatsächliche INPUT-/OUTPUT-Grenzen kontrollieren
+* Diagnosewerte und Geräteverlauf sichern
+* das Verhalten mit Gerätemodell und Firmware melden
 
 ---
 
 ## 10.6 Kleine 800-W-Systeme
 
-Bei kleineren Systemen wie SF800Pro oder SF800Pro2 können konservativere Werte sinnvoll sein.
+Bei kleineren Systemen wie SF800Pro oder SF800Pro2 verwendet Battery SmartFlow
+AI automatisch konservativere Profilwerte.
 
 Empfohlen:
 
-* etwas Ziel-Netzbezug zulassen
-* kleinere Schrittweiten
-* höhere Deadband
-* längere Haltezeiten
-* keine aggressive 0-W-Jagd
+* das exakte Geräteprofil auswählen
+* Geräte- und Netzsensoren auf laufende Aktualisierung prüfen
+* keine parallele Leistungsregelung aktivieren
+* auffälliges Verhalten mit Diagnosewerten melden
 
 ---
 
@@ -2924,6 +2762,9 @@ Empfohlen:
 Die folgenden Parameter sind typische Profilwerte.
 
 Nicht jedes Profil verwendet alle Werte gleich.
+
+Diese technischen Werte werden vom ausgewählten Geräteprofil verwaltet und
+sind nicht Bestandteil des normalen Einstellungsdialogs.
 
 ---
 
