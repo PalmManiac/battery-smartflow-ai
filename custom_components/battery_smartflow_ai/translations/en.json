@@ -149,77 +149,25 @@
   "options": {
     "step": {
       "init": {
-        "title": "Edit control profile",
-        "description": "Select the area you want to edit. “General” contains shared profile parameters, “Charging” the control values for charge power, “Discharging” the control values for discharge power, and “Expert mode” additional protection and diagnostic functions.",
+        "title": "Battery SmartFlow AI settings",
+        "description": "Select the settings area you want to edit. Device-specific control values are managed automatically by the selected device profile.",
         "menu_options": {
           "general": "General",
-          "charge": "Charging",
-          "discharge": "Discharging",
           "expert": "Expert mode"
         }
       },
       "general": {
-        "title": "Edit control profile – General",
-        "description": "General control parameters of the active device profile.",
+        "title": "Battery SmartFlow AI settings – General",
+        "description": "General system settings. Device-specific control values remain part of the selected device profile.",
         "data": {
-          "installed_pv_wp": "Installed PV power (Wp)",
-          "TARGET_IMPORT_W": "Target grid import",
-          "EXPORT_GUARD_W": "Export guard",
-          "KEEPALIVE_MIN_DEFICIT_W": "Keepalive minimum deficit",
-          "KEEPALIVE_MIN_OUTPUT_W": "Keepalive minimum output",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Discharge re-enable margin above SoC minimum",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "PV passthrough minimum PV",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "PV passthrough minimum house load"
+          "installed_pv_wp": "Installed PV power (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative summer/winter thresholds and other PV-related logic.",
-          "TARGET_IMPORT_W": "Target value for a small intended grid import. A higher value reduces the risk of unwanted export but slightly increases grid consumption.",
-          "EXPORT_GUARD_W": "Additional safety reserve against unwanted export. Higher values make control more cautious.",
-          "KEEPALIVE_MIN_DEFICIT_W": "Minimum deficit from which discharging is kept active. Helps prevent flapping at very small loads.",
-          "KEEPALIVE_MIN_OUTPUT_W": "Minimum discharge power to keep discharging stable. Prevents unnecessary on/off switching.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Additional SoC distance above the configured minimum SoC that must be reached before discharging is re-enabled after an SoC block. Prevents flapping between charging and discharging near the battery minimum, especially in the morning with fluctuating PV power.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Measured minimum PV power for normal PV passthrough. Full-battery MPPT restart works independently of this measurement.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Minimum house load for normal PV passthrough. Lower values support homes with a small base load."
-        }
-      },
-      "charge": {
-        "title": "Edit control profile – Charging",
-        "description": "Control parameters for charging behavior of the active device profile.",
-        "data": {
-          "CHARGE_DEADBAND_W": "Charging deadband",
-          "CHARGE_KP_UP": "Charging KP ramp up",
-          "CHARGE_KP_DOWN": "Charging KP ramp down",
-          "CHARGE_MAX_STEP_UP": "Charging max. step up",
-          "CHARGE_MAX_STEP_DOWN": "Charging max. step down"
-        },
-        "data_description": {
-          "CHARGE_DEADBAND_W": "Tolerance range for charge control where no adjustment is made. A higher value makes charging calmer; a lower value reacts faster and more precisely.",
-          "CHARGE_KP_UP": "Gain when increasing charge power. Higher values increase charge power faster but may lead to more unstable behavior.",
-          "CHARGE_KP_DOWN": "Gain when reducing charge power. Higher values reduce charge power faster but may cause larger jumps.",
-          "CHARGE_MAX_STEP_UP": "Maximum power step per control cycle when increasing charge power. Higher values make charge control faster but potentially more aggressive.",
-          "CHARGE_MAX_STEP_DOWN": "Maximum power step per control cycle when reducing charge power. Higher values slow charging down faster but may behave less smoothly."
-        }
-      },
-      "discharge": {
-        "title": "Edit control profile – Discharging",
-        "description": "Control parameters for discharge behavior of the active device profile.",
-        "data": {
-          "DISCHARGE_DEADBAND_W": "Discharging deadband",
-          "DISCHARGE_KP_UP": "Discharging KP ramp up",
-          "DISCHARGE_KP_DOWN": "Discharging KP ramp down",
-          "DISCHARGE_MAX_STEP_UP": "Discharging max. step up",
-          "DISCHARGE_MAX_STEP_DOWN": "Discharging max. step down"
-        },
-        "data_description": {
-          "DISCHARGE_DEADBAND_W": "Tolerance range for discharge control where no adjustment is made. A higher value makes discharging calmer; a lower value reacts faster and more precisely.",
-          "DISCHARGE_KP_UP": "Gain when increasing discharge power. Higher values increase discharge power faster but may overshoot more easily.",
-          "DISCHARGE_KP_DOWN": "Gain when reducing discharge power. Higher values reduce discharge power faster but may behave less smoothly.",
-          "DISCHARGE_MAX_STEP_UP": "Maximum power step per control cycle when increasing discharge power. Higher values make discharge control faster but potentially more aggressive.",
-          "DISCHARGE_MAX_STEP_DOWN": "Maximum power step per control cycle when reducing discharge power. Higher values slow discharging down faster but may jump more strongly."
+          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative summer/winter thresholds and other PV-related logic."
         }
       },
       "expert": {
-        "title": "Edit control profile – Expert mode",
+        "title": "Battery SmartFlow AI settings – Expert mode",
         "description": "Advanced protection, diagnostic and planning functions. Learned charge-window planning is used automatically once enough learning data is available. It can be disabled here if needed. Cell-voltage protection requires expert mode to be enabled first.",
         "data": {
           "expert_mode_enabled": "Enable expert mode",
@@ -881,6 +829,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "House-load coverage",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -986,6 +935,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "House-load coverage",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -1080,6 +1030,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "House-load coverage",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -1138,6 +1089,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "House-load coverage",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
