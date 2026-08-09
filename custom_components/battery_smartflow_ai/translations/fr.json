@@ -149,77 +149,25 @@
   "options": {
     "step": {
       "init": {
-        "title": "Modifier le profil de régulation",
-        "description": "Sélectionnez la zone à modifier. « Général » contient les paramètres communs, « Charge » les valeurs de régulation de charge, « Décharge » les valeurs de décharge et « Mode expert » les protections et diagnostics supplémentaires.",
+        "title": "Paramètres de Battery SmartFlow AI",
+        "description": "Sélectionnez la zone de paramètres à modifier. Les valeurs de régulation propres à l’appareil sont gérées automatiquement par le profil sélectionné.",
         "menu_options": {
           "general": "Général",
-          "charge": "Charge",
-          "discharge": "Décharge",
           "expert": "Mode expert"
         }
       },
       "general": {
-        "title": "Modifier le profil de régulation – Général",
-        "description": "Paramètres généraux du profil d’appareil actif.",
+        "title": "Paramètres de Battery SmartFlow AI – Général",
+        "description": "Paramètres généraux de l’installation. Les valeurs de régulation propres à l’appareil restent intégrées au profil sélectionné.",
         "data": {
-          "installed_pv_wp": "Puissance PV installée (Wp)",
-          "TARGET_IMPORT_W": "Import réseau cible",
-          "EXPORT_GUARD_W": "Protection export",
-          "KEEPALIVE_MIN_DEFICIT_W": "Déficit minimal keepalive",
-          "KEEPALIVE_MIN_OUTPUT_W": "Puissance minimale keepalive",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Réactivation de décharge au-dessus du SoC minimal",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "PV minimal pour le passage direct",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Charge maison minimale pour le passage direct"
+          "installed_pv_wp": "Puissance PV installée (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et d’autres logiques liées au PV.",
-          "TARGET_IMPORT_W": "Valeur cible pour un petit import réseau volontaire. Une valeur plus élevée réduit le risque d’export involontaire mais augmente légèrement la consommation réseau.",
-          "EXPORT_GUARD_W": "Réserve de sécurité supplémentaire contre l’export involontaire. Des valeurs plus élevées rendent la régulation plus prudente.",
-          "KEEPALIVE_MIN_DEFICIT_W": "Déficit minimal à partir duquel la décharge est maintenue active. Aide contre les oscillations à très faible charge.",
-          "KEEPALIVE_MIN_OUTPUT_W": "Puissance minimale de décharge pour maintenir la décharge stable. Évite les commutations marche/arrêt inutiles.",
-          "SOC_DISCHARGE_RESUME_MARGIN": "Écart SoC supplémentaire au-dessus du SoC minimal configuré, nécessaire avant de réautoriser la décharge après un blocage SoC. Évite les oscillations entre charge et décharge près du minimum batterie, surtout le matin avec une production PV fluctuante.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": "Puissance PV mesurée minimale pour le passage direct normal. Le redémarrage MPPT à batterie pleine fonctionne indépendamment de cette mesure.",
-          "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": "Charge maison minimale pour le passage direct PV normal. Une valeur plus basse convient aux faibles charges de base."
-        }
-      },
-      "charge": {
-        "title": "Modifier le profil de régulation – Charge",
-        "description": "Paramètres de régulation du comportement de charge du profil actif.",
-        "data": {
-          "CHARGE_DEADBAND_W": "Deadband charge",
-          "CHARGE_KP_UP": "KP charge augmentation",
-          "CHARGE_KP_DOWN": "KP charge diminution",
-          "CHARGE_MAX_STEP_UP": "Pas max. charge augmentation",
-          "CHARGE_MAX_STEP_DOWN": "Pas max. charge diminution"
-        },
-        "data_description": {
-          "CHARGE_DEADBAND_W": "Zone de tolérance de la régulation de charge dans laquelle aucun ajustement n’est effectué. Une valeur plus élevée rend la charge plus calme, une valeur plus faible réagit plus vite et plus précisément.",
-          "CHARGE_KP_UP": "Gain lors de l’augmentation de la puissance de charge. Des valeurs plus élevées augmentent plus vite la charge, mais peuvent rendre le comportement moins stable.",
-          "CHARGE_KP_DOWN": "Gain lors de la réduction de la puissance de charge. Des valeurs plus élevées réduisent plus vite la charge, mais peuvent provoquer de plus grands sauts.",
-          "CHARGE_MAX_STEP_UP": "Pas de puissance maximal par cycle de régulation lors de l’augmentation de la charge. Des valeurs plus élevées rendent la régulation plus rapide mais potentiellement plus agressive.",
-          "CHARGE_MAX_STEP_DOWN": "Pas de puissance maximal par cycle de régulation lors de la réduction de la charge. Des valeurs plus élevées freinent la charge plus vite mais peuvent être moins fluides."
-        }
-      },
-      "discharge": {
-        "title": "Modifier le profil de régulation – Décharge",
-        "description": "Paramètres de régulation du comportement de décharge du profil actif.",
-        "data": {
-          "DISCHARGE_DEADBAND_W": "Deadband décharge",
-          "DISCHARGE_KP_UP": "KP décharge augmentation",
-          "DISCHARGE_KP_DOWN": "KP décharge diminution",
-          "DISCHARGE_MAX_STEP_UP": "Pas max. décharge augmentation",
-          "DISCHARGE_MAX_STEP_DOWN": "Pas max. décharge diminution"
-        },
-        "data_description": {
-          "DISCHARGE_DEADBAND_W": "Zone de tolérance de la régulation de décharge dans laquelle aucun ajustement n’est effectué. Une valeur plus élevée rend la décharge plus calme, une valeur plus faible réagit plus vite et plus précisément.",
-          "DISCHARGE_KP_UP": "Gain lors de l’augmentation de la puissance de décharge. Des valeurs plus élevées augmentent plus vite la décharge mais peuvent entraîner du dépassement.",
-          "DISCHARGE_KP_DOWN": "Gain lors de la réduction de la puissance de décharge. Des valeurs plus élevées réduisent plus vite la décharge mais peuvent rendre le comportement moins fluide.",
-          "DISCHARGE_MAX_STEP_UP": "Pas de puissance maximal par cycle de régulation lors de l’augmentation de la décharge. Des valeurs plus élevées rendent la régulation plus rapide mais potentiellement plus agressive.",
-          "DISCHARGE_MAX_STEP_DOWN": "Pas de puissance maximal par cycle de régulation lors de la réduction de la décharge. Des valeurs plus élevées freinent la décharge plus vite mais peuvent créer des sauts plus marqués."
+          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et d’autres logiques liées au PV."
         }
       },
       "expert": {
-        "title": "Modifier le profil de régulation – Mode expert",
+        "title": "Paramètres de Battery SmartFlow AI – Mode expert",
         "description": "Fonctions avancées de protection, de diagnostic et de planification. La planification apprise des fenêtres de charge est utilisée automatiquement dès que suffisamment de données sont disponibles. Elle peut être désactivée ici si nécessaire. La protection par tension de cellule nécessite d’abord l’activation du mode expert.",
         "data": {
           "expert_mode_enabled": "Activer le mode expert",
@@ -881,6 +829,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Couverture de la charge domestique",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -986,6 +935,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Couverture de la charge domestique",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -1080,6 +1030,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Couverture de la charge domestique",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
@@ -1138,6 +1089,7 @@
           "pv_house_load_passthrough": "Pv house load passthrough",
           "offgrid_load_support": "Offgrid load support",
           "offgrid_load_active_blocks_ac_charge": "Offgrid load active blocks ac charge",
+          "load_coverage": "Couverture de la charge domestique",
           "summer_cover_deficit": "Summer cover deficit",
           "adaptive_peak_discharge": "Adaptive peak discharge",
           "very_expensive_force_discharge": "Very expensive force discharge",
