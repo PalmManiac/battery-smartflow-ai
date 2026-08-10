@@ -12,6 +12,7 @@ from support import bootstrap
 bootstrap()
 
 from custom_components.battery_smartflow_ai.battery_protection import (  # noqa: E402
+    cell_voltage_emergency_minimum_elapsed,
     next_cell_voltage_emergency_state,
 )
 from custom_components.battery_smartflow_ai.device_command import (  # noqa: E402
@@ -234,6 +235,7 @@ class Maintenance431Tests(unittest.TestCase):
                 lowest_cell_voltage=cell_v,
                 warning_voltage=3.10,
                 resume_voltage=3.18,
+                minimum_charge_elapsed=True,
             )
             states.append(active)
 
@@ -250,6 +252,58 @@ class Maintenance431Tests(unittest.TestCase):
                 lowest_cell_voltage=3.05,
                 warning_voltage=3.10,
                 resume_voltage=3.18,
+                minimum_charge_elapsed=False,
+            )
+        )
+
+    def test_cell_voltage_emergency_charge_observes_minimum_duration(self) -> None:
+        self.assertTrue(
+            next_cell_voltage_emergency_state(
+                previously_active=True,
+                protection_enabled=True,
+                lowest_cell_voltage=3.19,
+                warning_voltage=3.10,
+                resume_voltage=3.18,
+                minimum_charge_elapsed=False,
+            )
+        )
+        self.assertFalse(
+            next_cell_voltage_emergency_state(
+                previously_active=True,
+                protection_enabled=True,
+                lowest_cell_voltage=3.19,
+                warning_voltage=3.10,
+                resume_voltage=3.18,
+                minimum_charge_elapsed=True,
+            )
+        )
+
+    def test_cell_voltage_emergency_charge_keeps_voltage_hysteresis_after_minimum(self) -> None:
+        self.assertTrue(
+            next_cell_voltage_emergency_state(
+                previously_active=True,
+                protection_enabled=True,
+                lowest_cell_voltage=3.17,
+                warning_voltage=3.10,
+                resume_voltage=3.18,
+                minimum_charge_elapsed=True,
+            )
+        )
+
+    def test_cell_voltage_emergency_minimum_duration_survives_serialization(self) -> None:
+        start = datetime(2026, 8, 10, 0, 30, tzinfo=timezone.utc)
+        restored_start = datetime.fromisoformat(start.isoformat())
+
+        self.assertFalse(
+            cell_voltage_emergency_minimum_elapsed(
+                started_at=restored_start,
+                now=start + timedelta(minutes=19, seconds=59),
+            )
+        )
+        self.assertTrue(
+            cell_voltage_emergency_minimum_elapsed(
+                started_at=restored_start,
+                now=start + timedelta(minutes=20),
             )
         )
 
