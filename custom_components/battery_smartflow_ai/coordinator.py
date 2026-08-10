@@ -137,6 +137,7 @@ from .grid_history import GridHistory, build_grid_history_config
 from .charge_source_allocator import ChargeSourceAllocator
 from .charge_commit_policy import (
     learned_commit_is_forced,
+    learned_commit_price_phase,
     learned_commit_should_yield_to_discharge,
     learned_plan_charge_need_satisfied,
 )
@@ -1379,10 +1380,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                     )
 
-                    if price_too_high:
-                        commit.phase = "waiting"
-                    else:
-                        commit.phase = "active"
+                    commit.phase = learned_commit_price_phase(
+                        current_phase=current_phase,
+                        price_too_high=price_too_high,
+                    )
 
                 # The Decision Engine has already verified that economic
                 # discharge is genuinely possible (SoC, protection, data and
