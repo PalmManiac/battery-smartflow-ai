@@ -1824,10 +1824,16 @@ class DecisionEngine:
 
         effective = max(effective, dynamic_valley_floor)
 
-        # Do not force valid economic discharge to the configured expensive
-        # threshold. The configured threshold remains relevant when no real
-        # charge price exists and for the separate very-expensive force logic.
-        effective = min(effective, market_peak_threshold)
+        # V4.3.3 / Issue #156:
+        # Keep the effective threshold from collapsing exactly onto the dynamic
+        # peak threshold. The market part may be capped below the peak, but a
+        # genuinely higher economic threshold must remain authoritative so the
+        # configured profit margin is never silently undercut.
+        market_effective_cap = market_peak_threshold * 0.90
+        effective = max(
+            economic_threshold,
+            min(effective, market_effective_cap),
+        )
 
         return effective
 
