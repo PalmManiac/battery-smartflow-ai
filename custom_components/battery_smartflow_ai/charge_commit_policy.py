@@ -78,6 +78,25 @@ def learned_commit_is_forced(
     )
 
 
+def learned_commit_price_phase(
+    *,
+    current_phase: str,
+    price_too_high: bool,
+) -> str:
+    """Advance a learned binding without undoing an active charge.
+
+    Price gating is only allowed while the binding is still waiting. Once AC
+    charging has started, a later price-slot recalculation must not pause the
+    same binding again.
+    """
+
+    phase = str(current_phase or "waiting")
+    if phase in {"active", "forced"}:
+        return phase
+
+    return "waiting" if price_too_high else "active"
+
+
 def learned_commit_should_yield_to_discharge(
     *,
     commit: ChargeCommitState,
