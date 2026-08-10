@@ -140,7 +140,10 @@ from .charge_commit_policy import (
     learned_commit_should_yield_to_discharge,
     learned_plan_charge_need_satisfied,
 )
-from .battery_protection import next_cell_voltage_emergency_state
+from .battery_protection import (
+    cell_voltage_emergency_minimum_elapsed,
+    next_cell_voltage_emergency_state,
+)
 from .charge_economics import (
     add_charge_evidence,
     classify_charge_pricing,
@@ -390,6 +393,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "global_lowest_cell_voltage": None,
             "cell_voltage_status": "disabled",
             "cell_voltage_emergency_active": False,
+            "cell_voltage_emergency_started_at": None,
             "cell_voltage_discharge_blocked": False,
             "cell_voltage_resume_threshold": None,
             "cell_voltage_soc_plausibility": "not_available",
@@ -3114,10 +3118,26 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         global_lowest_cell_voltage: float | None,
     ) -> bool:
+        now_utc = dt_util.utcnow()
+        previously_active = bool(
+            self._persist.get("cell_voltage_emergency_active", False)
+        )
+        started_at = self._parse_commit_dt(
+            self._persist.get("cell_voltage_emergency_started_at")
+        )
+
+        if previously_active and started_at is None:
+            # Safe upgrade/restart fallback for an already active emergency
+            # charge without a stored Beta4 start timestamp.
+            started_at = now_utc
+
+        minimum_charge_elapsed = cell_voltage_emergency_minimum_elapsed(
+            started_at=started_at if previously_active else None,
+            now=now_utc,
+        )
+
         active = next_cell_voltage_emergency_state(
-            previously_active=bool(
-                self._persist.get("cell_voltage_emergency_active", False)
-            ),
+            previously_active=previously_active,
             protection_enabled=self._cell_voltage_protection_enabled(),
             lowest_cell_voltage=global_lowest_cell_voltage,
             warning_voltage=float(
@@ -3132,7 +3152,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     DEFAULT_CELL_VOLTAGE_RESUME,
                 )
             ),
+            minimum_charge_elapsed=minimum_charge_elapsed,
         )
+
+        if active:
+            if started_at is None:
+                started_at = now_utc
+            self._persist["cell_voltage_emergency_started_at"] = (
+                started_at.isoformat()
+            )
+        else:
+            self._persist["cell_voltage_emergency_started_at"] = None
+
         self._persist["cell_voltage_emergency_active"] = active
         return active
 
