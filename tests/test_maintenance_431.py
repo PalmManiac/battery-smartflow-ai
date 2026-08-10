@@ -23,6 +23,7 @@ from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E4
     DEVICE_PROFILES,
 )
 from custom_components.battery_smartflow_ai.charge_commit_policy import (  # noqa: E402
+    learned_commit_price_phase,
     learned_commit_should_yield_to_discharge,
     learned_plan_charge_need_satisfied,
 )
@@ -53,6 +54,31 @@ from custom_components.battery_smartflow_ai.strategy_state import (  # noqa: E40
 
 
 class Maintenance431Tests(unittest.TestCase):
+    def test_active_learned_binding_ignores_later_price_increase(self) -> None:
+        self.assertEqual(
+            learned_commit_price_phase(
+                current_phase="active",
+                price_too_high=True,
+            ),
+            "active",
+        )
+
+    def test_waiting_learned_binding_still_observes_price_window(self) -> None:
+        self.assertEqual(
+            learned_commit_price_phase(
+                current_phase="waiting",
+                price_too_high=True,
+            ),
+            "waiting",
+        )
+        self.assertEqual(
+            learned_commit_price_phase(
+                current_phase="waiting",
+                price_too_high=False,
+            ),
+            "active",
+        )
+
     def test_live_zero_energy_plan_completes_learned_binding(self) -> None:
         plan = SimpleNamespace(
             status="ready",
