@@ -1824,14 +1824,14 @@ class DecisionEngine:
 
         effective = max(effective, dynamic_valley_floor)
 
-        # V4.3.3 / Issue #156:
-        # Keep the effective threshold from collapsing exactly onto the dynamic
-        # peak threshold. The market part may be capped below the peak, but a
-        # genuinely higher economic threshold must remain authoritative so the
-        # configured profit margin is never silently undercut.
+        # V4.3.2-Beta3 / Issue #156:
+        # Keep the effective discharge threshold inside the current market band.
+        # A high economic threshold still influences the calculation, but it must
+        # not move the effective market threshold above the dynamic peak.
+        # Otherwise normal economic discharge can become impossible for the day.
         market_effective_cap = market_peak_threshold * 0.90
         effective = max(
-            economic_threshold,
+            dynamic_valley_floor,
             min(effective, market_effective_cap),
         )
 
