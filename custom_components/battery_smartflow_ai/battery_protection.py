@@ -8,6 +8,7 @@ from math import isfinite
 
 MIN_CELL_VOLTAGE_HYSTERESIS_V = 0.01
 CELL_VOLTAGE_EMERGENCY_MINIMUM_CHARGE_SECONDS = 20 * 60
+NORMAL_CHARGE_CONFIRMATION_W = 50.0
 
 
 def cell_voltage_emergency_minimum_elapsed(
@@ -66,3 +67,57 @@ def next_cell_voltage_emergency_state(
     if cell_v >= effective_resume_v:
         return False
     return bool(previously_active)
+
+
+def next_cell_voltage_discharge_lock_state(
+    *,
+    previously_locked: bool,
+    normal_charge_observed: bool,
+    cell_voltage_emergency_active: bool,
+    decision_action: str,
+    decision_reason: str,
+    measured_charge_w: float,
+    soc: float,
+    resume_soc: float,
+    lowest_cell_voltage: float | None,
+    resume_voltage: float,
+) -> tuple[bool, bool]:
+    """Return the persistent post-emergency discharge lock state."""
+    locked = bool(previously_locked)
+    observed = bool(normal_charge_observed) if locked else False
+    observed_before_this_cycle = observed
+
+    if cell_voltage_emergency_active:
+        return True, False
+
+    emergency_reasons = {
+        "cell_voltage_emergency_charge",
+        "emergency_latched_charge",
+    }
+    regular_charge_active = bool(
+        locked
+        and str(decision_action or "") == "charge"
+        and str(decision_reason or "") not in emergency_reasons
+        and float(measured_charge_w or 0.0) >= NORMAL_CHARGE_CONFIRMATION_W
+    )
+    if regular_charge_active:
+        observed = True
+
+    if (
+        not locked
+        or not observed_before_this_cycle
+        or lowest_cell_voltage is None
+    ):
+        return locked, observed
+
+    try:
+        recovery_reached = bool(
+            float(soc) >= float(resume_soc)
+            and float(lowest_cell_voltage) >= float(resume_voltage)
+        )
+    except (TypeError, ValueError):
+        recovery_reached = False
+
+    if recovery_reached:
+        return False, False
+    return True, observed
