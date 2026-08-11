@@ -143,6 +143,7 @@ from .charge_commit_policy import (
 )
 from .battery_protection import (
     cell_voltage_emergency_minimum_elapsed,
+    next_cell_voltage_discharge_lock_state,
     next_cell_voltage_emergency_state,
 )
 from .charge_economics import (
@@ -397,6 +398,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "cell_voltage_emergency_started_at": None,
             "cell_voltage_discharge_blocked": False,
             "cell_voltage_resume_threshold": None,
+            "cell_voltage_post_emergency_discharge_locked": False,
+            "cell_voltage_normal_charge_observed": False,
             "cell_voltage_soc_plausibility": "not_available",
 
             # PV charge debounce / hysteresis
@@ -3168,6 +3171,48 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["cell_voltage_emergency_active"] = active
         return active
 
+    def _update_cell_voltage_post_emergency_discharge_lock(
+        self,
+        *,
+        cell_voltage_emergency_active: bool,
+        decision_action: str,
+        decision_reason: str,
+        measured_charge_w: float,
+        soc: float,
+        resume_soc: float,
+        global_lowest_cell_voltage: float | None,
+    ) -> bool:
+        """Keep discharge blocked after a pure cell-voltage emergency charge."""
+        resume_voltage = float(
+            self._get_setting(
+                SETTING_CELL_VOLTAGE_RESUME,
+                DEFAULT_CELL_VOLTAGE_RESUME,
+            )
+        )
+        locked, normal_charge_observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=bool(
+                self._persist.get(
+                    "cell_voltage_post_emergency_discharge_locked", False
+                )
+            ),
+            normal_charge_observed=bool(
+                self._persist.get("cell_voltage_normal_charge_observed", False)
+            ),
+            cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
+            decision_action=str(decision_action or ""),
+            decision_reason=str(decision_reason or ""),
+            measured_charge_w=float(measured_charge_w or 0.0),
+            soc=float(soc),
+            resume_soc=float(resume_soc),
+            lowest_cell_voltage=global_lowest_cell_voltage,
+            resume_voltage=resume_voltage,
+        )
+        self._persist["cell_voltage_post_emergency_discharge_locked"] = locked
+        self._persist["cell_voltage_normal_charge_observed"] = (
+            normal_charge_observed
+        )
+        return locked
+
     def _parse_price_points(self, now) -> list[PricePoint]:
         if not self.entities.price_export:
             return []
@@ -3981,6 +4026,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             cell_voltage_discharge_blocked = self._update_cell_voltage_discharge_hysteresis(
                 global_lowest_cell_voltage
             )
+            cell_voltage_discharge_blocked = bool(
+                cell_voltage_discharge_blocked
+                or self._persist.get(
+                    "cell_voltage_post_emergency_discharge_locked", False
+                )
+            )
 
             discharge_blocked_by_soc_min = self._update_discharge_resume_hysteresis(
                 soc=float(soc),
@@ -4196,6 +4247,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             decision = self._engine.evaluate(ctx)
             strategy_selection = self._engine.last_strategy_selection
+
+            cell_voltage_post_emergency_discharge_locked = (
+                self._update_cell_voltage_post_emergency_discharge_lock(
+                    cell_voltage_emergency_active=bool(
+                        cell_voltage_emergency_active
+                    ),
+                    decision_action=str(decision.action or ""),
+                    decision_reason=str(decision.reason or ""),
+                    measured_charge_w=float(battery_charge_w or 0.0),
+                    soc=float(soc),
+                    resume_soc=float(soc_min) + max(0.0, float(resume_margin)),
+                    global_lowest_cell_voltage=global_lowest_cell_voltage,
+                )
+            )
+            cell_voltage_discharge_blocked = bool(
+                cell_voltage_discharge_blocked
+                or cell_voltage_post_emergency_discharge_locked
+            )
 
             strict_low_soc_protection = bool(profile.get("LOW_SOC_PROTECTION_STRICT", False))
             low_soc_pv_charge_requires_export = bool(
@@ -6455,6 +6524,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "cell_voltage_resume_threshold"
                 ),
                 "cell_voltage_emergency_active": cell_voltage_emergency_active,
+                "cell_voltage_post_emergency_discharge_locked": bool(
+                    self._persist.get(
+                        "cell_voltage_post_emergency_discharge_locked", False
+                    )
+                ),
+                "cell_voltage_normal_charge_observed": bool(
+                    self._persist.get("cell_voltage_normal_charge_observed", False)
+                ),
                 "forecast_status": forecast_summary.status,
                 "pv_outlook": forecast_summary.pv_outlook,
                 "forecast_remaining_today_kwh": float(forecast_summary.remaining_today_kwh),
