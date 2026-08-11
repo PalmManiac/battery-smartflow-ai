@@ -13,6 +13,7 @@ bootstrap()
 
 from custom_components.battery_smartflow_ai.battery_protection import (  # noqa: E402
     cell_voltage_emergency_minimum_elapsed,
+    next_cell_voltage_discharge_lock_state,
     next_cell_voltage_emergency_state,
 )
 from custom_components.battery_smartflow_ai.device_command import (  # noqa: E402
@@ -332,6 +333,101 @@ class Maintenance431Tests(unittest.TestCase):
                 now=start + timedelta(minutes=20),
             )
         )
+
+    def test_cell_voltage_emergency_sets_persistent_discharge_lock(self) -> None:
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=False,
+            normal_charge_observed=False,
+            cell_voltage_emergency_active=True,
+            decision_action="emergency",
+            decision_reason="cell_voltage_emergency_charge",
+            measured_charge_w=300.0,
+            soc=10.0,
+            resume_soc=14.0,
+            lowest_cell_voltage=3.18,
+            resume_voltage=3.18,
+        )
+        self.assertTrue(locked)
+        self.assertFalse(observed)
+
+    def test_emergency_charge_cannot_release_discharge_lock(self) -> None:
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=False,
+            cell_voltage_emergency_active=False,
+            decision_action="emergency",
+            decision_reason="emergency_latched_charge",
+            measured_charge_w=300.0,
+            soc=15.0,
+            resume_soc=14.0,
+            lowest_cell_voltage=3.20,
+            resume_voltage=3.18,
+        )
+        self.assertTrue(locked)
+        self.assertFalse(observed)
+
+    def test_regular_charge_releases_lock_after_safe_recovery(self) -> None:
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=False,
+            cell_voltage_emergency_active=False,
+            decision_action="charge",
+            decision_reason="pv_surplus_charge",
+            measured_charge_w=420.0,
+            soc=14.0,
+            resume_soc=14.0,
+            lowest_cell_voltage=3.19,
+            resume_voltage=3.18,
+        )
+        self.assertTrue(locked)
+        self.assertTrue(observed)
+
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=locked,
+            normal_charge_observed=observed,
+            cell_voltage_emergency_active=False,
+            decision_action="charge",
+            decision_reason="pv_surplus_charge",
+            measured_charge_w=420.0,
+            soc=14.0,
+            resume_soc=14.0,
+            lowest_cell_voltage=3.19,
+            resume_voltage=3.18,
+        )
+        self.assertFalse(locked)
+        self.assertFalse(observed)
+
+    def test_planned_but_unmeasured_charge_does_not_release_lock(self) -> None:
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=False,
+            cell_voltage_emergency_active=False,
+            decision_action="charge",
+            decision_reason="planned_charge",
+            measured_charge_w=0.0,
+            soc=20.0,
+            resume_soc=14.0,
+            lowest_cell_voltage=3.20,
+            resume_voltage=3.18,
+        )
+        self.assertTrue(locked)
+        self.assertFalse(observed)
+
+    def test_observed_regular_charge_survives_restart_until_recovery(self) -> None:
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=True,
+            cell_voltage_emergency_active=False,
+            decision_action="idle",
+            decision_reason="idle",
+            measured_charge_w=0.0,
+            soc=13.0,
+            resume_soc=14.0,
+            lowest_cell_voltage=3.20,
+            resume_voltage=3.18,
+        )
+        self.assertTrue(locked)
+        self.assertTrue(observed)
 
     def test_zero_stop_bypasses_positive_entity_minimum(self) -> None:
         self.assertEqual(
