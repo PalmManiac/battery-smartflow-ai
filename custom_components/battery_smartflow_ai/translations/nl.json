@@ -153,7 +153,8 @@
         "description": "Kies welk instellingenonderdeel je wilt bewerken. Apparaatspecifieke regelwaarden worden automatisch beheerd door het geselecteerde apparaatprofiel.",
         "menu_options": {
           "general": "Algemeen",
-          "expert": "Expertmodus"
+          "expert": "Expertmodus",
+          "debug": "Debugmodus"
         }
       },
       "general": {
@@ -165,6 +166,16 @@
         "data_description": {
           "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica."
         }
+      },
+      "debug_start": {
+        "title": "Debugopname starten",
+        "description": "Gebruik deze ondersteuningsfunctie alleen voor probleemoplossing. Technische statussen en geconfigureerde entiteits-ID’s worden tijdelijk opgenomen; wachtwoorden, tokens en API-sleutels worden gefilterd. De voortgang wordt weergegeven door de debugstatussensoren. Er worden maximaal 10 pakketten bewaard in /config/bsfai/debug/.",
+        "data": {"duration_minutes": "Opnameduur"},
+        "data_description": {"duration_minutes": "Kies 10, 30, 60 of 120 minuten. De opname stopt en exporteert automatisch."}
+      },
+      "debug_stop": {
+        "title": "Debugopname actief",
+        "description": "De opname eindigt om {recording_end}. Tot nu toe opgenomen samples: {sample_count}. De debugstatussensoren tonen ook de voortgang. Bevestig om nu te stoppen en het verzamelde pakket te exporteren."
       },
       "expert": {
         "title": "Battery SmartFlow AI instellen – Expertmodus",
@@ -231,6 +242,12 @@
       "fields": {
         "entry_id": {"name": "Configuratie", "description": "Selecteer de Battery SmartFlow AI-configuratie wanneer meerdere instanties zijn geladen."}
       }
+    },
+    "abort": {
+      "debug_recording_started": "Debugopname gestart. De voortgang wordt weergegeven door de debugstatussensoren.",
+      "debug_recording_stopped": "Debugopname gestopt en export aangevraagd.",
+      "debug_recording_already_stopped": "De debugopname is al gestopt.",
+      "debug_integration_not_loaded": "Battery SmartFlow AI is momenteel niet geladen."
     }
   },
   "entity": {
