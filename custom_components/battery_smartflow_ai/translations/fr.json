@@ -153,7 +153,8 @@
         "description": "Sélectionnez la zone de paramètres à modifier. Les valeurs de régulation propres à l’appareil sont gérées automatiquement par le profil sélectionné.",
         "menu_options": {
           "general": "Général",
-          "expert": "Mode expert"
+          "expert": "Mode expert",
+          "debug": "Mode débogage"
         }
       },
       "general": {
@@ -165,6 +166,16 @@
         "data_description": {
           "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et d’autres logiques liées au PV."
         }
+      },
+      "debug_start": {
+        "title": "Démarrer l’enregistrement de débogage",
+        "description": "Utilisez cette fonction d’assistance uniquement pour le dépannage. Les états techniques et les identifiants d’entité configurés sont enregistrés pendant une durée limitée ; les mots de passe, jetons et clés API sont filtrés. La progression est affichée par les capteurs d’état de débogage. Jusqu’à 10 paquets sont conservés dans /config/bsfai/debug/.",
+        "data": {"duration_minutes": "Durée d’enregistrement"},
+        "data_description": {"duration_minutes": "Sélectionnez 10, 30, 60 ou 120 minutes. L’enregistrement s’arrête et s’exporte automatiquement."}
+      },
+      "debug_stop": {
+        "title": "Enregistrement de débogage actif",
+        "description": "L’enregistrement se termine à {recording_end}. Échantillons enregistrés : {sample_count}. Les capteurs d’état affichent également la progression. Confirmez pour arrêter maintenant et exporter le paquet collecté."
       },
       "expert": {
         "title": "Paramètres de Battery SmartFlow AI – Mode expert",
@@ -231,6 +242,12 @@
       "fields": {
         "entry_id": {"name": "Configuration", "description": "Selectionnez la configuration Battery SmartFlow AI lorsque plusieurs instances sont chargees."}
       }
+    },
+    "abort": {
+      "debug_recording_started": "Enregistrement de débogage démarré. La progression est affichée par les capteurs d’état.",
+      "debug_recording_stopped": "Enregistrement de débogage arrêté et export demandé.",
+      "debug_recording_already_stopped": "L’enregistrement de débogage est déjà arrêté.",
+      "debug_integration_not_loaded": "Battery SmartFlow AI n’est pas actuellement chargé."
     }
   },
   "entity": {
