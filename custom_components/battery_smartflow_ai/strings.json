@@ -217,6 +217,23 @@
       }
     }
   },
+  "services": {
+    "start_debug_recording": {
+      "name": "Start debug recording",
+      "description": "Record technical diagnostics for a limited time and export a JSON package automatically.",
+      "fields": {
+        "entry_id": {"name": "Configuration", "description": "Select the Battery SmartFlow AI configuration when multiple instances are loaded."},
+        "duration_minutes": {"name": "Duration", "description": "Recording duration in minutes."}
+      }
+    },
+    "stop_debug_recording": {
+      "name": "Stop debug recording",
+      "description": "Stop the active recording and export its JSON package now.",
+      "fields": {
+        "entry_id": {"name": "Configuration", "description": "Select the Battery SmartFlow AI configuration when multiple instances are loaded."}
+      }
+    }
+  },
   "entity": {
     "select": {
       "ai_mode": {
@@ -566,6 +583,14 @@
           "lower_limit_active": "Lower SoC limit active (discharging blocked)"
         }
       },
+      "debug_recording_active": {
+        "name": "Debug recording active",
+        "state": {"no": "No", "yes": "Yes"}
+      },
+      "debug_recording_ends_at": {"name": "Debug recording ends at"},
+      "debug_sample_count": {"name": "Debug samples recorded"},
+      "debug_last_package": {"name": "Last debug package"},
+      "debug_last_error": {"name": "Last debug error"},
       "fault_level_status": {
         "name": "Fault status",
         "state": {
