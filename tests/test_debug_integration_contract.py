@@ -64,6 +64,14 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn("await self.hass.async_add_executor_job", source)
         self.assertIn("export_debug_package", source)
 
+    def test_native_diagnostics_download_and_auto_stop_refresh_are_wired(self) -> None:
+        diagnostics = (COMPONENT / "diagnostics.py").read_text(encoding="utf-8")
+        coordinator = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+
+        self.assertIn("async_get_config_entry_diagnostics", diagnostics)
+        self.assertIn("debug_last_package_path", diagnostics)
+        self.assertIn("self.hass.async_create_task(self.async_request_refresh())", coordinator)
+
 
 if __name__ == "__main__":
     unittest.main()
