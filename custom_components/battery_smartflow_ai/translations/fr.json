@@ -216,6 +216,23 @@
       }
     }
   },
+  "services": {
+    "start_debug_recording": {
+      "name": "Demarrer l'enregistrement de debogage",
+      "description": "Enregistrer les diagnostics techniques pendant une duree limitee et exporter automatiquement un paquet JSON.",
+      "fields": {
+        "entry_id": {"name": "Configuration", "description": "Selectionnez la configuration Battery SmartFlow AI lorsque plusieurs instances sont chargees."},
+        "duration_minutes": {"name": "Duree", "description": "Duree d'enregistrement en minutes."}
+      }
+    },
+    "stop_debug_recording": {
+      "name": "Arreter l'enregistrement de debogage",
+      "description": "Arreter l'enregistrement actif et exporter immediatement son paquet JSON.",
+      "fields": {
+        "entry_id": {"name": "Configuration", "description": "Selectionnez la configuration Battery SmartFlow AI lorsque plusieurs instances sont chargees."}
+      }
+    }
+  },
   "entity": {
     "select": {
       "ai_mode": {
@@ -565,6 +582,14 @@
           "lower_limit_active": "Limite SoC inférieure active (décharge bloquée)"
         }
       },
+      "debug_recording_active": {
+        "name": "Enregistrement de debogage actif",
+        "state": {"no": "Non", "yes": "Oui"}
+      },
+      "debug_recording_ends_at": {"name": "Fin de l'enregistrement de debogage"},
+      "debug_sample_count": {"name": "Echantillons de debogage enregistres"},
+      "debug_last_package": {"name": "Dernier paquet de debogage"},
+      "debug_last_error": {"name": "Derniere erreur de debogage"},
       "fault_level_status": {
         "name": "État d’erreur",
         "state": {
