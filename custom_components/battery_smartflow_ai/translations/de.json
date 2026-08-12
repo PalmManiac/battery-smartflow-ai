@@ -153,7 +153,8 @@
         "description": "Wähle den Einstellungsbereich aus. Gerätespezifische Regelwerte werden automatisch durch das ausgewählte Geräteprofil verwaltet.",
         "menu_options": {
           "general": "Allgemein",
-          "expert": "Expertenmodus"
+          "expert": "Expertenmodus",
+          "debug": "Debug-Modus"
         }
       },
       "general": {
@@ -165,6 +166,16 @@
         "data_description": {
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet."
         }
+      },
+      "debug_start": {
+        "title": "Debug-Aufzeichnung starten",
+        "description": "Diese Supportfunktion nur zur Fehlersuche verwenden. Technische Zustände und konfigurierte Entity-IDs werden zeitlich begrenzt aufgezeichnet; Passwörter, Tokens und API-Schlüssel werden gefiltert. Den Fortschritt zeigen die Debug-Statussensoren in der Geräteansicht von Battery SmartFlow AI. Unter /config/bsfai/debug/ werden höchstens 10 Pakete aufbewahrt.",
+        "data": {"duration_minutes": "Aufzeichnungsdauer"},
+        "data_description": {"duration_minutes": "10, 30, 60 oder 120 Minuten auswählen. Die Aufzeichnung stoppt und exportiert automatisch."}
+      },
+      "debug_stop": {
+        "title": "Debug-Aufzeichnung aktiv",
+        "description": "Die Aufzeichnung endet um {recording_end}. Bisher erfasste Samples: {sample_count}. Den aktuellen Fortschritt zeigen auch die Debug-Statussensoren. Mit Bestätigen wird die Aufzeichnung jetzt beendet und das gesammelte Paket exportiert."
       },
       "expert": {
         "title": "Battery SmartFlow AI einstellen – Expertenmodus",
@@ -231,6 +242,12 @@
       "fields": {
         "entry_id": {"name": "Konfiguration", "description": "Bei mehreren Instanzen die passende Battery-SmartFlow-AI-Konfiguration auswaehlen."}
       }
+    },
+    "abort": {
+      "debug_recording_started": "Debug-Aufzeichnung gestartet. Den Fortschritt zeigen die Debug-Statussensoren.",
+      "debug_recording_stopped": "Debug-Aufzeichnung beendet und Export angefordert.",
+      "debug_recording_already_stopped": "Die Debug-Aufzeichnung wurde bereits beendet.",
+      "debug_integration_not_loaded": "Battery SmartFlow AI ist derzeit nicht geladen."
     }
   },
   "entity": {
