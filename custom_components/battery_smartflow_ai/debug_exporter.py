@@ -7,16 +7,15 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import re
 import tempfile
 
 from .debug_package import DebugPackage, redact_secrets
 
 
-DEBUG_DIRECTORY = Path("battery_smartflow_ai") / "debug"
-DEFAULT_MAX_EXPORT_BYTES = 10 * 1024 * 1024
+DEBUG_DIRECTORY = Path("bsfai") / "debug"
+DEFAULT_MAX_EXPORT_BYTES = 16 * 1024 * 1024
 DEFAULT_MAX_RETAINED_PACKAGES = 10
-_DEBUG_FILE_GLOB = "bsfai_*_debug_*.json"
+_DEBUG_FILE_GLOB = "bsfai_debug_*.json"
 
 
 class DebugExportError(RuntimeError):
@@ -32,18 +31,11 @@ class DebugExportResult:
     removed_old_packages: int
 
 
-def _safe_version(value: str) -> str:
-    """Return a filename-safe integration version component."""
-
-    normalized = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())
-    return normalized.strip("._-") or "unknown"
-
-
-def _filename(integration_version: str, created_at: datetime) -> str:
+def _filename(created_at: datetime) -> str:
     if created_at.tzinfo is None or created_at.utcoffset() is None:
         raise ValueError("Debug timestamps must be timezone-aware")
-    stamp = created_at.astimezone(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S_%f")
-    return f"bsfai_v{_safe_version(integration_version)}_debug_{stamp}.json"
+    stamp = created_at.astimezone(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+    return f"bsfai_debug_{stamp}.json"
 
 
 def _available_destination(directory: Path, filename: str) -> Path:
@@ -123,10 +115,7 @@ def export_debug_package(
         directory.mkdir(parents=True, exist_ok=True)
         destination = _available_destination(
             directory,
-            _filename(
-                package.integration_version,
-                package.created_at or datetime.now(timezone.utc),
-            ),
+            _filename(package.created_at or datetime.now(timezone.utc)),
         )
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=".bsfai_debug_",
