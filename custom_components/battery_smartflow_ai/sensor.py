@@ -842,6 +842,48 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
     ),
 
     # --------------------------------------------------
+    # DEBUG RECORDING (V4.4.0)
+    # --------------------------------------------------
+    ZendureSensorEntityDescription(
+        key="debug_recording_active",
+        translation_key="debug_recording_active",
+        runtime_key="debug_recording_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
+        icon="mdi:bug-play-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="debug_recording_ends_at",
+        translation_key="debug_recording_ends_at",
+        runtime_key="debug_recording_ends_at",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:timer-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="debug_sample_count",
+        translation_key="debug_sample_count",
+        runtime_key="debug_sample_count",
+        icon="mdi:counter",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="debug_last_package",
+        translation_key="debug_last_package",
+        runtime_key="debug_last_package",
+        icon="mdi:file-code-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="debug_last_error",
+        translation_key="debug_last_error",
+        runtime_key="debug_last_error",
+        icon="mdi:bug-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+
+    # --------------------------------------------------
     # DEVICE / MODE
     # --------------------------------------------------
     ZendureSensorEntityDescription(
@@ -961,366 +1003,8 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         return val
         
-    def _build_automatic_weighting_attributes(self) -> dict:
-        """Return diagnostics for the unified automatic strategy context."""
-
-        data = self.coordinator.data or {}
-        details = data.get("details") or {}
-
-        return {
-            "active": details.get(
-                "automatic_strategy_active",
-                data.get("automatic_strategy_active"),
-            ),
-            "season_context": details.get(
-                "automatic_season_context",
-                data.get("automatic_season_context"),
-            ),
-            "pv_weight": details.get(
-                "automatic_pv_weight",
-                data.get("automatic_pv_weight"),
-            ),
-            "price_weight": details.get(
-                "automatic_price_weight",
-                data.get("automatic_price_weight"),
-            ),
-            "reserve_weight": details.get(
-                "automatic_reserve_weight",
-                data.get("automatic_reserve_weight"),
-            ),
-            "forecast_weight": details.get(
-                "automatic_forecast_weight",
-                data.get("automatic_forecast_weight"),
-            ),
-            "reason": details.get(
-                "automatic_strategy_reason",
-                data.get("automatic_strategy_reason"),
-            ),
-            "pv_weight_reason": details.get(
-                "automatic_pv_weight_reason",
-                data.get("automatic_pv_weight_reason"),
-            ),
-            "price_weight_reason": details.get(
-                "automatic_price_weight_reason",
-                data.get("automatic_price_weight_reason"),
-            ),
-            "reserve_weight_reason": details.get(
-                "automatic_reserve_weight_reason",
-                data.get("automatic_reserve_weight_reason"),
-            ),
-            "mode_arbiter_reason": details.get(
-                "regulation_mode_arbiter_reason",
-                data.get("regulation_mode_arbiter_reason"),
-            ),
-            "resolved_mode": details.get(
-                "regulation_resolved_mode",
-                data.get("regulation_resolved_mode"),
-            ),
-            "mode_allowed": details.get(
-                "regulation_mode_allowed",
-                data.get("regulation_mode_allowed"),
-            ),
-            "active_regulation_state": details.get(
-                "regulation_active_state",
-                data.get("regulation_active_state"),
-            ),
-            "active_hold_remaining_s": details.get(
-                "regulation_active_hold_remaining_s",
-                data.get("regulation_active_hold_remaining_s"),
-            ),
-            "forecast_weight_reason": details.get(
-                "automatic_forecast_weight_reason",
-                data.get("automatic_forecast_weight_reason"),
-            ),
-            "discharge_allowed": details.get(
-                "automatic_discharge_allowed",
-                data.get("automatic_discharge_allowed"),
-            ),
-            "discharge_reason": details.get(
-                "automatic_discharge_reason",
-                data.get("automatic_discharge_reason"),
-            ),
-            "discharge_latch_reason": details.get(
-                "automatic_discharge_latch_reason",
-                data.get("automatic_discharge_latch_reason"),
-            ),
-            "peak_reserve_allowed": details.get(
-                "automatic_peak_reserve_allowed",
-                data.get("automatic_peak_reserve_allowed"),
-            ),
-            "peak_reserve_reason": details.get(
-                "automatic_peak_reserve_reason",
-                data.get("automatic_peak_reserve_reason"),
-            ),
-            "pv_handover_policy": details.get(
-                "regulation_pv_handover_policy",
-                data.get("regulation_pv_handover_policy"),
-            ),
-            "load_coverage_priority": details.get(
-                "regulation_load_coverage_priority",
-                data.get("regulation_load_coverage_priority"),
-            ),
-            "valley_charge_allowed": details.get(
-                "automatic_valley_charge_allowed",
-                data.get("automatic_valley_charge_allowed"),
-            ),
-            "valley_charge_reason": details.get(
-                "automatic_valley_charge_reason",
-                data.get("automatic_valley_charge_reason"),
-            ),
-            # V4.3.0-dev5.8:
-            # Near-zero regulation diagnostics.
-            "grid_now_w": details.get(
-                "regulation_grid_now_w"
-            ),
-            "grid_avg_short_w": details.get(
-                "regulation_grid_avg_short_w"
-            ),
-            "grid_avg_medium_w": details.get(
-                "regulation_grid_avg_medium_w"
-            ),
-            "control_grid_w": details.get(
-                "regulation_control_grid_w"
-            ),
-            "target_import_w": details.get(
-                "regulation_target_import_w"
-            ),
-            "effective_deadband_w": details.get(
-                "regulation_effective_deadband_w"
-            ),
-            "error_w": details.get(
-                "regulation_error_w"
-            ),
-            "near_zero_active": details.get(
-                "regulation_near_zero_active"
-            ),
-            "near_zero_reason": details.get(
-                "regulation_near_zero_reason"
-            ),
-            "near_zero_trim_w": details.get(
-                "regulation_near_zero_trim_w"
-            ),
-            "economic_target_active": details.get(
-                "regulation_economic_target_active"
-            ),
-            "economic_target_reason": details.get(
-                "regulation_economic_target_reason"
-            ),
-            "economic_effective_target_import_w": details.get(
-                "regulation_economic_effective_target_import_w"
-            ),
-            "raw_target_w": details.get(
-                "regulation_raw_target_w"
-            ),
-            "limited_target_w": details.get(
-                "regulation_limited_target_w"
-            ),
-            "applied_step_w": details.get(
-                "regulation_applied_step_w"
-            ),
-            "final_power_w": details.get(
-                "regulation_final_power_w"
-            ),
-            "power_reason": details.get(
-                "regulation_power_reason"
-            ),
-            "input_write_requested_w": details.get(
-                "input_write_requested_w"
-            ),
-            "input_write_effective_w": details.get(
-                "input_write_effective_w"
-            ),
-            "input_write_entity_state_w": details.get(
-                "input_write_entity_state_w"
-            ),
-            "input_write_clamped": details.get(
-                "input_write_clamped"
-            ),
-            "input_write_skipped": details.get(
-                "input_write_skipped"
-            ),
-            "input_write_skip_reason": details.get(
-                "input_write_skip_reason"
-            ),
-            "input_write_last_success_w": details.get(
-                "input_write_last_success_w"
-            ),
-
-            "output_write_requested_w": details.get(
-                "output_write_requested_w"
-            ),
-            "output_write_effective_w": details.get(
-                "output_write_effective_w"
-            ),
-            "output_write_entity_state_w": details.get(
-                "output_write_entity_state_w"
-            ),
-            "output_write_clamped": details.get(
-                "output_write_clamped"
-            ),
-            "output_write_skipped": details.get(
-                "output_write_skipped"
-            ),
-            "output_write_skip_reason": details.get(
-                "output_write_skip_reason"
-            ),
-            "output_write_last_success_w": details.get(
-                "output_write_last_success_w"
-            ),
-            "input_live_entity_state_w": details.get(
-                "input_live_entity_state_w"
-            ),
-            "output_live_entity_state_w": details.get(
-                "output_live_entity_state_w"
-            ),
-            "mode_write_requested": details.get(
-                "mode_write_requested"
-            ),
-            "mode_write_entity_state": details.get(
-                "mode_write_entity_state"
-            ),
-            "mode_live_entity_state": details.get(
-                "mode_live_entity_state"
-            ),
-            "mode_write_skipped": details.get(
-                "mode_write_skipped"
-            ),
-            "mode_write_skip_reason": details.get(
-                "mode_write_skip_reason"
-            ),
-            "mode_write_last_success": details.get(
-                "mode_write_last_success"
-            ),
-            "charge_commit_phase_debug": details.get(
-                "charge_commit_phase_debug"
-            ),
-            "charge_commit_optimal_start_debug": details.get(
-                "charge_commit_optimal_start_debug"
-            ),
-            "charge_commit_latest_start_debug": details.get(
-                "charge_commit_latest_start_debug"
-            ),
-            "charge_commit_deadline_debug": details.get(
-                "charge_commit_deadline_debug"
-            ),
-            "charge_commit_acceptable_price_eur_kwh_debug": details.get(
-                "charge_commit_acceptable_price_eur_kwh_debug"
-            ),
-        }
-
-    def _build_charge_source_allocation_attributes(self) -> dict:
-        """Return diagnostic attributes for the charge source allocation."""
-
-        data = self.coordinator.data or {}
-        details = data.get("details") or {}
-
-        return {
-            "active": details.get(
-                "charge_source_allocation_active",
-                data.get("charge_source_allocation_active"),
-            ),
-            "total_target_w": details.get(
-                "charge_total_target_w",
-                data.get("charge_total_target_w"),
-            ),
-            "pv_available_w": details.get(
-                "charge_pv_available_w",
-                data.get("charge_pv_available_w"),
-            ),
-            "pv_allocated_w": details.get(
-                "charge_pv_allocated_w",
-                data.get("charge_pv_allocated_w"),
-            ),
-            "grid_requested_w": details.get(
-                "charge_grid_requested_w",
-                data.get("charge_grid_requested_w"),
-            ),
-            "unfilled_w": details.get(
-                "charge_unfilled_w",
-                data.get("charge_unfilled_w"),
-            ),
-            "pv_share_pct": details.get(
-                "charge_pv_share_pct",
-                data.get("charge_pv_share_pct"),
-            ),
-            "grid_share_pct": details.get(
-                "charge_grid_share_pct",
-                data.get("charge_grid_share_pct"),
-            ),
-            "reason": details.get(
-                "charge_source_allocation_reason",
-                data.get("charge_source_allocation_reason"),
-            ),
-        }
-
-    def _build_device_profile_attributes(self) -> dict:
-        data = self.coordinator.data or {}
-        details = data.get("details") or {}
-
-        base_profile = details.get("device_profile")
-        installed_pv_wp = details.get("installed_pv_wp")
-
-        profile_overrides = self._entry.options.get("profile_overrides", {})
-        if not isinstance(profile_overrides, dict):
-            profile_overrides = {}
-
-        season_thresholds = self.coordinator._persist.get("season_thresholds", {})
-        if not isinstance(season_thresholds, dict):
-            season_thresholds = {}
-
-        attrs = {
-            "base_profile": base_profile,
-            "profile_overrides_active": bool(profile_overrides),
-            "profile_override_count": len(profile_overrides),
-            "installed_pv_wp": installed_pv_wp,
-            "effective_target_import_w": details.get("effective_target_import_w"),
-            "effective_deadband_w": details.get("effective_deadband_w"),
-            "effective_export_guard_w": details.get("effective_export_guard_w"),
-            "effective_kp_up": details.get("effective_kp_up"),
-            "effective_kp_down": details.get("effective_kp_down"),
-            "effective_max_step_up": details.get("effective_max_step_up"),
-            "effective_max_step_down": details.get("effective_max_step_down"),
-            "effective_keepalive_min_deficit_w": details.get("effective_keepalive_min_deficit_w"),
-            "effective_keepalive_min_output_w": details.get("effective_keepalive_min_output_w"),
-            "effective_soc_discharge_resume_margin": details.get("effective_soc_discharge_resume_margin"),
-            "season_summer_pv_threshold": season_thresholds.get("summer_pv_threshold"),
-            "season_summer_export_threshold": season_thresholds.get("summer_export_threshold"),
-            "season_winter_pv_threshold": season_thresholds.get("winter_pv_threshold"),
-            "season_winter_export_threshold": season_thresholds.get("winter_export_threshold"),
-            "season_counter": season_thresholds.get("counter"),
-
-            # V3.5.0 cell voltage transparency
-            "expert_mode_enabled": details.get("expert_mode_enabled"),
-            "cell_voltage_protection_enabled": details.get("cell_voltage_protection_enabled"),
-            "configured_lowest_cell_voltage_sensor_count": details.get(
-                "configured_lowest_cell_voltage_sensor_count"
-            ),
-            "global_lowest_cell_voltage": details.get("global_lowest_cell_voltage"),
-        }
-
-        attrs["profile_overrides"] = profile_overrides
-
-        return attrs
-
     def _handle_coordinator_update(self) -> None:
-        """Update sensor attributes without duplicating the full details block.
+        """Keep recorder-facing entities attribute-free in normal operation."""
 
-        Important for Home Assistant Recorder:
-        The coordinator details dictionary can be large and changes often.
-        Attaching it to every sensor causes massive database growth because
-        every sensor state stores its own copy of the attributes.
-        """
-
-        attrs: dict | None = None
-
-        if self.entity_description.runtime_key == "device_profile":
-            attrs = self._build_device_profile_attributes()
-
-        elif self.entity_description.key == "charge_source_allocation":
-            attrs = self._build_charge_source_allocation_attributes()
-
-        elif self.entity_description.key == "automatic_weighting":
-            attrs = self._build_automatic_weighting_attributes()
-
-        self._attr_extra_state_attributes = attrs
+        self._attr_extra_state_attributes = None
         super()._handle_coordinator_update()
