@@ -1629,6 +1629,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "debug_last_error": self._debug_last_error,
         }
 
+    @property
+    def debug_last_package_path(self) -> str | None:
+        """Return the latest package path for Home Assistant diagnostics."""
+
+        return self._debug_last_package
+
     def _debug_configured_entities(self) -> dict[str, str | None]:
         """Return entity ids by diagnostic role without reading their contents."""
 
@@ -1730,6 +1736,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         if package is not None:
             await self._async_export_debug_package(package)
+            # Queue one follow-up refresh after an automatic completion so HA
+            # publishes the inactive state and exported path immediately.
+            self.hass.async_create_task(self.async_request_refresh())
 
     def _attr(self, entity_id: str | None, attr: str) -> Any:
         if not entity_id:
