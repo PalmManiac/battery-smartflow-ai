@@ -39,7 +39,9 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn("stop_debug_recording:", services)
         self.assertIn("integration: battery_smartflow_ai", services)
         for duration in (10, 30, 60, 120):
-            self.assertIn(f"- {duration}", services)
+            self.assertIn(f'- "{duration}"', services)
+
+        self.assertNotIn("            - 10\n", services)
         self.assertNotIn("- 0", services)
 
     def test_coordinator_keeps_inactive_path_before_sample_build(self) -> None:
