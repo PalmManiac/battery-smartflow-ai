@@ -216,6 +216,23 @@
       }
     }
   },
+  "services": {
+    "start_debug_recording": {
+      "name": "Debugopname starten",
+      "description": "Technische diagnosegegevens tijdelijk opnemen en automatisch als JSON-pakket exporteren.",
+      "fields": {
+        "entry_id": {"name": "Configuratie", "description": "Selecteer de Battery SmartFlow AI-configuratie wanneer meerdere instanties zijn geladen."},
+        "duration_minutes": {"name": "Duur", "description": "Opnameduur in minuten."}
+      }
+    },
+    "stop_debug_recording": {
+      "name": "Debugopname stoppen",
+      "description": "Stop de actieve opname en exporteer het JSON-pakket onmiddellijk.",
+      "fields": {
+        "entry_id": {"name": "Configuratie", "description": "Selecteer de Battery SmartFlow AI-configuratie wanneer meerdere instanties zijn geladen."}
+      }
+    }
+  },
   "entity": {
     "select": {
       "ai_mode": {
@@ -565,6 +582,14 @@
           "lower_limit_active": "Onderste SoC-limiet actief (ontladen geblokkeerd)"
         }
       },
+      "debug_recording_active": {
+        "name": "Debugopname actief",
+        "state": {"no": "Nee", "yes": "Ja"}
+      },
+      "debug_recording_ends_at": {"name": "Debugopname eindigt om"},
+      "debug_sample_count": {"name": "Opgenomen debugvoorbeelden"},
+      "debug_last_package": {"name": "Laatste debugpakket"},
+      "debug_last_error": {"name": "Laatste debugfout"},
       "fault_level_status": {
         "name": "Foutstatus",
         "state": {
