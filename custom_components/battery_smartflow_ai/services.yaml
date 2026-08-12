@@ -1,1 +1,30 @@
-# Platzhalter für spätere API-Services
+start_debug_recording:
+  name: Start debug recording
+  description: Start a bounded technical debug recording for one Battery SmartFlow AI config entry.
+  fields:
+    entry_id:
+      required: false
+      description: Required only when more than one Battery SmartFlow AI config entry is loaded.
+      selector:
+        config_entry:
+          integration: battery_smartflow_ai
+    duration_minutes:
+      required: true
+      selector:
+        select:
+          options:
+            - 10
+            - 30
+            - 60
+            - 120
+
+stop_debug_recording:
+  name: Stop debug recording
+  description: Stop an active debug recording and export its JSON debug package.
+  fields:
+    entry_id:
+      required: false
+      description: Required only when more than one Battery SmartFlow AI config entry is loaded.
+      selector:
+        config_entry:
+          integration: battery_smartflow_ai
