@@ -216,6 +216,23 @@
       }
     }
   },
+  "services": {
+    "start_debug_recording": {
+      "name": "Debug-Aufzeichnung starten",
+      "description": "Technische Diagnosedaten zeitlich begrenzt erfassen und automatisch als JSON-Paket exportieren.",
+      "fields": {
+        "entry_id": {"name": "Konfiguration", "description": "Bei mehreren Instanzen die passende Battery-SmartFlow-AI-Konfiguration auswaehlen."},
+        "duration_minutes": {"name": "Dauer", "description": "Aufzeichnungsdauer in Minuten."}
+      }
+    },
+    "stop_debug_recording": {
+      "name": "Debug-Aufzeichnung stoppen",
+      "description": "Die aktive Aufzeichnung jetzt beenden und ihr JSON-Paket exportieren.",
+      "fields": {
+        "entry_id": {"name": "Konfiguration", "description": "Bei mehreren Instanzen die passende Battery-SmartFlow-AI-Konfiguration auswaehlen."}
+      }
+    }
+  },
   "entity": {
     "select": {
       "ai_mode": {
@@ -565,6 +582,14 @@
           "lower_limit_active": "Unteres SoC-Limit aktiv (Entladen gesperrt)"
         }
       },
+      "debug_recording_active": {
+        "name": "Debug-Aufzeichnung aktiv",
+        "state": {"no": "Nein", "yes": "Ja"}
+      },
+      "debug_recording_ends_at": {"name": "Debug-Aufzeichnung endet um"},
+      "debug_sample_count": {"name": "Erfasste Debug-Samples"},
+      "debug_last_package": {"name": "Letztes Debug-Paket"},
+      "debug_last_error": {"name": "Letzter Debug-Fehler"},
       "fault_level_status": {
         "name": "Fehlerstatus",
         "state": {
