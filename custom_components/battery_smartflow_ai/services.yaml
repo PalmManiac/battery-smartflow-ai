@@ -13,10 +13,10 @@ start_debug_recording:
       selector:
         select:
           options:
-            - 10
-            - 30
-            - 60
-            - 120
+            - "10"
+            - "30"
+            - "60"
+            - "120"
 
 stop_debug_recording:
   name: Stop debug recording
