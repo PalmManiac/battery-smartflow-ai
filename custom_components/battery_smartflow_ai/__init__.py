@@ -52,7 +52,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             schema=vol.Schema(
                 {
                     vol.Optional("entry_id"): str,
-                    vol.Required("duration_minutes"): vol.In({10, 30, 60, 120}),
+                    vol.Required("duration_minutes"): vol.All(
+                        vol.Coerce(int),
+                        vol.In({10, 30, 60, 120}),
+                    ),
                 }
             ),
         )
