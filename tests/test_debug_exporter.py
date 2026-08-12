@@ -58,7 +58,7 @@ class DebugExporterTests(unittest.TestCase):
         self.assertEqual(result.path.parent, self.config_directory / DEBUG_DIRECTORY)
         self.assertRegex(
             result.path.name,
-            r"^bsfai_v4\.4\.0-dev1_debug_2026-08-12_14-05-06_000000\.json$",
+            r"^bsfai_debug_2026-08-12_14-05-06\.json$",
         )
         self.assertGreater(result.size_bytes, 0)
         self.assertEqual(result.size_bytes, result.path.stat().st_size)
@@ -67,15 +67,17 @@ class DebugExporterTests(unittest.TestCase):
         self.assertEqual(data["config"]["token"], "[REDACTED]")
         self.assertFalse(list(result.path.parent.glob("*.tmp")))
 
-    def test_filename_sanitizes_untrusted_version_text(self) -> None:
+    def test_filename_does_not_repeat_untrusted_version_text(self) -> None:
         result = export_debug_package(
             self.package(version="../4.4.0 test"),
             config_directory=self.config_directory,
         )
 
         self.assertEqual(result.path.parent, self.config_directory / DEBUG_DIRECTORY)
-        self.assertNotIn("..", result.path.name)
-        self.assertNotIn(" ", result.path.name)
+        self.assertEqual(
+            result.path.name,
+            "bsfai_debug_2026-08-12_14-05-06.json",
+        )
 
     def test_same_timestamp_never_overwrites_an_existing_package(self) -> None:
         first = export_debug_package(
@@ -122,7 +124,7 @@ class DebugExporterTests(unittest.TestCase):
         directory.mkdir(parents=True)
         old_files: list[Path] = []
         for index in range(3):
-            path = directory / f"bsfai_v4.4.0_debug_old_{index}.json"
+            path = directory / f"bsfai_debug_2026-01-0{index + 1}_00-00-00.json"
             path.write_text("{}", encoding="utf-8")
             timestamp = 100 + index
             os.utime(path, (timestamp, timestamp))
@@ -136,7 +138,7 @@ class DebugExporterTests(unittest.TestCase):
             max_retained_packages=2,
         )
 
-        retained = list(directory.glob("bsfai_*_debug_*.json"))
+        retained = list(directory.glob("bsfai_debug_*.json"))
         self.assertEqual(len(retained), 2)
         self.assertEqual(result.removed_old_packages, 2)
         self.assertTrue(result.path.exists())
