@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
@@ -14,6 +15,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
+    INTEGRATION_VERSION,
     # config keys
     CONF_SOC_ENTITY,
     CONF_PV_ENTITY,
@@ -168,6 +170,9 @@ from .command_effectiveness import (
     evaluate_command_effectiveness,
     record_effectiveness_retry,
 )
+from .debug_recorder import DebugRecorder
+from .debug_exporter import DebugExportError, export_debug_package
+from .debug_sample_builder import build_debug_sample
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -339,6 +344,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         self._engine = DecisionEngine()
+        self._debug_recorder = DebugRecorder(integration_version=INTEGRATION_VERSION)
+        self._debug_last_package: str | None = None
+        self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
         self._charge_source_allocator = ChargeSourceAllocator()
         
@@ -1608,6 +1616,120 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return None
         st = self.hass.states.get(entity_id)
         return st.state if st else None
+
+    def _debug_status_data(self) -> dict[str, Any]:
+        """Return the small V4.4.0 debug status surface for Home Assistant."""
+
+        status = self._debug_recorder.status
+        return {
+            "debug_recording_active": status.active,
+            "debug_recording_ends_at": status.recording_end,
+            "debug_sample_count": status.sample_count,
+            "debug_last_package": self._debug_last_package,
+            "debug_last_error": self._debug_last_error,
+        }
+
+    def _debug_configured_entities(self) -> dict[str, str | None]:
+        """Return entity ids by diagnostic role without reading their contents."""
+
+        return {
+            "soc": self.entities.soc,
+            "pv": self.entities.pv,
+            "pv_forecast_today": self.entities.pv_forecast_today,
+            "pv_forecast_tomorrow": self.entities.pv_forecast_tomorrow,
+            "price_now": self.entities.price_now,
+            "price_export": self.entities.price_export,
+            "ac_mode": self.entities.ac_mode,
+            "input_limit": self.entities.input_limit,
+            "output_limit": self.entities.output_limit,
+            "battery_ac_power": self.entities.battery_ac_power,
+            "additional_battery_charge": self.entities.additional_battery_charge,
+            "additional_battery_discharge": self.entities.additional_battery_discharge,
+            "soc_limit": self.entities.soc_limit,
+            "grid_power": self.entities.grid_power,
+            "grid_import": self.entities.grid_import,
+            "grid_export": self.entities.grid_export,
+            "offgrid_power": self.entities.offgrid_power,
+            "offgrid_mode": self.entities.offgrid_mode,
+        }
+
+    def _debug_entity_availability(self) -> dict[str, bool | None]:
+        """Return availability for configured diagnostic entities."""
+
+        return {
+            role: (
+                self.hass.states.get(entity_id) is not None
+                if entity_id
+                else None
+            )
+            for role, entity_id in self._debug_configured_entities().items()
+        }
+
+    async def _async_export_debug_package(self, package) -> None:
+        """Write a completed package outside the event loop and retain its path."""
+
+        try:
+            result = await self.hass.async_add_executor_job(
+                partial(
+                    export_debug_package,
+                    package,
+                    config_directory=self.hass.config.config_dir,
+                )
+            )
+        except DebugExportError as err:
+            self._debug_last_error = str(err)
+            _LOGGER.warning("Debug package export failed: %s", err)
+            return
+        self._debug_last_package = str(result.path)
+        self._debug_last_error = None
+
+    async def async_start_debug_recording(self, *, duration_minutes: int) -> None:
+        """Start a user-requested bounded debug recording."""
+
+        self._debug_recorder.start(
+            duration_minutes=duration_minutes,
+            now=dt_util.utcnow(),
+            device_profile=self.device_profile_key,
+            ai_mode=str(self.runtime_mode.get("ai_mode") or AI_MODE_AUTOMATIC),
+            season_mode=str(self._persist.get("season_mode", "winter")),
+            config={
+                "configured_entities": self._debug_configured_entities(),
+                "runtime_settings": self.runtime_settings,
+            },
+            profile=self._get_active_profile(),
+        )
+        self._debug_last_error = None
+        await self.async_request_refresh()
+
+    async def async_stop_debug_recording(self) -> None:
+        """Stop the active debug recording and write its JSON package."""
+
+        package = self._debug_recorder.stop(now=dt_util.utcnow())
+        if package is not None:
+            await self._async_export_debug_package(package)
+        await self.async_request_refresh()
+
+    async def _async_capture_debug_sample(
+        self,
+        *,
+        now: datetime,
+        details: dict[str, Any],
+    ) -> None:
+        """Capture one cycle only while a recording is active."""
+
+        if not self._debug_recorder.is_active:
+            return
+        package = self._debug_recorder.record(
+            build_debug_sample(
+                timestamp=now,
+                details=details,
+                configured_entities=self._debug_configured_entities(),
+                entity_availability=self._debug_entity_availability(),
+            ),
+            now=now,
+        )
+        if package is not None:
+            await self._async_export_debug_package(package)
 
     def _attr(self, entity_id: str | None, attr: str) -> Any:
         if not entity_id:
@@ -3513,6 +3635,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> dict[str, Any]:
         """Stop the active command and expose a deterministic safe-idle state."""
 
+        package = self._debug_recorder.tick(now=dt_util.utcnow())
+        if package is not None:
+            await self._async_export_debug_package(package)
+
         current_mode = str(
             self._state(self.entities.ac_mode)
             or self._persist.get("last_set_mode")
@@ -3559,6 +3685,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "ai_status": AI_STATUS_STANDBY,
             "recommendation": RECO_STANDBY,
             "debug": reason.upper(),
+            **self._debug_status_data(),
             "details": details,
             "decision_reason": reason,
             "next_action_time": None,
@@ -6082,9 +6209,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "regulation_command_path": "unified",
                 
                 "ai_mode": ai_mode,
+                "season_mode": (
+                    "manual"
+                    if ai_mode == AI_MODE_MANUAL
+                    else "summer"
+                    if ai_mode == AI_MODE_SUMMER
+                    else self._persist.get("season_mode", "winter")
+                ),
                 "manual_action": manual_action,
+                "decision_action": display_decision.action,
                 "decision_reason": decision.reason,
                 "charge_strategy": charge_strategy,
+                "current_peak_threshold": current_peak_threshold,
+                "current_valley_threshold": current_valley_threshold,
                 
                 # V4.2.0 regulation / strategy intent diagnostics
                 "regulation_strategy_intent": strategy_intent.intent,
@@ -6807,6 +6944,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else "none"
             )
 
+            await self._async_capture_debug_sample(now=now, details=details)
+
             return {
                 "status": (
                     STATUS_SENSOR_INVALID
@@ -6824,6 +6963,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "ai_status": ai_status,
                 "recommendation": recommendation,
                 "debug": "OK",
+                **self._debug_status_data(),
                 "details": details,
                 "decision_reason": decision.reason,
                 "next_action_time": next_action_time_state,
