@@ -50,6 +50,14 @@ def bootstrap() -> None:
     ha_core.HomeAssistant = HomeAssistant
     _install_module("homeassistant.core", ha_core)
 
+    ha_config_entries = ModuleType("homeassistant.config_entries")
+
+    class ConfigEntry:
+        pass
+
+    ha_config_entries.ConfigEntry = ConfigEntry
+    _install_module("homeassistant.config_entries", ha_config_entries)
+
     ha_util = ModuleType("homeassistant.util")
     ha_util.__path__ = []
     _install_module("homeassistant.util", ha_util)
