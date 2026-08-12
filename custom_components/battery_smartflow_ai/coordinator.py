@@ -1635,6 +1635,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return self._debug_last_package
 
+    @property
+    def debug_recording_status(self):
+        """Return the sparse recording status for the options flow."""
+
+        return self._debug_recorder.status
+
     def _debug_configured_entities(self) -> dict[str, str | None]:
         """Return entity ids by diagnostic role without reading their contents."""
 
