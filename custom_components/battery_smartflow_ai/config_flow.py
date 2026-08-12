@@ -686,7 +686,85 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         self._working_options = {}
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general", "expert"],
+            menu_options=["general", "expert", "debug"],
+        )
+
+    def _debug_coordinator(self):
+        """Return the loaded coordinator for this options-flow entry."""
+
+        return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+
+    async def async_step_debug(self, user_input: dict[str, Any] | None = None):
+        """Route to the current recording action without changing options."""
+
+        coordinator = self._debug_coordinator()
+        if coordinator is None:
+            return self.async_abort(reason="debug_integration_not_loaded")
+
+        status = coordinator.debug_recording_status
+        if status.active:
+            return await self.async_step_debug_stop()
+        return await self.async_step_debug_start()
+
+    async def async_step_debug_start(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Start one bounded debug recording."""
+
+        coordinator = self._debug_coordinator()
+        if coordinator is None:
+            return self.async_abort(reason="debug_integration_not_loaded")
+        if coordinator.debug_recording_status.active:
+            return await self.async_step_debug_stop()
+
+        if user_input is not None:
+            await coordinator.async_start_debug_recording(
+                duration_minutes=int(user_input["duration_minutes"])
+            )
+            return self.async_abort(reason="debug_recording_started")
+
+        return self.async_show_form(
+            step_id="debug_start",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("duration_minutes", default="10"):
+                        selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=["10", "30", "60", "120"],
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
+                }
+            ),
+        )
+
+    async def async_step_debug_stop(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Show current progress and optionally stop the recording."""
+
+        coordinator = self._debug_coordinator()
+        if coordinator is None:
+            return self.async_abort(reason="debug_integration_not_loaded")
+        status = coordinator.debug_recording_status
+        if not status.active:
+            return self.async_abort(reason="debug_recording_already_stopped")
+        if user_input is not None:
+            await coordinator.async_stop_debug_recording()
+            return self.async_abort(reason="debug_recording_stopped")
+
+        recording_end = (
+            status.recording_end.isoformat()
+            if status.recording_end is not None
+            else "—"
+        )
+        return self.async_show_form(
+            step_id="debug_stop",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "recording_end": recording_end,
+                "sample_count": str(status.sample_count),
+            },
         )
 
     async def async_step_general(self, user_input: dict[str, Any] | None = None):
