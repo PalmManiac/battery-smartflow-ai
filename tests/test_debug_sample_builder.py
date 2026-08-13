@@ -100,6 +100,7 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(result["regulation"]["grid_now_w"], 10.0)
         self.assertNotIn("profile_target_import_w", result["regulation"])
         self.assertNotIn("soc", result["raw_values"]["entities"])
+        self.assertNotIn("offgrid", result["raw_values"]["entities"])
         self.assertEqual(
             result["raw_values"]["entities"]["pv"]["status"],
             "unavailable",
