@@ -97,6 +97,31 @@ def learned_commit_price_phase(
     return "waiting" if price_too_high else "active"
 
 
+def current_inactive_commit_abort_reason(
+    *, stored_abort_reason: str, learned_charge_plan: Any | None,
+) -> str:
+    """Hide a historical abort once a new actionable plan exists."""
+    if learned_charge_plan is None:
+        return str(stored_abort_reason or "none")
+    status = str(getattr(learned_charge_plan, "status", "") or "")
+    reason = str(getattr(learned_charge_plan, "decision_reason", "") or "")
+    required = float(
+        getattr(learned_charge_plan, "required_charge_energy_kwh", 0.0) or 0.0
+    )
+    if (
+        status in {"ready", "active"}
+        and required > 0.0
+        and reason in {
+            "learned_charge_window_wait",
+            "learned_charge_window_active",
+            "learned_charge_window_latest_start_reached",
+            "learned_charge_window_deadline_too_close_start_now",
+        }
+    ):
+        return "none"
+    return str(stored_abort_reason or "none")
+
+
 def learned_commit_should_yield_to_discharge(
     *,
     commit: ChargeCommitState,
