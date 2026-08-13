@@ -1,5 +1,11 @@
 {
   "config": {
+    "abort": {
+      "debug_recording_started": "Debugopname gestart. De voortgang wordt weergegeven door de debugstatussensoren.",
+      "debug_recording_stopped": "Debugopname gestopt en export aangevraagd.",
+      "debug_recording_already_stopped": "De debugopname is al gestopt.",
+      "debug_integration_not_loaded": "Battery SmartFlow AI is momenteel niet geladen."
+    },
     "error": {
       "grid_split_missing": "Bij gebruik van twee sensoren moeten zowel netafname als netteruglevering zijn geselecteerd."
     },
