@@ -138,6 +138,7 @@ from .learned_planning import (
 from .grid_history import GridHistory, build_grid_history_config
 from .charge_source_allocator import ChargeSourceAllocator
 from .charge_commit_policy import (
+    current_inactive_commit_abort_reason,
     learned_commit_is_forced,
     learned_commit_price_phase,
     learned_commit_should_yield_to_discharge,
@@ -1608,7 +1609,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 max_charge_w=float(max_charge_w),
             )
 
-        # Keep last abort reason visible, but no active commit.
+        self._persist["charge_commit_abort_reason"] = (
+            current_inactive_commit_abort_reason(
+                stored_abort_reason=str(
+                    self._persist.get("charge_commit_abort_reason", "none") or "none"
+                ),
+                learned_charge_plan=learned_charge_plan,
+            )
+        )
         return decision
 
     def _state(self, entity_id: str | None) -> Any:
