@@ -121,7 +121,7 @@ def build_entity_diagnostics(
         # Configured and available is the normal case and already documented
         # once in config.configured_entities. Per-sample data only needs to
         # retain exceptions and transitions away from that state.
-        if not compact or status != "available":
+        if not compact or status in {"unavailable", "unknown"}:
             result[str(role)] = diagnostic
     return redact_secrets(result)
 
