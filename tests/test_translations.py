@@ -130,6 +130,8 @@ class TranslationCoverageTests(unittest.TestCase):
             "general",
             "debug_start",
             "debug_stop",
+            "debug_started",
+            "debug_stopped",
             "expert",
             "expert_cell_voltage",
             "expert_cell_voltage_config",
