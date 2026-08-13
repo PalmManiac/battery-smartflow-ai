@@ -74,9 +74,9 @@ class DebugPipelineTests(unittest.TestCase):
         self.assertEqual(data["samples"][2]["raw_values"]["soc"], 52.0)
         self.assertEqual(data["config"]["access_token"], "[REDACTED]")
         self.assertNotIn("inline-secret", json.dumps(data))
-        self.assertEqual(
-            data["samples"][0]["raw_values"]["entities"]["offgrid"]["status"],
-            "not_configured",
+        self.assertNotIn(
+            "offgrid",
+            data["samples"][0]["raw_values"]["entities"],
         )
 
     def test_elapsed_recording_exports_planned_end_not_late_tick_time(self) -> None:
