@@ -183,6 +183,14 @@
         "title": "Debug-Aufzeichnung aktiv",
         "description": "Die Aufzeichnung endet um {recording_end}. Bisher erfasste Samples: {sample_count}. Den aktuellen Fortschritt zeigen auch die Debug-Statussensoren. Mit Bestätigen wird die Aufzeichnung jetzt beendet und das gesammelte Paket exportiert."
       },
+      "debug_started": {
+        "title": "Debug-Aufzeichnung gestartet",
+        "description": "Die Debug-Aufzeichnung läuft. Den Fortschritt zeigen die Debug-Statussensoren in der Geräteansicht von Battery SmartFlow AI. Mit Bestätigen kehrst du zum Einstellungsmenü zurück."
+      },
+      "debug_stopped": {
+        "title": "Debug-Aufzeichnung beendet",
+        "description": "Die Aufzeichnung wurde beendet und das JSON-Debug-Paket exportiert. Den Speicherort zeigt der Sensor Letztes Debug-Paket. Mit Bestätigen kehrst du zum Einstellungsmenü zurück."
+      },
       "expert": {
         "title": "Battery SmartFlow AI einstellen – Expertenmodus",
         "description": "Erweiterte Schutz-, Diagnose- und Planungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
