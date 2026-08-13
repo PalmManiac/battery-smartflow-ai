@@ -92,6 +92,8 @@ def _prefixed(
 def build_entity_diagnostics(
     configured_entities: Mapping[str, str | None] | None,
     entity_availability: Mapping[str, bool | None] | None,
+    *,
+    compact: bool = False,
 ) -> dict[str, dict[str, Any]]:
     """Describe configured, optional and unavailable entities explicitly."""
 
@@ -109,12 +111,18 @@ def build_entity_diagnostics(
             status = "unavailable"
         else:
             status = "unknown"
-        result[str(role)] = {
-            "entity_id": entity_id,
+        diagnostic = {
             "configured": configured,
             "available": available,
             "status": status,
         }
+        if not compact:
+            diagnostic["entity_id"] = entity_id
+        # Configured and available is the normal case and already documented
+        # once in config.configured_entities. Per-sample data only needs to
+        # retain exceptions and transitions away from that state.
+        if not compact or status != "available":
+            result[str(role)] = diagnostic
     return redact_secrets(result)
 
 
@@ -135,6 +143,7 @@ def build_debug_sample(
     raw_values["entities"] = build_entity_diagnostics(
         configured_entities,
         entity_availability,
+        compact=True,
     )
 
     strategy = _selected(details, _STRATEGY_KEYS)
@@ -159,7 +168,11 @@ def build_debug_sample(
     regulation = _prefixed(
         details,
         "regulation_",
-        exclude_prefixes=("regulation_command_", "regulation_strategy_"),
+        exclude_prefixes=(
+            "regulation_command_",
+            "regulation_strategy_",
+            "regulation_profile_",
+        ),
     )
 
     planning = {
