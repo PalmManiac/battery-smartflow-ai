@@ -108,6 +108,22 @@ def enum_translation_options() -> dict[tuple[str, str], set[str]]:
 
 
 class TranslationCoverageTests(unittest.TestCase):
+    def test_debug_abort_reasons_exist_on_config_flow_surface(self) -> None:
+        expected = {
+            "debug_recording_started",
+            "debug_recording_stopped",
+            "debug_recording_already_stopped",
+            "debug_integration_not_loaded",
+        }
+        files = [
+            COMPONENT / "strings.json",
+            *(TRANSLATIONS / f"{lang}.json" for lang in LANGUAGES),
+        ]
+        for path in files:
+            with self.subTest(file=path.name):
+                data = load_json(path)
+                self.assertTrue(expected <= set(data["config"]["abort"]))
+
     def test_options_ui_only_exposes_user_facing_sections(self) -> None:
         expected_steps = {
             "init",
