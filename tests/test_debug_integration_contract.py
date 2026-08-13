@@ -29,7 +29,7 @@ class DebugIntegrationContractTests(unittest.TestCase):
             and isinstance(node.value, ast.Constant)
         )
 
-        self.assertEqual(manifest_version, "4.4.0-dev1")
+        self.assertEqual(manifest_version, "4.4.0-dev4")
         self.assertEqual(runtime_version, manifest_version)
 
     def test_services_expose_only_supported_durations(self) -> None:
@@ -71,6 +71,23 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn("async_get_config_entry_diagnostics", diagnostics)
         self.assertIn("debug_last_package_path", diagnostics)
         self.assertIn("self.hass.async_create_task(self.async_request_refresh())", coordinator)
+
+    def test_options_menu_exposes_non_persistent_debug_controls(self) -> None:
+        source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        methods = {
+            node.name: ast.unparse(node)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef)
+        }
+
+        self.assertIn('menu_options=["general", "expert", "debug"]', source)
+        self.assertIn("async_step_debug_start", methods)
+        self.assertIn("async_step_debug_stop", methods)
+        self.assertIn("async_start_debug_recording", methods["async_step_debug_start"])
+        self.assertIn("async_stop_debug_recording", methods["async_step_debug_stop"])
+        self.assertNotIn("async_create_entry", methods["async_step_debug_start"])
+        self.assertNotIn("async_create_entry", methods["async_step_debug_stop"])
 
 
 if __name__ == "__main__":
