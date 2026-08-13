@@ -221,6 +221,27 @@ class Dev9FallbackScenarios(unittest.TestCase):
 
 
 class Dev9OptionalDataScenarios(unittest.TestCase):
+    def test_active_learned_window_bypasses_coarse_pv_planning_gate(self) -> None:
+        plan = SimpleNamespace(
+            status="ready",
+            mode="charge",
+            decision_reason="learned_charge_window_active",
+            required_charge_energy_kwh=1.5,
+            requested_charge_power_w=1000.0,
+        )
+
+        result = DecisionEngine().evaluate(
+            context(
+                learned_planning_enabled=True,
+                learned_charge_plan=plan,
+                automatic_planning_allowed=False,
+            )
+        )
+
+        self.assertEqual(result.reason, "learned_charge_window_active")
+        self.assertEqual(result.action, "charge")
+        self.assertEqual(result.charge_w, 1000.0)
+
     def test_missing_price_only_blocks_price_strategies(self) -> None:
         result = DecisionEngine().evaluate(
             context(
