@@ -721,7 +721,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             await coordinator.async_start_debug_recording(
                 duration_minutes=int(user_input["duration_minutes"])
             )
-            return self.async_abort(reason="debug_recording_started")
+            return await self.async_step_debug_started()
 
         return self.async_show_form(
             step_id="debug_start",
@@ -751,7 +751,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="debug_recording_already_stopped")
         if user_input is not None:
             await coordinator.async_stop_debug_recording()
-            return self.async_abort(reason="debug_recording_stopped")
+            return await self.async_step_debug_stopped()
 
         recording_end = (
             status.recording_end.isoformat()
@@ -765,6 +765,30 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "recording_end": recording_end,
                 "sample_count": str(status.sample_count),
             },
+        )
+
+    async def async_step_debug_started(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Show a translated confirmation without writing integration options."""
+
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="debug_started",
+            data_schema=vol.Schema({}),
+        )
+
+    async def async_step_debug_stopped(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Show a translated export confirmation without writing options."""
+
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="debug_stopped",
+            data_schema=vol.Schema({}),
         )
 
     async def async_step_general(self, user_input: dict[str, Any] | None = None):
