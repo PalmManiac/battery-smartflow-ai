@@ -183,6 +183,14 @@
         "title": "Debug recording active",
         "description": "The recording ends at {recording_end}. Samples recorded so far: {sample_count}. Current progress is also shown by the debug status sensors. Submit to stop now and export the collected package."
       },
+      "debug_started": {
+        "title": "Debug recording started",
+        "description": "The debug recording is running. Progress is shown by the debug status sensors in the Battery SmartFlow AI device view. Submit to return to the settings menu."
+      },
+      "debug_stopped": {
+        "title": "Debug recording stopped",
+        "description": "The recording was stopped and the JSON debug package was exported. Its location is shown by the Last debug package sensor. Submit to return to the settings menu."
+      },
       "expert": {
         "title": "Battery SmartFlow AI settings – Expert mode",
         "description": "Advanced protection, diagnostic and planning functions. Learned charge-window planning is used automatically once enough learning data is available. It can be disabled here if needed. Cell-voltage protection requires expert mode to be enabled first.",
