@@ -183,6 +183,14 @@
         "title": "Enregistrement de débogage actif",
         "description": "L’enregistrement se termine à {recording_end}. Échantillons enregistrés : {sample_count}. Les capteurs d’état affichent également la progression. Confirmez pour arrêter maintenant et exporter le paquet collecté."
       },
+      "debug_started": {
+        "title": "Enregistrement de débogage démarré",
+        "description": "L’enregistrement de débogage est en cours. Sa progression est affichée par les capteurs d’état de Battery SmartFlow AI. Validez pour revenir au menu des paramètres."
+      },
+      "debug_stopped": {
+        "title": "Enregistrement de débogage arrêté",
+        "description": "L’enregistrement a été arrêté et le paquet JSON de débogage a été exporté. Son emplacement est affiché par le capteur du dernier paquet. Validez pour revenir au menu des paramètres."
+      },
       "expert": {
         "title": "Paramètres de Battery SmartFlow AI – Mode expert",
         "description": "Fonctions avancées de protection, de diagnostic et de planification. La planification apprise des fenêtres de charge est utilisée automatiquement dès que suffisamment de données sont disponibles. Elle peut être désactivée ici si nécessaire. La protection par tension de cellule nécessite d’abord l’activation du mode expert.",
