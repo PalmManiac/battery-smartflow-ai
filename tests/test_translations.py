@@ -112,6 +112,8 @@ class TranslationCoverageTests(unittest.TestCase):
         expected_steps = {
             "init",
             "general",
+            "debug_start",
+            "debug_stop",
             "expert",
             "expert_cell_voltage",
             "expert_cell_voltage_config",
@@ -127,7 +129,11 @@ class TranslationCoverageTests(unittest.TestCase):
                 self.assertEqual(set(steps), expected_steps)
                 self.assertEqual(
                     set(steps["init"]["menu_options"]),
-                    {"general", "expert"},
+                    {"general", "expert", "debug"},
+                )
+                self.assertEqual(
+                    set(steps["debug_start"]["data"]),
+                    {"duration_minutes"},
                 )
                 self.assertEqual(
                     set(steps["general"]["data"]),
