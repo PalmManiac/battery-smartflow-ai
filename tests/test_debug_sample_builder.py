@@ -51,6 +51,10 @@ class DebugSampleBuilderTests(unittest.TestCase):
             "charge_commit_reason": "learned_window",
             "set_mode": "input",
             "set_input_w": 500,
+            "mode_write_requested": "input",
+            "mode_write_entity_state_before_write": "output",
+            "mode_write_live_entity_state": "input",
+            "mode_write_last_success": "input",
             "input_write_requested_w": 500,
             "input_write_effective_w": 500,
             "input_write_skipped": False,
@@ -79,6 +83,20 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertTrue(result["planning"]["charge_commit"]["active"])
         self.assertEqual(result["command"]["requested"]["set_input_w"], 500)
         self.assertEqual(result["command"]["regulation"]["ac_mode"], "input")
+        self.assertEqual(result["command"]["mode_write"]["requested"], "input")
+        self.assertEqual(
+            result["command"]["mode_write"]["entity_state_before_write"],
+            "output",
+        )
+        self.assertEqual(
+            result["command"]["mode_write"]["live_entity_state"],
+            "input",
+        )
+        self.assertEqual(
+            result["command"]["mode_write"]["last_success"],
+            "input",
+        )
+        self.assertNotIn("entity_state", result["command"]["mode_write"])
         self.assertEqual(result["command"]["input_write"]["effective_w"], 500)
         self.assertEqual(result["command"]["effectiveness"]["status"], "effective")
 
