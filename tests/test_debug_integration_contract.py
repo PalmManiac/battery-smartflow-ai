@@ -29,7 +29,7 @@ class DebugIntegrationContractTests(unittest.TestCase):
             and isinstance(node.value, ast.Constant)
         )
 
-        self.assertEqual(manifest_version, "4.4.0-dev5")
+        self.assertEqual(manifest_version, "4.4.0-dev6")
         self.assertEqual(runtime_version, manifest_version)
 
     def test_services_expose_only_supported_durations(self) -> None:
@@ -84,10 +84,16 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn('menu_options=["general", "expert", "debug"]', source)
         self.assertIn("async_step_debug_start", methods)
         self.assertIn("async_step_debug_stop", methods)
+        self.assertIn("async_step_debug_started", methods)
+        self.assertIn("async_step_debug_stopped", methods)
         self.assertIn("async_start_debug_recording", methods["async_step_debug_start"])
         self.assertIn("async_stop_debug_recording", methods["async_step_debug_stop"])
         self.assertNotIn("async_create_entry", methods["async_step_debug_start"])
         self.assertNotIn("async_create_entry", methods["async_step_debug_stop"])
+        self.assertNotIn("async_create_entry", methods["async_step_debug_started"])
+        self.assertNotIn("async_create_entry", methods["async_step_debug_stopped"])
+        self.assertIn("async_step_debug_started", methods["async_step_debug_start"])
+        self.assertIn("async_step_debug_stopped", methods["async_step_debug_stop"])
 
 
 if __name__ == "__main__":
