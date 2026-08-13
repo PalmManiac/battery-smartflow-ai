@@ -183,6 +183,14 @@
         "title": "Debugopname actief",
         "description": "De opname eindigt om {recording_end}. Tot nu toe opgenomen samples: {sample_count}. De debugstatussensoren tonen ook de voortgang. Bevestig om nu te stoppen en het verzamelde pakket te exporteren."
       },
+      "debug_started": {
+        "title": "Debugopname gestart",
+        "description": "De debugopname loopt. De voortgang wordt weergegeven door de debugstatussensoren van Battery SmartFlow AI. Bevestig om terug te keren naar het instellingenmenu."
+      },
+      "debug_stopped": {
+        "title": "Debugopname gestopt",
+        "description": "De opname is gestopt en het JSON-debugpakket is geëxporteerd. De locatie wordt weergegeven door de sensor voor het laatste debugpakket. Bevestig om terug te keren naar het instellingenmenu."
+      },
       "expert": {
         "title": "Battery SmartFlow AI instellen – Expertmodus",
         "description": "Geavanceerde beschermings-, diagnose- en planningsfuncties. De lerende laadvensterplanning wordt automatisch gebruikt zodra voldoende leerdata beschikbaar is. Indien nodig kan deze hier worden uitgeschakeld. Voor celspanningsbescherming moet eerst de expertmodus worden geactiveerd.",
