@@ -1451,7 +1451,13 @@ class DecisionEngine:
         if plan is None:
             return False
 
-        if not self._automatic_planning_context_allows(ctx):
+        # A ready learned plan has already evaluated the complete price curve,
+        # required energy, PV forecast and deadline. The coarse Automatic gate
+        # must not delay an already active learned window.
+        if not bool(
+            ctx.ai_mode == "automatic"
+            and ctx.automatic_strategy_active
+        ):
             return False
 
         # Dev5.8.2 remains authoritative: do not reserve tiny strategic grid
