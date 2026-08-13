@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import re
 
 from .debug_package import DebugPackage, redact_secrets
 
@@ -16,6 +17,30 @@ DEBUG_DIRECTORY = Path("bsfai") / "debug"
 DEFAULT_MAX_EXPORT_BYTES = 16 * 1024 * 1024
 DEFAULT_MAX_RETAINED_PACKAGES = 10
 _DEBUG_FILE_GLOB = "bsfai_debug_*.json"
+_ENTITY_ID_PATTERN = re.compile(r"^([a-z_][a-z0-9_]*)\.([a-z0-9_]+)$")
+_ENTITY_DOMAINS = {
+    "binary_sensor",
+    "button",
+    "climate",
+    "cover",
+    "device_tracker",
+    "fan",
+    "input_boolean",
+    "input_datetime",
+    "input_number",
+    "input_select",
+    "input_text",
+    "light",
+    "lock",
+    "media_player",
+    "number",
+    "person",
+    "select",
+    "sensor",
+    "switch",
+    "text",
+    "update",
+}
 
 
 class DebugExportError(RuntimeError):
@@ -55,15 +80,48 @@ def _available_destination(directory: Path, filename: str) -> Path:
 def _serialize(package: DebugPackage) -> bytes:
     """Serialize through the package API and redact once more at the I/O edge."""
 
-    safe_package = redact_secrets(package.as_dict())
+    safe_package = _anonymize_entity_ids(redact_secrets(package.as_dict()))
+    safe_package["meta"]["entity_ids_anonymized"] = True
+    safe_package["meta"]["serialization"] = "compact"
     text = json.dumps(
         safe_package,
         ensure_ascii=False,
-        indent=2,
+        separators=(",", ":"),
         sort_keys=False,
         allow_nan=False,
     )
     return (text + "\n").encode("utf-8")
+
+
+def _anonymize_entity_ids(value):
+    """Replace exact HA entity IDs with stable package-local aliases.
+
+    Domains and equality relationships remain visible for support analysis,
+    while object IDs containing names, addresses or device serials do not
+    leave the Home Assistant instance in an exported package.
+    """
+
+    aliases: dict[str, str] = {}
+
+    def anonymize(item):
+        if isinstance(item, dict):
+            return {key: anonymize(child) for key, child in item.items()}
+        if isinstance(item, list):
+            return [anonymize(child) for child in item]
+        if not isinstance(item, str):
+            return item
+
+        match = _ENTITY_ID_PATTERN.fullmatch(item)
+        if match is None or match.group(1) not in _ENTITY_DOMAINS:
+            return item
+
+        if item not in aliases:
+            aliases[item] = (
+                f"{match.group(1)}.debug_entity_{len(aliases) + 1:02d}"
+            )
+        return aliases[item]
+
+    return anonymize(value)
 
 
 def _prune_old_packages(directory: Path, *, retain: int) -> int:
