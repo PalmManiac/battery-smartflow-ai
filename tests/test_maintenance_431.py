@@ -26,6 +26,7 @@ from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E4
 from custom_components.battery_smartflow_ai.charge_commit_policy import (  # noqa: E402
     learned_commit_price_phase,
     learned_commit_should_yield_to_discharge,
+    learned_plan_may_complete_active_commit,
     learned_plan_charge_need_satisfied,
 )
 from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E402
@@ -55,6 +56,46 @@ from custom_components.battery_smartflow_ai.strategy_state import (  # noqa: E40
 
 
 class Maintenance431Tests(unittest.TestCase):
+    def test_live_zero_need_does_not_cancel_targeted_active_binding(self) -> None:
+        plan = SimpleNamespace(
+            status="ready",
+            decision_reason="learned_charge_window_no_charge_needed",
+            required_charge_energy_kwh=0.0,
+        )
+        commit = ChargeCommitState(
+            active=True,
+            phase="active",
+            commit_type="learned",
+            target_soc=100.0,
+            requested_power_w=2400.0,
+        )
+        self.assertFalse(
+            learned_plan_may_complete_active_commit(
+                commit=commit,
+                learned_charge_plan=plan,
+            )
+        )
+
+    def test_targetless_legacy_binding_keeps_zero_need_failsafe(self) -> None:
+        plan = SimpleNamespace(
+            status="ready",
+            decision_reason="learned_charge_window_no_charge_needed",
+            required_charge_energy_kwh=0.0,
+        )
+        commit = ChargeCommitState(
+            active=True,
+            phase="active",
+            commit_type="learned",
+            target_soc=None,
+            requested_power_w=100.0,
+        )
+        self.assertTrue(
+            learned_plan_may_complete_active_commit(
+                commit=commit,
+                learned_charge_plan=plan,
+            )
+        )
+
     def test_active_learned_binding_ignores_later_price_increase(self) -> None:
         self.assertEqual(
             learned_commit_price_phase(
