@@ -6052,10 +6052,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "mode_write_requested": self._persist.get(
                     "mode_write_requested"
                 ),
-                "mode_write_entity_state": self._persist.get(
+                "mode_write_entity_state_before_write": self._persist.get(
                     "mode_write_entity_state"
                 ),
-                "mode_live_entity_state": str(
+                "mode_write_live_entity_state": str(
                     self._state(self.entities.ac_mode) or ""
                 ),
                 "mode_write_skipped": bool(
