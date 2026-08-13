@@ -142,7 +142,7 @@ from .charge_commit_policy import (
     learned_commit_is_forced,
     learned_commit_price_phase,
     learned_commit_should_yield_to_discharge,
-    learned_plan_charge_need_satisfied,
+    learned_plan_may_complete_active_commit,
 )
 from .battery_protection import (
     cell_voltage_emergency_minimum_elapsed,
@@ -938,13 +938,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if float(additional_battery_discharge_w or 0.0) > 50.0:
             return "additional_battery_discharging_blocks_charge"
 
-        # V4.3.1-dev3:
-        # A learned binding is no longer valid once the current usable plan
-        # reports that no grid energy is needed. Keeping the old snapshot would
-        # otherwise preserve its former minimum request (typically 100 W), even
-        # with 0.0 kWh, zero slots and no planned start in the live plan.
-        if learned_plan_charge_need_satisfied(
-            commit_type=str(commit.commit_type or ""),
+        # A falling live need must not replace an active binding's target SoC.
+        # Only legacy targetless bindings retain the zero-need fail-safe.
+        if learned_plan_may_complete_active_commit(
+            commit=commit,
             learned_charge_plan=learned_charge_plan,
         ):
             return "learned_charge_no_longer_needed"
