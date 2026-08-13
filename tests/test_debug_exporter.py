@@ -67,6 +67,34 @@ class DebugExporterTests(unittest.TestCase):
         self.assertEqual(data["config"]["token"], "[REDACTED]")
         self.assertFalse(list(result.path.parent.glob("*.tmp")))
 
+    def test_export_is_compact_and_anonymizes_entity_ids_stably(self) -> None:
+        package = self.package()
+        package.config = {
+            "configured_entities": {
+                "price": "sensor.paul_schneider_strasse_39_preis",
+                "price_copy": "sensor.paul_schneider_strasse_39_preis",
+                "mode": "select.solarflow_2400_ac_ac_mode",
+            }
+        }
+
+        result = export_debug_package(
+            package,
+            config_directory=self.config_directory,
+        )
+        text = result.path.read_text(encoding="utf-8")
+        data = json.loads(text)
+
+        self.assertNotIn("paul_schneider", text)
+        self.assertNotIn("solarflow_2400", text)
+        self.assertNotIn("\n  ", text)
+        self.assertEqual(data["meta"]["schema"], "battery_smartflow_ai.debug")
+        self.assertTrue(data["meta"]["entity_ids_anonymized"])
+        self.assertEqual(data["meta"]["serialization"], "compact")
+        entities = data["config"]["configured_entities"]
+        self.assertEqual(entities["price"], "sensor.debug_entity_01")
+        self.assertEqual(entities["price_copy"], entities["price"])
+        self.assertEqual(entities["mode"], "select.debug_entity_02")
+
     def test_filename_does_not_repeat_untrusted_version_text(self) -> None:
         result = export_debug_package(
             self.package(version="../4.4.0 test"),
