@@ -56,6 +56,22 @@ def learned_plan_charge_need_satisfied(
         return False
 
 
+def learned_plan_may_complete_active_commit(
+    *, commit: ChargeCommitState, learned_charge_plan: Any | None,
+) -> bool:
+    """Keep a targeted active binding independent of falling live demand."""
+    if (
+        bool(commit.active)
+        and str(commit.commit_type or "") == "learned"
+        and commit.target_soc is not None
+    ):
+        return False
+    return learned_plan_charge_need_satisfied(
+        commit_type=str(commit.commit_type or ""),
+        learned_charge_plan=learned_charge_plan,
+    )
+
+
 def learned_commit_is_forced(
     *,
     commit: ChargeCommitState,
