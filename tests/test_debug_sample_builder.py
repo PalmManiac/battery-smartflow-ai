@@ -82,6 +82,33 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(result["command"]["input_write"]["effective_w"], 500)
         self.assertEqual(result["command"]["effectiveness"]["status"], "effective")
 
+    def test_sample_omits_repeated_profile_and_healthy_entity_details(self) -> None:
+        result = build_debug_sample(
+            timestamp=self.now,
+            details={
+                "soc": 50.0,
+                "regulation_grid_now_w": 10.0,
+                "regulation_profile_target_import_w": 10.0,
+            },
+            configured_entities={
+                "soc": "sensor.private_battery_name",
+                "pv": "sensor.private_pv_name",
+            },
+            entity_availability={"soc": True, "pv": False},
+        ).as_dict()
+
+        self.assertEqual(result["regulation"]["grid_now_w"], 10.0)
+        self.assertNotIn("profile_target_import_w", result["regulation"])
+        self.assertNotIn("soc", result["raw_values"]["entities"])
+        self.assertEqual(
+            result["raw_values"]["entities"]["pv"]["status"],
+            "unavailable",
+        )
+        self.assertNotIn(
+            "entity_id",
+            result["raw_values"]["entities"]["pv"],
+        )
+
     def test_entity_diagnostics_distinguish_all_availability_states(self) -> None:
         result = build_entity_diagnostics(
             {
@@ -110,7 +137,7 @@ class DebugSampleBuilderTests(unittest.TestCase):
                 "regulation_command_reason": {"api_key": "must-not-leak"},
             },
             configured_entities={"token_sensor": "sensor.harmless"},
-            entity_availability={"token_sensor": True},
+            entity_availability={"token_sensor": False},
         )
 
         result = sample.as_dict()
