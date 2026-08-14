@@ -14,6 +14,7 @@ from custom_components.battery_smartflow_ai.charge_economics import (  # noqa: E
     add_charge_evidence,
     classify_charge_pricing,
     pricing_from_charge_evidence,
+    resolve_feed_in_tariff,
 )
 
 
@@ -21,6 +22,24 @@ NOW = datetime(2026, 8, 2, 12, 0, tzinfo=timezone.utc)
 
 
 class ChargeEconomicsTests(unittest.TestCase):
+    def test_config_data_tariff_overrides_stale_zero_option(self) -> None:
+        self.assertEqual(
+            resolve_feed_in_tariff(
+                data={"feed_in_tariff": 0.1221},
+                options={"feed_in_tariff": 0.0},
+            ),
+            0.1221,
+        )
+
+    def test_legacy_options_tariff_remains_supported_without_data_key(self) -> None:
+        self.assertEqual(
+            resolve_feed_in_tariff(
+                data={},
+                options={"feed_in_tariff": 0.1221},
+            ),
+            0.1221,
+        )
+
     def test_pv_surplus_uses_feed_in_tariff_as_opportunity_cost(self) -> None:
         pricing = classify_charge_pricing(
             grid_import_w=0.0,
