@@ -154,6 +154,7 @@ from .charge_economics import (
     classify_charge_pricing,
     pricing_from_charge_evidence,
     recent_charge_evidence,
+    resolve_feed_in_tariff,
 )
 from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
@@ -1776,14 +1777,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return float(DEFAULT_INSTALLED_PV_WP)
             
     def _get_feed_in_tariff(self) -> float:
-        try:
-            value = self.entry.options.get(
-                CONF_FEED_IN_TARIFF,
-                self.entry.data.get(CONF_FEED_IN_TARIFF, DEFAULT_FEED_IN_TARIFF),
-            )
-            return max(0.0, float(value or DEFAULT_FEED_IN_TARIFF))
-        except Exception:
-            return float(DEFAULT_FEED_IN_TARIFF)
+        return resolve_feed_in_tariff(
+            data=self.entry.data,
+            options=self.entry.options,
+            default=DEFAULT_FEED_IN_TARIFF,
+        )
 
     def _expert_mode_enabled(self) -> bool:
         return bool(
