@@ -7,6 +7,27 @@ from datetime import datetime
 from typing import Any, Mapping
 
 
+def resolve_feed_in_tariff(
+    *,
+    data: Mapping[str, Any],
+    options: Mapping[str, Any],
+    default: float = 0.0,
+) -> float:
+    """Resolve the tariff without allowing stale options to shadow config data."""
+
+    if "feed_in_tariff" in data:
+        value = data.get("feed_in_tariff")
+    elif "feed_in_tariff" in options:
+        value = options.get("feed_in_tariff")
+    else:
+        value = default
+
+    try:
+        return max(0.0, float(value if value is not None else default))
+    except (TypeError, ValueError):
+        return max(0.0, float(default))
+
+
 @dataclass(frozen=True)
 class ChargePricing:
     """Economic source and price of an active battery charge sample."""
