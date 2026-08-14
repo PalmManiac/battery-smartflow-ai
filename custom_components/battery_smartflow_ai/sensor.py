@@ -13,6 +13,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.const import UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -129,7 +130,7 @@ class ZendureSensorEntityDescription(SensorEntityDescription):
     runtime_key: str
 
 
-SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
+_SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
     # --------------------------------------------------
     # SYSTEM STATUS
     # --------------------------------------------------
@@ -913,11 +914,45 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = (
 )
 
 
+# V4.4.0: Deep technical diagnostics now live in bounded JSON packages instead
+# of permanent Recorder-facing entities. Keep only the five sparse recording
+# status sensors from the diagnostic category.
+DEBUG_STATUS_SENSOR_KEYS = frozenset(
+    {
+        "debug_recording_active",
+        "debug_recording_ends_at",
+        "debug_sample_count",
+        "debug_last_package",
+        "debug_last_error",
+    }
+)
+
+RETIRED_DIAGNOSTIC_SENSOR_KEYS = frozenset(
+    description.key
+    for description in _SENSOR_DESCRIPTIONS
+    if description.entity_category == EntityCategory.DIAGNOSTIC
+    and description.key not in DEBUG_STATUS_SENSOR_KEYS
+)
+
+SENSORS: tuple[ZendureSensorEntityDescription, ...] = tuple(
+    description
+    for description in _SENSOR_DESCRIPTIONS
+    if description.key not in RETIRED_DIAGNOSTIC_SENSOR_KEYS
+)
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
     add_entities: AddEntitiesCallback,
 ) -> None:
+    registry = er.async_get(hass)
+    for key in RETIRED_DIAGNOSTIC_SENSOR_KEYS:
+        unique_id = f"{DOMAIN}_{entry.entry_id}_{key}"
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+
     coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = [ZendureSmartFlowSensor(entry, coordinator, d) for d in SENSORS]
     add_entities(entities)
