@@ -6,10 +6,10 @@ from .regulation_models import ChargeSourceAllocation
 class ChargeSourceAllocator:
     """Allocate a strategic battery charge target between PV and grid.
 
-    V4.3.0-dev4.0:
-    The allocator is diagnostic-only. It calculates a provisional source split
-    but does not yet modify the StrategyIntent, PowerController result or final
-    device command.
+    V4.4.0-dev8:
+    Besides the diagnostic source split, the allocator calculates the total AC
+    input command. An AC-coupled battery cannot distinguish PV from grid power,
+    so the grid contribution must never be used as the device command itself.
     """
 
     def allocate(
@@ -59,6 +59,7 @@ class ChargeSourceAllocator:
                 pv_available_w=0.0,
                 pv_allocated_w=0.0,
                 grid_requested_w=round(grid_requested, 2),
+                device_input_w=round(grid_requested, 2),
                 unfilled_w=round(unfilled, 2),
                 pv_share_pct=0.0,
                 grid_share_pct=round(
@@ -93,6 +94,18 @@ class ChargeSourceAllocator:
             remaining_target - grid_requested,
         )
 
+        # The device input is the total battery charging power, not merely the
+        # additional grid contribution. Also absorb PV surplus above a small or
+        # stale strategic binding target instead of exporting it while the
+        # binding owns INPUT mode. Clamp the combined request to the physical
+        # device limit.
+        planned_input = pv_allocated + grid_requested
+        pv_surplus_input = min(pv_available, max_grid_input)
+        device_input = min(
+            max_grid_input,
+            max(planned_input, pv_surplus_input),
+        )
+
         pv_share_pct = (
             (pv_allocated / total_target) * 100.0
             if total_target > 0.0
@@ -120,6 +133,7 @@ class ChargeSourceAllocator:
             pv_available_w=round(pv_available, 2),
             pv_allocated_w=round(pv_allocated, 2),
             grid_requested_w=round(grid_requested, 2),
+            device_input_w=round(device_input, 2),
             unfilled_w=round(unfilled, 2),
             pv_share_pct=round(pv_share_pct, 1),
             grid_share_pct=round(grid_share_pct, 1),
