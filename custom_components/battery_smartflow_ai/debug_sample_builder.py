@@ -158,6 +158,7 @@ def build_debug_sample(
                 "charge_pv_available_w",
                 "charge_pv_allocated_w",
                 "charge_grid_requested_w",
+                "charge_device_input_w",
                 "charge_unfilled_w",
                 "charge_pv_share_pct",
                 "charge_grid_share_pct",
