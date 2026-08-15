@@ -36,6 +36,7 @@ class DebugSampleBuilderTests(unittest.TestCase):
             "charge_total_target_w": 900.0,
             "charge_pv_allocated_w": 400.0,
             "charge_grid_requested_w": 500.0,
+            "charge_device_input_w": 900.0,
             "regulation_strategy_intent": "charge",
             "regulation_strategy_priority": 40,
             "regulation_grid_avg_short_w": 110.0,
@@ -76,6 +77,7 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(allocation["charge_total_target_w"], 900.0)
         self.assertEqual(allocation["charge_pv_allocated_w"], 400.0)
         self.assertEqual(allocation["charge_grid_requested_w"], 500.0)
+        self.assertEqual(allocation["charge_device_input_w"], 900.0)
         self.assertEqual(result["regulation"]["grid_avg_short_w"], 110.0)
         self.assertNotIn("command_ac_mode", result["regulation"])
         self.assertEqual(result["planning"]["learned"]["status"], "ready")
