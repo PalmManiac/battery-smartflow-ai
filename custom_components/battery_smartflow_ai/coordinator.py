@@ -5033,12 +5033,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     in CHARGE_COMMIT_SOURCE_REASONS
                 )
             ):
-                # Keep the binding active even when PV temporarily covers the
-                # complete target and the required AC share becomes 0 W.
+                # Keep the binding active even when PV covers the complete
+                # target. The SF AC input expects TOTAL charging power; using
+                # only grid_requested_w here would turn a PV-covered target
+                # into INPUT 0 W and export the available surplus.
                 decision.charge_w = max(
                     0.0,
                     float(
-                        charge_source_allocation.grid_requested_w
+                        charge_source_allocation.device_input_w
                         or 0.0
                     ),
                 )
@@ -5152,6 +5154,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ),
                     "charge_grid_requested_w": float(
                         charge_source_allocation.grid_requested_w
+                    ),
+                    "charge_device_input_w": float(
+                        charge_source_allocation.device_input_w
                     ),
                     "charge_unfilled_w": float(
                         charge_source_allocation.unfilled_w
@@ -6925,6 +6930,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "charge_grid_requested_w": float(
                     charge_source_allocation.grid_requested_w
                 ),
+                "charge_device_input_w": float(
+                    charge_source_allocation.device_input_w
+                ),
                 "charge_unfilled_w": float(
                     charge_source_allocation.unfilled_w
                 ),
@@ -7106,6 +7114,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "charge_grid_requested_w": float(
                     charge_source_allocation.grid_requested_w
+                ),
+                "charge_device_input_w": float(
+                    charge_source_allocation.device_input_w
                 ),
                 "charge_unfilled_w": float(
                     charge_source_allocation.unfilled_w
