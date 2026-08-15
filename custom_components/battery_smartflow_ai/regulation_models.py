@@ -193,8 +193,9 @@ class PowerControllerResult:
 class ChargeSourceAllocation:
     """Calculated source split for an active strategic AC charge binding.
 
-    V4.3.0-dev4.0:
-    Diagnostic-only source allocation.
+    V4.4.0-dev8:
+    Source allocation plus the effective total AC input command. The device
+    cannot distinguish PV power from grid power at its AC input.
 
     total_target_w:
         Strategic total battery charge target.
@@ -208,6 +209,10 @@ class ChargeSourceAllocation:
     grid_requested_w:
         Remaining AC/grid contribution required to reach the total target.
 
+    device_input_w:
+        Total AC input power to request from the battery. This includes the PV
+        contribution and must never be replaced by the grid contribution alone.
+
     unfilled_w:
         Part of the total target that cannot be covered because the grid input
         limit is lower than the required remaining power.
@@ -219,6 +224,7 @@ class ChargeSourceAllocation:
     pv_available_w: float = 0.0
     pv_allocated_w: float = 0.0
     grid_requested_w: float = 0.0
+    device_input_w: float = 0.0
     unfilled_w: float = 0.0
 
     pv_share_pct: float = 0.0
