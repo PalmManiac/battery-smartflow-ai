@@ -532,13 +532,11 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ] = selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=[
-                    {"value": GRID_MODE_NONE, "label": "Kein Netzsensor"},
-                    {"value": GRID_MODE_SINGLE, "label": "Ein Sensor (+ / −)"},
-                    {
-                        "value": GRID_MODE_SPLIT,
-                        "label": "Zwei Sensoren (Bezug & Einspeisung)",
-                    },
-                ]
+                    GRID_MODE_NONE,
+                    GRID_MODE_SINGLE,
+                    GRID_MODE_SPLIT,
+                ],
+                translation_key="grid_mode",
             )
         )
 
