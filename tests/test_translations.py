@@ -123,6 +123,10 @@ class TranslationCoverageTests(unittest.TestCase):
             with self.subTest(file=path.name):
                 data = load_json(path)
                 self.assertTrue(expected <= set(data["config"]["abort"]))
+                self.assertNotIn(
+                    "debug_integration_not_loaded",
+                    data["services"]["abort"],
+                )
 
     def test_options_ui_only_exposes_user_facing_sections(self) -> None:
         expected_steps = {
