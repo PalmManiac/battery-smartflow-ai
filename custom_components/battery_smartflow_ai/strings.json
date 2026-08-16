@@ -261,11 +261,15 @@
       "fields": {
         "entry_id": {"name": "Configuration", "description": "Select the Battery SmartFlow AI configuration when multiple instances are loaded."}
       }
-    },
-    "abort": {
-      "debug_recording_started": "Debug recording started. Progress is shown by the debug status sensors.",
-      "debug_recording_stopped": "Debug recording stopped and export requested.",
-      "debug_recording_already_stopped": "The debug recording has already stopped."
+    }
+  },
+  "selector": {
+    "grid_mode": {
+      "options": {
+        "none": "No grid sensor",
+        "single": "One sensor (+ / −)",
+        "split": "Two sensors (import and export)"
+      }
     }
   },
   "entity": {
