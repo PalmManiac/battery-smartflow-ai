@@ -123,10 +123,25 @@ class TranslationCoverageTests(unittest.TestCase):
             with self.subTest(file=path.name):
                 data = load_json(path)
                 self.assertTrue(expected <= set(data["config"]["abort"]))
-                self.assertNotIn(
-                    "debug_integration_not_loaded",
-                    data["services"]["abort"],
+                self.assertNotIn("abort", data["services"])
+
+    def test_grid_mode_selector_options_are_translated(self) -> None:
+        expected = {"none", "single", "split"}
+        files = [
+            COMPONENT / "strings.json",
+            *(TRANSLATIONS / f"{lang}.json" for lang in LANGUAGES),
+        ]
+        for path in files:
+            with self.subTest(file=path.name):
+                data = load_json(path)
+                self.assertEqual(
+                    set(data["selector"]["grid_mode"]["options"]),
+                    expected,
                 )
+
+        config_flow = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+        self.assertIn('translation_key="grid_mode"', config_flow)
+        self.assertNotIn('"label": "Kein Netzsensor"', config_flow)
 
     def test_options_ui_only_exposes_user_facing_sections(self) -> None:
         expected_steps = {
