@@ -1942,6 +1942,29 @@ Im manuellen Modus kann gewählt werden:
 
 ---
 
+# 6.7 Debug-Status
+
+V4.4 führt eine zeitlich begrenzte interne Debug-Aufzeichnung ein. Damit der
+Home-Assistant-Recorder im Normalbetrieb nicht mit umfangreichen
+Diagnoseattributen belastet wird, erscheinen in der Geräteansicht nur wenige
+sparsame Statusentitäten:
+
+* **Debug-Aufzeichnung aktiv** – zeigt `Ja` oder `Nein`
+* **Debug-Aufzeichnung endet um** – geplantes automatisches Ende
+* **Erfasste Debug-Samples** – Anzahl der bisher gespeicherten Messpunkte
+* **Letztes Debug-Paket** – Pfad des zuletzt exportierten JSON-Pakets
+* **Letzter Debug-Fehler** – letzter Fehler beim Aufzeichnen oder Exportieren
+
+Die technischen Einzelheiten befinden sich nicht als große Attributblöcke an
+diesen Entitäten, sondern ausschließlich im zeitlich begrenzten JSON-Paket.
+Ist keine Aufzeichnung aktiv, entsteht dadurch praktisch keine zusätzliche
+Recorder-Last.
+
+Die Bedienung des Debug-Modus wird in [Kapitel 7.3](#73-debug-modus)
+beschrieben.
+
+---
+
 # Kapitel 7 – Einstellungen bearbeiten
 
 Der Einstellungsbereich enthält nur Optionen, die im normalen Betrieb bewusst
@@ -1951,6 +1974,14 @@ Gerätespezifische Werte für Lade- und Entladeregelung werden automatisch durch
 das ausgewählte Geräteprofil verwaltet. Bereits gespeicherte Profilanpassungen
 älterer Versionen bleiben aus Kompatibilitätsgründen erhalten, werden aber nicht
 mehr im Einstellungsdialog angeboten.
+
+Der Einstellungsdialog ist seit V4.4 in drei Bereiche gegliedert:
+
+![Einstellungsbereiche mit Debug-Modus](images/config_07_settings_menu.png)
+
+* **Allgemein** – grundlegende, regelmäßig benötigte Einstellungen
+* **Expertenmodus** – erweiterte Planungs- und Schutzfunktionen
+* **Debug-Modus** – zeitlich begrenzte Aufzeichnung nur für Fehlersuche und Support
 
 ---
 
@@ -1994,6 +2025,118 @@ Bis dahin bleibt klassische Planung aktiv.
 Aktiviert die Möglichkeit, Zellspannungssensoren zu konfigurieren.
 
 Der Schutz kann Entladung sperren oder Notladung auslösen.
+
+---
+
+## 7.3 Debug-Modus
+
+Der Debug-Modus ist eine Supportfunktion für Situationen, in denen sich eine
+Lade-, Entlade- oder Planungsentscheidung nicht allein anhand der sichtbaren
+Sensorwerte erklären lässt. Er ist bewusst nicht als dauerhaft präsentes
+Bedienelement in der normalen Geräteansicht ausgeführt.
+
+### Debug-Aufzeichnung starten
+
+Öffne in Home Assistant:
+
+```text
+Einstellungen
+→ Geräte & Dienste
+→ Battery SmartFlow AI
+→ Konfigurieren
+→ Debug-Modus
+```
+
+Anschließend erscheint der Startdialog:
+
+![Debug-Aufzeichnung starten](images/config_08_debug_start.png)
+
+Wähle eine Aufzeichnungsdauer:
+
+* 10 Minuten
+* 30 Minuten
+* 60 Minuten
+* 120 Minuten
+
+Mit **OK** wird die Aufzeichnung unmittelbar gestartet. Ein zusätzlicher
+Startschalter ist nicht erforderlich. Der Start wird durch eine übersetzte
+Bestätigung quittiert.
+
+> [!TIP]
+> Starte die Aufzeichnung möglichst kurz bevor das auffällige Verhalten
+> erwartet wird. Für kurze Regelungsprobleme reichen meist 10 Minuten. Für
+> Ladeplanung, Ladefenster oder wechselnde Preise sind 30 bis 120 Minuten oft
+> aussagekräftiger.
+
+### Fortschritt beobachten
+
+Während der Aufnahme zeigen die Debug-Statusentitäten in der Geräteansicht:
+
+* ob die Aufzeichnung aktiv ist,
+* wann sie automatisch endet,
+* und wie viele Samples bereits erfasst wurden.
+
+Die Detaildaten werden intern gesammelt und nicht fortlaufend als große
+Sensorattribute in die Home-Assistant-Datenbank geschrieben.
+
+### Automatisches Ende
+
+Nach der gewählten Laufzeit stoppt die Aufzeichnung automatisch. Anschließend
+wird ein JSON-Debug-Paket exportiert und der Pfad über **Letztes Debug-Paket**
+angezeigt.
+
+Die Dateien liegen unter:
+
+```text
+/config/bsfai/debug/
+```
+
+Es werden höchstens zehn BSFAI-Debug-Pakete aufbewahrt. Beim Erreichen dieser
+Grenze werden die ältesten eigenen Pakete automatisch entfernt.
+
+### Aufzeichnung vorzeitig beenden
+
+Rufe während einer aktiven Aufzeichnung erneut **Konfigurieren → Debug-Modus**
+auf. Der Dialog zeigt den aktuellen Fortschritt und das geplante Ende. Mit
+**OK** wird die laufende Aufzeichnung vorzeitig beendet und das bis dahin
+gesammelte Paket exportiert.
+
+### Debug-Paket herunterladen
+
+Das letzte Paket kann über **Diagnosedaten herunterladen** am
+Battery-SmartFlow-AI-Integrations- beziehungsweise Geräteeintrag abgerufen
+werden. Alternativ kann die unter **Letztes Debug-Paket** angezeigte Datei im
+Verzeichnis `/config/bsfai/debug/` geöffnet werden.
+
+Das JSON-Paket enthält unter anderem:
+
+* Integrationsversion, Geräteprofil und Aufnahmezeitraum
+* konfigurierte und verfügbare Datenquellen
+* SoC, PV-Leistung, Hauslast, Netzbezug und Einspeisung
+* Preise, Einspeisevergütung und wirtschaftliche Bewertung
+* Strategie-, Planungs- und Ladebindungszustände
+* PV-/Netz-Aufteilung einer Ladung
+* Regelungswerte und endgültige Gerätebefehle
+* Zusammenfassung und Warnungen
+
+### Datenschutz und Weitergabe
+
+Passwörter, Tokens, API-Schlüssel, Authorization-Header und andere bekannte
+Geheimnisse werden vor dem Export rekursiv gefiltert. Für die technische
+Zuordnung können jedoch konfigurierte Entity-IDs und detaillierte Zustände im
+Paket enthalten sein.
+
+> [!IMPORTANT]
+> Prüfe ein Debug-Paket vor einer öffentlichen Veröffentlichung trotzdem kurz.
+> Teile es bevorzugt gezielt mit dem Support oder hänge es nur dann an ein
+> öffentliches Issue beziehungsweise eine Diskussion an, wenn die enthaltenen
+> Entity-IDs für dich unproblematisch sind.
+
+### Debug-Modus im Normalbetrieb
+
+Der Debug-Modus muss nicht vorsorglich laufen. Verwende ihn nur für konkrete
+Fehlersuche. Ohne aktive Aufnahme werden keine Samples gesammelt und keine
+laufenden Debug-Dateien erzeugt.
 
 ---
 
@@ -2641,6 +2784,33 @@ Wenn du von einer alten Version mit altem Namen kommst:
 
 ---
 
+## 9.13 Debug-Aufzeichnung startet oder exportiert nicht
+
+Prüfe zuerst die fünf Debug-Statusentitäten in der Geräteansicht:
+
+* Ist **Debug-Aufzeichnung aktiv** auf `Ja` gewechselt?
+* Wird unter **Debug-Aufzeichnung endet um** ein Zeitpunkt angezeigt?
+* Steigt **Erfasste Debug-Samples** während der Aufnahme an?
+* Zeigt **Letzter Debug-Fehler** eine Meldung?
+* Wird nach dem Ende unter **Letztes Debug-Paket** ein Pfad angezeigt?
+
+Wenn eine abgelaufene Aufnahme noch als aktiv erscheint, lade die Integration
+neu oder starte Home Assistant neu und wiederhole eine kurze 10-Minuten-Aufnahme.
+Prüfe außerdem, ob Home Assistant in `/config/bsfai/debug/` schreiben kann.
+
+Wurde ein Paket erzeugt, aber nicht gefunden, suche nicht im Verzeichnis
+`/config/custom_components/`. Die Debug-Dateien liegen bewusst außerhalb des
+Integrationscodes unter:
+
+```text
+/config/bsfai/debug/
+```
+
+Über **Diagnosedaten herunterladen** kann das letzte Paket ohne direkten
+Dateizugriff abgerufen werden.
+
+---
+
 # Kapitel 10 – Best Practices & empfohlene Einstellungen
 
 ---
@@ -2854,7 +3024,21 @@ normalen Felder des Profil-Editors. Ein Geräteprofil kann sie technisch
 
 # Anhang 2 – Wichtige Diagnosewerte für Support
 
-Bei Support-Anfragen sind folgende Werte besonders hilfreich:
+Seit V4.4 sollte bei einem reproduzierbaren Problem bevorzugt eine zeitlich
+begrenzte Debug-Aufzeichnung erstellt und das daraus erzeugte JSON-Paket
+bereitgestellt werden. Dadurch müssen die folgenden Werte nicht mehr einzeln
+als Screenshots oder Sensorattribute zusammengesucht werden.
+
+Empfohlenes Vorgehen:
+
+1. Debug-Modus kurz vor dem erwarteten Problem starten.
+2. Eine zum Vorgang passende Laufzeit wählen.
+3. Problem auftreten lassen oder gezielt reproduzieren.
+4. Automatisches Ende abwarten oder die Aufzeichnung vorzeitig stoppen.
+5. Paket über **Diagnosedaten herunterladen** beziehen.
+6. Paket vor öffentlicher Weitergabe kurz auf persönliche Entity-IDs prüfen.
+
+Das Debug-Paket erfasst insbesondere folgende Werte und Zusammenhänge:
 
 ```text
 device_profile
@@ -2929,15 +3113,20 @@ regulation_economic_effective_target_import_w
 
 Zusätzlich hilfreich:
 
-* Screenshot des Verlaufs
+* kurze Beschreibung des erwarteten und tatsächlichen Verhaltens
+* genauer Zeitpunkt des Problems
+* Screenshot des Energie- oder Geräteverlaufs
 * verwendetes Geräteprofil
 * Betriebsmodus
 * Version von Battery SmartFlow AI
-* Diagnosewert `regulation_command_path`
-* Attribute des Sensors **Automatik-Gewichtung**
 * Status und Auslöser einer eventuell aktiven AC-Ladebindung
 * ob Off-Grid konfiguriert ist
 * ob Zusatzakku-Sensoren konfiguriert sind
+
+> [!NOTE]
+> Die technische Detailtiefe liegt seit V4.4 bewusst im JSON-Paket. Zusätzliche
+> dauerhaft aktive Diagnoseentitäten oder große Recorder-Attribute sollen nicht
+> allein für eine mögliche spätere Supportanfrage aktiviert werden.
 
 ---
 
