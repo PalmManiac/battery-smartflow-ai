@@ -256,11 +256,15 @@
       "fields": {
         "entry_id": {"name": "Configuration", "description": "Selectionnez la configuration Battery SmartFlow AI lorsque plusieurs instances sont chargees."}
       }
-    },
-    "abort": {
-      "debug_recording_started": "Enregistrement de débogage démarré. La progression est affichée par les capteurs d’état.",
-      "debug_recording_stopped": "Enregistrement de débogage arrêté et export demandé.",
-      "debug_recording_already_stopped": "L’enregistrement de débogage est déjà arrêté."
+    }
+  },
+  "selector": {
+    "grid_mode": {
+      "options": {
+        "none": "Aucun capteur réseau",
+        "single": "Un capteur (+ / −)",
+        "split": "Deux capteurs (soutirage et injection)"
+      }
     }
   },
   "entity": {
