@@ -256,11 +256,15 @@
       "fields": {
         "entry_id": {"name": "Configuratie", "description": "Selecteer de Battery SmartFlow AI-configuratie wanneer meerdere instanties zijn geladen."}
       }
-    },
-    "abort": {
-      "debug_recording_started": "Debugopname gestart. De voortgang wordt weergegeven door de debugstatussensoren.",
-      "debug_recording_stopped": "Debugopname gestopt en export aangevraagd.",
-      "debug_recording_already_stopped": "De debugopname is al gestopt."
+    }
+  },
+  "selector": {
+    "grid_mode": {
+      "options": {
+        "none": "Geen netsensor",
+        "single": "Eén sensor (+ / −)",
+        "split": "Twee sensoren (afname en teruglevering)"
+      }
     }
   },
   "entity": {
