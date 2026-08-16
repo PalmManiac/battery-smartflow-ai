@@ -256,11 +256,15 @@
       "fields": {
         "entry_id": {"name": "Konfiguration", "description": "Bei mehreren Instanzen die passende Battery-SmartFlow-AI-Konfiguration auswaehlen."}
       }
-    },
-    "abort": {
-      "debug_recording_started": "Debug-Aufzeichnung gestartet. Den Fortschritt zeigen die Debug-Statussensoren.",
-      "debug_recording_stopped": "Debug-Aufzeichnung beendet und Export angefordert.",
-      "debug_recording_already_stopped": "Die Debug-Aufzeichnung wurde bereits beendet."
+    }
+  },
+  "selector": {
+    "grid_mode": {
+      "options": {
+        "none": "Kein Netzsensor",
+        "single": "Ein Sensor (+ / −)",
+        "split": "Zwei Sensoren (Bezug und Einspeisung)"
+      }
     }
   },
   "entity": {
