@@ -1,10 +1,10 @@
 {
   "config": {
     "abort": {
+      "debug_integration_not_loaded": "Battery SmartFlow AI is not currently loaded.",
       "debug_recording_started": "Debug recording started. Progress is shown by the debug status sensors.",
       "debug_recording_stopped": "Debug recording stopped and export requested.",
-      "debug_recording_already_stopped": "The debug recording has already stopped.",
-      "debug_integration_not_loaded": "Battery SmartFlow AI is not currently loaded."
+      "debug_recording_already_stopped": "The debug recording has already stopped."
     },
     "error": {
       "grid_split_missing": "When using two sensors, both grid import and grid export must be selected."
@@ -260,8 +260,7 @@
     "abort": {
       "debug_recording_started": "Debug recording started. Progress is shown by the debug status sensors.",
       "debug_recording_stopped": "Debug recording stopped and export requested.",
-      "debug_recording_already_stopped": "The debug recording has already stopped.",
-      "debug_integration_not_loaded": "Battery SmartFlow AI is not currently loaded."
+      "debug_recording_already_stopped": "The debug recording has already stopped."
     }
   },
   "entity": {
