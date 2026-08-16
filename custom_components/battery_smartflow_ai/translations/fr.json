@@ -260,8 +260,7 @@
     "abort": {
       "debug_recording_started": "Enregistrement de débogage démarré. La progression est affichée par les capteurs d’état.",
       "debug_recording_stopped": "Enregistrement de débogage arrêté et export demandé.",
-      "debug_recording_already_stopped": "L’enregistrement de débogage est déjà arrêté.",
-      "debug_integration_not_loaded": "Battery SmartFlow AI n’est pas actuellement chargé."
+      "debug_recording_already_stopped": "L’enregistrement de débogage est déjà arrêté."
     }
   },
   "entity": {
