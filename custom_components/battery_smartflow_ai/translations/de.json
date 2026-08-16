@@ -1,10 +1,10 @@
 {
   "config": {
     "abort": {
+      "debug_integration_not_loaded": "Battery SmartFlow AI ist derzeit nicht geladen.",
       "debug_recording_started": "Debug-Aufzeichnung gestartet. Den Fortschritt zeigen die Debug-Statussensoren.",
       "debug_recording_stopped": "Debug-Aufzeichnung beendet und Export angefordert.",
-      "debug_recording_already_stopped": "Die Debug-Aufzeichnung wurde bereits beendet.",
-      "debug_integration_not_loaded": "Battery SmartFlow AI ist derzeit nicht geladen."
+      "debug_recording_already_stopped": "Die Debug-Aufzeichnung wurde bereits beendet."
     },
     "error": {
       "grid_split_missing": "Bei \"Zwei Sensoren\" müssen Netzbezug und Netzeinspeisung beide ausgewählt werden."
@@ -260,8 +260,7 @@
     "abort": {
       "debug_recording_started": "Debug-Aufzeichnung gestartet. Den Fortschritt zeigen die Debug-Statussensoren.",
       "debug_recording_stopped": "Debug-Aufzeichnung beendet und Export angefordert.",
-      "debug_recording_already_stopped": "Die Debug-Aufzeichnung wurde bereits beendet.",
-      "debug_integration_not_loaded": "Battery SmartFlow AI ist derzeit nicht geladen."
+      "debug_recording_already_stopped": "Die Debug-Aufzeichnung wurde bereits beendet."
     }
   },
   "entity": {
