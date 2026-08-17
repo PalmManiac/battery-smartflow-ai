@@ -1712,7 +1712,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             season_mode=str(self._persist.get("season_mode", "winter")),
             config={
                 "configured_entities": self._debug_configured_entities(),
-                "runtime_settings": self.runtime_settings,
+                # Options may change without recreating the coordinator. Keep
+                # the debug package aligned with the live control settings.
+                "runtime_settings": {
+                    **self.runtime_settings,
+                    **dict(self.entry.options),
+                },
             },
             profile=self._get_active_profile(),
         )
@@ -3346,6 +3351,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             resume_soc=float(resume_soc),
             lowest_cell_voltage=global_lowest_cell_voltage,
             resume_voltage=resume_voltage,
+            protection_enabled=self._cell_voltage_protection_enabled(),
+            battery_full=bool(self._get_soc_limit() == 1),
         )
         self._persist["cell_voltage_post_emergency_discharge_locked"] = locked
         self._persist["cell_voltage_normal_charge_observed"] = (
