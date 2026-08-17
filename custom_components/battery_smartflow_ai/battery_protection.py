@@ -81,8 +81,13 @@ def next_cell_voltage_discharge_lock_state(
     resume_soc: float,
     lowest_cell_voltage: float | None,
     resume_voltage: float,
+    protection_enabled: bool = True,
+    battery_full: bool = False,
 ) -> tuple[bool, bool]:
     """Return the persistent post-emergency discharge lock state."""
+    if not protection_enabled:
+        return False, False
+
     locked = bool(previously_locked)
     observed = bool(normal_charge_observed) if locked else False
     observed_before_this_cycle = observed
@@ -96,7 +101,6 @@ def next_cell_voltage_discharge_lock_state(
     }
     regular_charge_active = bool(
         locked
-        and str(decision_action or "") == "charge"
         and str(decision_reason or "") not in emergency_reasons
         and float(measured_charge_w or 0.0) >= NORMAL_CHARGE_CONFIRMATION_W
     )
@@ -105,8 +109,8 @@ def next_cell_voltage_discharge_lock_state(
 
     if (
         not locked
-        or not observed_before_this_cycle
         or lowest_cell_voltage is None
+        or (not observed_before_this_cycle and not battery_full)
     ):
         return locked, observed
 
@@ -118,6 +122,10 @@ def next_cell_voltage_discharge_lock_state(
     except (TypeError, ValueError):
         recovery_reached = False
 
-    if recovery_reached:
+    # A verified full battery is an independent safe recovery proof. This
+    # prevents a deadlock when PV fills the battery while the charge is still
+    # classified as an emergency: once the emergency ends at the upper SoC
+    # limit, no subsequent regular charge can occur to set ``observed``.
+    if recovery_reached and (observed_before_this_cycle or battery_full):
         return False, False
     return True, observed
