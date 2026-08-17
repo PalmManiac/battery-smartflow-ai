@@ -407,6 +407,75 @@ class Maintenance431Tests(unittest.TestCase):
         self.assertTrue(locked)
         self.assertFalse(observed)
 
+    def test_full_safe_battery_releases_lock_without_later_regular_charge(self) -> None:
+        """Issue #231: emergency-classified PV can fill the battery first."""
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=False,
+            cell_voltage_emergency_active=False,
+            decision_action="idle",
+            decision_reason="soc_limit_upper",
+            measured_charge_w=0.0,
+            soc=99.0,
+            resume_soc=15.0,
+            lowest_cell_voltage=3.32,
+            resume_voltage=3.25,
+            battery_full=True,
+        )
+        self.assertFalse(locked)
+        self.assertFalse(observed)
+
+    def test_full_flag_does_not_release_lock_below_safe_cell_voltage(self) -> None:
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=False,
+            cell_voltage_emergency_active=False,
+            decision_action="idle",
+            decision_reason="soc_limit_upper",
+            measured_charge_w=0.0,
+            soc=99.0,
+            resume_soc=15.0,
+            lowest_cell_voltage=3.20,
+            resume_voltage=3.25,
+            battery_full=True,
+        )
+        self.assertTrue(locked)
+        self.assertFalse(observed)
+
+    def test_disabling_protection_clears_persistent_lock_state(self) -> None:
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=True,
+            cell_voltage_emergency_active=False,
+            decision_action="idle",
+            decision_reason="idle",
+            measured_charge_w=0.0,
+            soc=5.0,
+            resume_soc=15.0,
+            lowest_cell_voltage=2.8,
+            resume_voltage=3.25,
+            protection_enabled=False,
+        )
+        self.assertFalse(locked)
+        self.assertFalse(observed)
+
+    def test_measured_pv_charge_counts_after_decision_reaches_idle(self) -> None:
+        """A real non-emergency charge matters even during command handover."""
+        locked, observed = next_cell_voltage_discharge_lock_state(
+            previously_locked=True,
+            normal_charge_observed=False,
+            cell_voltage_emergency_active=False,
+            decision_action="idle",
+            decision_reason="soc_limit_upper",
+            measured_charge_w=120.0,
+            soc=98.0,
+            resume_soc=15.0,
+            lowest_cell_voltage=3.30,
+            resume_voltage=3.25,
+        )
+        self.assertTrue(locked)
+        self.assertTrue(observed)
+
     def test_regular_charge_releases_lock_after_safe_recovery(self) -> None:
         locked, observed = next_cell_voltage_discharge_lock_state(
             previously_locked=True,
