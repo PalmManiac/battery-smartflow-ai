@@ -58,6 +58,7 @@ from .const import (
 )
 
 from .device_profiles import DEVICE_PROFILES
+from .price_currency import price_input_profile, resolve_price_currency
 
 EMPTY_ENTITY_VALUES = {
     "",
@@ -274,6 +275,10 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return value
 
         schema: dict[Any, Any] = {}
+        currency = resolve_price_currency(
+            getattr(self.hass.config, "currency", None)
+        )
+        price_profile = price_input_profile(currency)
 
         schema[
             vol.Required(
@@ -356,9 +361,14 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     DEFAULT_FEED_IN_TARIFF,
                 ),
             )
-        ] = vol.All(
-            vol.Coerce(float),
-            vol.Range(min=0.0, max=1.0),
+        ] = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=0.0,
+                max=price_profile.maximum,
+                step=price_profile.step,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement=currency.price_unit,
+            )
         )
 
         pv_forecast_today_val = _val(CONF_PV_FORECAST_TODAY_ENTITY)

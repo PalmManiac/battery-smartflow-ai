@@ -10,7 +10,7 @@ DOMAIN = "battery_smartflow_ai"
 INTEGRATION_NAME = "Battery SmartFlow AI"
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.4.2"
+INTEGRATION_VERSION = "4.5.0-Beta1"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
@@ -28,7 +28,7 @@ CONF_SOC_LIMIT_ENTITY = "soc_limit_entity"
 
 # Preis ist optional (Sommer/PV-only Nutzer)
 CONF_PRICE_EXPORT_ENTITY = "price_export_entity"  # Tibber Export (attributes.data)
-CONF_PRICE_NOW_ENTITY = "price_now_entity"        # direkter Preis-Sensor (€/kWh)
+CONF_PRICE_NOW_ENTITY = "price_now_entity"        # direct price sensor (currency/kWh)
 
 CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY = "additional_battery_charge_entity"
 CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY = "additional_battery_discharge_entity"
@@ -214,8 +214,6 @@ DEFAULT_SOC_MAX = 100.0  # Herstellerempfehlung ✔
 DEFAULT_MAX_CHARGE = 2400.0
 DEFAULT_MAX_DISCHARGE = 700.0
 
-DEFAULT_PRICE_THRESHOLD = 0.35
-DEFAULT_VERY_EXPENSIVE_THRESHOLD = 0.49
 
 DEFAULT_EMERGENCY_SOC = 8.0
 DEFAULT_EMERGENCY_CHARGE = 1200.0

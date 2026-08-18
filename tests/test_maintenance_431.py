@@ -56,6 +56,54 @@ from custom_components.battery_smartflow_ai.strategy_state import (  # noqa: E40
 
 
 class Maintenance431Tests(unittest.TestCase):
+    def test_economic_target_uses_currency_neutral_price_metadata(self) -> None:
+        controller = RegulationPowerController(RegulationPowerConfig())
+        intent = StrategyIntent(
+            intent="arbitrage_discharge",
+            requested_mode="output",
+            requested_power_w=500.0,
+            reason="price_based_discharge",
+            metadata={
+                "feed_in_tariff_configured": True,
+                "feed_in_tariff_per_kwh": 2.2,
+                "battery_value_per_kwh": 1.0,
+            },
+        )
+
+        target, metadata = controller._effective_target_import_w(
+            intent=intent,
+            base_target_import_w=10.0,
+            direction="output",
+        )
+
+        self.assertEqual(target, -15.0)
+        self.assertEqual(metadata["economic_feed_in_tariff_per_kwh"], 2.2)
+        self.assertEqual(metadata["economic_battery_value_per_kwh"], 1.0)
+
+    def test_economic_target_still_reads_legacy_eur_named_metadata(self) -> None:
+        controller = RegulationPowerController(RegulationPowerConfig())
+        intent = StrategyIntent(
+            intent="arbitrage_discharge",
+            requested_mode="output",
+            requested_power_w=500.0,
+            reason="price_based_discharge",
+            metadata={
+                "feed_in_tariff_configured": True,
+                "feed_in_tariff_eur_kwh": 2.2,
+                "battery_value_eur_kwh": 1.0,
+            },
+        )
+
+        target, metadata = controller._effective_target_import_w(
+            intent=intent,
+            base_target_import_w=10.0,
+            direction="output",
+        )
+
+        self.assertEqual(target, -15.0)
+        self.assertEqual(metadata["economic_feed_in_tariff_per_kwh"], 2.2)
+        self.assertEqual(metadata["economic_battery_value_per_kwh"], 1.0)
+
     def test_live_zero_need_does_not_cancel_targeted_active_binding(self) -> None:
         plan = SimpleNamespace(
             status="ready",

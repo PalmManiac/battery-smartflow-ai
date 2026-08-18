@@ -94,14 +94,15 @@ class AutomaticStrategy:
             or price_max is None
             or float(price_max) <= float(price_min)
         ):
-            if price_average is None or float(price_average) <= 0.0:
+            if price_average is None:
                 return 0.35, "price_range_missing"
 
-            deviation = abs(current - float(price_average))
-            relative_deviation = deviation / max(
-                0.01,
-                float(price_average),
-            )
+            average = float(price_average)
+            deviation = abs(current - average)
+            magnitude = max(abs(current), abs(average))
+            if magnitude <= 0.0:
+                return 0.35, "price_range_missing"
+            relative_deviation = deviation / magnitude
 
             return (
                 _clamp01(0.30 + relative_deviation),
@@ -110,7 +111,7 @@ class AutomaticStrategy:
 
         low = float(price_min)
         high = float(price_max)
-        span = max(0.001, high - low)
+        span = high - low
         position = _clamp01((current - low) / span)
 
         # Distance from the center:

@@ -118,7 +118,7 @@ class ChargeCommitState:
     deadline: datetime | None = None
 
     # Economic boundary for planned/learned charging.
-    acceptable_price_eur_kwh: float | None = None
+    acceptable_price_per_kwh: float | None = None
 
     requested_power_w: float | None = None
     allow_pv_blend: bool = True

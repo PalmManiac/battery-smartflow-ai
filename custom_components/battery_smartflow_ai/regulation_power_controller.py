@@ -9,6 +9,7 @@ from .regulation_models import (
     PowerControllerResult,
     StrategyIntent,
 )
+from .price_math import comparison_tolerance
 
 
 DEFAULT_TARGET_IMPORT_W = 10.0
@@ -38,7 +39,6 @@ DEFAULT_DISCHARGE_NEAR_ZERO_MAX_TRIM_W = 80.0
 # A small export is preferable to small import when export has a monetary
 # value or when stored battery energy is cheaper than the feed-in tariff.
 DEFAULT_ECONOMIC_EXPORT_TARGET_W = -15.0
-DEFAULT_ECONOMIC_EXPORT_MARGIN_EUR_KWH = 0.01
 DEFAULT_ECONOMIC_TARGET_DEADBAND_W = 15.0
 
 DEFAULT_CHARGE_DEADBAND_W = 30.0
@@ -71,9 +71,7 @@ class RegulationPowerConfig:
     discharge_near_zero_max_trim_w: float = DEFAULT_DISCHARGE_NEAR_ZERO_MAX_TRIM_W
     
     economic_export_target_w: float = DEFAULT_ECONOMIC_EXPORT_TARGET_W
-    economic_export_margin_eur_kwh: float = (
-        DEFAULT_ECONOMIC_EXPORT_MARGIN_EUR_KWH
-    )
+    economic_export_margin_per_kwh: float = 0.0
     economic_target_deadband_w: float = DEFAULT_ECONOMIC_TARGET_DEADBAND_W
 
     charge_deadband_w: float = DEFAULT_CHARGE_DEADBAND_W
@@ -100,7 +98,11 @@ def _profile_int(profile: dict[str, Any], key: str, default: int) -> int:
         return int(default)
 
 
-def build_regulation_power_config(profile: dict[str, Any]) -> RegulationPowerConfig:
+def build_regulation_power_config(
+    profile: dict[str, Any],
+    *,
+    price_step: float = 0.0,
+) -> RegulationPowerConfig:
     """Build technical power-controller config from device profile."""
 
     return RegulationPowerConfig(
@@ -179,10 +181,14 @@ def build_regulation_power_config(profile: dict[str, Any]) -> RegulationPowerCon
             "ECONOMIC_EXPORT_TARGET_W",
             DEFAULT_ECONOMIC_EXPORT_TARGET_W,
         ),
-        economic_export_margin_eur_kwh=_profile_float(
+        economic_export_margin_per_kwh=_profile_float(
             profile,
-            "ECONOMIC_EXPORT_MARGIN_EUR_KWH",
-            DEFAULT_ECONOMIC_EXPORT_MARGIN_EUR_KWH,
+            "ECONOMIC_EXPORT_MARGIN_PER_KWH",
+            _profile_float(
+                profile,
+                "ECONOMIC_EXPORT_MARGIN_EUR_KWH",
+                comparison_tolerance(price_step),
+            ),
         ),
         economic_target_deadband_w=_profile_float(
             profile,
@@ -510,19 +516,29 @@ class RegulationPowerController:
             base_target_w,
             float(self.config.economic_export_target_w),
         )
-        margin_eur_kwh = max(
+        margin_per_kwh = max(
             0.0,
-            float(self.config.economic_export_margin_eur_kwh),
+            float(self.config.economic_export_margin_per_kwh),
         )
 
         feed_in_tariff = self._intent_metadata_float(
             intent,
-            "feed_in_tariff_eur_kwh",
+            "feed_in_tariff_per_kwh",
         )
+        if feed_in_tariff is None:
+            feed_in_tariff = self._intent_metadata_float(
+                intent,
+                "feed_in_tariff_eur_kwh",
+            )
         battery_value = self._intent_metadata_float(
             intent,
-            "battery_value_eur_kwh",
+            "battery_value_per_kwh",
         )
+        if battery_value is None:
+            battery_value = self._intent_metadata_float(
+                intent,
+                "battery_value_eur_kwh",
+            )
 
         tariff_configured = bool(
             intent.metadata.get("feed_in_tariff_configured", False)
@@ -534,9 +550,9 @@ class RegulationPowerController:
             "economic_base_target_import_w": round(base_target_w, 2),
             "economic_effective_target_import_w": round(base_target_w, 2),
             "economic_export_target_w": round(export_target_w, 2),
-            "economic_feed_in_tariff_eur_kwh": feed_in_tariff,
-            "economic_battery_value_eur_kwh": battery_value,
-            "economic_margin_eur_kwh": round(margin_eur_kwh, 4),
+            "economic_feed_in_tariff_per_kwh": feed_in_tariff,
+            "economic_battery_value_per_kwh": battery_value,
+            "economic_margin_per_kwh": round(margin_per_kwh, 4),
         }
 
         if (
@@ -581,7 +597,7 @@ class RegulationPowerController:
                 return base_target_w, metadata
 
             economic_export_allowed = (
-                float(battery_value) + margin_eur_kwh
+                float(battery_value) + margin_per_kwh
                 < float(feed_in_tariff)
             )
 
