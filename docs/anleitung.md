@@ -1,5 +1,10 @@
 # 📘 Battery SmartFlow AI – Anleitung
 
+**Sprache:** Deutsch | [English](user-guide.md)
+
+> Gültig ab Battery SmartFlow AI V4.4.2
+> Letzte inhaltliche Aktualisierung: 18. August 2026
+
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
 
 ---

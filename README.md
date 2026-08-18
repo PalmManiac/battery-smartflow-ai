@@ -499,7 +499,8 @@ This README provides an overview.
 
 For detailed setup, screenshots, examples, FAQ and troubleshooting, see:
 
-* **Manual**
+* [**English – User Guide**](docs/user-guide.md)
+* [**Deutsch – Benutzeranleitung**](docs/anleitung.md)
 
 ---
 
@@ -983,7 +984,8 @@ Diese README bietet eine Übersicht.
 
 Für detaillierte Einrichtung, Screenshots, Beispiele, FAQ und Troubleshooting siehe:
 
-* **Anleitung**
+* [**Deutsch – Benutzeranleitung**](docs/anleitung.md)
+* [**English – User Guide**](docs/user-guide.md)
 
 ---
 
