@@ -1,4 +1,5 @@
 * [Startseite](README.md)
 * [Installation](installation.md)
 * [Anleitung](anleitung.md)
+* [User Guide](user-guide.md)
 * [Dashboard](dashboard.md)
