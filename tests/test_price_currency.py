@@ -15,6 +15,7 @@ from custom_components.battery_smartflow_ai.price_currency import (  # noqa: E40
     LARGE_NOMINAL_PRICE_PROFILE,
     MEDIUM_NOMINAL_PRICE_PROFILE,
     PriceCurrency,
+    PRICE_STORAGE_MIGRATION_MARKER,
     SMALL_NOMINAL_PRICE_PROFILE,
     migrate_legacy_price_fields,
     normalize_currency_code,
@@ -88,6 +89,30 @@ class PriceCurrencyTests(unittest.TestCase):
         migrate_legacy_price_fields(values)
 
         self.assertEqual(values["charge_commit_price_per_kwh"], 3.0)
+
+    def test_beta1_zero_profit_recovers_the_legacy_total(self) -> None:
+        values = {
+            "profit": 0.0,
+            "profit_eur": 151.696931286252,
+        }
+
+        migrate_legacy_price_fields(values)
+
+        self.assertEqual(values["profit"], 151.696931286252)
+        self.assertTrue(values[PRICE_STORAGE_MIGRATION_MARKER])
+
+    def test_beta1_accrued_profit_is_added_to_the_legacy_total_once(self) -> None:
+        values = {
+            "profit": 0.25,
+            "profit_eur": 151.696931286252,
+        }
+
+        migrate_legacy_price_fields(values)
+        first_result = values["profit"]
+        migrate_legacy_price_fields(values)
+
+        self.assertAlmostEqual(first_result, 151.946931286252)
+        self.assertEqual(values["profit"], first_result)
 
     def test_zero_legacy_prices_are_preserved_exactly(self) -> None:
         values = {
