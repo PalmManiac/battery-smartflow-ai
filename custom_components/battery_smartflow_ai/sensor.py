@@ -44,6 +44,7 @@ from .const import (
     AUTOMATIC_WEIGHTING_ENUMS,
 )
 from .device_profiles import DEVICE_PROFILES
+from .price_currency import price_input_profile
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +60,22 @@ SOC_LIMIT_ENUMS = [
 FAULT_LEVEL_ENUMS = ["normal", "warning", "error"]
 
 DEVICE_PROFILE_ENUMS = list(DEVICE_PROFILES.keys())
+
+PRICE_SENSOR_KEYS = frozenset(
+    {
+        "learned_planning_window_score",
+        "price_daily_average",
+        "current_peak_threshold",
+        "current_valley_threshold",
+        "economic_discharge_threshold",
+        "effective_discharge_threshold",
+        "price_now",
+        "charge_price_applied",
+        "avg_charge_price",
+    }
+)
+
+MONETARY_SENSOR_KEYS = frozenset({"profit_eur"})
 
 LEARNED_PLANNING_STATUS_ENUMS = [
     "not_started",
@@ -593,7 +610,6 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         key="learned_planning_window_score",
         translation_key="learned_planning_window_score",
         runtime_key="learned_planning_window_score",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:chart-bell-curve",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -637,35 +653,30 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         key="price_daily_average",
         translation_key="price_daily_average",
         runtime_key="price_daily_average",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:chart-line",
     ),
     ZendureSensorEntityDescription(
         key="current_peak_threshold",
         translation_key="current_peak_threshold",
         runtime_key="current_peak_threshold",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:chart-bell-curve",
     ),
     ZendureSensorEntityDescription(
         key="current_valley_threshold",
         translation_key="current_valley_threshold",
         runtime_key="current_valley_threshold",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:chart-bell-curve-cumulative",
     ),
     ZendureSensorEntityDescription(
         key="economic_discharge_threshold",
         translation_key="economic_discharge_threshold",
         runtime_key="economic_discharge_threshold",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:cash-clock",
     ),
     ZendureSensorEntityDescription(
         key="effective_discharge_threshold",
         translation_key="effective_discharge_threshold",
         runtime_key="effective_discharge_threshold",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:chart-line-variant",
     ),
     ZendureSensorEntityDescription(
@@ -679,8 +690,7 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         key="price_now",
         translation_key="price_now",
         runtime_key="price_now",
-        native_unit_of_measurement="€/kWh",
-        icon="mdi:currency-eur",
+        icon="mdi:cash",
     ),
 
     # --------------------------------------------------
@@ -743,7 +753,6 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         key="charge_price_applied",
         translation_key="charge_price_applied",
         runtime_key="charge_price_applied",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:cash-clock",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -788,14 +797,12 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         key="avg_charge_price",
         translation_key="avg_charge_price",
         runtime_key="avg_charge_price",
-        native_unit_of_measurement="€/kWh",
         icon="mdi:scale-balance",
     ),
     ZendureSensorEntityDescription(
         key="profit_eur",
         translation_key="profit_eur",
         runtime_key="profit_eur",
-        native_unit_of_measurement="€",
         icon="mdi:cash",
     ),
 
@@ -966,6 +973,18 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
         self.entity_description = description
         self._entry = entry
 
+        if description.runtime_key in PRICE_SENSOR_KEYS:
+            self._attr_native_unit_of_measurement = (
+                coordinator.price_currency.price_unit
+            )
+            self._attr_suggested_display_precision = price_input_profile(
+                coordinator.price_currency
+            ).display_precision
+        elif description.runtime_key in MONETARY_SENSOR_KEYS:
+            self._attr_native_unit_of_measurement = (
+                coordinator.price_currency.monetary_unit
+            )
+
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{description.key}"
 
         self._attr_device_info = {
@@ -1030,7 +1049,7 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
             except Exception:
                 return None
 
-        if self.entity_description.native_unit_of_measurement:
+        if self.native_unit_of_measurement:
             try:
                 return float(val)
             except Exception:

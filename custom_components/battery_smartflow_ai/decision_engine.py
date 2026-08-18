@@ -7,6 +7,7 @@ from typing import Any, List, Literal, Optional
 
 from .const import MANUAL_CONST_DISCHARGE
 from .forecast import ForecastSummary
+from .price_math import peak_threshold
 from .power_controller import PowerController, PowerContext
 
 
@@ -1700,8 +1701,7 @@ class DecisionEngine:
         return sum(prices) / len(prices)
 
     def _compute_peak_threshold(self, prices: List[float], peak_factor: float) -> float:
-        base_price = self._compute_base_price(prices)
-        return max(base_price * peak_factor, base_price + 0.03)
+        return peak_threshold(prices, peak_factor)
 
     def _compute_valley_threshold(self, prices: List[float], valley_factor: float) -> float:
         base_price = self._compute_base_price(prices)
@@ -1944,7 +1944,7 @@ class DecisionEngine:
         actually required before the next high-price window.
 
         The former broad 35-percent price band could start AC charging too early,
-        e.g. at 0.20 EUR/kWh although sufficient 0.15 EUR/kWh slots were still
+        e.g. at 0.20 per kWh although sufficient 0.15 per kWh slots were still
         available later.
 
         The peak slot itself is never considered a charging candidate.

@@ -71,8 +71,6 @@ from .const import (
     DEFAULT_SOC_MAX,
     DEFAULT_MAX_CHARGE,
     DEFAULT_MAX_DISCHARGE,
-    DEFAULT_PRICE_THRESHOLD,
-    DEFAULT_VERY_EXPENSIVE_THRESHOLD,
     DEFAULT_EMERGENCY_SOC,
     DEFAULT_EMERGENCY_CHARGE,
     DEFAULT_PROFIT_MARGIN_PCT,
@@ -155,6 +153,7 @@ from .charge_economics import (
     pricing_from_charge_evidence,
     recent_charge_evidence,
     resolve_feed_in_tariff,
+    trade_soc_min_reset_state,
 )
 from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
@@ -175,6 +174,13 @@ from .command_effectiveness import (
 from .debug_recorder import DebugRecorder
 from .debug_exporter import DebugExportError, export_debug_package
 from .debug_sample_builder import build_debug_sample
+from .price_currency import (
+    PriceCurrency,
+    migrate_legacy_price_fields,
+    price_input_profile,
+    resolve_price_currency,
+)
+from .price_math import comparison_tolerance
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -182,11 +188,6 @@ STORE_VERSION = 1
 ACTIVE_STATUS_DISPLAY_HOLD_S = 60
 
 CHARGE_COMMIT_PRICE_VALID_MINUTES = 20
-
-# V4.3.0-dev5.0.1:
-# Small hysteresis for the strategic AC-charge price guard.
-# Prevents a charge binding from flickering exactly at the discharge threshold.
-STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH = 0.005
 
 # V4.3.0-dev5.8.3:
 # Treat a strategic AC charge target as practically reached when the battery
@@ -298,6 +299,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self.hass = hass
         self.entry = entry
+        self.price_currency: PriceCurrency = resolve_price_currency(
+            getattr(hass.config, "currency", None)
+        )
+
+        if self.price_currency.used_fallback:
+            _LOGGER.warning(
+                "Home Assistant has no valid system currency; using %s for "
+                "Battery SmartFlow AI price units",
+                self.price_currency.code,
+            )
+        self.price_comparison_tolerance = comparison_tolerance(
+            price_input_profile(self.price_currency).step
+        )
 
         self.device_profile_key = (
             entry.options.get(CONF_DEVICE_PROFILE)
@@ -361,7 +375,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         
         self._regulation_power_controller = RegulationPowerController(
-            build_regulation_power_config(self._get_active_profile())
+            build_regulation_power_config(
+                self._get_active_profile(),
+                price_step=price_input_profile(self.price_currency).step,
+            )
         )
         
         self._device_command_builder = DeviceCommandBuilder()
@@ -388,13 +405,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "trade_avg_charge_price": None,
             "trade_charged_kwh": 0.0,
             "trade_cycle_below_soc_min": False,
+            "trade_soc_min_reset_count": 0,
             "prev_soc": None,
             "pending_charge_price_evidence": None,
 
             "avg_charge_price": None,
             "charged_kwh": 0.0,
             "discharged_kwh": 0.0,
-            "profit_eur": 0.0,
+            "profit": 0.0,
             "last_ts": None,
 
             # season detection
@@ -487,12 +505,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "charge_commit_optimal_start": None,
             "charge_commit_latest_start": None,
             "charge_commit_deadline": None,
-            "charge_commit_acceptable_price_eur_kwh": None,
+            "charge_commit_acceptable_price_per_kwh": None,
 
             "charge_commit_requested_power_w": 0.0,
             "charge_commit_allow_pv_blend": True,
             "charge_commit_abort_reason": "none",
-            "charge_commit_price_eur_kwh": None,
+            "charge_commit_price_per_kwh": None,
 
             # V4.3.0-dev5.8.3:
             # Start time of a continuously detected BMS/full-charge stall.
@@ -513,6 +531,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data = await self._store.async_load()
         if isinstance(data, dict):
             self._persist.update(data)
+            migrate_legacy_price_fields(self._persist)
 
             # V4.2.2:
             # Normalize old persisted extreme values. Previous versions could let
@@ -704,9 +723,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "charge_commit_deadline",
                 )
             ),
-            acceptable_price_eur_kwh=_to_float(
+            acceptable_price_per_kwh=_to_float(
                 self._persist.get(
-                    "charge_commit_acceptable_price_eur_kwh",
+                    "charge_commit_acceptable_price_per_kwh",
                 ),
                 None,
             ),
@@ -791,8 +810,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
         self._persist[
-            "charge_commit_acceptable_price_eur_kwh"
-        ] = commit.acceptable_price_eur_kwh
+            "charge_commit_acceptable_price_per_kwh"
+        ] = commit.acceptable_price_per_kwh
 
         self._persist["charge_commit_requested_power_w"] = float(
             commit.requested_power_w or 0.0
@@ -833,7 +852,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["charge_commit_latest_start"] = None
         self._persist["charge_commit_deadline"] = None
         self._persist[
-            "charge_commit_acceptable_price_eur_kwh"
+            "charge_commit_acceptable_price_per_kwh"
         ] = None
 
         self._persist["charge_commit_requested_power_w"] = 0.0
@@ -841,7 +860,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["charge_commit_abort_reason"] = str(
             abort_reason or "none"
         )
-        self._persist["charge_commit_price_eur_kwh"] = None
+        self._persist["charge_commit_price_per_kwh"] = None
         self._persist["charge_commit_bms_stall_started_at"] = None
 
 
@@ -898,7 +917,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         margin = max(
             0.0,
-            float(STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH),
+            float(self.price_comparison_tolerance),
         )
 
         return float(current_price) >= (
@@ -1222,7 +1241,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         acceptable_price = _to_float(
             getattr(
                 learned_charge_plan,
-                "acceptable_charge_price_eur_kwh",
+                "acceptable_charge_price_per_kwh",
                 None,
             ),
             None,
@@ -1370,7 +1389,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
                 else:
                     acceptable_price = _to_float(
-                        commit.acceptable_price_eur_kwh,
+                        commit.acceptable_price_per_kwh,
                         None,
                     )
                     current_price = _to_float(
@@ -1385,7 +1404,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         > (
                             float(acceptable_price)
                             + float(
-                                STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH
+                                self.price_comparison_tolerance
                             )
                         )
                     )
@@ -1453,7 +1472,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if refreshed_until is not None:
                     commit.valid_until = refreshed_until
                 if price_now is not None:
-                    self._persist["charge_commit_price_eur_kwh"] = float(price_now)
+                    self._persist["charge_commit_price_per_kwh"] = float(price_now)
                 self._store_charge_commit(commit)
                 
             return self._committed_charge_decision(
@@ -1536,7 +1555,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         > (
                             float(acceptable_price)
                             + float(
-                                STRATEGIC_AC_CHARGE_PRICE_GUARD_MARGIN_EUR_KWH
+                                self.price_comparison_tolerance
                             )
                         )
                     ):
@@ -1576,7 +1595,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     if commit_type == "learned"
                     else None
                 ),
-                acceptable_price_eur_kwh=(
+                acceptable_price_per_kwh=(
                     learned_acceptable_price
                     if commit_type == "learned"
                     else None
@@ -1591,9 +1610,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._store_charge_commit(new_commit)
             
             if price_now is not None:
-                self._persist["charge_commit_price_eur_kwh"] = float(price_now)
+                self._persist["charge_commit_price_per_kwh"] = float(price_now)
             else:
-                self._persist["charge_commit_price_eur_kwh"] = None
+                self._persist["charge_commit_price_per_kwh"] = None
                 
             if new_commit.phase == "waiting":
                 return self._waiting_charge_commit_decision(
@@ -3849,10 +3868,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 and float(profile_max_out) > 0.0
             )
 
-            expensive = self._get_setting(SETTING_PRICE_THRESHOLD, DEFAULT_PRICE_THRESHOLD)
+            price_profile = price_input_profile(self.price_currency)
+            expensive = self._get_setting(
+                SETTING_PRICE_THRESHOLD,
+                price_profile.default_expensive_threshold,
+            )
             very_expensive = self._get_setting(
                 SETTING_VERY_EXPENSIVE_THRESHOLD,
-                DEFAULT_VERY_EXPENSIVE_THRESHOLD,
+                price_profile.default_very_expensive_threshold,
             )
             emergency_soc = self._get_setting(SETTING_EMERGENCY_SOC, DEFAULT_EMERGENCY_SOC)
             emergency_w = self._get_setting(SETTING_EMERGENCY_CHARGE, DEFAULT_EMERGENCY_CHARGE)
@@ -4191,7 +4214,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 resume_margin=float(resume_margin),
             )
 
-            if float(soc) <= float(soc_min):
+            (
+                trade_soc_min_reset_count,
+                trade_cycle_below_soc_min,
+            ) = trade_soc_min_reset_state(
+                soc=float(soc),
+                soc_min=float(soc_min),
+                previous_count=int(
+                    self._persist.get("trade_soc_min_reset_count", 0) or 0
+                ),
+                previously_confirmed=bool(
+                    self._persist.get("trade_cycle_below_soc_min", False)
+                ),
+            )
+            self._persist["trade_soc_min_reset_count"] = (
+                trade_soc_min_reset_count
+            )
+
+            if trade_cycle_below_soc_min:
                 self._persist["trade_avg_charge_price"] = 0.0
                 self._persist["trade_charged_kwh"] = 0.0
                 self._persist["trade_cycle_below_soc_min"] = True
@@ -4767,7 +4807,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             charge_pricing_reason = self._charge_pricing_reason(decision.reason)
 
             stored_commit_price = _to_float(
-                self._persist.get("charge_commit_price_eur_kwh"),
+                self._persist.get("charge_commit_price_per_kwh"),
                 None,
             )
             pricing_price_now = (
@@ -4829,7 +4869,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         delta_charge_pricing.is_grid_charge
                     )
                     charge_price_applied = float(
-                        delta_charge_pricing.price_eur_kwh
+                        delta_charge_pricing.price_per_kwh
                     )
                     charge_source = str(delta_charge_pricing.source)
                     charge_grid_part_w = float(
@@ -4848,7 +4888,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                             "trade_avg_charge_price"
                         )
                         applied_price = float(
-                            delta_charge_pricing.price_eur_kwh
+                            delta_charge_pricing.price_per_kwh
                         )
                         new_total_kwh = charged_kwh + float(delta_kwh)
 
@@ -4879,7 +4919,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # economic energy ledger still waits for a real SoC increase.
                 is_grid_charge = bool(current_charge_pricing.is_grid_charge)
                 charge_price_applied = float(
-                    current_charge_pricing.price_eur_kwh
+                    current_charge_pricing.price_per_kwh
                 )
                 charge_source = str(current_charge_pricing.source)
                 charge_grid_part_w = float(current_charge_pricing.grid_part_w)
@@ -4896,7 +4936,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             #
             # The real energy ledger is still updated only by delta_kwh > 0.
             # This fallback only prevents the average charge price from staying
-            # at 0.00 €/kWh throughout a real AC charge because of coarse or
+            # at a zero price throughout a real AC charge because of coarse or
             # delayed SoC updates.
             current_trade_avg_price = _to_float(
                 self._persist.get("trade_avg_charge_price"),
@@ -4982,8 +5022,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         float(price_now) - float(avg_price)
                     ) * float(accounted_sold_kwh)
 
-                    self._persist["profit_eur"] = (
-                        float(self._persist.get("profit_eur", 0.0))
+                    self._persist["profit"] = (
+                        float(self._persist.get("profit", 0.0))
                         + float(profit)
                     )
 
@@ -5287,14 +5327,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or CONF_FEED_IN_TARIFF in self.entry.data
             )
 
-            battery_value_eur_kwh = _to_float(
+            battery_value_per_kwh = _to_float(
                 self._persist.get("trade_avg_charge_price"),
                 None,
             )
 
             # Compatibility fallback for older persisted installations.
-            if battery_value_eur_kwh is None:
-                battery_value_eur_kwh = _to_float(
+            if battery_value_per_kwh is None:
+                battery_value_per_kwh = _to_float(
                     self._persist.get("avg_charge_price"),
                     None,
                 )
@@ -5304,10 +5344,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "feed_in_tariff_configured": bool(
                         feed_in_tariff_configured
                     ),
-                    "feed_in_tariff_eur_kwh": float(
+                    "feed_in_tariff_per_kwh": float(
                         feed_in_tariff or 0.0
                     ),
-                    "battery_value_eur_kwh": battery_value_eur_kwh,
+                    "battery_value_per_kwh": battery_value_per_kwh,
                 }
             )
 
@@ -6016,7 +6056,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "avg_charge_price": self._persist.get("trade_avg_charge_price"),
                 "economic_discharge_threshold": economic_discharge_threshold,
                 "effective_discharge_threshold": effective_discharge_threshold,
-                "profit_eur": float(self._persist.get("profit_eur") or 0.0),
+                # Keep the existing entity runtime key stable so Home Assistant
+                # does not create a replacement entity during the update. The
+                # displayed monetary unit is supplied dynamically by sensor.py.
+                "profit_eur": float(self._persist.get("profit") or 0.0),
                 "delta_kwh": float(delta_kwh),
                 "is_grid_charge": is_grid_charge,
                 "charge_source": charge_source,
@@ -6533,8 +6576,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "charge_commit_deadline_debug": self._persist.get(
                     "charge_commit_deadline"
                 ),
-                "charge_commit_acceptable_price_eur_kwh_debug": self._persist.get(
-                    "charge_commit_acceptable_price_eur_kwh"
+                "charge_commit_acceptable_price_per_kwh_debug": self._persist.get(
+                    "charge_commit_acceptable_price_per_kwh"
                 ),
 
                 # SF800Pro passthrough / arbiter debug

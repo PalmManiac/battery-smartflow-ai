@@ -7,6 +7,36 @@ from datetime import datetime
 from typing import Any, Mapping
 
 
+TRADE_SOC_MIN_RESET_CONFIRM_CYCLES = 3
+
+
+def trade_soc_min_reset_state(
+    *,
+    soc: float,
+    soc_min: float,
+    previous_count: int,
+    previously_confirmed: bool,
+    required_cycles: int = TRADE_SOC_MIN_RESET_CONFIRM_CYCLES,
+) -> tuple[int, bool]:
+    """Confirm a real SoC-min event without trusting one transient sample.
+
+    Some battery integrations briefly expose 0 percent while their entities
+    refresh. Clearing the economic charge ledger on that single sample loses
+    the average charge price permanently. A real low-SoC condition remains
+    eligible after a short sequence of consecutive update cycles.
+    """
+
+    if float(soc) > float(soc_min):
+        return 0, False
+
+    required = max(1, int(required_cycles))
+    if previously_confirmed:
+        return required, True
+
+    count = min(required, max(0, int(previous_count)) + 1)
+    return count, count >= required
+
+
 def resolve_feed_in_tariff(
     *,
     data: Mapping[str, Any],
@@ -34,7 +64,7 @@ class ChargePricing:
 
     active: bool
     is_grid_charge: bool
-    price_eur_kwh: float
+    price_per_kwh: float
     source: str
     grid_part_w: float
     pv_part_w: float
@@ -50,7 +80,7 @@ def inactive_charge_pricing(source: str = "no_charge_command") -> ChargePricing:
     return ChargePricing(
         active=False,
         is_grid_charge=False,
-        price_eur_kwh=0.0,
+        price_per_kwh=0.0,
         source=str(source),
         grid_part_w=0.0,
         pv_part_w=0.0,
@@ -106,7 +136,7 @@ def classify_charge_pricing(
         return ChargePricing(
             active=True,
             is_grid_charge=False,
-            price_eur_kwh=pv_price,
+            price_per_kwh=pv_price,
             source="pv_surplus_export",
             grid_part_w=0.0,
             pv_part_w=charge_w,
@@ -130,7 +160,7 @@ def classify_charge_pricing(
         return ChargePricing(
             active=True,
             is_grid_charge=False,
-            price_eur_kwh=pv_price,
+            price_per_kwh=pv_price,
             source="pv_or_free_low_import",
             grid_part_w=0.0,
             pv_part_w=charge_w,
@@ -140,7 +170,7 @@ def classify_charge_pricing(
         return ChargePricing(
             active=True,
             is_grid_charge=False,
-            price_eur_kwh=pv_price,
+            price_per_kwh=pv_price,
             source="price_missing_assume_pv_opportunity",
             grid_part_w=0.0,
             pv_part_w=charge_w,
@@ -166,7 +196,7 @@ def classify_charge_pricing(
     return ChargePricing(
         active=True,
         is_grid_charge=grid_part_w > max(60.0, charge_w * 0.10),
-        price_eur_kwh=float(mixed_price),
+        price_per_kwh=float(mixed_price),
         source=str(source),
         grid_part_w=float(grid_part_w),
         pv_part_w=float(pv_part_w),
@@ -202,7 +232,10 @@ def recent_charge_evidence(
     try:
         age_seconds = (now - updated_at).total_seconds()
         energy_wh = max(0.0, float(raw.get("energy_wh", 0.0) or 0.0))
-        cost_eur = float(raw.get("cost_eur", 0.0) or 0.0)
+        # V4.5.0 reads the former EUR-named field so pending evidence created
+        # before the update remains usable. Numeric values are preserved as-is;
+        # there is no exchange-rate conversion.
+        cost = float(raw.get("cost", raw.get("cost_eur", 0.0)) or 0.0)
         grid_energy_wh = max(
             0.0,
             float(raw.get("grid_energy_wh", 0.0) or 0.0),
@@ -225,7 +258,7 @@ def recent_charge_evidence(
 
     return {
         "energy_wh": energy_wh,
-        "cost_eur": cost_eur,
+        "cost": cost,
         "grid_energy_wh": min(grid_energy_wh, energy_wh),
         "pv_energy_wh": min(pv_energy_wh, energy_wh),
         "duration_seconds": duration_seconds,
@@ -249,7 +282,7 @@ def add_charge_evidence(
     duration_seconds = max(1.0, min(float(duration_seconds), 30.0))
     existing = recent_charge_evidence(raw, now=now) or {
         "energy_wh": 0.0,
-        "cost_eur": 0.0,
+        "cost": 0.0,
         "grid_energy_wh": 0.0,
         "pv_energy_wh": 0.0,
         "duration_seconds": 0.0,
@@ -263,8 +296,8 @@ def add_charge_evidence(
 
     return {
         "energy_wh": float(existing["energy_wh"]) + energy_wh,
-        "cost_eur": float(existing["cost_eur"])
-        + (energy_wh / 1000.0) * float(pricing.price_eur_kwh),
+        "cost": float(existing["cost"])
+        + (energy_wh / 1000.0) * float(pricing.price_per_kwh),
         "grid_energy_wh": float(existing["grid_energy_wh"]) + grid_energy_wh,
         "pv_energy_wh": float(existing["pv_energy_wh"]) + pv_energy_wh,
         "duration_seconds": float(existing["duration_seconds"]) + duration_seconds,
@@ -289,7 +322,7 @@ def pricing_from_charge_evidence(
     grid_energy_wh = float(evidence["grid_energy_wh"])
     pv_energy_wh = float(evidence["pv_energy_wh"])
 
-    price = float(evidence["cost_eur"]) / (energy_wh / 1000.0)
+    price = float(evidence["cost"]) / (energy_wh / 1000.0)
     grid_part_w = grid_energy_wh / duration_hours
     pv_part_w = pv_energy_wh / duration_hours
     total_power_w = grid_part_w + pv_part_w
@@ -302,7 +335,7 @@ def pricing_from_charge_evidence(
     return ChargePricing(
         active=True,
         is_grid_charge=grid_part_w > max(60.0, total_power_w * 0.10),
-        price_eur_kwh=float(price),
+        price_per_kwh=float(price),
         source=source,
         grid_part_w=float(grid_part_w),
         pv_part_w=float(pv_part_w),

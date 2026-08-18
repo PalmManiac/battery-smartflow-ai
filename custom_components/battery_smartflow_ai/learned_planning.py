@@ -10,6 +10,7 @@ from homeassistant.util import dt as dt_util
 
 from .decision_engine import PricePoint
 from .forecast import ForecastSummary
+from .price_math import peak_threshold
 
 
 LEARNED_STATUS_NOT_STARTED = "not_started"
@@ -165,7 +166,7 @@ class LearnedChargePlan:
 
     # Maximum price contained in the selected learned charge window.
     # Dev5.6 uses this as the economic continuation boundary before latest start.
-    acceptable_charge_price_eur_kwh: float | None = None
+    acceptable_charge_price_per_kwh: float | None = None
 
     window_score: float | None = None
 
@@ -812,12 +813,11 @@ def choose_deadline(
 
     if future_prices:
         prices = [float(p.price) for p in future_prices]
-        avg_price = sum(prices) / len(prices)
-        peak_threshold = max(avg_price * 1.35, avg_price + 0.03)
+        learned_peak_threshold = peak_threshold(prices, 1.35)
 
         peak_candidates = [
             p for p in future_prices
-            if float(p.price) >= peak_threshold
+            if float(p.price) >= learned_peak_threshold
         ]
 
         if peak_candidates:
@@ -1157,7 +1157,7 @@ def build_learned_charge_plan(
         optimal_charge_start=start,
         optimal_charge_end=end,
         latest_charge_start=latest_start,
-        acceptable_charge_price_eur_kwh=(
+        acceptable_charge_price_per_kwh=(
             round(float(acceptable_charge_price), 6)
             if acceptable_charge_price is not None
             else None
