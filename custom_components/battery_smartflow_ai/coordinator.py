@@ -530,8 +530,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _load(self) -> None:
         data = await self._store.async_load()
         if isinstance(data, dict):
-            self._persist.update(data)
-            migrate_legacy_price_fields(self._persist)
+            loaded_data = dict(data)
+            migrate_legacy_price_fields(loaded_data)
+            self._persist.update(loaded_data)
 
             # V4.2.2:
             # Normalize old persisted extreme values. Previous versions could let
@@ -541,8 +542,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist.get("season_counter", 0)
             )
 
-            if "runtime_mode" in data and isinstance(data["runtime_mode"], dict):
-                self.runtime_mode.update(data["runtime_mode"])
+            if "runtime_mode" in loaded_data and isinstance(
+                loaded_data["runtime_mode"], dict
+            ):
+                self.runtime_mode.update(loaded_data["runtime_mode"])
                 
             self.runtime_mode["ai_mode"] = normalize_ai_mode(
                 self.runtime_mode.get("ai_mode")

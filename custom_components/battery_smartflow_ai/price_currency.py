@@ -7,6 +7,7 @@ from typing import Any, MutableMapping
 
 
 DEFAULT_CURRENCY = "EUR"
+PRICE_STORAGE_MIGRATION_MARKER = "price_currency_storage_migrated"
 
 LEGACY_PRICE_FIELD_NAMES: dict[str, str] = {
     "charge_commit_acceptable_price_per_kwh": (
@@ -118,6 +119,24 @@ def migrate_legacy_price_fields(values: MutableMapping[str, Any]) -> None:
     passed through an exchange-rate conversion.
     """
 
+    if values.get(PRICE_STORAGE_MIGRATION_MARKER) is True:
+        return
+
     for neutral_name, legacy_name in LEGACY_PRICE_FIELD_NAMES.items():
-        if values.get(neutral_name) is None and values.get(legacy_name) is not None:
-            values[neutral_name] = values[legacy_name]
+        legacy_value = values.get(legacy_name)
+        if legacy_value is None:
+            continue
+
+        neutral_value = values.get(neutral_name)
+        if neutral_name == "profit" and neutral_value is not None:
+            # Beta1 initialized the new key with 0.0 before loading the old
+            # persisted ``profit_eur`` total. Preserve that historic total and
+            # add any profit accrued while Beta1 was already running.
+            try:
+                values[neutral_name] = float(legacy_value) + float(neutral_value)
+            except (TypeError, ValueError):
+                values[neutral_name] = legacy_value
+        elif neutral_value is None:
+            values[neutral_name] = legacy_value
+
+    values[PRICE_STORAGE_MIGRATION_MARKER] = True
