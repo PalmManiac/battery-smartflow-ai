@@ -7,6 +7,7 @@ from typing import Any, List, Literal, Optional
 
 from .const import MANUAL_CONST_DISCHARGE
 from .forecast import ForecastSummary
+from .market_price import MarketPricePoint
 from .price_math import peak_threshold
 from .power_controller import PowerController, PowerContext
 
@@ -178,11 +179,7 @@ def advance_pv_charge_hysteresis(
     return start_counter, stop_counter, latched
 
 
-@dataclass
-class PricePoint:
-    start: datetime
-    end: datetime
-    price: float
+PricePoint = MarketPricePoint
 
 
 @dataclass
