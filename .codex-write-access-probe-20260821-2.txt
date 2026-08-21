@@ -1,2 +1,0 @@
-Temporary Codex GitHub write-access probe.
-Created for a sequential create-verify-delete test on 2026-08-21.
