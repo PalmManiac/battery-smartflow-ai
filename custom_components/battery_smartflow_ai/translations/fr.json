@@ -1,4 +1,8 @@
 {
+  "device": {
+    "control_and_planning": {"name": "Battery SmartFlow AI – Commande et planification"},
+    "economics_and_prices": {"name": "Battery SmartFlow AI – Économie et prix"}
+  },
   "config": {
     "abort": {
       "debug_recording_started": "Enregistrement de débogage démarré. La progression est affichée par les capteurs d’état.",

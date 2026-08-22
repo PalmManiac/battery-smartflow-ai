@@ -80,7 +80,8 @@ def test_all_new_economics_sensors_use_the_virtual_device() -> None:
         assert _source(descriptions[key]["economics_device"]) == "True"
 
     source = SENSOR_PATH.read_text(encoding="utf-8")
-    assert 'name="Battery SmartFlow AI – Wirtschaft & Preise"' in source
+    assert 'translation_key="economics_and_prices"' in source
+    assert "model=virtual_device_model(coordinator.hass.config.language)" in source
     assert 'via_device=(DOMAIN, entry.entry_id)' in source
     assert 'identifiers={(DOMAIN, f"{entry.entry_id}_economics")}' in source
 

@@ -41,6 +41,8 @@ def translation_keys(module_name: str) -> set[str]:
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
+        if isinstance(node.func, ast.Name) and node.func.id == "DeviceInfo":
+            continue
         for keyword in node.keywords:
             if keyword.arg != "translation_key":
                 continue
@@ -108,6 +110,39 @@ def enum_translation_options() -> dict[tuple[str, str], set[str]]:
 
 
 class TranslationCoverageTests(unittest.TestCase):
+    def test_device_names_and_virtual_model_are_localized(self) -> None:
+        expected = {
+            "de": (
+                "Battery SmartFlow AI – Steuerung & Planung",
+                "Battery SmartFlow AI – Wirtschaft & Preise",
+                "Virtuelles Gerät",
+            ),
+            "en": (
+                "Battery SmartFlow AI – Control & Planning",
+                "Battery SmartFlow AI – Economics & Prices",
+                "Virtual device",
+            ),
+            "fr": (
+                "Battery SmartFlow AI – Commande et planification",
+                "Battery SmartFlow AI – Économie et prix",
+                "Appareil virtuel",
+            ),
+            "nl": (
+                "Battery SmartFlow AI – Besturing en planning",
+                "Battery SmartFlow AI – Economie en prijzen",
+                "Virtueel apparaat",
+            ),
+        }
+        for language, values in expected.items():
+            with self.subTest(language=language):
+                devices = load_json(TRANSLATIONS / f"{language}.json")["device"]
+                self.assertEqual(devices["control_and_planning"]["name"], values[0])
+                self.assertEqual(devices["economics_and_prices"]["name"], values[1])
+                self.assertEqual(const.virtual_device_model(language), values[2])
+
+        self.assertEqual(const.virtual_device_model("de-DE"), "Virtuelles Gerät")
+        self.assertEqual(const.virtual_device_model("es"), "Virtual device")
+
     def test_debug_abort_reasons_exist_on_config_flow_surface(self) -> None:
         expected = {
             "debug_recording_started",

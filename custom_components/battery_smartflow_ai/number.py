@@ -9,7 +9,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
     DOMAIN,
-    INTEGRATION_NAME,
     INTEGRATION_MANUFACTURER,
     INTEGRATION_MODEL,
     INTEGRATION_VERSION,
@@ -275,7 +274,7 @@ class ZendureSmartFlowNumber(NumberEntity):
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": INTEGRATION_NAME,
+            "translation_key": "control_and_planning",
             "manufacturer": INTEGRATION_MANUFACTURER,
             "model": INTEGRATION_MODEL,
             "sw_version": INTEGRATION_VERSION,

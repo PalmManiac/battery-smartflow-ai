@@ -8,6 +8,21 @@ from homeassistant.const import Platform
 DOMAIN = "battery_smartflow_ai"
 
 INTEGRATION_NAME = "Battery SmartFlow AI"
+
+VIRTUAL_DEVICE_MODELS = {
+    "de": "Virtuelles Gerät",
+    "en": "Virtual device",
+    "fr": "Appareil virtuel",
+    "nl": "Virtueel apparaat",
+}
+
+
+def virtual_device_model(language: str | None) -> str:
+    """Return the short virtual-device label for the HA backend language."""
+    language_code = (language or "en").replace("_", "-").split("-", 1)[0]
+    return VIRTUAL_DEVICE_MODELS.get(language_code, VIRTUAL_DEVICE_MODELS["en"])
+
+
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
 INTEGRATION_VERSION = "4.6.0-Beta2"

@@ -21,10 +21,10 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
-    INTEGRATION_NAME,
     INTEGRATION_MANUFACTURER,
     INTEGRATION_MODEL,
     INTEGRATION_VERSION,
+    virtual_device_model,
     STATUS_ENUMS,
     AI_STATUS_ENUMS,
     RECO_ENUMS,
@@ -1263,16 +1263,16 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
         if description.economics_device:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{entry.entry_id}_economics")},
-                name="Battery SmartFlow AI – Wirtschaft & Preise",
+                translation_key="economics_and_prices",
                 manufacturer=INTEGRATION_MANUFACTURER,
-                model="Virtual economics and market price device",
+                model=virtual_device_model(coordinator.hass.config.language),
                 sw_version=INTEGRATION_VERSION,
                 via_device=(DOMAIN, entry.entry_id),
             )
         else:
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, entry.entry_id)},
-                name=INTEGRATION_NAME,
+                translation_key="control_and_planning",
                 manufacturer=INTEGRATION_MANUFACTURER,
                 model=INTEGRATION_MODEL,
                 sw_version=INTEGRATION_VERSION,

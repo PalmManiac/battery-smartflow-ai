@@ -11,7 +11,6 @@ from .const import (
     DOMAIN,
     INTEGRATION_MANUFACTURER,
     INTEGRATION_MODEL,
-    INTEGRATION_NAME,
     INTEGRATION_VERSION,
     AI_MODES,
     MANUAL_ACTIONS,
@@ -87,7 +86,7 @@ class ZendureSmartFlowSelect(SelectEntity):
 
         self._attr_device_info = {
             "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": INTEGRATION_NAME,
+            "translation_key": "control_and_planning",
             "manufacturer": INTEGRATION_MANUFACTURER,
             "model": INTEGRATION_MODEL,
             "sw_version": INTEGRATION_VERSION,
