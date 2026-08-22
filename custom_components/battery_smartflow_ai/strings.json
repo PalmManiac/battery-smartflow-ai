@@ -1,5 +1,9 @@
 {
   "title": "Battery SmartFlow AI",
+  "device": {
+    "control_and_planning": {"name": "Battery SmartFlow AI – Control & Planning"},
+    "economics_and_prices": {"name": "Battery SmartFlow AI – Economics & Prices"}
+  },
   "config": {
     "abort": {
       "debug_integration_not_loaded": "Battery SmartFlow AI is not currently loaded.",
