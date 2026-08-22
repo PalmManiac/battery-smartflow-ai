@@ -69,6 +69,7 @@ _SOURCE_VALIDITY = {
 
 
 _CURRENCY_ENERGY_UNIT = re.compile(r"^([A-Za-z]{3})/(kWh|MWh)$", re.IGNORECASE)
+_EURO_SYMBOL_ENERGY_UNIT = re.compile(r"^€/(kWh|MWh)$", re.IGNORECASE)
 _CENT_PER_KWH_UNITS = frozenset({"ct/kwh", "cent/kwh", "c/kwh"})
 DEFAULT_CURRENT_PRICE_MAX_AGE = timedelta(hours=6)
 MAX_FUTURE_TIMESTAMP_SKEW = timedelta(minutes=5)
@@ -130,15 +131,21 @@ def normalize_price_value(
     elif compact_unit.lower() in _CENT_PER_KWH_UNITS:
         divisor = 100.0
     else:
-        match = _CURRENCY_ENERGY_UNIT.fullmatch(compact_unit)
-        if match is None:
+        euro_match = _EURO_SYMBOL_ENERGY_UNIT.fullmatch(compact_unit)
+        currency_match = _CURRENCY_ENERGY_UNIT.fullmatch(compact_unit)
+        if euro_match is not None:
+            unit_currency = "EUR"
+            energy_unit = euro_match.group(1)
+        elif currency_match is not None:
+            unit_currency = normalize_currency_code(currency_match.group(1))
+            energy_unit = currency_match.group(2)
+        else:
             return NormalizedNumericPrice(
                 value=None,
                 currency=source_code or active_code,
                 unit=canonical_unit,
                 validity=MarketPriceValidity.INVALID,
             )
-        unit_currency = normalize_currency_code(match.group(1))
         if unit_currency != active_code:
             return NormalizedNumericPrice(
                 value=None,
@@ -146,7 +153,7 @@ def normalize_price_value(
                 unit=canonical_unit,
                 validity=MarketPriceValidity.INVALID,
             )
-        divisor = 1000.0 if match.group(2).lower() == "mwh" else 1.0
+        divisor = 1000.0 if energy_unit.lower() == "mwh" else 1.0
 
     if source_code is not None and unit_currency is not None:
         if source_code != unit_currency:

@@ -254,6 +254,27 @@ class LegacyImportForecastAdapterTests(unittest.TestCase):
 
         self.assertEqual(forecast.points[0].price, 0.122)
 
+    def test_epex_euro_symbol_forecast_is_preserved(self) -> None:
+        forecast = normalize(
+            {
+                "unit_of_measurement": "€/kWh",
+                "data": [
+                    {
+                        "start_time": "2026-08-22T11:00:00+00:00",
+                        "end_time": "2026-08-22T12:00:00+00:00",
+                        "price_per_kwh": -0.04,
+                    },
+                    {
+                        "start_time": "2026-08-22T12:00:00+00:00",
+                        "end_time": "2026-08-22T13:00:00+00:00",
+                        "price_per_kwh": 0.22,
+                    },
+                ],
+            }
+        )
+
+        self.assertEqual([point.price for point in forecast.points], [-0.04, 0.22])
+
     def test_forecast_with_different_currency_is_rejected(self) -> None:
         forecast = normalize(
             {
