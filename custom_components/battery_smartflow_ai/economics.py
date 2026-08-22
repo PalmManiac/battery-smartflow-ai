@@ -77,6 +77,7 @@ class EnergyAccumulationResult:
     """Outcome of one sample, including gap-handling diagnostics."""
 
     energy: EconomicEnergyFlows
+    daily_energy: EconomicEnergyFlows
     elapsed_seconds: float
     accounted_seconds: float
     status: str
@@ -153,6 +154,11 @@ class EnergyAccumulator:
 
         return EnergyAccumulationResult(
             energy=energy,
+            daily_energy=(
+                current_energy
+                if previous.date() != sampled_at.date() and accounted == elapsed
+                else energy
+            ),
             elapsed_seconds=elapsed,
             accounted_seconds=accounted,
             status=status,
@@ -219,6 +225,7 @@ class EnergyAccumulator:
     ) -> EnergyAccumulationResult:
         return EnergyAccumulationResult(
             energy=EconomicEnergyFlows(),
+            daily_energy=EconomicEnergyFlows(),
             elapsed_seconds=elapsed,
             accounted_seconds=0.0,
             status=status,
@@ -354,6 +361,63 @@ class EconomicsEngine:
             totals.avoided_grid_import_cost += avoided_cost
             totals.battery_benefit += battery_benefit
 
+    def record_grid_flows(
+        self,
+        *,
+        flows: EconomicEnergyFlows,
+        import_price: MarketPrice,
+        export_price: MarketPrice,
+        daily_flows: EconomicEnergyFlows | None = None,
+    ) -> None:
+        """Record the grid-related monetary flows defined by issue #248."""
+
+        daily = daily_flows if daily_flows is not None else flows
+        self._record_grid_totals(
+            self._daily,
+            daily,
+            import_price=import_price,
+            export_price=export_price,
+        )
+        self._record_grid_totals(
+            self._total,
+            flows,
+            import_price=import_price,
+            export_price=export_price,
+        )
+
+    def to_state(self) -> dict[str, Any]:
+        """Serialize daily and lifetime monetary totals."""
+
+        return {
+            "version": 1,
+            "currency": self._currency,
+            "daily": self._totals_to_state(self._daily),
+            "total": self._totals_to_state(self._total),
+        }
+
+    @classmethod
+    def from_state(
+        cls,
+        raw: Mapping[str, Any] | None,
+        *,
+        currency: str,
+    ) -> EconomicsEngine:
+        """Restore persisted monetary totals for the active currency."""
+
+        engine = cls(currency=currency)
+        if (
+            not isinstance(raw, Mapping)
+            or raw.get("version") != 1
+            or str(raw.get("currency", "")).strip().upper() != engine.currency
+        ):
+            return engine
+        try:
+            engine._daily = cls._totals_from_state(raw.get("daily"))
+            engine._total = cls._totals_from_state(raw.get("total"))
+        except (TypeError, ValueError):
+            return cls(currency=currency)
+        return engine
+
     def daily_snapshot(self) -> EconomicsSnapshot:
         return self._snapshot(self._daily)
 
@@ -412,3 +476,51 @@ class EconomicsEngine:
     @staticmethod
     def _average(value: float, energy_kwh: float) -> float | None:
         return value / energy_kwh if energy_kwh > 0.0 else None
+
+    def _record_grid_totals(
+        self,
+        totals: _EconomicsTotals,
+        flows: EconomicEnergyFlows,
+        *,
+        import_price: MarketPrice,
+        export_price: MarketPrice,
+    ) -> None:
+        import_value = self._price(
+            import_price,
+            MarketPriceDirection.IMPORT,
+            required=bool(
+                flows.grid_to_battery_kwh or flows.battery_to_home_kwh
+            ),
+        )
+        export_value = self._price(
+            export_price,
+            MarketPriceDirection.EXPORT,
+            required=bool(flows.grid_export_kwh),
+        )
+        totals.grid_charge_kwh += flows.grid_to_battery_kwh
+        totals.grid_charge_cost += flows.grid_to_battery_kwh * import_value
+        totals.export_kwh += flows.grid_export_kwh
+        totals.export_revenue += flows.grid_export_kwh * export_value
+        totals.battery_discharge_kwh += flows.battery_to_home_kwh
+        avoided_cost = flows.battery_to_home_kwh * import_value
+        totals.battery_discharge_value += avoided_cost
+        totals.avoided_grid_import_cost += avoided_cost
+
+    @staticmethod
+    def _totals_to_state(totals: _EconomicsTotals) -> dict[str, float]:
+        return {
+            field.name: float(getattr(totals, field.name))
+            for field in fields(_EconomicsTotals)
+        }
+
+    @staticmethod
+    def _totals_from_state(raw: Any) -> _EconomicsTotals:
+        if not isinstance(raw, Mapping):
+            raise ValueError("economics totals must be a mapping")
+        values: dict[str, float] = {}
+        for field in fields(_EconomicsTotals):
+            value = float(raw.get(field.name, 0.0))
+            if not isfinite(value):
+                raise ValueError("economics totals must be finite")
+            values[field.name] = value
+        return _EconomicsTotals(**values)

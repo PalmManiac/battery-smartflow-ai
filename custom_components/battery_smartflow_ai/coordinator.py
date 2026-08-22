@@ -155,7 +155,7 @@ from .charge_economics import (
     resolve_feed_in_tariff,
     trade_soc_min_reset_state,
 )
-from .economics import EconomicPowerFlows, EnergyAccumulator
+from .economics import EconomicPowerFlows, EconomicsEngine, EnergyAccumulator
 from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
@@ -380,6 +380,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._automatic_strategy = AutomaticStrategy()
         self._charge_source_allocator = ChargeSourceAllocator()
         self._energy_accumulator = EnergyAccumulator()
+        self._economics_engine = EconomicsEngine(
+            currency=self.price_currency.code
+        )
         
         self._grid_history = GridHistory(
             build_grid_history_config(self._get_active_profile())
@@ -430,6 +433,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "profit": 0.0,
             "last_ts": None,
             "economics_energy_state": None,
+            "economics_money_state": None,
+            "economics_money_day": None,
 
             # season detection
             "season_mode": "winter",
@@ -580,6 +585,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             self._energy_accumulator = EnergyAccumulator.from_state(
                 self._persist.get("economics_energy_state")
+            )
+            self._economics_engine = EconomicsEngine.from_state(
+                self._persist.get("economics_money_state"),
+                currency=self.price_currency.code,
             )
 
     async def _save(self) -> None:
@@ -4821,6 +4830,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist[
                 "economics_energy_state"
             ] = self._energy_accumulator.to_state()
+            economics_day = economics_energy_snapshot.day.isoformat()
+            if self._persist.get("economics_money_day") != economics_day:
+                self._economics_engine.reset_daily()
+            self._economics_engine.record_grid_flows(
+                flows=economics_energy_result.energy,
+                daily_flows=economics_energy_result.daily_energy,
+                import_price=import_market_price,
+                export_price=export_market_price,
+            )
+            economics_daily_snapshot = self._economics_engine.daily_snapshot()
+            economics_total_snapshot = self._economics_engine.total_snapshot()
+            self._persist["economics_money_day"] = economics_day
+            self._persist[
+                "economics_money_state"
+            ] = self._economics_engine.to_state()
 
             sample_duration_seconds = float(UPDATE_INTERVAL)
             try:
@@ -6088,6 +6112,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economics_energy_total": (
                     economics_energy_snapshot.total.as_dict()
                 ),
+                "economics_daily": economics_daily_snapshot.as_dict(),
+                "economics_total": economics_total_snapshot.as_dict(),
                 "battery_ac_power_raw": battery_power,
                 "battery_ac_power_sensor_valid": bool(
                     battery_ac_power_sensor_valid
