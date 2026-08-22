@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from .adapters import MarketPriceSourceAdapter, NumericPriceNormalizer
 from .models import MarketPrice, MarketPriceDirection, MarketPriceValidity
@@ -23,6 +24,7 @@ class ExportMarketPriceResolver:
     dynamic_entity_id: str | None = None
     static_value: object | None = None
     static_configured: bool = False
+    now: datetime | None = None
 
     def resolve(self) -> MarketPrice:
         """Prefer a valid dynamic sensor, then the configured static tariff."""
@@ -65,7 +67,7 @@ class ExportMarketPriceResolver:
     def _adapt(self, source: PriceSource) -> MarketPrice:
         return MarketPriceSourceAdapter(
             source=source,
-            normalizer=NumericPriceNormalizer(),
+            normalizer=NumericPriceNormalizer(now=self.now),
             direction=MarketPriceDirection.EXPORT,
             active_currency=self.active_currency,
         ).read()

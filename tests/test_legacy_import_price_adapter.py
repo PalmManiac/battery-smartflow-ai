@@ -241,6 +241,32 @@ class LegacyImportForecastAdapterTests(unittest.TestCase):
 
         self.assertEqual([point.price for point in forecast.points], [0.0, -0.05])
 
+    def test_forecast_unit_is_normalized_to_currency_per_kwh(self) -> None:
+        forecast = normalize(
+            {
+                "unit_of_measurement": "EUR/MWh",
+                "currency": "EUR",
+                "rates": [
+                    {"start": "2026-08-22T11:00:00+00:00", "price": 122.0}
+                ],
+            }
+        )
+
+        self.assertEqual(forecast.points[0].price, 0.122)
+
+    def test_forecast_with_different_currency_is_rejected(self) -> None:
+        forecast = normalize(
+            {
+                "unit_of_measurement": "DKK/kWh",
+                "currency": "DKK",
+                "rates": [
+                    {"start": "2026-08-22T11:00:00+00:00", "price": 1.5}
+                ],
+            }
+        )
+
+        self.assertEqual(forecast.points, ())
+
     def test_gap_is_preserved_instead_of_inventing_missing_slots(self) -> None:
         forecast = normalize(
             {

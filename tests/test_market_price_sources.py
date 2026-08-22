@@ -77,12 +77,34 @@ class MarketPriceSourceTests(unittest.TestCase):
             source=source,
             normalizer=NumericPriceNormalizer(),
             direction=MarketPriceDirection.IMPORT,
-            active_currency="EUR",
+            active_currency="DKK",
         ).read()
 
         self.assertEqual(price.currency, "DKK")
         self.assertEqual(price.unit, "DKK/kWh")
         self.assertEqual(price.current_price, 1.35)
+
+    def test_different_source_currency_is_rejected_without_conversion(self) -> None:
+        source = GenericStatePriceSource(
+            "sensor.danish_price",
+            lambda _: FakeState(
+                1.35,
+                {
+                    "unit_of_measurement": "DKK/kWh",
+                    "currency": "DKK",
+                },
+            ),
+        )
+        price = MarketPriceSourceAdapter(
+            source=source,
+            normalizer=NumericPriceNormalizer(),
+            direction=MarketPriceDirection.IMPORT,
+            active_currency="EUR",
+        ).read()
+
+        self.assertFalse(price.valid)
+        self.assertIsNone(price.current_price)
+        self.assertEqual(price.validity, MarketPriceValidity.INVALID)
 
     def test_zero_and_negative_state_prices_remain_valid(self) -> None:
         for raw_value in ("0", "-0.05"):

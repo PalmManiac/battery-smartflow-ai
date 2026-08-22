@@ -10,7 +10,9 @@ from .models import (
     MarketPriceDirection,
     MarketPriceForecast,
     MarketPricePoint,
+    MarketPriceValidity,
 )
+from .adapters import normalize_price_value
 
 
 DatetimeParser = Callable[[str], datetime | None]
@@ -68,7 +70,9 @@ class _PendingPoint:
 
     start: datetime
     end: datetime | None
-    price: float
+    price: object
+    unit: object | None = None
+    currency: object | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,33 +104,50 @@ class LegacyImportForecastAdapter:
         """Return the same future price intervals produced by V4.5.
 
         ``direction`` and ``active_currency`` establish the common adapter
-        contract. This compatibility parser intentionally performs only the
-        historic cents conversion; central unit handling follows in issue
-        #243.
+        contract. Values and units are normalized centrally after the legacy
+        provider fields have been extracted.
         """
 
-        del direction, active_currency
+        del direction
 
         raw_items = self._extract_items(attributes)
         if not raw_items:
             return MarketPriceForecast.empty(timestamp=self.now)
 
         now = self._normalize_datetime(self.now)
+        source_unit = _first_present(
+            attributes,
+            ("unit_of_measurement", "unit"),
+        )
+        source_currency = attributes.get("currency")
         pending: list[_PendingPoint] = []
 
         for item in raw_items:
             if "validFrom" in item and "validTo" in item:
-                tariff_point = self._parse_tariff_point(item, now)
+                tariff_point = self._parse_tariff_point(
+                    item,
+                    now,
+                    source_currency=source_currency,
+                )
                 if tariff_point is not None:
                     pending.append(tariff_point)
                 continue
 
-            generic_point = self._parse_generic_point(item, now)
+            generic_point = self._parse_generic_point(
+                item,
+                now,
+                source_unit=source_unit,
+                source_currency=source_currency,
+            )
             if generic_point is not None:
                 pending.append(generic_point)
 
         pending.sort(key=lambda point: point.start)
-        points = self._finalize_points(pending, now)
+        points = self._finalize_points(
+            pending,
+            now,
+            active_currency=active_currency,
+        )
         return MarketPriceForecast(points=tuple(points), timestamp=now)
 
     def _extract_items(
@@ -161,6 +182,8 @@ class LegacyImportForecastAdapter:
         self,
         item: Mapping[str, object],
         now: datetime,
+        *,
+        source_currency: object | None,
     ) -> _PendingPoint | None:
         """Parse the historic validFrom/unitRateInformation structure."""
 
@@ -191,13 +214,18 @@ class LegacyImportForecastAdapter:
         return _PendingPoint(
             start=point_start,
             end=point_end,
-            price=float(cents) / 100.0,
+            price=cents,
+            unit="ct/kWh",
+            currency=item.get("currency", source_currency),
         )
 
     def _parse_generic_point(
         self,
         item: Mapping[str, object],
         now: datetime,
+        *,
+        source_unit: object | None,
+        source_currency: object | None,
     ) -> _PendingPoint | None:
         """Parse the generic field aliases accepted by V4.5."""
 
@@ -225,12 +253,20 @@ class LegacyImportForecastAdapter:
             start=point_start,
             end=point_end,
             price=float(price),
+            unit=_first_present(
+                item,
+                ("unit_of_measurement", "unit"),
+            )
+            or source_unit,
+            currency=item.get("currency", source_currency),
         )
 
     def _finalize_points(
         self,
         pending: list[_PendingPoint],
         now: datetime,
+        *,
+        active_currency: str,
     ) -> list[MarketPricePoint]:
         """Infer missing ends from adjacent starts and retain real slot lengths."""
 
@@ -287,12 +323,22 @@ class LegacyImportForecastAdapter:
             interval = (point.start, point_end)
             if interval in seen:
                 continue
+            normalized = normalize_price_value(
+                point.price,
+                unit=point.unit,
+                currency=point.currency,
+                active_currency=active_currency,
+            )
+            if not normalized.validity is MarketPriceValidity.VALID:
+                continue
+            if normalized.value is None:
+                continue
             seen.add(interval)
             points.append(
                 MarketPricePoint(
                     start=point.start,
                     end=point_end,
-                    price=point.price,
+                    price=float(normalized.value),
                 )
             )
         return points

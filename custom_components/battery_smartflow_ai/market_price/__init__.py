@@ -5,6 +5,7 @@ from .adapters import (
     MarketPriceSourceAdapter,
     NormalizedNumericPrice,
     NumericPriceNormalizer,
+    normalize_price_value,
     PriceNormalizer,
 )
 from .legacy_import import LegacyImportForecastAdapter
@@ -37,6 +38,7 @@ __all__ = [
     "MarketPriceValidity",
     "NormalizedNumericPrice",
     "NumericPriceNormalizer",
+    "normalize_price_value",
     "PriceNormalizer",
     "PriceSource",
     "PriceSourceReading",

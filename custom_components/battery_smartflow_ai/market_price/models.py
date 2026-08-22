@@ -26,6 +26,7 @@ class MarketPriceValidity(StrEnum):
     MISSING = "missing"
     UNKNOWN = "unknown"
     UNAVAILABLE = "unavailable"
+    STALE = "stale"
     INVALID = "invalid"
 
 

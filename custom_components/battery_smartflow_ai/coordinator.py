@@ -1821,7 +1821,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         price = self._get_export_market_price()
         return float(price.current_price) if price.valid else 0.0
 
-    def _get_export_market_price(self) -> MarketPrice:
+    def _get_export_market_price(
+        self,
+        now: datetime | None = None,
+    ) -> MarketPrice:
         """Return dynamic export price, static fallback, or explicit missing."""
 
         static_configured = bool(
@@ -1839,6 +1842,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             dynamic_entity_id=self.entities.dynamic_feed_in_price,
             static_value=static_value,
             static_configured=static_configured,
+            now=now,
         ).resolve()
 
     def _expert_mode_enabled(self) -> bool:
@@ -2252,7 +2256,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         current_price = MarketPriceSourceAdapter(
             source=source,
-            normalizer=NumericPriceNormalizer(),
+            normalizer=NumericPriceNormalizer(now=now),
             direction=MarketPriceDirection.IMPORT,
             active_currency=self.price_currency.code,
         ).read()
@@ -3719,7 +3723,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             profile = self._get_active_profile()
             
-            export_market_price = self._get_export_market_price()
+            export_market_price = self._get_export_market_price(now)
             feed_in_tariff = float(
                 export_market_price.current_price
                 if export_market_price.valid
