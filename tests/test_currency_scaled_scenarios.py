@@ -23,7 +23,13 @@ from custom_components.battery_smartflow_ai.learned_planning import (  # noqa: E
     LearningReadiness,
     build_learned_charge_plan,
 )
-from test_dev9_scenarios import NOW, PROFILE, context, price_points  # noqa: E402
+from test_dev9_scenarios import (  # noqa: E402
+    NOW,
+    PROFILE,
+    context,
+    import_market_price,
+    price_points,
+)
 
 
 def _scaled_optional(value: float | None, factor: float) -> float | None:
@@ -46,6 +52,10 @@ def scale_price_context(ctx: DecisionContext, factor: float) -> DecisionContext:
         very_cheap_price=_scaled_optional(ctx.very_cheap_price, factor),
         feed_in_tariff=float(ctx.feed_in_tariff) * factor,
         price_points=scaled_points,
+        market_price=import_market_price(
+            _scaled_optional(ctx.price_now, factor),
+            scaled_points,
+        ),
     )
 
 
@@ -216,7 +226,7 @@ class CurrencyScaledLearnedPlanningScenarios(unittest.TestCase):
                 model=model,
                 readiness=readiness,
                 now=NOW,
-                price_points=points,
+                market_price=import_market_price(points[0].price, points),
                 forecast=None,
                 total_battery_capacity_kwh=5.76,
                 current_soc=5.0,
