@@ -155,6 +155,7 @@ from .charge_economics import (
     resolve_feed_in_tariff,
     trade_soc_min_reset_state,
 )
+from .economics import EconomicPowerFlows, EnergyAccumulator
 from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
@@ -378,6 +379,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
         self._charge_source_allocator = ChargeSourceAllocator()
+        self._energy_accumulator = EnergyAccumulator()
         
         self._grid_history = GridHistory(
             build_grid_history_config(self._get_active_profile())
@@ -427,6 +429,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "discharged_kwh": 0.0,
             "profit": 0.0,
             "last_ts": None,
+            "economics_energy_state": None,
 
             # season detection
             "season_mode": "winter",
@@ -574,6 +577,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "sf800_mode_arbiter_reason",
             ):
                 self._persist.pop(legacy_key, None)
+
+            self._energy_accumulator = EnergyAccumulator.from_state(
+                self._persist.get("economics_energy_state")
+            )
 
     async def _save(self) -> None:
         self._persist["runtime_mode"] = dict(self.runtime_mode)
@@ -4781,6 +4788,40 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision_reason=charge_pricing_reason,
             )
 
+            # V4.6.0 economics energy accounting uses measured battery/grid
+            # power and the already centralized charge-source attribution.
+            # Each physical direction is represented once: total grid export
+            # remains an export flow, while its battery-attributable subset is
+            # tracked separately for later benefit calculations.
+            battery_to_grid_w = min(
+                float(battery_discharge_w), float(grid_export)
+            )
+            battery_to_home_w = max(
+                0.0, float(battery_discharge_w) - battery_to_grid_w
+            )
+            economics_energy_result = self._energy_accumulator.add_sample(
+                sampled_at=now,
+                power=EconomicPowerFlows(
+                    grid_to_battery_w=float(
+                        current_charge_pricing.grid_part_w
+                        if current_charge_pricing.active
+                        else 0.0
+                    ),
+                    pv_to_battery_w=float(
+                        current_charge_pricing.pv_part_w
+                        if current_charge_pricing.active
+                        else 0.0
+                    ),
+                    grid_export_w=float(grid_export),
+                    battery_to_home_w=battery_to_home_w,
+                    battery_to_grid_w=battery_to_grid_w,
+                ),
+            )
+            economics_energy_snapshot = self._energy_accumulator.snapshot()
+            self._persist[
+                "economics_energy_state"
+            ] = self._energy_accumulator.to_state()
+
             sample_duration_seconds = float(UPDATE_INTERVAL)
             try:
                 previous_update = dt_util.parse_datetime(
@@ -6032,6 +6073,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "charge_mixed_price_active": bool(
                     float(charge_grid_part_w or 0.0) > 0.0
                     and float(charge_pv_part_w or 0.0) > 0.0
+                ),
+                "economics_energy_sample_status": economics_energy_result.status,
+                "economics_energy_elapsed_seconds": float(
+                    economics_energy_result.elapsed_seconds
+                ),
+                "economics_energy_accounted_seconds": float(
+                    economics_energy_result.accounted_seconds
+                ),
+                "economics_energy_day": economics_energy_snapshot.day.isoformat(),
+                "economics_energy_daily": (
+                    economics_energy_snapshot.daily.as_dict()
+                ),
+                "economics_energy_total": (
+                    economics_energy_snapshot.total.as_dict()
                 ),
                 "battery_ac_power_raw": battery_power,
                 "battery_ac_power_sensor_valid": bool(
