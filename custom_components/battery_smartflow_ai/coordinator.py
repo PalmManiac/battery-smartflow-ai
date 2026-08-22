@@ -155,7 +155,12 @@ from .charge_economics import (
     resolve_feed_in_tariff,
     trade_soc_min_reset_state,
 )
-from .economics import EconomicPowerFlows, EconomicsEngine, EnergyAccumulator
+from .economics import (
+    EconomicPowerFlows,
+    EconomicsEngine,
+    EnergyAccumulator,
+    priceable_energy_flows,
+)
 from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
@@ -4833,15 +4838,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             economics_day = economics_energy_snapshot.day.isoformat()
             if self._persist.get("economics_money_day") != economics_day:
                 self._economics_engine.reset_daily()
+            priceable_total = priceable_energy_flows(
+                economics_energy_result.energy,
+                import_price=import_market_price,
+                export_price=export_market_price,
+            )
+            priceable_daily = priceable_energy_flows(
+                economics_energy_result.daily_energy,
+                import_price=import_market_price,
+                export_price=export_market_price,
+            )
             self._economics_engine.record_grid_flows(
-                flows=economics_energy_result.energy,
-                daily_flows=economics_energy_result.daily_energy,
+                flows=priceable_total.flows,
+                daily_flows=priceable_daily.flows,
                 import_price=import_market_price,
                 export_price=export_market_price,
             )
             self._economics_engine.record_battery_value_flows(
-                flows=economics_energy_result.energy,
-                daily_flows=economics_energy_result.daily_energy,
+                flows=priceable_total.flows,
+                daily_flows=priceable_daily.flows,
                 import_price=import_market_price,
                 export_price=export_market_price,
             )
@@ -6137,6 +6152,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     and float(charge_pv_part_w or 0.0) > 0.0
                 ),
                 "economics_energy_sample_status": economics_energy_result.status,
+                "economics_accounting_status": priceable_total.status,
                 "economics_energy_elapsed_seconds": float(
                     economics_energy_result.elapsed_seconds
                 ),

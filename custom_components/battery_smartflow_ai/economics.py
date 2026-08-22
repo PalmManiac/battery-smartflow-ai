@@ -34,6 +34,60 @@ class EconomicEnergyFlows:
 
 
 @dataclass(frozen=True, slots=True)
+class PriceableEnergyFlows:
+    """Energy flows that can be valued with the currently available prices."""
+
+    flows: EconomicEnergyFlows
+    status: str
+
+
+def priceable_energy_flows(
+    flows: EconomicEnergyFlows,
+    *,
+    import_price: MarketPrice,
+    export_price: MarketPrice,
+) -> PriceableEnergyFlows:
+    """Exclude only flows whose historical interval price is unavailable.
+
+    Physical energy remains in ``EnergyAccumulator``. This projection prevents
+    an unavailable price from stopping the coordinator without inventing a zero
+    price or valuing the interval later with a different price.
+    """
+
+    import_available = import_price.valid
+    export_available = export_price.valid
+    if import_available and export_available:
+        status = "accounted"
+    elif not import_available and not export_available:
+        status = "import_and_export_price_missing"
+    elif not import_available:
+        status = "import_price_missing"
+    else:
+        status = "export_price_missing"
+
+    return PriceableEnergyFlows(
+        flows=EconomicEnergyFlows(
+            grid_to_battery_kwh=(
+                flows.grid_to_battery_kwh if import_available else 0.0
+            ),
+            pv_to_battery_kwh=(
+                flows.pv_to_battery_kwh if export_available else 0.0
+            ),
+            grid_export_kwh=(
+                flows.grid_export_kwh if export_available else 0.0
+            ),
+            battery_to_home_kwh=(
+                flows.battery_to_home_kwh if import_available else 0.0
+            ),
+            battery_to_grid_kwh=(
+                flows.battery_to_grid_kwh if export_available else 0.0
+            ),
+        ),
+        status=status,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class EconomicPowerFlows:
     """Power attributed to economic flow directions, in watts."""
 
