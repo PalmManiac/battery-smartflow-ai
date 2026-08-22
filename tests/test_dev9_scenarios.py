@@ -278,6 +278,61 @@ class Dev9FallbackScenarios(unittest.TestCase):
 
 
 class Dev9OptionalDataScenarios(unittest.TestCase):
+    @staticmethod
+    def _waiting_learned_plan() -> SimpleNamespace:
+        return SimpleNamespace(
+            status="ready",
+            mode="wait",
+            decision_reason="learned_charge_window_wait",
+            required_charge_energy_kwh=1.0,
+            requested_charge_power_w=1000.0,
+        )
+
+    def test_issue_255_very_cheap_near_zero_price_overrides_learned_wait(self) -> None:
+        result = DecisionEngine().evaluate(
+            context(
+                price_now=-0.00001,
+                very_cheap_price=0.02,
+                pv_w=1000.0,
+                house_load_w=200.0,
+                grid_import_w=0.0,
+                feed_in_tariff=0.0,
+                learned_planning_enabled=True,
+                learned_charge_plan=self._waiting_learned_plan(),
+            )
+        )
+
+        self.assertEqual(result.reason, "very_cheap_force_charge")
+        self.assertEqual(result.action, "charge")
+        self.assertEqual(result.charge_w, 1000.0)
+
+    def test_zero_price_is_equivalent_to_pv_without_feed_in_tariff(self) -> None:
+        result = DecisionEngine().evaluate(
+            context(
+                price_now=0.0,
+                very_cheap_price=0.02,
+                pv_w=1000.0,
+                house_load_w=200.0,
+                grid_import_w=0.0,
+                feed_in_tariff=0.0,
+            )
+        )
+
+        self.assertEqual(result.reason, "very_cheap_force_charge")
+
+    def test_normal_price_still_respects_waiting_learned_window(self) -> None:
+        result = DecisionEngine().evaluate(
+            context(
+                price_now=0.10,
+                very_cheap_price=0.02,
+                learned_planning_enabled=True,
+                learned_charge_plan=self._waiting_learned_plan(),
+            )
+        )
+
+        self.assertEqual(result.reason, "learned_charge_window_wait")
+        self.assertEqual(result.action, "idle")
+
     def test_active_learned_window_bypasses_coarse_pv_planning_gate(self) -> None:
         plan = SimpleNamespace(
             status="ready",
