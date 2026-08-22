@@ -196,6 +196,7 @@ from .market_price import (
     MarketPriceSourceAdapter,
     NumericPriceNormalizer,
 )
+from .manual_standby import active_power_direction
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -5660,45 +5661,46 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 and str(manual_action) == MANUAL_STANDBY
             )
 
-            manual_standby_active_charge = bool(
-                manual_standby_no_command
-                and (
-                    str(self._state(self.entities.ac_mode) or "")
-                    == ZENDURE_MODE_INPUT
-                    or str(self._persist.get("last_set_mode") or "")
-                    == ZENDURE_MODE_INPUT
-                    or float(
-                        self._persist.get(
-                            "last_set_input_w",
-                            0.0,
-                        )
-                        or 0.0
-                    )
-                    > 0.0
-                )
-            )
-
             if manual_standby_no_command:
-                # Dev5.6 emergency correction:
-                # Manual standby must actively stop an AC charge that BSFAI previously
-                # started. Merely stopping future writes leaves the device in its last
-                # INPUT state and therefore allows grid charging to continue indefinitely.
-                #
-                # After the neutral stop command has been sent, subsequent standby cycles
-                # remain passive and do not fight external control.
-                if manual_standby_active_charge:
-                    # Stop the active INPUT side once, then leave the neutral
-                    # display mode in OUTPUT. Do not follow it with a redundant
-                    # outputLimit=0 command.
-                    await self._set_input_limit(0.0, force=True)
-                    await self._set_ac_mode(ZENDURE_MODE_OUTPUT)
+                # Stop BSFAI's active side exactly once when manual standby is
+                # entered. Later standby cycles stay passive, so external
+                # controls are not overwritten. The persisted latch also makes
+                # an update/restart in an already active standby safe.
+                if not bool(self._persist.get("manual_standby_stop_applied")):
+                    standby_direction = active_power_direction(
+                        current_ac_mode=self._state(self.entities.ac_mode),
+                        last_ac_mode=self._persist.get("last_set_mode"),
+                        current_input_limit_w=_to_float(
+                            self._state(self.entities.input_limit), 0.0
+                        ),
+                        current_output_limit_w=_to_float(
+                            self._state(self.entities.output_limit), 0.0
+                        ),
+                        last_input_limit_w=_to_float(
+                            self._persist.get("last_set_input_w"), 0.0
+                        ),
+                        last_output_limit_w=_to_float(
+                            self._persist.get("last_set_output_w"), 0.0
+                        ),
+                        measured_charge_w=battery_charge_w,
+                        measured_discharge_w=battery_discharge_w,
+                    )
+
+                    if standby_direction == "input":
+                        await self._set_input_limit(0.0, force=True)
+                        await self._set_ac_mode(ZENDURE_MODE_OUTPUT)
+                    elif standby_direction == "output":
+                        await self._set_output_limit(0.0, force=True)
 
                     self._persist["last_set_input_w"] = 0
                     self._persist["last_set_output_w"] = 0
                     self._persist["last_set_mode"] = ZENDURE_MODE_OUTPUT
+                    self._persist["manual_standby_stop_applied"] = True
 
                     self._persist["regulation_skipped_write_reason"] = (
-                        "manual_standby_stopped_active_charge"
+                        f"manual_standby_stopped_active_{standby_direction}"
+                        if standby_direction
+                        else "manual_standby_no_active_power"
                     )
                 else:
                     self._persist["regulation_skipped_write_reason"] = (
@@ -5706,6 +5708,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
 
             else:
+                self._persist["manual_standby_stop_applied"] = False
                 if regulation_device_command.should_write_mode:
                     await self._set_ac_mode(ac_mode)
 
