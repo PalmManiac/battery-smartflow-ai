@@ -29,6 +29,7 @@ CONF_SOC_LIMIT_ENTITY = "soc_limit_entity"
 # Preis ist optional (Sommer/PV-only Nutzer)
 CONF_PRICE_EXPORT_ENTITY = "price_export_entity"  # Tibber Export (attributes.data)
 CONF_PRICE_NOW_ENTITY = "price_now_entity"        # direct price sensor (currency/kWh)
+CONF_DYNAMIC_FEED_IN_PRICE_ENTITY = "dynamic_feed_in_price_entity"
 
 CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY = "additional_battery_charge_entity"
 CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY = "additional_battery_discharge_entity"

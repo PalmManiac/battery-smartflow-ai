@@ -37,7 +37,8 @@
           "output_limit_entity": "Puissance de décharge Zendure",
 		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
           "offgrid_mode_entity": "Mode hors réseau (optionnel)",
-		  "feed_in_tariff": "Rémunération de l’injection"
+		  "feed_in_tariff": "Rémunération de l’injection",
+          "dynamic_feed_in_price_entity": "Prix d’injection dynamique actuel (facultatif)"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Le profil contient des paramètres de régulation ajustés.",
@@ -63,7 +64,8 @@
           "output_limit_entity": "Entité number pour définir la puissance de décharge en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
           "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
-		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Lors d’une charge PV, elle est également intégrée au prix de charge moyen de la batterie en tant que revenu d’injection perdu. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle sert de valeur de repli lorsqu’aucun prix d’injection dynamique valide n’est disponible.",
+          "dynamic_feed_in_price_entity": "Capteur numérique Home Assistant facultatif pour le prix d’injection dynamique actuel. Une valeur valide, y compris zéro ou un prix négatif, est prioritaire sur la rémunération fixe."
         }
       },
       "reconfigure_grid": {
@@ -121,7 +123,8 @@
           "output_limit_entity": "Puissance de décharge Zendure",
 		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
           "offgrid_mode_entity": "Mode hors réseau (optionnel)",
-		  "feed_in_tariff": "Rémunération de l’injection"
+		  "feed_in_tariff": "Rémunération de l’injection",
+          "dynamic_feed_in_price_entity": "Prix d’injection dynamique actuel (facultatif)"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Les paramètres de régulation sont ajustés automatiquement.",
@@ -147,7 +150,8 @@
           "output_limit_entity": "Puissance de décharge réglable en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
           "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
-		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Lors d’une charge PV, elle est également intégrée au prix de charge moyen de la batterie en tant que revenu d’injection perdu. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle sert de valeur de repli lorsqu’aucun prix d’injection dynamique valide n’est disponible.",
+          "dynamic_feed_in_price_entity": "Capteur numérique Home Assistant facultatif pour le prix d’injection dynamique actuel. Une valeur valide, y compris zéro ou un prix négatif, est prioritaire sur la rémunération fixe."
         }
       }
     }

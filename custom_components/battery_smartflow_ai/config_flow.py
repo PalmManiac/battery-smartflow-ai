@@ -20,6 +20,7 @@ from .const import (
     CONF_OFFGRID_MODE_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
+    CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
     CONF_AC_MODE_ENTITY,
     CONF_INPUT_LIMIT_ENTITY,
     CONF_OUTPUT_LIMIT_ENTITY,
@@ -72,6 +73,7 @@ EMPTY_ENTITY_VALUES = {
 OPTIONAL_ENTITY_KEYS = (
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
+    CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
     CONF_SOC_LIMIT_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
@@ -370,6 +372,23 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 unit_of_measurement=currency.price_unit,
             )
         )
+
+        dynamic_feed_in_val = _val(CONF_DYNAMIC_FEED_IN_PRICE_ENTITY)
+        if dynamic_feed_in_val:
+            schema[
+                vol.Optional(
+                    CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
+                    default=dynamic_feed_in_val,
+                )
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
+        else:
+            schema[
+                vol.Optional(CONF_DYNAMIC_FEED_IN_PRICE_ENTITY)
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
 
         pv_forecast_today_val = _val(CONF_PV_FORECAST_TODAY_ENTITY)
         if pv_forecast_today_val:

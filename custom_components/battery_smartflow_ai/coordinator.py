@@ -23,6 +23,7 @@ from .const import (
     CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
+    CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
     CONF_AC_MODE_ENTITY,
     CONF_INPUT_LIMIT_ENTITY,
     CONF_OUTPUT_LIMIT_ENTITY,
@@ -181,6 +182,7 @@ from .price_currency import (
 )
 from .price_math import comparison_tolerance
 from .market_price import (
+    ExportMarketPriceResolver,
     GenericStatePriceSource,
     LegacyImportForecastAdapter,
     MarketPrice,
@@ -286,6 +288,7 @@ class SelectedEntities:
     pv_forecast_tomorrow: str | None
     price_export: str | None
     price_now: str | None
+    dynamic_feed_in_price: str | None
     ac_mode: str
     input_limit: str
     output_limit: str
@@ -346,6 +349,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             additional_battery_discharge=entry.data.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY),
             price_export=entry.data.get(CONF_PRICE_EXPORT_ENTITY),
             price_now=entry.data.get(CONF_PRICE_NOW_ENTITY),
+            dynamic_feed_in_price=entry.data.get(
+                CONF_DYNAMIC_FEED_IN_PRICE_ENTITY
+            ),
             ac_mode=str(entry.data[CONF_AC_MODE_ENTITY]),
             input_limit=str(entry.data[CONF_INPUT_LIMIT_ENTITY]),
             output_limit=str(entry.data[CONF_OUTPUT_LIMIT_ENTITY]),
@@ -1686,6 +1692,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "pv_forecast_tomorrow": self.entities.pv_forecast_tomorrow,
             "price_now": self.entities.price_now,
             "price_export": self.entities.price_export,
+            "dynamic_feed_in_price": self.entities.dynamic_feed_in_price,
             "ac_mode": self.entities.ac_mode,
             "input_limit": self.entities.input_limit,
             "output_limit": self.entities.output_limit,
@@ -1811,11 +1818,28 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return float(DEFAULT_INSTALLED_PV_WP)
             
     def _get_feed_in_tariff(self) -> float:
-        return resolve_feed_in_tariff(
+        price = self._get_export_market_price()
+        return float(price.current_price) if price.valid else 0.0
+
+    def _get_export_market_price(self) -> MarketPrice:
+        """Return dynamic export price, static fallback, or explicit missing."""
+
+        static_configured = bool(
+            CONF_FEED_IN_TARIFF in self.entry.data
+            or CONF_FEED_IN_TARIFF in self.entry.options
+        )
+        static_value = resolve_feed_in_tariff(
             data=self.entry.data,
             options=self.entry.options,
             default=DEFAULT_FEED_IN_TARIFF,
         )
+        return ExportMarketPriceResolver(
+            state_getter=self.hass.states.get,
+            active_currency=self.price_currency.code,
+            dynamic_entity_id=self.entities.dynamic_feed_in_price,
+            static_value=static_value,
+            static_configured=static_configured,
+        ).resolve()
 
     def _expert_mode_enabled(self) -> bool:
         return bool(
@@ -3695,7 +3719,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             profile = self._get_active_profile()
             
-            feed_in_tariff = self._get_feed_in_tariff()
+            export_market_price = self._get_export_market_price()
+            feed_in_tariff = float(
+                export_market_price.current_price
+                if export_market_price.valid
+                else 0.0
+            )
 
             offgrid_raw = _to_float(
                 self._state(self.entities.offgrid_power),
@@ -5244,10 +5273,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # The PowerController does not decide whether charging or discharging
             # should start. It only uses these values to shift the small technical
             # target range toward slight export when that is economically preferable.
-            feed_in_tariff_configured = bool(
-                CONF_FEED_IN_TARIFF in self.entry.options
-                or CONF_FEED_IN_TARIFF in self.entry.data
-            )
+            feed_in_tariff_configured = bool(export_market_price.valid)
 
             battery_value_per_kwh = _to_float(
                 self._persist.get("trade_avg_charge_price"),
@@ -5974,6 +6000,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 
                 "price_now": price_now,
                 "feed_in_tariff": float(feed_in_tariff),
+                "feed_in_tariff_source": str(export_market_price.source),
+                "feed_in_tariff_is_dynamic": bool(
+                    export_market_price.is_dynamic
+                ),
+                "feed_in_tariff_is_fallback": bool(
+                    export_market_price.is_fallback
+                ),
+                "feed_in_tariff_validity": str(
+                    export_market_price.validity
+                ),
                 "pv_opportunity_price": float(feed_in_tariff),
                 "avg_charge_price": self._persist.get("trade_avg_charge_price"),
                 "economic_discharge_threshold": economic_discharge_threshold,

@@ -38,7 +38,8 @@
           "output_limit_entity": "Zendure discharge power",
 		  "offgrid_power_entity": "Off-grid power / island socket (optional)",
           "offgrid_mode_entity": "Off-grid mode (optional)",
-		  "feed_in_tariff": "Feed-in tariff"
+		  "feed_in_tariff": "Feed-in tariff",
+          "dynamic_feed_in_price_entity": "Current dynamic feed-in price (optional)"
         },
         "data_description": {
           "device_profile": "Select the matching device profile for your Zendure system. The profile contains tuned control parameters.",
@@ -64,7 +65,8 @@
           "output_limit_entity": "Number entity for setting the discharge power in watts.",
 		  "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
           "offgrid_mode_entity": "Optional select sensor for the Zendure off-grid / island socket mode. The mode is only read and is never set by Battery SmartFlow AI.",
-		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as an economic comparison value: optional grid charging may only displace existing PV charging if grid power is cheaper than this feed-in tariff. During PV charging it is also included in the battery's average charge price as lost export revenue. If no tariff is entered, the value remains 0.0."
+		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as a fallback when no valid dynamic feed-in price is available.",
+          "dynamic_feed_in_price_entity": "Optional numeric Home Assistant sensor for the current dynamic feed-in price. A valid sensor value, including zero or a negative price, takes priority over the fixed feed-in tariff."
         }
       },
       "reconfigure_grid": {
@@ -122,7 +124,8 @@
           "output_limit_entity": "Zendure discharge power",
 		  "offgrid_power_entity": "Off-grid power / island socket (optional)",
           "offgrid_mode_entity": "Off-grid mode (optional)",
-		  "feed_in_tariff": "Feed-in tariff"
+		  "feed_in_tariff": "Feed-in tariff",
+          "dynamic_feed_in_price_entity": "Current dynamic feed-in price (optional)"
         },
         "data_description": {
           "device_profile": "Select the matching device profile for your Zendure system. The control parameters are adjusted automatically.",
@@ -148,7 +151,8 @@
           "output_limit_entity": "Adjustable discharge power in watts.",
 		  "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
           "offgrid_mode_entity": "Optional select sensor for the Zendure off-grid / island socket mode. The mode is only read and is never set by Battery SmartFlow AI.",
-		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as an economic comparison value: optional grid charging may only displace existing PV charging if grid power is cheaper than this feed-in tariff. During PV charging it is also included in the battery's average charge price as lost export revenue. If no tariff is entered, the value remains 0.0."
+		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as a fallback when no valid dynamic feed-in price is available.",
+          "dynamic_feed_in_price_entity": "Optional numeric Home Assistant sensor for the current dynamic feed-in price. A valid sensor value, including zero or a negative price, takes priority over the fixed feed-in tariff."
         }
       }
     }

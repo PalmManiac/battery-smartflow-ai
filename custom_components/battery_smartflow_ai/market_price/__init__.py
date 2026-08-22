@@ -8,6 +8,7 @@ from .adapters import (
     PriceNormalizer,
 )
 from .legacy_import import LegacyImportForecastAdapter
+from .export_price import ExportMarketPriceResolver
 from .models import (
     MarketPrice,
     MarketPriceDirection,
@@ -25,6 +26,7 @@ from .sources import (
 
 __all__ = [
     "ForecastAdapter",
+    "ExportMarketPriceResolver",
     "GenericStatePriceSource",
     "LegacyImportForecastAdapter",
     "MarketPrice",

@@ -37,7 +37,8 @@
           "output_limit_entity": "Zendure ontlaadvermogen",
 		  "offgrid_power_entity": "Off-grid vermogen / eilandstopcontact (optioneel)",
           "offgrid_mode_entity": "Off-grid modus (optioneel)",
-		  "feed_in_tariff": "Terugleververgoeding"
+		  "feed_in_tariff": "Terugleververgoeding",
+          "dynamic_feed_in_price_entity": "Actuele dynamische terugleverprijs (optioneel)"
         },
         "data_description": {
           "device_profile": "Kies het passende apparaatprofiel voor je Zendure-systeem. Het profiel bevat afgestemde regelparameters.",
@@ -63,7 +64,8 @@
           "output_limit_entity": "Number-entiteit voor het instellen van het ontlaadvermogen in watt.",
 		  "offgrid_power_entity": "Optionele sensor voor het vermogen van het Zendure off-grid / eilandstopcontact. Positieve waarden worden geïnterpreteerd als een actieve belasting op het eilandstopcontact.",
           "offgrid_mode_entity": "Optionele select-sensor voor de Zendure off-grid / eilandstopcontact-modus. De modus wordt alleen gelezen en nooit door Battery SmartFlow AI ingesteld.",
-		  "feed_in_tariff": "Vergoeding per teruggeleverde kWh in dezelfde valuta-eenheid als de stroomprijzen. Wordt gebruikt als economische vergelijkingswaarde: optioneel laden via het net mag bestaande PV-lading alleen verdringen als netstroom goedkoper is dan deze terugleververgoeding. Bij laden via PV wordt deze vergoeding ook als misgelopen terugleveropbrengst in de gemiddelde laadprijs van de batterij opgenomen. Als er geen vergoeding is ingevuld, blijft de waarde 0,0."
+		  "feed_in_tariff": "Vergoeding per teruggeleverde kWh in dezelfde valuta-eenheid als de stroomprijzen. Deze dient als terugvalwaarde wanneer geen geldige dynamische terugleverprijs beschikbaar is.",
+          "dynamic_feed_in_price_entity": "Optionele numerieke Home Assistant-sensor voor de actuele dynamische terugleverprijs. Een geldige sensorwaarde, inclusief nul of een negatieve prijs, krijgt voorrang op de vaste vergoeding."
         }
       },
       "reconfigure_grid": {
@@ -121,7 +123,8 @@
           "output_limit_entity": "Zendure ontlaadvermogen",
 		  "offgrid_power_entity": "Off-grid vermogen / eilandstopcontact (optioneel)",
           "offgrid_mode_entity": "Off-grid modus (optioneel)",
-		  "feed_in_tariff": "Terugleververgoeding"
+		  "feed_in_tariff": "Terugleververgoeding",
+          "dynamic_feed_in_price_entity": "Actuele dynamische terugleverprijs (optioneel)"
         },
         "data_description": {
           "device_profile": "Kies het passende apparaatprofiel voor je Zendure-systeem. De regelparameters worden automatisch aangepast.",
@@ -147,7 +150,8 @@
           "output_limit_entity": "Instelbaar ontlaadvermogen in watt.",
 		  "offgrid_power_entity": "Optionele sensor voor het vermogen van het Zendure off-grid / eilandstopcontact. Positieve waarden worden geïnterpreteerd als een actieve belasting op het eilandstopcontact.",
           "offgrid_mode_entity": "Optionele select-sensor voor de Zendure off-grid / eilandstopcontact-modus. De modus wordt alleen gelezen en nooit door Battery SmartFlow AI ingesteld.",
-		  "feed_in_tariff": "Vergoeding per teruggeleverde kWh in dezelfde valuta-eenheid als de stroomprijzen. Wordt gebruikt als economische vergelijkingswaarde: optioneel laden via het net mag bestaande PV-lading alleen verdringen als netstroom goedkoper is dan deze terugleververgoeding. Bij laden via PV wordt deze vergoeding ook als misgelopen terugleveropbrengst in de gemiddelde laadprijs van de batterij opgenomen. Als er geen vergoeding is ingevuld, blijft de waarde 0,0."
+		  "feed_in_tariff": "Vergoeding per teruggeleverde kWh in dezelfde valuta-eenheid als de stroomprijzen. Deze dient als terugvalwaarde wanneer geen geldige dynamische terugleverprijs beschikbaar is.",
+          "dynamic_feed_in_price_entity": "Optionele numerieke Home Assistant-sensor voor de actuele dynamische terugleverprijs. Een geldige sensorwaarde, inclusief nul of een negatieve prijs, krijgt voorrang op de vaste vergoeding."
         }
       }
     }
