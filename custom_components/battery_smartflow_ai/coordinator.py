@@ -4851,6 +4851,38 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist[
                 "economics_money_state"
             ] = self._economics_engine.to_state()
+            economics_runtime_values = {
+                **{
+                    f"economics_daily_{key}": value
+                    for key, value in economics_daily_snapshot.as_dict().items()
+                    if key != "currency"
+                },
+                **{
+                    f"economics_total_{key}": value
+                    for key, value in economics_total_snapshot.as_dict().items()
+                    if key != "currency"
+                },
+                **{
+                    f"economics_daily_{key}": value
+                    for key, value in economics_energy_snapshot.daily.as_dict().items()
+                },
+                **{
+                    f"economics_total_{key}": value
+                    for key, value in economics_energy_snapshot.total.as_dict().items()
+                },
+                "economics_average_grid_charge_price": (
+                    economics_total_snapshot.average_grid_charge_price
+                ),
+                "economics_average_pv_opportunity_value": (
+                    economics_total_snapshot.average_pv_opportunity_value
+                ),
+                "economics_average_export_price": (
+                    economics_total_snapshot.average_export_price
+                ),
+                "economics_average_battery_discharge_value": (
+                    economics_total_snapshot.average_battery_discharge_value
+                ),
+            }
 
             sample_duration_seconds = float(UPDATE_INTERVAL)
             try:
@@ -6120,6 +6152,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "economics_daily": economics_daily_snapshot.as_dict(),
                 "economics_total": economics_total_snapshot.as_dict(),
+                **economics_runtime_values,
                 "battery_ac_power_raw": battery_power,
                 "battery_ac_power_sensor_valid": bool(
                     battery_ac_power_sensor_valid
