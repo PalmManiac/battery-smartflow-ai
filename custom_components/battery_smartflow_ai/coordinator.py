@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from functools import partial
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -119,7 +119,6 @@ from .decision_engine import (
     DecisionContext,
     DecisionEngine,
     DecisionResult,
-    PricePoint,
 )
 from .forecast import build_forecast_summary
 from .learned_planning import (
@@ -181,6 +180,14 @@ from .price_currency import (
     resolve_price_currency,
 )
 from .price_math import comparison_tolerance
+from .market_price import (
+    GenericStatePriceSource,
+    LegacyImportForecastAdapter,
+    MarketPrice,
+    MarketPriceDirection,
+    MarketPriceSourceAdapter,
+    NumericPriceNormalizer,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -2212,12 +2219,36 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return None, None
 
-    def _get_price_now(self) -> float | None:
-        if self.entities.price_now:
-            p = _to_float(self._state(self.entities.price_now), None)
-            if p is not None:
-                return float(p)
-        return None
+    def _get_import_market_price(self, now: datetime) -> MarketPrice:
+        """Build the canonical import price from the configured V4.5 sources."""
+
+        source = GenericStatePriceSource(
+            entity_id=self.entities.price_now or "not_configured",
+            state_getter=self.hass.states.get,
+        )
+        current_price = MarketPriceSourceAdapter(
+            source=source,
+            normalizer=NumericPriceNormalizer(),
+            direction=MarketPriceDirection.IMPORT,
+            active_currency=self.price_currency.code,
+        ).read()
+
+        forecast = None
+        if self.entities.price_export:
+            forecast_state = self.hass.states.get(self.entities.price_export)
+            if forecast_state is not None:
+                adapter = LegacyImportForecastAdapter(
+                    now=now,
+                    default_timezone=dt_util.get_default_time_zone(),
+                    parse_datetime=dt_util.parse_datetime,
+                )
+                forecast = adapter.normalize(
+                    forecast_state.attributes or {},
+                    direction=MarketPriceDirection.IMPORT,
+                    active_currency=self.price_currency.code,
+                )
+
+        return replace(current_price, forecast=forecast)
 
     def _normalize_offgrid_mode(self, raw: Any) -> str:
         if raw is None:
@@ -3382,127 +3413,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return locked
 
-    def _parse_price_points(self, now) -> list[PricePoint]:
-        if not self.entities.price_export:
-            return []
-
-        st = self.hass.states.get(self.entities.price_export)
-        if not st:
-            return []
-
-        attrs = st.attributes or {}
-
-        raw = (
-            attrs.get("rates")
-            or attrs.get("data")
-            or attrs.get("unit_rate_forecast")
-        )
-
-        if not raw:
-            return []
-
-        if isinstance(raw, dict):
-            raw = raw.get("rates") or raw.get("data") or raw.get("timeslots")
-
-        if not isinstance(raw, list):
-            return []
-
-        tz = dt_util.get_default_time_zone()
-
-        def normalize(dt):
-            if not dt:
-                return None
-            if dt.tzinfo is None:
-                return dt.replace(tzinfo=tz)
-            return dt.astimezone(tz)
-
-        now = normalize(now)
-
-        out: list[PricePoint] = []
-
-        for item in raw:
-            if not isinstance(item, dict):
-                continue
-
-            if "validFrom" in item and "validTo" in item:
-                start = item.get("validFrom")
-                end = item.get("validTo")
-
-                cents = None
-                uinfo = item.get("unitRateInformation") or {}
-                rates_list = uinfo.get("rates") or []
-                if rates_list and isinstance(rates_list[0], dict):
-                    cents = _to_float(
-                        rates_list[0].get("latestGrossUnitRateCentsPerKwh"),
-                        None,
-                    )
-
-                if not start or not end or cents is None:
-                    continue
-
-                t_start = normalize(dt_util.parse_datetime(str(start)))
-                t_end = normalize(dt_util.parse_datetime(str(end)))
-
-                if not t_start or not t_end:
-                    continue
-
-                if t_end <= t_start:
-                    continue
-
-                if t_end <= now:
-                    continue
-
-                price = float(cents) / 100.0
-                out.append(PricePoint(start=t_start, end=t_end, price=price))
-                continue
-
-            start = (
-                item.get("start_time")
-                or item.get("starts_at")
-                or item.get("start")
-                or item.get("time")
-            )
-
-            end = (
-                item.get("end_time")
-                or item.get("ends_at")
-                or item.get("end")
-            )
-
-            p = _to_float(
-                item.get("price_per_kwh")
-                or item.get("value_inc_vat")
-                or item.get("value")
-                or item.get("unit_rate")
-                or item.get("price"),
-                None,
-            )
-
-            if not start or p is None:
-                continue
-
-            t_start = normalize(dt_util.parse_datetime(str(start)))
-            if not t_start:
-                continue
-
-            if end:
-                t_end = normalize(dt_util.parse_datetime(str(end)))
-                if not t_end:
-                    continue
-            else:
-                t_end = t_start + timedelta(minutes=15)
-
-            if t_end <= t_start:
-                continue
-
-            if t_end <= now:
-                continue
-
-            out.append(PricePoint(start=t_start, end=t_end, price=float(p)))
-
-        out.sort(key=lambda x: x.start)
-        return out
-
     def _season_detection(
         self,
         pv_w: float,
@@ -3944,8 +3854,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 grid_export_w=float(grid_export or 0.0),
             )
 
-            price_now = self._get_price_now()
-            price_points = self._parse_price_points(now)
+            import_market_price = self._get_import_market_price(now)
+            price_now = (
+                import_market_price.current_price
+                if import_market_price.valid
+                else None
+            )
+            price_points = list(
+                import_market_price.forecast.points
+                if import_market_price.forecast is not None
+                else ()
+            )
 
             forecast_summary = build_forecast_summary(
                 hass=self.hass,
