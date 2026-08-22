@@ -3,3 +3,4 @@
 * [Anleitung](anleitung.md)
 * [User Guide](user-guide.md)
 * [Dashboard](dashboard.md)
+* [Dashboard Wirtschaft & Preise](dashboard-wirtschaft-preise.md)
