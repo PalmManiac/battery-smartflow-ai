@@ -1322,6 +1322,7 @@ class DecisionEngine:
 
         if (
             self._learned_planning_waits_for_window(ctx)
+            and str(result.reason or "") != "very_cheap_force_charge"
             and state
             in {
                 "ac_charge_planned",
@@ -1693,8 +1694,10 @@ class DecisionEngine:
         except Exception:
             pv_opportunity_price = 0.0
 
-        # Small epsilon avoids oscillation on equal/rounded values.
-        return price_now <= (pv_opportunity_price - 0.001)
+        # Equal prices are economically equivalent. This also lets a zero or
+        # negative grid price override PV when no feed-in tariff is configured,
+        # without introducing a fixed tolerance that depends on the currency.
+        return price_now <= pv_opportunity_price
 
     def _optional_grid_charge_should_wait_for_pv(self, ctx: DecisionContext) -> bool:
         """Return True when optional grid charging should not override current PV.
