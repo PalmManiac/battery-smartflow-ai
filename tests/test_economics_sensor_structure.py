@@ -31,6 +31,18 @@ PRICE_KEYS = {
     "economics_average_export_price",
     "economics_average_battery_discharge_value",
 }
+MIGRATED_KEYS = {
+    "price_daily_average",
+    "current_peak_threshold",
+    "current_valley_threshold",
+    "economic_discharge_threshold",
+    "effective_discharge_threshold",
+    "price_now",
+    "feed_in_tariff",
+    "charge_price_applied",
+    "avg_charge_price",
+    "profit_eur",
+}
 
 
 def _descriptions() -> dict[str, dict[str, ast.expr]]:
@@ -112,3 +124,27 @@ def test_coordinator_exposes_flat_runtime_values_for_sensor_readers() -> None:
     assert 'f"economics_total_{key}"' in source
     for key in PRICE_KEYS:
         assert f'"{key}"' in source
+
+
+def test_existing_price_entities_migrate_without_changing_unique_ids() -> None:
+    descriptions = _descriptions()
+    for key in MIGRATED_KEYS:
+        assert key in descriptions
+        assert _source(descriptions[key]["economics_device"]) == "True"
+        assert _source(descriptions[key]["runtime_key"]) == repr(key)
+
+    source = SENSOR_PATH.read_text(encoding="utf-8")
+    assert 'f"{DOMAIN}_{entry.entry_id}_{description.key}"' in source
+    # The formerly disabled applied-charge-price entity keeps its existing key
+    # but is no longer removed as a retired diagnostic entity.
+    charge_price = descriptions["charge_price_applied"]
+    assert "entity_category" not in charge_price
+    assert "entity_registry_enabled_default" not in charge_price
+
+
+def test_migrated_visible_names_use_economics_group_prefixes() -> None:
+    strings = json.loads((COMPONENT / "strings.json").read_text(encoding="utf-8"))
+    sensors = strings["entity"]["sensor"]
+    prefixes = ("Current – ", "Prices – ", "Balance since start – ")
+    for key in MIGRATED_KEYS:
+        assert sensors[key]["name"].startswith(prefixes)

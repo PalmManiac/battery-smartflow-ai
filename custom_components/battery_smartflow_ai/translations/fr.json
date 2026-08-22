@@ -508,19 +508,19 @@
         "name": "Prévision PV prochaines 6 heures"
       },
       "price_daily_average": {
-        "name": "Prix moyen journalier dynamique"
+        "name": "Prix – Moyenne journalière dynamique"
       },
       "current_peak_threshold": {
-        "name": "Seuil de pic actuel"
+        "name": "Prix – Seuil de pic actuel"
       },
       "current_valley_threshold": {
-        "name": "Seuil de creux actuel"
+        "name": "Prix – Seuil de creux actuel"
       },
       "economic_discharge_threshold": {
-        "name": "Seuil économique de décharge"
+        "name": "Prix – Seuil économique de décharge"
       },
       "effective_discharge_threshold": {
-        "name": "Seuil effectif de décharge"
+        "name": "Prix – Seuil effectif de décharge"
       },
       "global_lowest_cell_voltage": {
         "name": "Tension de cellule minimale globale"
@@ -750,7 +750,10 @@
         "name": "Charge maison"
       },
       "price_now": {
-        "name": "Prix actuel de l’électricité"
+        "name": "Actuel – Prix d’importation"
+      },
+      "feed_in_tariff": {
+        "name": "Actuel – Tarif d’injection"
       },
 	  "charge_source": {
         "name": "Source de charge",
@@ -777,7 +780,7 @@
         }
       },
       "charge_price_applied": {
-        "name": "Prix de charge appliqué"
+        "name": "Actuel – Prix de charge batterie appliqué"
       },
       "charge_grid_part_w": {
         "name": "Part de charge réseau"
@@ -793,10 +796,10 @@
         }
       },
       "avg_charge_price": {
-        "name": "Prix moyen de charge batterie"
+        "name": "Prix – Ancien prix moyen de charge batterie"
       },
       "profit_eur": {
-        "name": "Économies / gain (total)"
+        "name": "Bilan depuis le début – Ancien gain commercial"
       },
       "economics_daily_grid_charge_cost": {"name": "Bilan aujourd’hui – Coût de charge réseau"},
       "economics_daily_pv_opportunity_cost": {"name": "Bilan aujourd’hui – Coût d’opportunité PV"},

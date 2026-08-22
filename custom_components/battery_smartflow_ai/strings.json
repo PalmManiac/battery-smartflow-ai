@@ -513,19 +513,19 @@
         "name": "PV forecast next 6 hours"
       },
       "price_daily_average": {
-        "name": "Dynamic daily average price"
+        "name": "Prices – Dynamic daily average"
       },
       "current_peak_threshold": {
-        "name": "Current peak threshold"
+        "name": "Prices – Current peak threshold"
       },
       "current_valley_threshold": {
-        "name": "Current valley threshold"
+        "name": "Prices – Current valley threshold"
       },
       "economic_discharge_threshold": {
-        "name": "Economic discharge threshold"
+        "name": "Prices – Economic discharge threshold"
       },
       "effective_discharge_threshold": {
-        "name": "Effective discharge threshold"
+        "name": "Prices – Effective discharge threshold"
       },
       "global_lowest_cell_voltage": {
         "name": "Global lowest cell voltage"
@@ -755,7 +755,10 @@
         "name": "House load"
       },
       "price_now": {
-        "name": "Current electricity price"
+        "name": "Current – Import price"
+      },
+      "feed_in_tariff": {
+        "name": "Current – Export price"
       },
 	    "charge_source": {
         "name": "Charge source",
@@ -782,7 +785,7 @@
         }
       },
       "charge_price_applied": {
-        "name": "Applied charge price"
+        "name": "Current – Applied battery charge price"
       },
       "charge_grid_part_w": {
         "name": "Grid charge share"
@@ -798,10 +801,10 @@
         }
       },
       "avg_charge_price": {
-        "name": "Avg. battery charge price"
+        "name": "Prices – Avg. legacy battery charge price"
       },
       "profit_eur": {
-        "name": "Savings / profit (total)"
+        "name": "Balance since start – Legacy trading profit"
       },
       "economics_daily_grid_charge_cost": {"name": "Balance today – Grid charging cost"},
       "economics_daily_pv_opportunity_cost": {"name": "Balance today – PV opportunity cost"},

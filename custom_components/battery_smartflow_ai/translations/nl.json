@@ -508,19 +508,19 @@
         "name": "PV-prognose komende 6 uur"
       },
       "price_daily_average": {
-        "name": "Dynamische gemiddelde dagprijs"
+        "name": "Prijzen – Dynamisch daggemiddelde"
       },
       "current_peak_threshold": {
-        "name": "Actuele piekdrempel"
+        "name": "Prijzen – Actuele piekdrempel"
       },
       "current_valley_threshold": {
-        "name": "Actuele daldrempel"
+        "name": "Prijzen – Actuele daldrempel"
       },
       "economic_discharge_threshold": {
-        "name": "Economische ontlaaddrempel"
+        "name": "Prijzen – Economische ontlaaddrempel"
       },
       "effective_discharge_threshold": {
-        "name": "Effectieve ontlaaddrempel"
+        "name": "Prijzen – Effectieve ontlaaddrempel"
       },
       "global_lowest_cell_voltage": {
         "name": "Globale laagste celspanning"
@@ -750,7 +750,10 @@
         "name": "Huislast"
       },
       "price_now": {
-        "name": "Actuele stroomprijs"
+        "name": "Actueel – Inkoopprijs"
+      },
+      "feed_in_tariff": {
+        "name": "Actueel – Terugleverprijs"
       },
 	  "charge_source": {
         "name": "Laadbron",
@@ -777,7 +780,7 @@
         }
       },
       "charge_price_applied": {
-        "name": "Toegepaste laadprijs"
+        "name": "Actueel – Toegepaste batterijlaadprijs"
       },
       "charge_grid_part_w": {
         "name": "Net-laadaandeel"
@@ -793,10 +796,10 @@
         }
       },
       "avg_charge_price": {
-        "name": "Gem. laadprijs batterij"
+        "name": "Prijzen – Gem. eerdere batterijlaadprijs"
       },
       "profit_eur": {
-        "name": "Besparing / winst (totaal)"
+        "name": "Balans sinds start – Eerdere handelswinst"
       },
       "economics_daily_grid_charge_cost": {"name": "Balans vandaag – Netlaadkosten"},
       "economics_daily_pv_opportunity_cost": {"name": "Balans vandaag – PV-opportuniteitskosten"},

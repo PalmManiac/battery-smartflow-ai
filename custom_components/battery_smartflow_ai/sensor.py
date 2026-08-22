@@ -74,6 +74,7 @@ PRICE_SENSOR_KEYS = frozenset(
         "price_now",
         "charge_price_applied",
         "avg_charge_price",
+        "feed_in_tariff",
     }
 )
 
@@ -679,30 +680,40 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="price_daily_average",
         runtime_key="price_daily_average",
         icon="mdi:chart-line",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="current_peak_threshold",
         translation_key="current_peak_threshold",
         runtime_key="current_peak_threshold",
         icon="mdi:chart-bell-curve",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="current_valley_threshold",
         translation_key="current_valley_threshold",
         runtime_key="current_valley_threshold",
         icon="mdi:chart-bell-curve-cumulative",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="economic_discharge_threshold",
         translation_key="economic_discharge_threshold",
         runtime_key="economic_discharge_threshold",
         icon="mdi:cash-clock",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="effective_discharge_threshold",
         translation_key="effective_discharge_threshold",
         runtime_key="effective_discharge_threshold",
         icon="mdi:chart-line-variant",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="house_load",
@@ -716,6 +727,16 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="price_now",
         runtime_key="price_now",
         icon="mdi:cash",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="feed_in_tariff",
+        translation_key="feed_in_tariff",
+        runtime_key="feed_in_tariff",
+        icon="mdi:transmission-tower-export",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
 
     # --------------------------------------------------
@@ -779,8 +800,8 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="charge_price_applied",
         runtime_key="charge_price_applied",
         icon="mdi:cash-clock",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="charge_grid_part_w",
@@ -1045,12 +1066,17 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="avg_charge_price",
         runtime_key="avg_charge_price",
         icon="mdi:scale-balance",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="profit_eur",
         translation_key="profit_eur",
         runtime_key="profit_eur",
         icon="mdi:cash",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
 
     # --------------------------------------------------
