@@ -53,7 +53,16 @@ class LegacyImportForecastAdapterTests(unittest.TestCase):
     def test_recognizes_all_v45_top_level_containers(self) -> None:
         instance = adapter()
 
-        for key in ("rates", "data", "unit_rate_forecast"):
+        for key in (
+            "rates",
+            "data",
+            "unit_rate_forecast",
+            "timeslots",
+            "today",
+            "tomorrow",
+            "raw_today",
+            "raw_tomorrow",
+        ):
             with self.subTest(key=key):
                 self.assertTrue(instance.supports({key: []}))
         self.assertFalse(instance.supports({"forecast": []}))
@@ -145,6 +154,113 @@ class LegacyImportForecastAdapterTests(unittest.TestCase):
 
         point = forecast.points[0]
         self.assertEqual(point.end - point.start, timedelta(minutes=15))
+
+    def test_merges_today_and_tomorrow_forecast_lists(self) -> None:
+        forecast = normalize(
+            {
+                "today": [
+                    {"starts_at": "2026-08-22T23:00:00+00:00", "total": 0.12}
+                ],
+                "tomorrow": [
+                    {"starts_at": "2026-08-23T00:00:00+00:00", "total": 0.08}
+                ],
+            }
+        )
+
+        self.assertEqual([point.price for point in forecast.points], [0.12, 0.08])
+        self.assertEqual(
+            forecast.points[0].end - forecast.points[0].start,
+            timedelta(hours=1),
+        )
+        self.assertEqual(
+            forecast.points[1].end - forecast.points[1].start,
+            timedelta(hours=1),
+        )
+
+    def test_merges_nested_today_and_tomorrow_provider_payload(self) -> None:
+        forecast = normalize(
+            {
+                "data": {
+                    "today": [
+                        {"start": "2026-08-22T11:00:00+00:00", "price": 0.2}
+                    ],
+                    "tomorrow": [
+                        {"start": "2026-08-23T00:00:00+00:00", "price": 0.1}
+                    ],
+                }
+            }
+        )
+
+        self.assertEqual(len(forecast.points), 2)
+        self.assertEqual(
+            forecast.points[0].end - forecast.points[0].start,
+            timedelta(minutes=15),
+        )
+        self.assertLess(forecast.points[0].end, forecast.points[1].start)
+
+    def test_infers_quarter_hour_and_hour_slots_from_adjacent_starts(self) -> None:
+        quarter_hour = normalize(
+            {
+                "rates": [
+                    {"start": "2026-08-22T11:00:00+00:00", "price": 0.1},
+                    {"start": "2026-08-22T11:15:00+00:00", "price": 0.2},
+                ]
+            }
+        )
+        hourly = normalize(
+            {
+                "rates": [
+                    {"start": "2026-08-22T11:00:00+00:00", "price": 0.1},
+                    {"start": "2026-08-22T12:00:00+00:00", "price": 0.2},
+                ]
+            }
+        )
+
+        self.assertTrue(
+            all(
+                point.end - point.start == timedelta(minutes=15)
+                for point in quarter_hour.points
+            )
+        )
+        self.assertTrue(
+            all(
+                point.end - point.start == timedelta(hours=1)
+                for point in hourly.points
+            )
+        )
+
+    def test_zero_and_negative_prices_are_preserved(self) -> None:
+        forecast = normalize(
+            {
+                "rates": [
+                    {"start": "2026-08-22T11:00:00+00:00", "price": 0.0},
+                    {"start": "2026-08-22T12:00:00+00:00", "price": -0.05},
+                ]
+            }
+        )
+
+        self.assertEqual([point.price for point in forecast.points], [0.0, -0.05])
+
+    def test_gap_is_preserved_instead_of_inventing_missing_slots(self) -> None:
+        forecast = normalize(
+            {
+                "rates": [
+                    {
+                        "start": "2026-08-22T11:00:00+00:00",
+                        "end": "2026-08-22T12:00:00+00:00",
+                        "price": 0.1,
+                    },
+                    {
+                        "start": "2026-08-22T13:00:00+00:00",
+                        "end": "2026-08-22T14:00:00+00:00",
+                        "price": 0.2,
+                    },
+                ]
+            }
+        )
+
+        self.assertEqual(forecast.points[0].end, datetime(2026, 8, 22, 12, tzinfo=UTC))
+        self.assertEqual(forecast.points[1].start, datetime(2026, 8, 22, 13, tzinfo=UTC))
 
     def test_expired_invalid_and_non_mapping_points_are_discarded(self) -> None:
         forecast = normalize(
