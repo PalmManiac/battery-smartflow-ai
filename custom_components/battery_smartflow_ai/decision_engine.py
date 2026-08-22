@@ -206,12 +206,10 @@ class DecisionContext:
     pv_w: float
     house_load_w: float
 
-    price_now: Optional[float]
     avg_charge_price: Optional[float]
     expensive_threshold: float
     very_expensive_threshold: float
     profit_margin_pct: float
-    price_points: List[PricePoint]
 
     ai_mode: AiMode
     manual_action: Optional[str]
@@ -237,7 +235,6 @@ class DecisionContext:
     # Opportunity cost of using PV for charging instead of exporting it.
     # If no feed-in tariff is available, 0.0 is conservative: only zero/negative
     # grid prices may override currently useful PV.
-    feed_in_tariff: float = 0.0
 
     # V3.5.0 cell voltage protection
     cell_voltage_emergency_active: bool = False
@@ -250,7 +247,8 @@ class DecisionContext:
     # Keep this typed as Any to avoid circular imports.
     learned_charge_plan: Any | None = None
     learned_planning_enabled: bool = False
-    market_price: MarketPrice | None = None
+    import_market_price: MarketPrice | None = None
+    export_market_price: MarketPrice | None = None
 
     # Runtime counters / debounce
     pv_charge_start_counter: int = 0
@@ -399,8 +397,9 @@ class PeakRule(BaseRule):
                 )
 
             if (
-                ctx.price_now is not None
-                and ctx.price_now >= ctx.very_expensive_threshold
+                engine._current_import_price(ctx) is not None
+                and engine._current_import_price(ctx)
+                >= ctx.very_expensive_threshold
             ):
                 discharge_w = engine._delta_discharge(ctx)
                 discharge_w = max(
@@ -427,7 +426,7 @@ class ArbitrageRule(BaseRule):
             return None
             
         if (
-            ctx.price_now is not None
+            engine._current_import_price(ctx) is not None
             and ctx.avg_charge_price is not None
             and ctx.soc > ctx.soc_min
             and ctx.ai_mode == "automatic"
@@ -578,13 +577,14 @@ class VeryCheapRule(BaseRule):
         if ctx.ai_mode != "automatic":
             return None
 
-        if ctx.price_now is None or ctx.very_cheap_price is None:
+        price_now = engine._current_import_price(ctx)
+        if price_now is None or ctx.very_cheap_price is None:
             return None
 
         if ctx.soc >= ctx.soc_max:
             return None
 
-        if float(ctx.price_now) > float(ctx.very_cheap_price):
+        if float(price_now) > float(ctx.very_cheap_price):
             return None
 
         # V4.2.3-Beta3:
@@ -623,8 +623,8 @@ class ValleyBoostRule(BaseRule):
         if not engine._automatic_valley_charge_context_allows(ctx):
             return None
 
-        price_now = engine._planning_current_price(ctx)
-        price_points = engine._planning_price_points(ctx)
+        price_now = engine._current_import_price(ctx)
+        price_points = engine._import_price_points(ctx)
         if price_now is None:
             return None
 
@@ -650,7 +650,7 @@ class ValleyBoostRule(BaseRule):
         # Valley boost is still optional grid charging. If useful PV is already
         # available and grid energy is not cheaper than PV opportunity cost,
         # keep PV charging priority.
-        if engine._planning_grid_charge_should_wait_for_pv(ctx):
+        if engine._market_grid_charge_should_wait_for_pv(ctx):
             return None
 
         soc_gap_pct = max(0.0, ctx.soc_max - ctx.soc)
@@ -693,13 +693,13 @@ class ValleyOpportunityRule(BaseRule):
         if not engine._automatic_valley_charge_context_allows(ctx):
             return None
 
-        if engine._planning_current_price(ctx) is None:
+        if engine._current_import_price(ctx) is None:
             return None
 
         if ctx.soc >= ctx.soc_max:
             return None
 
-        if not engine._planning_price_points(ctx):
+        if not engine._import_price_points(ctx):
             return None
 
         if not engine._is_valley_price_now(ctx):
@@ -709,7 +709,7 @@ class ValleyOpportunityRule(BaseRule):
         # Valley opportunity is only optional grid charging. It must not take over
         # while useful PV is available or already charging the battery, unless grid
         # energy is economically better than using/exporting PV.
-        if engine._planning_grid_charge_should_wait_for_pv(ctx):
+        if engine._market_grid_charge_should_wait_for_pv(ctx):
             return None
 
         if not engine._is_real_pv_underperforming(ctx):
@@ -795,8 +795,8 @@ class ReserveChargeRule(BaseRule):
         if ctx.soc >= ctx.soc_max:
             return None
 
-        price_now = engine._planning_current_price(ctx)
-        if price_now is None or not engine._planning_price_points(ctx):
+        price_now = engine._current_import_price(ctx)
+        if price_now is None or not engine._import_price_points(ctx):
             return None
             
         # V4.2.8:
@@ -1446,10 +1446,10 @@ class DecisionEngine:
         )
 
     @staticmethod
-    def _planning_market_price(ctx: DecisionContext) -> MarketPrice | None:
-        """Return the canonical import market context used by planning only."""
+    def _import_market_price(ctx: DecisionContext) -> MarketPrice | None:
+        """Return the canonical import market context."""
 
-        market_price = getattr(ctx, "market_price", None)
+        market_price = getattr(ctx, "import_market_price", None)
         if (
             not isinstance(market_price, MarketPrice)
             or market_price.direction is not MarketPriceDirection.IMPORT
@@ -1457,23 +1457,34 @@ class DecisionEngine:
             return None
         return market_price
 
-    def _planning_current_price(
+    def _current_import_price(
         self,
         ctx: DecisionContext,
     ) -> float | None:
-        market_price = self._planning_market_price(ctx)
+        market_price = self._import_market_price(ctx)
         if market_price is None or not market_price.valid:
             return None
         return float(market_price.current_price)
 
-    def _planning_price_points(
+    def _import_price_points(
         self,
         ctx: DecisionContext,
     ) -> list[MarketPricePoint]:
-        market_price = self._planning_market_price(ctx)
+        market_price = self._import_market_price(ctx)
         return planning_price_points(market_price)
 
-    def _planning_grid_charge_should_wait_for_pv(
+    @staticmethod
+    def _current_export_price(ctx: DecisionContext) -> float | None:
+        market_price = getattr(ctx, "export_market_price", None)
+        if (
+            not isinstance(market_price, MarketPrice)
+            or market_price.direction is not MarketPriceDirection.EXPORT
+            or not market_price.valid
+        ):
+            return None
+        return float(market_price.current_price)
+
+    def _market_grid_charge_should_wait_for_pv(
         self,
         ctx: DecisionContext,
     ) -> bool:
@@ -1481,13 +1492,13 @@ class DecisionEngine:
 
         if not self._pv_power_is_relevant_for_charging(ctx):
             return False
-        price_now = self._planning_current_price(ctx)
+        price_now = self._current_import_price(ctx)
         if price_now is None:
             return True
         try:
             pv_opportunity_price = max(
                 0.0,
-                float(ctx.feed_in_tariff or 0.0),
+                float(self._current_export_price(ctx) or 0.0),
             )
         except Exception:
             pv_opportunity_price = 0.0
@@ -1523,8 +1534,8 @@ class DecisionEngine:
             return False
 
         if (
-            self._planning_current_price(ctx) is None
-            or not self._planning_price_points(ctx)
+            self._current_import_price(ctx) is None
+            or not self._import_price_points(ctx)
             or ctx.battery_capacity_kwh <= 0
             or ctx.max_charge_w <= 0
         ):
@@ -1665,16 +1676,20 @@ class DecisionEngine:
         prices may override PV.
         """
 
-        if ctx.price_now is None:
+        current_import_price = self._current_import_price(ctx)
+        if current_import_price is None:
             return False
 
         try:
-            price_now = float(ctx.price_now)
+            price_now = float(current_import_price)
         except Exception:
             return False
 
         try:
-            pv_opportunity_price = max(0.0, float(ctx.feed_in_tariff or 0.0))
+            pv_opportunity_price = max(
+                0.0,
+                float(self._current_export_price(ctx) or 0.0),
+            )
         except Exception:
             pv_opportunity_price = 0.0
 
@@ -1774,10 +1789,11 @@ class DecisionEngine:
         return avg_charge_price * (1.0 + margin_pct / 100.0)
 
     def _compute_effective_discharge_threshold(self, ctx: DecisionContext) -> Optional[float]:
-        if not ctx.price_points:
+        price_points = self._import_price_points(ctx)
+        if not price_points:
             return None
 
-        prices = [p.price for p in ctx.price_points]
+        prices = [p.price for p in price_points]
         if not prices:
             return None
 
@@ -1823,7 +1839,10 @@ class DecisionEngine:
         safety_floor = max(0.0, valley_threshold)
 
         try:
-            feed_in_floor = max(0.0, float(ctx.feed_in_tariff or 0.0)) * (
+            feed_in_floor = max(
+                0.0,
+                float(self._current_export_price(ctx) or 0.0),
+            ) * (
                 1.0 + float(ctx.profit_margin_pct or 0.0) / 100.0
             )
             safety_floor = max(safety_floor, feed_in_floor)
@@ -1898,7 +1917,8 @@ class DecisionEngine:
         return effective
 
     def _with_thresholds(self, ctx: DecisionContext, result: DecisionResult) -> DecisionResult:
-        prices = [p.price for p in ctx.price_points] if ctx.price_points else []
+        price_points = self._import_price_points(ctx)
+        prices = [p.price for p in price_points]
         if prices:
             result.current_peak_threshold = self._compute_peak_threshold(prices, ctx.peak_factor)
             result.current_valley_threshold = self._compute_valley_threshold(prices, ctx.valley_factor)
@@ -1923,14 +1943,15 @@ class DecisionEngine:
         discharge until almost the absolute daily peak.
         """
 
-        if ctx.price_now is None:
+        current_import_price = self._current_import_price(ctx)
+        if current_import_price is None:
             return False
 
         effective_threshold = self._compute_effective_discharge_threshold(ctx)
         if effective_threshold is None:
             return False
 
-        return float(ctx.price_now) >= float(effective_threshold)
+        return float(current_import_price) >= float(effective_threshold)
         
     def _reserve_charge_enabled(
         self,
@@ -1941,8 +1962,8 @@ class DecisionEngine:
             ctx.ai_mode == "automatic"
             and ctx.automatic_strategy_active
             and ctx.automatic_peak_reserve_allowed
-            and self._planning_current_price(ctx) is not None
-            and bool(self._planning_price_points(ctx))
+            and self._current_import_price(ctx) is not None
+            and bool(self._import_price_points(ctx))
             and ctx.battery_capacity_kwh > 0
         )
 
@@ -1954,7 +1975,7 @@ class DecisionEngine:
         if not self._reserve_charge_enabled(ctx):
             return []
 
-        price_points = self._planning_price_points(ctx)
+        price_points = self._import_price_points(ctx)
         prices = [p.price for p in price_points]
         if not prices:
             return []
@@ -2008,8 +2029,8 @@ class DecisionEngine:
         if not self._reserve_charge_enabled(ctx):
             return False
 
-        price_now = self._planning_current_price(ctx)
-        price_points = self._planning_price_points(ctx)
+        price_now = self._current_import_price(ctx)
+        price_points = self._import_price_points(ctx)
         if price_now is None or not price_points:
             return False
 
@@ -2196,7 +2217,7 @@ class DecisionEngine:
         if expected_peak is None:
             return None
 
-        if not self._planning_price_points(ctx):
+        if not self._import_price_points(ctx):
             return None
 
         return max(
@@ -2206,18 +2227,19 @@ class DecisionEngine:
 
 
     def _is_effective_discharge_price_reached(self, ctx: DecisionContext) -> bool:
-        if ctx.price_now is None:
+        current_import_price = self._current_import_price(ctx)
+        if current_import_price is None:
             return False
 
         effective_threshold = self._compute_effective_discharge_threshold(ctx)
         if effective_threshold is None:
             return False
 
-        return float(ctx.price_now) >= float(effective_threshold)
+        return float(current_import_price) >= float(effective_threshold)
 
     def _is_valley_price_now(self, ctx: DecisionContext) -> bool:
-        price_now = self._planning_current_price(ctx)
-        price_points = self._planning_price_points(ctx)
+        price_now = self._current_import_price(ctx)
+        price_points = self._import_price_points(ctx)
         if price_now is None or not price_points:
             return False
 
@@ -2429,8 +2451,8 @@ class DecisionEngine:
         return PowerController.delta_charge(self._to_power_ctx(ctx, "charge"))
 
     def _detect_adaptive_peak(self, ctx: DecisionContext) -> bool:
-        price_now = self._planning_current_price(ctx)
-        price_points = self._planning_price_points(ctx)
+        price_now = self._current_import_price(ctx)
+        price_points = self._import_price_points(ctx)
         if not price_points or price_now is None:
             return False
 
@@ -2461,8 +2483,8 @@ class DecisionEngine:
         if self._learned_planning_waits_for_window(ctx):
             return None
 
-        price_now = self._planning_current_price(ctx)
-        price_points = self._planning_price_points(ctx)
+        price_now = self._current_import_price(ctx)
+        price_points = self._import_price_points(ctx)
         if (
             not self._automatic_planning_context_allows(ctx)
             or not price_points

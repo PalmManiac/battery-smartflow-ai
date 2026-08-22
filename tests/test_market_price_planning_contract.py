@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import timedelta
 from pathlib import Path
 import unittest
@@ -13,6 +13,7 @@ from support import bootstrap
 bootstrap()
 
 from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E402
+    DecisionContext,
     DecisionEngine,
 )
 from custom_components.battery_smartflow_ai.market_price import (  # noqa: E402
@@ -27,10 +28,30 @@ from test_dev9_scenarios import (  # noqa: E402
     context,
     import_market_price,
     price_points,
+    export_market_price,
 )
 
 
 class MarketPricePlanningContractTests(unittest.TestCase):
+    def test_decision_context_has_only_canonical_market_price_inputs(self) -> None:
+        field_names = {field.name for field in fields(DecisionContext)}
+
+        self.assertIn("import_market_price", field_names)
+        self.assertIn("export_market_price", field_names)
+        self.assertNotIn("price_now", field_names)
+        self.assertNotIn("price_points", field_names)
+        self.assertNotIn("feed_in_tariff", field_names)
+
+    def test_import_and_export_prices_remain_directionally_separate(self) -> None:
+        ctx = context(
+            import_market_price=import_market_price(0.22, price_points()),
+            export_market_price=export_market_price(-0.04),
+        )
+        engine = DecisionEngine()
+
+        self.assertEqual(engine._current_import_price(ctx), 0.22)
+        self.assertEqual(engine._current_export_price(ctx), -0.04)
+
     def test_classic_planning_ignores_conflicting_legacy_price_fields(self) -> None:
         canonical = import_market_price(0.10, price_points())
         ctx = context(
@@ -38,7 +59,7 @@ class MarketPricePlanningContractTests(unittest.TestCase):
             soc=20.0,
             price_now=99.0,
             price_points=[],
-            market_price=canonical,
+            import_market_price=canonical,
         )
 
         result = DecisionEngine()._evaluate_adaptive_planning(ctx)
@@ -64,7 +85,7 @@ class MarketPricePlanningContractTests(unittest.TestCase):
             soc=20.0,
             price_now=0.10,
             price_points=price_points(),
-            market_price=missing,
+            import_market_price=missing,
         )
 
         result = DecisionEngine()._evaluate_adaptive_planning(ctx)
@@ -79,7 +100,7 @@ class MarketPricePlanningContractTests(unittest.TestCase):
         ctx = context(
             battery_capacity_kwh=10.0,
             soc=20.0,
-            market_price=export_price,
+            import_market_price=export_price,
         )
 
         self.assertIsNone(DecisionEngine()._evaluate_adaptive_planning(ctx))

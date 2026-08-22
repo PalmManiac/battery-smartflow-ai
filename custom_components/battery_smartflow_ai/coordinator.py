@@ -4255,14 +4255,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist.get("last_set_output_w", 0.0)
                     or 0.0
                 ),
-                price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
-                price_points=price_points,
-                market_price=import_market_price,
-                feed_in_tariff=float(feed_in_tariff),
+                import_market_price=import_market_price,
+                export_market_price=export_market_price,
                 ai_mode=ai_mode,
                 manual_action=manual_action,
                 season=season,
@@ -5830,14 +5828,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist.get("last_set_output_w", 0.0)
                     or 0.0
                 ),
-                price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
-                price_points=price_points,
-                market_price=import_market_price,
-                feed_in_tariff=float(feed_in_tariff),
+                import_market_price=import_market_price,
+                export_market_price=export_market_price,
                 ai_mode=ai_mode,
                 manual_action=manual_action,
                 season=season,

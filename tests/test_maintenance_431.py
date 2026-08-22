@@ -76,6 +76,20 @@ def import_market_price(now, current_price, points):
     )
 
 
+def export_market_price(now, current_price=0.0):
+    return MarketPrice(
+        direction=MarketPriceDirection.EXPORT,
+        current_price=current_price,
+        currency="EUR",
+        unit="EUR/kWh",
+        timestamp=now,
+        source="test.normalized_export",
+        validity=MarketPriceValidity.VALID,
+        is_dynamic=False,
+        is_fallback=False,
+    )
+
+
 class Maintenance431Tests(unittest.TestCase):
     def test_economic_target_uses_currency_neutral_price_metadata(self) -> None:
         controller = RegulationPowerController(RegulationPowerConfig())
@@ -267,13 +281,12 @@ class Maintenance431Tests(unittest.TestCase):
             grid_export_w=0.0,
             pv_w=0.0,
             house_load_w=942.0,
-            price_now=0.3493,
             avg_charge_price=0.20,
             expensive_threshold=0.38552,
             very_expensive_threshold=0.50,
             profit_margin_pct=15.0,
-            price_points=prices,
-            market_price=import_market_price(now, 0.3493, prices),
+            import_market_price=import_market_price(now, 0.3493, prices),
+            export_market_price=export_market_price(now),
             ai_mode="automatic",
             manual_action=None,
             season="summer",
@@ -334,13 +347,12 @@ class Maintenance431Tests(unittest.TestCase):
             grid_export_w=0.0,
             pv_w=0.0,
             house_load_w=942.0,
-            price_now=0.3493,
             avg_charge_price=0.20,
             expensive_threshold=0.38552,
             very_expensive_threshold=0.50,
             profit_margin_pct=15.0,
-            price_points=prices,
-            market_price=import_market_price(now, 0.3493, prices),
+            import_market_price=import_market_price(now, 0.3493, prices),
+            export_market_price=export_market_price(now),
             ai_mode="automatic",
             manual_action=None,
             season="summer",
