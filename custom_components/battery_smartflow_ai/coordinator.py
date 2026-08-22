@@ -4839,6 +4839,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 import_price=import_market_price,
                 export_price=export_market_price,
             )
+            self._economics_engine.record_battery_value_flows(
+                flows=economics_energy_result.energy,
+                daily_flows=economics_energy_result.daily_energy,
+                import_price=import_market_price,
+                export_price=export_market_price,
+            )
             economics_daily_snapshot = self._economics_engine.daily_snapshot()
             economics_total_snapshot = self._economics_engine.total_snapshot()
             self._persist["economics_money_day"] = economics_day

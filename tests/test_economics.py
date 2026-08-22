@@ -220,3 +220,105 @@ def test_economics_state_is_not_restored_for_another_currency() -> None:
     restored = EconomicsEngine.from_state(engine.to_state(), currency="USD")
 
     assert restored.total_snapshot().grid_charge_cost == 0.0
+
+
+def test_battery_value_is_traceable_without_double_counting_pv_export() -> None:
+    engine = EconomicsEngine(currency="EUR")
+    flows = EconomicEnergyFlows(
+        grid_to_battery_kwh=2.0,
+        pv_to_battery_kwh=1.0,
+        grid_export_kwh=4.0,
+        battery_to_home_kwh=1.5,
+        battery_to_grid_kwh=0.5,
+    )
+    import_price = _price(MarketPriceDirection.IMPORT, 0.30)
+    export_price = _price(MarketPriceDirection.EXPORT, 0.10)
+
+    engine.record_grid_flows(
+        flows=flows,
+        import_price=import_price,
+        export_price=export_price,
+    )
+    engine.record_battery_value_flows(
+        flows=flows,
+        import_price=import_price,
+        export_price=export_price,
+    )
+
+    result = engine.total_snapshot()
+    assert result.grid_charge_cost == pytest.approx(0.60)
+    assert result.pv_opportunity_cost == pytest.approx(0.10)
+    assert result.export_revenue == pytest.approx(0.40)
+    assert result.avoided_grid_import_cost == pytest.approx(0.45)
+    # 0.45 avoided - 0.60 grid - 0.10 PV + 0.05 battery export.
+    assert result.battery_benefit == pytest.approx(-0.20)
+    # The other 3.5 kWh of export never enter battery benefit.
+    assert result.battery_benefit != pytest.approx(
+        0.45 - 0.60 - 0.10 + result.export_revenue
+    )
+    assert result.average_pv_opportunity_value == pytest.approx(0.10)
+    assert result.average_battery_discharge_value == pytest.approx(0.25)
+
+
+def test_negative_export_price_creates_negative_opportunity_cost() -> None:
+    engine = EconomicsEngine(currency="EUR")
+    flows = EconomicEnergyFlows(
+        pv_to_battery_kwh=2.0,
+        grid_export_kwh=3.0,
+    )
+    import_price = _price(MarketPriceDirection.IMPORT, 0.30)
+    export_price = _price(MarketPriceDirection.EXPORT, -0.05)
+
+    engine.record_grid_flows(
+        flows=flows,
+        import_price=import_price,
+        export_price=export_price,
+    )
+    engine.record_battery_value_flows(
+        flows=flows,
+        import_price=import_price,
+        export_price=export_price,
+    )
+
+    result = engine.total_snapshot()
+    assert result.pv_opportunity_cost == pytest.approx(-0.10)
+    assert result.export_revenue == pytest.approx(-0.15)
+    assert result.battery_benefit == pytest.approx(0.10)
+
+
+def test_only_attributable_battery_export_increases_battery_benefit() -> None:
+    engine = EconomicsEngine(currency="EUR")
+    flows = EconomicEnergyFlows(
+        grid_export_kwh=5.0,
+        battery_to_grid_kwh=1.0,
+    )
+    import_price = _price(MarketPriceDirection.IMPORT, 0.30)
+    export_price = _price(MarketPriceDirection.EXPORT, 0.12)
+
+    engine.record_grid_flows(
+        flows=flows,
+        import_price=import_price,
+        export_price=export_price,
+    )
+    engine.record_battery_value_flows(
+        flows=flows,
+        import_price=import_price,
+        export_price=export_price,
+    )
+
+    result = engine.total_snapshot()
+    assert result.export_revenue == pytest.approx(0.60)
+    assert result.battery_benefit == pytest.approx(0.12)
+
+
+def test_battery_values_use_separate_daily_midnight_energy() -> None:
+    engine = EconomicsEngine(currency="EUR")
+    engine.record_battery_value_flows(
+        flows=EconomicEnergyFlows(pv_to_battery_kwh=0.02),
+        daily_flows=EconomicEnergyFlows(pv_to_battery_kwh=0.01),
+        import_price=_price(MarketPriceDirection.IMPORT, 0.30),
+        export_price=_price(MarketPriceDirection.EXPORT, 0.10),
+    )
+
+    assert engine.daily_snapshot().pv_opportunity_cost == pytest.approx(0.001)
+    assert engine.total_snapshot().pv_opportunity_cost == pytest.approx(0.002)

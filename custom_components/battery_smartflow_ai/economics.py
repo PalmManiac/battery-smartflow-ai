@@ -385,6 +385,37 @@ class EconomicsEngine:
             export_price=export_price,
         )
 
+    def record_battery_value_flows(
+        self,
+        *,
+        flows: EconomicEnergyFlows,
+        import_price: MarketPrice,
+        export_price: MarketPrice,
+        daily_flows: EconomicEnergyFlows | None = None,
+    ) -> None:
+        """Record PV opportunity cost and attributable battery benefit.
+
+        Battery benefit is defined as avoided grid-import cost minus grid
+        charging cost minus PV opportunity cost plus only the export revenue
+        attributable to battery discharge. Total export revenue is deliberately
+        not added here because ``record_grid_flows`` already records it and it
+        may contain ordinary PV export that is not a battery benefit.
+        """
+
+        daily = daily_flows if daily_flows is not None else flows
+        self._record_battery_value_totals(
+            self._daily,
+            daily,
+            import_price=import_price,
+            export_price=export_price,
+        )
+        self._record_battery_value_totals(
+            self._total,
+            flows,
+            import_price=import_price,
+            export_price=export_price,
+        )
+
     def to_state(self) -> dict[str, Any]:
         """Serialize daily and lifetime monetary totals."""
 
@@ -505,6 +536,44 @@ class EconomicsEngine:
         avoided_cost = flows.battery_to_home_kwh * import_value
         totals.battery_discharge_value += avoided_cost
         totals.avoided_grid_import_cost += avoided_cost
+
+    def _record_battery_value_totals(
+        self,
+        totals: _EconomicsTotals,
+        flows: EconomicEnergyFlows,
+        *,
+        import_price: MarketPrice,
+        export_price: MarketPrice,
+    ) -> None:
+        import_value = self._price(
+            import_price,
+            MarketPriceDirection.IMPORT,
+            required=bool(
+                flows.grid_to_battery_kwh or flows.battery_to_home_kwh
+            ),
+        )
+        export_value = self._price(
+            export_price,
+            MarketPriceDirection.EXPORT,
+            required=bool(
+                flows.pv_to_battery_kwh or flows.battery_to_grid_kwh
+            ),
+        )
+        grid_charge_cost = flows.grid_to_battery_kwh * import_value
+        pv_opportunity_cost = flows.pv_to_battery_kwh * export_value
+        avoided_cost = flows.battery_to_home_kwh * import_value
+        battery_export_value = flows.battery_to_grid_kwh * export_value
+
+        totals.pv_charge_kwh += flows.pv_to_battery_kwh
+        totals.pv_opportunity_cost += pv_opportunity_cost
+        totals.battery_discharge_kwh += flows.battery_to_grid_kwh
+        totals.battery_discharge_value += battery_export_value
+        totals.battery_benefit += (
+            avoided_cost
+            - grid_charge_cost
+            - pv_opportunity_cost
+            + battery_export_value
+        )
 
     @staticmethod
     def _totals_to_state(totals: _EconomicsTotals) -> dict[str, float]:
