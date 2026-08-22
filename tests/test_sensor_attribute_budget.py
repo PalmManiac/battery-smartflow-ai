@@ -62,8 +62,10 @@ class SensorAttributeBudgetTests(unittest.TestCase):
                 next(keyword.value for keyword in node.keywords if keyword.arg == "key")
             ]
         }
-        self.assertEqual(len(diagnostic_keys), 51)
-        self.assertEqual(len(diagnostic_keys - debug_keys), 46)
+        # V4.6 promotes charge_price_applied from a retired diagnostic to the
+        # economics device while preserving its existing entity identity.
+        self.assertEqual(len(diagnostic_keys), 50)
+        self.assertEqual(len(diagnostic_keys - debug_keys), 45)
 
     def test_sensor_platform_has_no_dynamic_attribute_builders(self) -> None:
         tree = ast.parse(SENSOR.read_text(encoding="utf-8"))

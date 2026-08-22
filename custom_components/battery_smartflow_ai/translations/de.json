@@ -27,6 +27,7 @@
           "installed_pv_wp": "Installierte PV-Leistung (Wp)",
           "pv_entity": "PV-Leistung Sensor",
 		  "feed_in_tariff": "Einspeisevergütung",
+          "dynamic_feed_in_price_entity": "Aktueller dynamischer Einspeisepreis (optional)",
           "pv_forecast_today_entity": "PV-Prognose heute (optional)",
           "pv_forecast_tomorrow_entity": "PV-Prognose morgen (optional)",
           "price_now_entity": "Aktueller Strompreis",
@@ -52,7 +53,8 @@
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt. Wird zur Erkennung von Überschuss verwendet.",
-		  "feed_in_tariff": "Vergütung pro eingespeister kWh in ganzer Währung. Wird als wirtschaftlicher Vergleichswert genutzt: Optionale Netzladungen dürfen vorhandene PV-Ladung nur verdrängen, wenn Netzstrom günstiger ist als diese Einspeisevergütung. Bei PV-Ladung wird sie außerdem als entgangener Erlös in den durchschnittlichen Ladepreis des Akkus eingerechnet. Wenn keine Vergütung eingetragen ist, bleibt der Wert 0,0.",
+		  "feed_in_tariff": "Vergütung pro eingespeister kWh in ganzer Währung. Sie dient als Rückfallwert, wenn kein gültiger dynamischer Einspeisepreis verfügbar ist.",
+          "dynamic_feed_in_price_entity": "Optionaler numerischer Home-Assistant-Sensor für den aktuellen dynamischen Einspeisepreis. Ein gültiger Sensorwert einschließlich null oder eines negativen Preises hat Vorrang vor der festen Einspeisevergütung.",
           "pv_forecast_today_entity": "Optionaler Sensor mit der PV-Tagesprognose für heute, z. B. aus Solcast PV Forecast. Die Prognose ist nur ein zusätzlicher Planungs-Input und keine Voraussetzung für die Integration.",
           "pv_forecast_tomorrow_entity": "Optionaler Sensor mit der PV-Tagesprognose für morgen, z. B. aus Solcast PV Forecast. Die Prognose ist nur ein zusätzlicher Planungs-Input und keine Voraussetzung für die Integration.",
           "price_now_entity": "Sensor mit dem aktuellen Strompreis (z. B. Tibber). Wird für wirtschaftliche Entscheidungen genutzt.",
@@ -111,6 +113,7 @@
           "installed_pv_wp": "Installierte PV-Leistung (Wp)",
           "pv_entity": "PV-Leistung Sensor",
 		  "feed_in_tariff": "Einspeisevergütung",
+          "dynamic_feed_in_price_entity": "Aktueller dynamischer Einspeisepreis (optional)",
           "pv_forecast_today_entity": "PV-Prognose heute (optional)",
           "pv_forecast_tomorrow_entity": "PV-Prognose morgen (optional)",
           "price_now_entity": "Aktueller Strompreis",
@@ -136,7 +139,8 @@
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt.",
-		  "feed_in_tariff": "Vergütung pro eingespeister kWh in ganzer Währung. Wird als wirtschaftlicher Vergleichswert genutzt: Optionale Netzladungen dürfen vorhandene PV-Ladung nur verdrängen, wenn Netzstrom günstiger ist als diese Einspeisevergütung. Bei PV-Ladung wird sie außerdem als entgangener Erlös in den durchschnittlichen Ladepreis des Akkus eingerechnet. Wenn keine Vergütung eingetragen ist, bleibt der Wert 0,0.",
+		  "feed_in_tariff": "Vergütung pro eingespeister kWh in ganzer Währung. Sie dient als Rückfallwert, wenn kein gültiger dynamischer Einspeisepreis verfügbar ist.",
+          "dynamic_feed_in_price_entity": "Optionaler numerischer Home-Assistant-Sensor für den aktuellen dynamischen Einspeisepreis. Ein gültiger Sensorwert einschließlich null oder eines negativen Preises hat Vorrang vor der festen Einspeisevergütung.",
           "pv_forecast_today_entity": "Optionaler Sensor mit der PV-Tagesprognose für heute, z. B. aus Solcast PV Forecast. Die Prognose ist nur ein zusätzlicher Planungs-Input und keine Voraussetzung für die Integration.",
           "pv_forecast_tomorrow_entity": "Optionaler Sensor mit der PV-Tagesprognose für morgen, z. B. aus Solcast PV Forecast. Die Prognose ist nur ein zusätzlicher Planungs-Input und keine Voraussetzung für die Integration.",
           "price_now_entity": "Aktueller Strompreis. Ermöglicht preisabhängige Entladung.",
@@ -504,19 +508,19 @@
         "name": "PV-Prognose nächste 6 Stunden"
       },
       "price_daily_average": {
-        "name": "Ø Tagespreis dynamisch"
+        "name": "Preise – Ø dynamischer Tagespreis"
       },
       "current_peak_threshold": {
-        "name": "Aktuelle Peak-Schwelle"
+        "name": "Preise – Aktuelle Peak-Schwelle"
       },
       "current_valley_threshold": {
-        "name": "Aktuelle Tal-Schwelle"
+        "name": "Preise – Aktuelle Valley-Schwelle"
       },
       "economic_discharge_threshold": {
-        "name": "Ökonomische Entladeschwelle"
+        "name": "Preise – Ökonomische Entladeschwelle"
       },
       "effective_discharge_threshold": {
-        "name": "Effektive Entladeschwelle"
+        "name": "Preise – Effektive Entladeschwelle"
       },
       "offgrid_power_w": {
         "name": "Off-Grid-Leistung"
@@ -746,7 +750,10 @@
         "name": "Hauslast"
       },
       "price_now": {
-        "name": "Aktueller Strompreis"
+        "name": "Aktuell – Bezugspreis"
+      },
+      "feed_in_tariff": {
+        "name": "Aktuell – Einspeisevergütung"
       },
 	  "charge_source": {
         "name": "Ladequelle",
@@ -773,7 +780,7 @@
         }
       },
       "charge_price_applied": {
-        "name": "Angerechneter Ladepreis"
+        "name": "Aktuell – Angerechneter Akku-Ladepreis"
       },
       "charge_grid_part_w": {
         "name": "Ladeanteil Netz"
@@ -789,11 +796,35 @@
         }
       },
       "avg_charge_price": {
-        "name": "Ø Ladepreis Akku"
+        "name": "Preise – Ø bisheriger Akku-Ladepreis"
       },
       "profit_eur": {
-        "name": "Ersparnis / Gewinn (gesamt)"
+        "name": "Bilanz seit Start – Bisheriger Handelsgewinn"
       },
+      "economics_daily_grid_charge_cost": {"name": "Bilanz heute – Netzladekosten"},
+      "economics_daily_pv_opportunity_cost": {"name": "Bilanz heute – PV-Opportunitätskosten"},
+      "economics_daily_export_revenue": {"name": "Bilanz heute – Einspeiseertrag"},
+      "economics_daily_avoided_grid_import_cost": {"name": "Bilanz heute – Vermiedene Netzbezugskosten"},
+      "economics_daily_battery_benefit": {"name": "Bilanz heute – Batterienutzen"},
+      "economics_total_grid_charge_cost": {"name": "Bilanz seit Start – Netzladekosten"},
+      "economics_total_pv_opportunity_cost": {"name": "Bilanz seit Start – PV-Opportunitätskosten"},
+      "economics_total_export_revenue": {"name": "Bilanz seit Start – Einspeiseertrag"},
+      "economics_total_avoided_grid_import_cost": {"name": "Bilanz seit Start – Vermiedene Netzbezugskosten"},
+      "economics_total_battery_benefit": {"name": "Bilanz seit Start – Batterienutzen"},
+      "economics_daily_grid_to_battery_kwh": {"name": "Energie heute – Netz zu Akku"},
+      "economics_daily_pv_to_battery_kwh": {"name": "Energie heute – PV zu Akku"},
+      "economics_daily_grid_export_kwh": {"name": "Energie heute – Netzeinspeisung"},
+      "economics_daily_battery_to_home_kwh": {"name": "Energie heute – Akku zu Haus"},
+      "economics_daily_battery_to_grid_kwh": {"name": "Energie heute – Akku zu Netz"},
+      "economics_total_grid_to_battery_kwh": {"name": "Energie seit Start – Netz zu Akku"},
+      "economics_total_pv_to_battery_kwh": {"name": "Energie seit Start – PV zu Akku"},
+      "economics_total_grid_export_kwh": {"name": "Energie seit Start – Netzeinspeisung"},
+      "economics_total_battery_to_home_kwh": {"name": "Energie seit Start – Akku zu Haus"},
+      "economics_total_battery_to_grid_kwh": {"name": "Energie seit Start – Akku zu Netz"},
+      "economics_average_grid_charge_price": {"name": "Preise – Ø Netzladepreis"},
+      "economics_average_pv_opportunity_value": {"name": "Preise – Ø PV-Opportunitätswert"},
+      "economics_average_export_price": {"name": "Preise – Ø Einspeisevergütung"},
+      "economics_average_battery_discharge_value": {"name": "Preise – Ø Wert der Batterieentladung"},
       "strategy_state": {
         "name": "Strategiezustand",
         "state": {

@@ -8,8 +8,8 @@ from typing import Literal
 
 from homeassistant.util import dt as dt_util
 
-from .decision_engine import PricePoint
 from .forecast import ForecastSummary
+from .market_price import MarketPrice, MarketPricePoint, planning_price_points
 from .price_math import peak_threshold
 
 
@@ -792,7 +792,7 @@ def compute_window_slots(
 
 def choose_deadline(
     now: datetime,
-    price_points: list[PricePoint],
+    price_points: list[MarketPricePoint],
     forecast: ForecastSummary | None,
 ) -> tuple[datetime, str]:
     """Choose one active planning deadline.
@@ -853,7 +853,7 @@ def choose_deadline(
 def optimize_charge_window(
     now: datetime,
     deadline: datetime,
-    price_points: list[PricePoint],
+    price_points: list[MarketPricePoint],
     window_slots: int,
 ) -> tuple[datetime | None, datetime | None, float | None, list[float], list[float], str | None]:
     """Find the best charge window using normalized triangle weights."""
@@ -938,7 +938,7 @@ def build_learned_charge_plan(
     model: LearnedSlotModel,
     readiness: LearningReadiness,
     now: datetime,
-    price_points: list[PricePoint],
+    market_price: MarketPrice,
     forecast: ForecastSummary | None,
     total_battery_capacity_kwh: float,
     current_soc: float,
@@ -956,6 +956,7 @@ def build_learned_charge_plan(
     - In that case, mode stays classic_fallback and the plan must not actively control charging.
     """
 
+    price_points = planning_price_points(market_price)
     diagnostics_only = not readiness.ready
 
     if diagnostics_only and model.history_days <= 0:

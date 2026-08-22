@@ -37,7 +37,8 @@
           "output_limit_entity": "Puissance de décharge Zendure",
 		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
           "offgrid_mode_entity": "Mode hors réseau (optionnel)",
-		  "feed_in_tariff": "Rémunération de l’injection"
+		  "feed_in_tariff": "Rémunération de l’injection",
+          "dynamic_feed_in_price_entity": "Prix d’injection dynamique actuel (facultatif)"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Le profil contient des paramètres de régulation ajustés.",
@@ -63,7 +64,8 @@
           "output_limit_entity": "Entité number pour définir la puissance de décharge en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
           "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
-		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Lors d’une charge PV, elle est également intégrée au prix de charge moyen de la batterie en tant que revenu d’injection perdu. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle sert de valeur de repli lorsqu’aucun prix d’injection dynamique valide n’est disponible.",
+          "dynamic_feed_in_price_entity": "Capteur numérique Home Assistant facultatif pour le prix d’injection dynamique actuel. Une valeur valide, y compris zéro ou un prix négatif, est prioritaire sur la rémunération fixe."
         }
       },
       "reconfigure_grid": {
@@ -121,7 +123,8 @@
           "output_limit_entity": "Puissance de décharge Zendure",
 		  "offgrid_power_entity": "Puissance hors réseau / prise îlot (optionnel)",
           "offgrid_mode_entity": "Mode hors réseau (optionnel)",
-		  "feed_in_tariff": "Rémunération de l’injection"
+		  "feed_in_tariff": "Rémunération de l’injection",
+          "dynamic_feed_in_price_entity": "Prix d’injection dynamique actuel (facultatif)"
         },
         "data_description": {
           "device_profile": "Sélectionnez le profil adapté à votre système Zendure. Les paramètres de régulation sont ajustés automatiquement.",
@@ -147,7 +150,8 @@
           "output_limit_entity": "Puissance de décharge réglable en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
           "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
-		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle est utilisée comme valeur de comparaison économique : les charges réseau optionnelles ne doivent remplacer une charge PV existante que si l’électricité du réseau est moins chère que cette rémunération. Lors d’une charge PV, elle est également intégrée au prix de charge moyen de la batterie en tant que revenu d’injection perdu. Si aucune rémunération n’est saisie, la valeur reste à 0,0."
+		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle sert de valeur de repli lorsqu’aucun prix d’injection dynamique valide n’est disponible.",
+          "dynamic_feed_in_price_entity": "Capteur numérique Home Assistant facultatif pour le prix d’injection dynamique actuel. Une valeur valide, y compris zéro ou un prix négatif, est prioritaire sur la rémunération fixe."
         }
       }
     }
@@ -504,19 +508,19 @@
         "name": "Prévision PV prochaines 6 heures"
       },
       "price_daily_average": {
-        "name": "Prix moyen journalier dynamique"
+        "name": "Prix – Moyenne journalière dynamique"
       },
       "current_peak_threshold": {
-        "name": "Seuil de pic actuel"
+        "name": "Prix – Seuil de pic actuel"
       },
       "current_valley_threshold": {
-        "name": "Seuil de creux actuel"
+        "name": "Prix – Seuil de creux actuel"
       },
       "economic_discharge_threshold": {
-        "name": "Seuil économique de décharge"
+        "name": "Prix – Seuil économique de décharge"
       },
       "effective_discharge_threshold": {
-        "name": "Seuil effectif de décharge"
+        "name": "Prix – Seuil effectif de décharge"
       },
       "global_lowest_cell_voltage": {
         "name": "Tension de cellule minimale globale"
@@ -746,7 +750,10 @@
         "name": "Charge maison"
       },
       "price_now": {
-        "name": "Prix actuel de l’électricité"
+        "name": "Actuel – Prix d’importation"
+      },
+      "feed_in_tariff": {
+        "name": "Actuel – Tarif d’injection"
       },
 	  "charge_source": {
         "name": "Source de charge",
@@ -773,7 +780,7 @@
         }
       },
       "charge_price_applied": {
-        "name": "Prix de charge appliqué"
+        "name": "Actuel – Prix de charge batterie appliqué"
       },
       "charge_grid_part_w": {
         "name": "Part de charge réseau"
@@ -789,11 +796,35 @@
         }
       },
       "avg_charge_price": {
-        "name": "Prix moyen de charge batterie"
+        "name": "Prix – Ancien prix moyen de charge batterie"
       },
       "profit_eur": {
-        "name": "Économies / gain (total)"
+        "name": "Bilan depuis le début – Ancien gain commercial"
       },
+      "economics_daily_grid_charge_cost": {"name": "Bilan aujourd’hui – Coût de charge réseau"},
+      "economics_daily_pv_opportunity_cost": {"name": "Bilan aujourd’hui – Coût d’opportunité PV"},
+      "economics_daily_export_revenue": {"name": "Bilan aujourd’hui – Revenu d’injection"},
+      "economics_daily_avoided_grid_import_cost": {"name": "Bilan aujourd’hui – Coût d’import évité"},
+      "economics_daily_battery_benefit": {"name": "Bilan aujourd’hui – Bénéfice de la batterie"},
+      "economics_total_grid_charge_cost": {"name": "Bilan depuis le début – Coût de charge réseau"},
+      "economics_total_pv_opportunity_cost": {"name": "Bilan depuis le début – Coût d’opportunité PV"},
+      "economics_total_export_revenue": {"name": "Bilan depuis le début – Revenu d’injection"},
+      "economics_total_avoided_grid_import_cost": {"name": "Bilan depuis le début – Coût d’import évité"},
+      "economics_total_battery_benefit": {"name": "Bilan depuis le début – Bénéfice de la batterie"},
+      "economics_daily_grid_to_battery_kwh": {"name": "Énergie aujourd’hui – Réseau vers batterie"},
+      "economics_daily_pv_to_battery_kwh": {"name": "Énergie aujourd’hui – PV vers batterie"},
+      "economics_daily_grid_export_kwh": {"name": "Énergie aujourd’hui – Injection réseau"},
+      "economics_daily_battery_to_home_kwh": {"name": "Énergie aujourd’hui – Batterie vers maison"},
+      "economics_daily_battery_to_grid_kwh": {"name": "Énergie aujourd’hui – Batterie vers réseau"},
+      "economics_total_grid_to_battery_kwh": {"name": "Énergie depuis le début – Réseau vers batterie"},
+      "economics_total_pv_to_battery_kwh": {"name": "Énergie depuis le début – PV vers batterie"},
+      "economics_total_grid_export_kwh": {"name": "Énergie depuis le début – Injection réseau"},
+      "economics_total_battery_to_home_kwh": {"name": "Énergie depuis le début – Batterie vers maison"},
+      "economics_total_battery_to_grid_kwh": {"name": "Énergie depuis le début – Batterie vers réseau"},
+      "economics_average_grid_charge_price": {"name": "Prix – Prix moyen de charge réseau"},
+      "economics_average_pv_opportunity_value": {"name": "Prix – Valeur d’opportunité PV moyenne"},
+      "economics_average_export_price": {"name": "Prix – Tarif d’injection moyen"},
+      "economics_average_battery_discharge_value": {"name": "Prix – Valeur moyenne de décharge batterie"},
       "strategy_state": {
         "name": "État de la stratégie",
         "state": {

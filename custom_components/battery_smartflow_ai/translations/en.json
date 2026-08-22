@@ -37,7 +37,8 @@
           "output_limit_entity": "Zendure discharge power",
 		  "offgrid_power_entity": "Off-grid power / island socket (optional)",
           "offgrid_mode_entity": "Off-grid mode (optional)",
-		  "feed_in_tariff": "Feed-in tariff"
+		  "feed_in_tariff": "Feed-in tariff",
+          "dynamic_feed_in_price_entity": "Current dynamic feed-in price (optional)"
         },
         "data_description": {
           "device_profile": "Select the matching device profile for your Zendure system. The profile contains tuned control parameters.",
@@ -63,7 +64,8 @@
           "output_limit_entity": "Number entity for setting the discharge power in watts.",
 		  "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
           "offgrid_mode_entity": "Optional select sensor for the Zendure off-grid / island socket mode. The mode is only read and is never set by Battery SmartFlow AI.",
-		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as an economic comparison value: optional grid charging may only displace existing PV charging if grid power is cheaper than this feed-in tariff. During PV charging it is also included in the battery's average charge price as lost export revenue. If no tariff is entered, the value remains 0.0."
+		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as a fallback when no valid dynamic feed-in price is available.",
+          "dynamic_feed_in_price_entity": "Optional numeric Home Assistant sensor for the current dynamic feed-in price. A valid sensor value, including zero or a negative price, takes priority over the fixed feed-in tariff."
         }
       },
       "reconfigure_grid": {
@@ -121,7 +123,8 @@
           "output_limit_entity": "Zendure discharge power",
 		  "offgrid_power_entity": "Off-grid power / island socket (optional)",
           "offgrid_mode_entity": "Off-grid mode (optional)",
-		  "feed_in_tariff": "Feed-in tariff"
+		  "feed_in_tariff": "Feed-in tariff",
+          "dynamic_feed_in_price_entity": "Current dynamic feed-in price (optional)"
         },
         "data_description": {
           "device_profile": "Select the matching device profile for your Zendure system. The control parameters are adjusted automatically.",
@@ -147,7 +150,8 @@
           "output_limit_entity": "Adjustable discharge power in watts.",
 		  "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
           "offgrid_mode_entity": "Optional select sensor for the Zendure off-grid / island socket mode. The mode is only read and is never set by Battery SmartFlow AI.",
-		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as an economic comparison value: optional grid charging may only displace existing PV charging if grid power is cheaper than this feed-in tariff. During PV charging it is also included in the battery's average charge price as lost export revenue. If no tariff is entered, the value remains 0.0."
+		  "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as a fallback when no valid dynamic feed-in price is available.",
+          "dynamic_feed_in_price_entity": "Optional numeric Home Assistant sensor for the current dynamic feed-in price. A valid sensor value, including zero or a negative price, takes priority over the fixed feed-in tariff."
         }
       }
     }
@@ -504,19 +508,19 @@
         "name": "PV forecast next 6 hours"
       },
       "price_daily_average": {
-        "name": "Dynamic daily average price"
+        "name": "Prices – Dynamic daily average"
       },
       "current_peak_threshold": {
-        "name": "Current peak threshold"
+        "name": "Prices – Current peak threshold"
       },
       "current_valley_threshold": {
-        "name": "Current valley threshold"
+        "name": "Prices – Current valley threshold"
       },
       "economic_discharge_threshold": {
-        "name": "Economic discharge threshold"
+        "name": "Prices – Economic discharge threshold"
       },
       "effective_discharge_threshold": {
-        "name": "Effective discharge threshold"
+        "name": "Prices – Effective discharge threshold"
       },
       "global_lowest_cell_voltage": {
         "name": "Global lowest cell voltage"
@@ -746,7 +750,10 @@
         "name": "House load"
       },
       "price_now": {
-        "name": "Current electricity price"
+        "name": "Current – Import price"
+      },
+      "feed_in_tariff": {
+        "name": "Current – Export price"
       },
 	    "charge_source": {
         "name": "Charge source",
@@ -773,7 +780,7 @@
         }
       },
       "charge_price_applied": {
-        "name": "Applied charge price"
+        "name": "Current – Applied battery charge price"
       },
       "charge_grid_part_w": {
         "name": "Grid charge share"
@@ -789,11 +796,35 @@
         }
       },
       "avg_charge_price": {
-        "name": "Avg. battery charge price"
+        "name": "Prices – Avg. legacy battery charge price"
       },
       "profit_eur": {
-        "name": "Savings / profit (total)"
+        "name": "Balance since start – Legacy trading profit"
       },
+      "economics_daily_grid_charge_cost": {"name": "Balance today – Grid charging cost"},
+      "economics_daily_pv_opportunity_cost": {"name": "Balance today – PV opportunity cost"},
+      "economics_daily_export_revenue": {"name": "Balance today – Export revenue"},
+      "economics_daily_avoided_grid_import_cost": {"name": "Balance today – Avoided grid import cost"},
+      "economics_daily_battery_benefit": {"name": "Balance today – Battery benefit"},
+      "economics_total_grid_charge_cost": {"name": "Balance since start – Grid charging cost"},
+      "economics_total_pv_opportunity_cost": {"name": "Balance since start – PV opportunity cost"},
+      "economics_total_export_revenue": {"name": "Balance since start – Export revenue"},
+      "economics_total_avoided_grid_import_cost": {"name": "Balance since start – Avoided grid import cost"},
+      "economics_total_battery_benefit": {"name": "Balance since start – Battery benefit"},
+      "economics_daily_grid_to_battery_kwh": {"name": "Energy today – Grid to battery"},
+      "economics_daily_pv_to_battery_kwh": {"name": "Energy today – PV to battery"},
+      "economics_daily_grid_export_kwh": {"name": "Energy today – Grid export"},
+      "economics_daily_battery_to_home_kwh": {"name": "Energy today – Battery to home"},
+      "economics_daily_battery_to_grid_kwh": {"name": "Energy today – Battery to grid"},
+      "economics_total_grid_to_battery_kwh": {"name": "Energy since start – Grid to battery"},
+      "economics_total_pv_to_battery_kwh": {"name": "Energy since start – PV to battery"},
+      "economics_total_grid_export_kwh": {"name": "Energy since start – Grid export"},
+      "economics_total_battery_to_home_kwh": {"name": "Energy since start – Battery to home"},
+      "economics_total_battery_to_grid_kwh": {"name": "Energy since start – Battery to grid"},
+      "economics_average_grid_charge_price": {"name": "Prices – Avg. grid charging price"},
+      "economics_average_pv_opportunity_value": {"name": "Prices – Avg. PV opportunity value"},
+      "economics_average_export_price": {"name": "Prices – Avg. export price"},
+      "economics_average_battery_discharge_value": {"name": "Prices – Avg. battery discharge value"},
       "strategy_state": {
         "name": "Strategy state",
         "state": {

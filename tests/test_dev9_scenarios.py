@@ -33,6 +33,12 @@ from custom_components.battery_smartflow_ai.learned_planning import (  # noqa: E
     learned_typical_charge_power_w,
     requested_charge_power_w,
 )
+from custom_components.battery_smartflow_ai.market_price import (  # noqa: E402
+    MarketPrice,
+    MarketPriceDirection,
+    MarketPriceForecast,
+    MarketPriceValidity,
+)
 from custom_components.battery_smartflow_ai.strategy_adapter import (  # noqa: E402
     decision_to_strategy_decision,
 )
@@ -83,7 +89,51 @@ def price_points() -> list[PricePoint]:
     ]
 
 
+def import_market_price(
+    current_price: float | None,
+    points: list[PricePoint],
+) -> MarketPrice:
+    return MarketPrice(
+        direction=MarketPriceDirection.IMPORT,
+        current_price=current_price,
+        currency="EUR",
+        unit="EUR/kWh",
+        timestamp=NOW,
+        source="test.normalized_import",
+        validity=(
+            MarketPriceValidity.VALID
+            if current_price is not None
+            else MarketPriceValidity.MISSING
+        ),
+        is_dynamic=True,
+        is_fallback=False,
+        forecast=MarketPriceForecast(points=tuple(points), timestamp=NOW),
+    )
+
+
+def export_market_price(current_price: float | None = 0.0) -> MarketPrice:
+    return MarketPrice(
+        direction=MarketPriceDirection.EXPORT,
+        current_price=current_price,
+        currency="EUR",
+        unit="EUR/kWh",
+        timestamp=NOW,
+        source="test.normalized_export",
+        validity=(
+            MarketPriceValidity.VALID
+            if current_price is not None
+            else MarketPriceValidity.MISSING
+        ),
+        is_dynamic=False,
+        is_fallback=False,
+    )
+
+
 def context(**overrides) -> DecisionContext:
+    legacy_price_now = overrides.pop("price_now", 0.10)
+    legacy_price_points = overrides.pop("price_points", price_points())
+    legacy_feed_in_tariff = overrides.pop("feed_in_tariff", 0.0)
+    legacy_market_price = overrides.pop("market_price", None)
     values = {
         "now": NOW,
         "soc": 50.0,
@@ -97,12 +147,10 @@ def context(**overrides) -> DecisionContext:
         "grid_export_w": 0.0,
         "pv_w": 0.0,
         "house_load_w": 500.0,
-        "price_now": 0.10,
         "avg_charge_price": 0.20,
         "expensive_threshold": 0.32,
         "very_expensive_threshold": 0.50,
         "profit_margin_pct": 15.0,
-        "price_points": price_points(),
         "ai_mode": AI_MODE_AUTOMATIC,
         "manual_action": None,
         "season": "winter",
@@ -117,6 +165,15 @@ def context(**overrides) -> DecisionContext:
         "automatic_planning_allowed": True,
     }
     values.update(overrides)
+    if "import_market_price" not in overrides:
+        values["import_market_price"] = (
+            legacy_market_price
+            or import_market_price(legacy_price_now, legacy_price_points)
+        )
+    if "export_market_price" not in overrides:
+        values["export_market_price"] = export_market_price(
+            legacy_feed_in_tariff
+        )
     return DecisionContext(**values)
 
 
@@ -423,7 +480,7 @@ class Dev9Point1ChargePowerScenarios(unittest.TestCase):
             model=model,
             readiness=readiness,
             now=NOW,
-            price_points=price_points(),
+            market_price=import_market_price(0.10, price_points()),
             forecast=None,
             total_battery_capacity_kwh=5.76,
             current_soc=5.0,

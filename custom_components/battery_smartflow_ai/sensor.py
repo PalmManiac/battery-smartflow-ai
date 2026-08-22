@@ -7,14 +7,16 @@ from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
+    SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.const import UnitOfPower
+from homeassistant.const import UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -72,10 +74,33 @@ PRICE_SENSOR_KEYS = frozenset(
         "price_now",
         "charge_price_applied",
         "avg_charge_price",
+        "feed_in_tariff",
     }
 )
 
-MONETARY_SENSOR_KEYS = frozenset({"profit_eur"})
+ECONOMICS_MONETARY_SENSOR_KEYS = frozenset(
+    f"economics_{period}_{value}"
+    for period in ("daily", "total")
+    for value in (
+        "grid_charge_cost",
+        "pv_opportunity_cost",
+        "export_revenue",
+        "avoided_grid_import_cost",
+        "battery_benefit",
+    )
+)
+
+ECONOMICS_PRICE_SENSOR_KEYS = frozenset(
+    {
+        "economics_average_grid_charge_price",
+        "economics_average_pv_opportunity_value",
+        "economics_average_export_price",
+        "economics_average_battery_discharge_value",
+    }
+)
+
+MONETARY_SENSOR_KEYS = frozenset({"profit_eur"}) | ECONOMICS_MONETARY_SENSOR_KEYS
+PRICE_SENSOR_KEYS = PRICE_SENSOR_KEYS | ECONOMICS_PRICE_SENSOR_KEYS
 
 LEARNED_PLANNING_STATUS_ENUMS = [
     "not_started",
@@ -145,6 +170,7 @@ CHARGE_SOURCE_ALLOCATION_REASON_ENUMS = [
 @dataclass(frozen=True, kw_only=True)
 class ZendureSensorEntityDescription(SensorEntityDescription):
     runtime_key: str
+    economics_device: bool = False
 
 
 _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
@@ -654,30 +680,40 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="price_daily_average",
         runtime_key="price_daily_average",
         icon="mdi:chart-line",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="current_peak_threshold",
         translation_key="current_peak_threshold",
         runtime_key="current_peak_threshold",
         icon="mdi:chart-bell-curve",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="current_valley_threshold",
         translation_key="current_valley_threshold",
         runtime_key="current_valley_threshold",
         icon="mdi:chart-bell-curve-cumulative",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="economic_discharge_threshold",
         translation_key="economic_discharge_threshold",
         runtime_key="economic_discharge_threshold",
         icon="mdi:cash-clock",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="effective_discharge_threshold",
         translation_key="effective_discharge_threshold",
         runtime_key="effective_discharge_threshold",
         icon="mdi:chart-line-variant",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="house_load",
@@ -691,6 +727,16 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="price_now",
         runtime_key="price_now",
         icon="mdi:cash",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="feed_in_tariff",
+        translation_key="feed_in_tariff",
+        runtime_key="feed_in_tariff",
+        icon="mdi:transmission-tower-export",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
 
     # --------------------------------------------------
@@ -754,8 +800,8 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="charge_price_applied",
         runtime_key="charge_price_applied",
         icon="mdi:cash-clock",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="charge_grid_part_w",
@@ -789,6 +835,228 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
     # --------------------------------------------------
     # ECONOMICS
     # --------------------------------------------------
+    ZendureSensorEntityDescription(
+        key="economics_daily_grid_charge_cost",
+        translation_key="economics_daily_grid_charge_cost",
+        runtime_key="economics_daily_grid_charge_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-import",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_pv_opportunity_cost",
+        translation_key="economics_daily_pv_opportunity_cost",
+        runtime_key="economics_daily_pv_opportunity_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:solar-power-variant",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_export_revenue",
+        translation_key="economics_daily_export_revenue",
+        runtime_key="economics_daily_export_revenue",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-export",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_avoided_grid_import_cost",
+        translation_key="economics_daily_avoided_grid_import_cost",
+        runtime_key="economics_daily_avoided_grid_import_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:home-lightning-bolt-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_battery_benefit",
+        translation_key="economics_daily_battery_benefit",
+        runtime_key="economics_daily_battery_benefit",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-check-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_grid_charge_cost",
+        translation_key="economics_total_grid_charge_cost",
+        runtime_key="economics_total_grid_charge_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-import",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_pv_opportunity_cost",
+        translation_key="economics_total_pv_opportunity_cost",
+        runtime_key="economics_total_pv_opportunity_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:solar-power-variant",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_export_revenue",
+        translation_key="economics_total_export_revenue",
+        runtime_key="economics_total_export_revenue",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-export",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_avoided_grid_import_cost",
+        translation_key="economics_total_avoided_grid_import_cost",
+        runtime_key="economics_total_avoided_grid_import_cost",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:home-lightning-bolt-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_battery_benefit",
+        translation_key="economics_total_battery_benefit",
+        runtime_key="economics_total_battery_benefit",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-check-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_grid_to_battery_kwh",
+        translation_key="economics_daily_grid_to_battery_kwh",
+        runtime_key="economics_daily_grid_to_battery_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:battery-arrow-up-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_pv_to_battery_kwh",
+        translation_key="economics_daily_pv_to_battery_kwh",
+        runtime_key="economics_daily_pv_to_battery_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:solar-power-variant",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_grid_export_kwh",
+        translation_key="economics_daily_grid_export_kwh",
+        runtime_key="economics_daily_grid_export_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:transmission-tower-export",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_battery_to_home_kwh",
+        translation_key="economics_daily_battery_to_home_kwh",
+        runtime_key="economics_daily_battery_to_home_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:home-battery-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_daily_battery_to_grid_kwh",
+        translation_key="economics_daily_battery_to_grid_kwh",
+        runtime_key="economics_daily_battery_to_grid_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:battery-arrow-down-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_grid_to_battery_kwh",
+        translation_key="economics_total_grid_to_battery_kwh",
+        runtime_key="economics_total_grid_to_battery_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:battery-arrow-up-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_pv_to_battery_kwh",
+        translation_key="economics_total_pv_to_battery_kwh",
+        runtime_key="economics_total_pv_to_battery_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:solar-power-variant",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_grid_export_kwh",
+        translation_key="economics_total_grid_export_kwh",
+        runtime_key="economics_total_grid_export_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:transmission-tower-export",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_battery_to_home_kwh",
+        translation_key="economics_total_battery_to_home_kwh",
+        runtime_key="economics_total_battery_to_home_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:home-battery-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_battery_to_grid_kwh",
+        translation_key="economics_total_battery_to_grid_kwh",
+        runtime_key="economics_total_battery_to_grid_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:battery-arrow-down-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_average_grid_charge_price",
+        translation_key="economics_average_grid_charge_price",
+        runtime_key="economics_average_grid_charge_price",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-import",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_average_pv_opportunity_value",
+        translation_key="economics_average_pv_opportunity_value",
+        runtime_key="economics_average_pv_opportunity_value",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:solar-power-variant",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_average_export_price",
+        translation_key="economics_average_export_price",
+        runtime_key="economics_average_export_price",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-export",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_average_battery_discharge_value",
+        translation_key="economics_average_battery_discharge_value",
+        runtime_key="economics_average_battery_discharge_value",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-arrow-down-outline",
+        economics_device=True,
+    ),
 
     # --------------------------------------------------
     # ECONOMICS
@@ -798,12 +1066,17 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         translation_key="avg_charge_price",
         runtime_key="avg_charge_price",
         icon="mdi:scale-balance",
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
     ZendureSensorEntityDescription(
         key="profit_eur",
         translation_key="profit_eur",
         runtime_key="profit_eur",
         icon="mdi:cash",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.MEASUREMENT,
+        economics_device=True,
     ),
 
     # --------------------------------------------------
@@ -987,13 +1260,23 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{description.key}"
 
-        self._attr_device_info = {
-            "identifiers": {(DOMAIN, entry.entry_id)},
-            "name": INTEGRATION_NAME,
-            "manufacturer": INTEGRATION_MANUFACTURER,
-            "model": INTEGRATION_MODEL,
-            "sw_version": INTEGRATION_VERSION,
-        }
+        if description.economics_device:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"{entry.entry_id}_economics")},
+                name="Battery SmartFlow AI – Wirtschaft & Preise",
+                manufacturer=INTEGRATION_MANUFACTURER,
+                model="Virtual economics and market price device",
+                sw_version=INTEGRATION_VERSION,
+                via_device=(DOMAIN, entry.entry_id),
+            )
+        else:
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, entry.entry_id)},
+                name=INTEGRATION_NAME,
+                manufacturer=INTEGRATION_MANUFACTURER,
+                model=INTEGRATION_MODEL,
+                sw_version=INTEGRATION_VERSION,
+            )
 
     @property
     def available(self) -> bool:

@@ -23,7 +23,14 @@ from custom_components.battery_smartflow_ai.learned_planning import (  # noqa: E
     LearningReadiness,
     build_learned_charge_plan,
 )
-from test_dev9_scenarios import NOW, PROFILE, context, price_points  # noqa: E402
+from test_dev9_scenarios import (  # noqa: E402
+    NOW,
+    PROFILE,
+    context,
+    export_market_price,
+    import_market_price,
+    price_points,
+)
 
 
 def _scaled_optional(value: float | None, factor: float) -> float | None:
@@ -33,19 +40,26 @@ def _scaled_optional(value: float | None, factor: float) -> float | None:
 def scale_price_context(ctx: DecisionContext, factor: float) -> DecisionContext:
     """Scale every monetary price input while preserving physical inputs."""
 
+    source_points = list(ctx.import_market_price.forecast.points)
     scaled_points = [
         PricePoint(point.start, point.end, float(point.price) * factor)
-        for point in ctx.price_points
+        for point in source_points
     ]
+    import_price_now = ctx.import_market_price.current_price
+    export_price_now = ctx.export_market_price.current_price
     return replace(
         ctx,
-        price_now=_scaled_optional(ctx.price_now, factor),
         avg_charge_price=_scaled_optional(ctx.avg_charge_price, factor),
         expensive_threshold=float(ctx.expensive_threshold) * factor,
         very_expensive_threshold=float(ctx.very_expensive_threshold) * factor,
         very_cheap_price=_scaled_optional(ctx.very_cheap_price, factor),
-        feed_in_tariff=float(ctx.feed_in_tariff) * factor,
-        price_points=scaled_points,
+        import_market_price=import_market_price(
+            _scaled_optional(import_price_now, factor),
+            scaled_points,
+        ),
+        export_market_price=export_market_price(
+            _scaled_optional(export_price_now, factor)
+        ),
     )
 
 
@@ -216,7 +230,7 @@ class CurrencyScaledLearnedPlanningScenarios(unittest.TestCase):
                 model=model,
                 readiness=readiness,
                 now=NOW,
-                price_points=points,
+                market_price=import_market_price(points[0].price, points),
                 forecast=None,
                 total_battery_capacity_kwh=5.76,
                 current_soc=5.0,

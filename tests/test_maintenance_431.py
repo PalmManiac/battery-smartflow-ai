@@ -39,6 +39,12 @@ from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E4
 from custom_components.battery_smartflow_ai.mode_arbiter import (  # noqa: E402
     ModeArbiter,
 )
+from custom_components.battery_smartflow_ai.market_price import (  # noqa: E402
+    MarketPrice,
+    MarketPriceDirection,
+    MarketPriceForecast,
+    MarketPriceValidity,
+)
 from custom_components.battery_smartflow_ai.regulation_models import (  # noqa: E402
     GridHistoryState,
     ModeArbiterResult,
@@ -53,6 +59,35 @@ from custom_components.battery_smartflow_ai.regulation_power_controller import (
 from custom_components.battery_smartflow_ai.strategy_state import (  # noqa: E402
     ChargeCommitState,
 )
+
+
+def import_market_price(now, current_price, points):
+    return MarketPrice(
+        direction=MarketPriceDirection.IMPORT,
+        current_price=current_price,
+        currency="EUR",
+        unit="EUR/kWh",
+        timestamp=now,
+        source="test.normalized_import",
+        validity=MarketPriceValidity.VALID,
+        is_dynamic=True,
+        is_fallback=False,
+        forecast=MarketPriceForecast(points=tuple(points), timestamp=now),
+    )
+
+
+def export_market_price(now, current_price=0.0):
+    return MarketPrice(
+        direction=MarketPriceDirection.EXPORT,
+        current_price=current_price,
+        currency="EUR",
+        unit="EUR/kWh",
+        timestamp=now,
+        source="test.normalized_export",
+        validity=MarketPriceValidity.VALID,
+        is_dynamic=False,
+        is_fallback=False,
+    )
 
 
 class Maintenance431Tests(unittest.TestCase):
@@ -246,12 +281,12 @@ class Maintenance431Tests(unittest.TestCase):
             grid_export_w=0.0,
             pv_w=0.0,
             house_load_w=942.0,
-            price_now=0.3493,
             avg_charge_price=0.20,
             expensive_threshold=0.38552,
             very_expensive_threshold=0.50,
             profit_margin_pct=15.0,
-            price_points=prices,
+            import_market_price=import_market_price(now, 0.3493, prices),
+            export_market_price=export_market_price(now),
             ai_mode="automatic",
             manual_action=None,
             season="summer",
@@ -312,12 +347,12 @@ class Maintenance431Tests(unittest.TestCase):
             grid_export_w=0.0,
             pv_w=0.0,
             house_load_w=942.0,
-            price_now=0.3493,
             avg_charge_price=0.20,
             expensive_threshold=0.38552,
             very_expensive_threshold=0.50,
             profit_margin_pct=15.0,
-            price_points=prices,
+            import_market_price=import_market_price(now, 0.3493, prices),
+            export_market_price=export_market_price(now),
             ai_mode="automatic",
             manual_action=None,
             season="summer",

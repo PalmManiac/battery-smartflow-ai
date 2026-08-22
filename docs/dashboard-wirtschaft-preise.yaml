@@ -1,0 +1,94 @@
+# Freiwillige BSFAI-V4.6-Vorlage; wird niemals automatisch importiert.
+# Die tatsächlichen Entity-IDs im Gerät „Battery SmartFlow AI – Wirtschaft &
+# Preise“ nachschlagen und die folgenden sensor.bsfai_...-Beispiele ersetzen.
+title: Battery SmartFlow AI – Wirtschaft & Preise
+views:
+  - title: Wirtschaft & Preise
+    path: bsfai-wirtschaft-preise
+    icon: mdi:finance
+    cards:
+      - type: markdown
+        content: "# Battery SmartFlow AI – Wirtschaft & Preise\nMarktpreise, Bilanz und persistente Energieflüsse."
+      - type: entities
+        title: Aktuell
+        show_header_toggle: false
+        entities:
+          - sensor.bsfai_aktuell_bezugspreis
+          - sensor.bsfai_aktuell_einspeisevergutung
+          - sensor.bsfai_aktuell_angerechneter_akku_ladepreis
+          - sensor.bsfai_preise_effektive_entladeschwelle
+          - sensor.bsfai_preise_aktuelle_peak_schwelle
+          - sensor.bsfai_preise_aktuelle_valley_schwelle
+      - type: glance
+        title: Bilanz heute
+        columns: 2
+        entities:
+          - sensor.bsfai_bilanz_heute_batterienutzen
+          - sensor.bsfai_bilanz_heute_vermiedene_netzbezugskosten
+          - sensor.bsfai_bilanz_heute_einspeiseertrag
+          - sensor.bsfai_bilanz_heute_netzladekosten
+          - sensor.bsfai_bilanz_heute_pv_opportunitatskosten
+      - type: entities
+        title: Bilanz seit Start
+        entities:
+          - sensor.bsfai_bilanz_seit_start_batterienutzen
+          - sensor.bsfai_bilanz_seit_start_vermiedene_netzbezugskosten
+          - sensor.bsfai_bilanz_seit_start_einspeiseertrag
+          - sensor.bsfai_bilanz_seit_start_netzladekosten
+          - sensor.bsfai_bilanz_seit_start_pv_opportunitatskosten
+      - type: entities
+        title: Energie heute
+        entities:
+          - sensor.bsfai_energie_heute_netz_zu_akku
+          - sensor.bsfai_energie_heute_pv_zu_akku
+          - sensor.bsfai_energie_heute_akku_zu_haus
+          - sensor.bsfai_energie_heute_akku_zu_netz
+          - sensor.bsfai_energie_heute_netzeinspeisung
+      - type: entities
+        title: Energie seit Start
+        entities:
+          - sensor.bsfai_energie_seit_start_netz_zu_akku
+          - sensor.bsfai_energie_seit_start_pv_zu_akku
+          - sensor.bsfai_energie_seit_start_akku_zu_haus
+          - sensor.bsfai_energie_seit_start_akku_zu_netz
+          - sensor.bsfai_energie_seit_start_netzeinspeisung
+      - type: entities
+        title: Energiegewichtete Preise
+        entities:
+          - sensor.bsfai_preise_netzladepreis
+          - sensor.bsfai_preise_pv_opportunitatswert
+          - sensor.bsfai_preise_einspeisevergutung
+          - sensor.bsfai_preise_wert_der_batterieentladung
+      - type: history-graph
+        title: Marktpreise und Schwellen – 24 Stunden
+        hours_to_show: 24
+        entities:
+          - sensor.bsfai_aktuell_bezugspreis
+          - sensor.bsfai_aktuell_einspeisevergutung
+          - sensor.bsfai_preise_aktuelle_peak_schwelle
+          - sensor.bsfai_preise_aktuelle_valley_schwelle
+          - sensor.bsfai_preise_effektive_entladeschwelle
+      - type: statistics-graph
+        title: Wirtschaftliche Tageswerte – 30 Tage
+        chart_type: line
+        period: day
+        days_to_show: 30
+        stat_types: [max, min]
+        entities:
+          - sensor.bsfai_bilanz_heute_batterienutzen
+          - sensor.bsfai_bilanz_heute_einspeiseertrag
+          - sensor.bsfai_bilanz_heute_netzladekosten
+          - sensor.bsfai_bilanz_heute_pv_opportunitatskosten
+          - sensor.bsfai_bilanz_heute_vermiedene_netzbezugskosten
+      - type: statistics-graph
+        title: Kumulierte Energieflüsse – 30 Tage
+        chart_type: line
+        period: day
+        days_to_show: 30
+        stat_types: [change]
+        entities:
+          - sensor.bsfai_energie_seit_start_netz_zu_akku
+          - sensor.bsfai_energie_seit_start_pv_zu_akku
+          - sensor.bsfai_energie_seit_start_akku_zu_haus
+          - sensor.bsfai_energie_seit_start_akku_zu_netz
+          - sensor.bsfai_energie_seit_start_netzeinspeisung

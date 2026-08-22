@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from functools import partial
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -23,6 +23,7 @@ from .const import (
     CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
+    CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
     CONF_AC_MODE_ENTITY,
     CONF_INPUT_LIMIT_ENTITY,
     CONF_OUTPUT_LIMIT_ENTITY,
@@ -119,7 +120,6 @@ from .decision_engine import (
     DecisionContext,
     DecisionEngine,
     DecisionResult,
-    PricePoint,
 )
 from .forecast import build_forecast_summary
 from .learned_planning import (
@@ -155,6 +155,7 @@ from .charge_economics import (
     resolve_feed_in_tariff,
     trade_soc_min_reset_state,
 )
+from .economics import EconomicPowerFlows, EconomicsEngine, EnergyAccumulator
 from .automatic_strategy import AutomaticStrategy
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
@@ -181,6 +182,15 @@ from .price_currency import (
     resolve_price_currency,
 )
 from .price_math import comparison_tolerance
+from .market_price import (
+    ExportMarketPriceResolver,
+    GenericStatePriceSource,
+    LegacyImportForecastAdapter,
+    MarketPrice,
+    MarketPriceDirection,
+    MarketPriceSourceAdapter,
+    NumericPriceNormalizer,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -279,6 +289,7 @@ class SelectedEntities:
     pv_forecast_tomorrow: str | None
     price_export: str | None
     price_now: str | None
+    dynamic_feed_in_price: str | None
     ac_mode: str
     input_limit: str
     output_limit: str
@@ -339,6 +350,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             additional_battery_discharge=entry.data.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY),
             price_export=entry.data.get(CONF_PRICE_EXPORT_ENTITY),
             price_now=entry.data.get(CONF_PRICE_NOW_ENTITY),
+            dynamic_feed_in_price=entry.data.get(
+                CONF_DYNAMIC_FEED_IN_PRICE_ENTITY
+            ),
             ac_mode=str(entry.data[CONF_AC_MODE_ENTITY]),
             input_limit=str(entry.data[CONF_INPUT_LIMIT_ENTITY]),
             output_limit=str(entry.data[CONF_OUTPUT_LIMIT_ENTITY]),
@@ -365,6 +379,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
         self._charge_source_allocator = ChargeSourceAllocator()
+        self._energy_accumulator = EnergyAccumulator()
+        self._economics_engine = EconomicsEngine(
+            currency=self.price_currency.code
+        )
         
         self._grid_history = GridHistory(
             build_grid_history_config(self._get_active_profile())
@@ -414,6 +432,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "discharged_kwh": 0.0,
             "profit": 0.0,
             "last_ts": None,
+            "economics_energy_state": None,
+            "economics_money_state": None,
+            "economics_money_day": None,
 
             # season detection
             "season_mode": "winter",
@@ -561,6 +582,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "sf800_mode_arbiter_reason",
             ):
                 self._persist.pop(legacy_key, None)
+
+            self._energy_accumulator = EnergyAccumulator.from_state(
+                self._persist.get("economics_energy_state")
+            )
+            self._economics_engine = EconomicsEngine.from_state(
+                self._persist.get("economics_money_state"),
+                currency=self.price_currency.code,
+            )
 
     async def _save(self) -> None:
         self._persist["runtime_mode"] = dict(self.runtime_mode)
@@ -1679,6 +1708,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "pv_forecast_tomorrow": self.entities.pv_forecast_tomorrow,
             "price_now": self.entities.price_now,
             "price_export": self.entities.price_export,
+            "dynamic_feed_in_price": self.entities.dynamic_feed_in_price,
             "ac_mode": self.entities.ac_mode,
             "input_limit": self.entities.input_limit,
             "output_limit": self.entities.output_limit,
@@ -1804,11 +1834,32 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return float(DEFAULT_INSTALLED_PV_WP)
             
     def _get_feed_in_tariff(self) -> float:
-        return resolve_feed_in_tariff(
+        price = self._get_export_market_price()
+        return float(price.current_price) if price.valid else 0.0
+
+    def _get_export_market_price(
+        self,
+        now: datetime | None = None,
+    ) -> MarketPrice:
+        """Return dynamic export price, static fallback, or explicit missing."""
+
+        static_configured = bool(
+            CONF_FEED_IN_TARIFF in self.entry.data
+            or CONF_FEED_IN_TARIFF in self.entry.options
+        )
+        static_value = resolve_feed_in_tariff(
             data=self.entry.data,
             options=self.entry.options,
             default=DEFAULT_FEED_IN_TARIFF,
         )
+        return ExportMarketPriceResolver(
+            state_getter=self.hass.states.get,
+            active_currency=self.price_currency.code,
+            dynamic_entity_id=self.entities.dynamic_feed_in_price,
+            static_value=static_value,
+            static_configured=static_configured,
+            now=now,
+        ).resolve()
 
     def _expert_mode_enabled(self) -> bool:
         return bool(
@@ -2212,12 +2263,36 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return None, None
 
-    def _get_price_now(self) -> float | None:
-        if self.entities.price_now:
-            p = _to_float(self._state(self.entities.price_now), None)
-            if p is not None:
-                return float(p)
-        return None
+    def _get_import_market_price(self, now: datetime) -> MarketPrice:
+        """Build the canonical import price from the configured V4.5 sources."""
+
+        source = GenericStatePriceSource(
+            entity_id=self.entities.price_now or "not_configured",
+            state_getter=self.hass.states.get,
+        )
+        current_price = MarketPriceSourceAdapter(
+            source=source,
+            normalizer=NumericPriceNormalizer(now=now),
+            direction=MarketPriceDirection.IMPORT,
+            active_currency=self.price_currency.code,
+        ).read()
+
+        forecast = None
+        if self.entities.price_export:
+            forecast_state = self.hass.states.get(self.entities.price_export)
+            if forecast_state is not None:
+                adapter = LegacyImportForecastAdapter(
+                    now=now,
+                    default_timezone=dt_util.get_default_time_zone(),
+                    parse_datetime=dt_util.parse_datetime,
+                )
+                forecast = adapter.normalize(
+                    forecast_state.attributes or {},
+                    direction=MarketPriceDirection.IMPORT,
+                    active_currency=self.price_currency.code,
+                )
+
+        return replace(current_price, forecast=forecast)
 
     def _normalize_offgrid_mode(self, raw: Any) -> str:
         if raw is None:
@@ -3382,127 +3457,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         return locked
 
-    def _parse_price_points(self, now) -> list[PricePoint]:
-        if not self.entities.price_export:
-            return []
-
-        st = self.hass.states.get(self.entities.price_export)
-        if not st:
-            return []
-
-        attrs = st.attributes or {}
-
-        raw = (
-            attrs.get("rates")
-            or attrs.get("data")
-            or attrs.get("unit_rate_forecast")
-        )
-
-        if not raw:
-            return []
-
-        if isinstance(raw, dict):
-            raw = raw.get("rates") or raw.get("data") or raw.get("timeslots")
-
-        if not isinstance(raw, list):
-            return []
-
-        tz = dt_util.get_default_time_zone()
-
-        def normalize(dt):
-            if not dt:
-                return None
-            if dt.tzinfo is None:
-                return dt.replace(tzinfo=tz)
-            return dt.astimezone(tz)
-
-        now = normalize(now)
-
-        out: list[PricePoint] = []
-
-        for item in raw:
-            if not isinstance(item, dict):
-                continue
-
-            if "validFrom" in item and "validTo" in item:
-                start = item.get("validFrom")
-                end = item.get("validTo")
-
-                cents = None
-                uinfo = item.get("unitRateInformation") or {}
-                rates_list = uinfo.get("rates") or []
-                if rates_list and isinstance(rates_list[0], dict):
-                    cents = _to_float(
-                        rates_list[0].get("latestGrossUnitRateCentsPerKwh"),
-                        None,
-                    )
-
-                if not start or not end or cents is None:
-                    continue
-
-                t_start = normalize(dt_util.parse_datetime(str(start)))
-                t_end = normalize(dt_util.parse_datetime(str(end)))
-
-                if not t_start or not t_end:
-                    continue
-
-                if t_end <= t_start:
-                    continue
-
-                if t_end <= now:
-                    continue
-
-                price = float(cents) / 100.0
-                out.append(PricePoint(start=t_start, end=t_end, price=price))
-                continue
-
-            start = (
-                item.get("start_time")
-                or item.get("starts_at")
-                or item.get("start")
-                or item.get("time")
-            )
-
-            end = (
-                item.get("end_time")
-                or item.get("ends_at")
-                or item.get("end")
-            )
-
-            p = _to_float(
-                item.get("price_per_kwh")
-                or item.get("value_inc_vat")
-                or item.get("value")
-                or item.get("unit_rate")
-                or item.get("price"),
-                None,
-            )
-
-            if not start or p is None:
-                continue
-
-            t_start = normalize(dt_util.parse_datetime(str(start)))
-            if not t_start:
-                continue
-
-            if end:
-                t_end = normalize(dt_util.parse_datetime(str(end)))
-                if not t_end:
-                    continue
-            else:
-                t_end = t_start + timedelta(minutes=15)
-
-            if t_end <= t_start:
-                continue
-
-            if t_end <= now:
-                continue
-
-            out.append(PricePoint(start=t_start, end=t_end, price=float(p)))
-
-        out.sort(key=lambda x: x.start)
-        return out
-
     def _season_detection(
         self,
         pv_w: float,
@@ -3785,7 +3739,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             profile = self._get_active_profile()
             
-            feed_in_tariff = self._get_feed_in_tariff()
+            export_market_price = self._get_export_market_price(now)
+            feed_in_tariff = float(
+                export_market_price.current_price
+                if export_market_price.valid
+                else 0.0
+            )
 
             offgrid_raw = _to_float(
                 self._state(self.entities.offgrid_power),
@@ -3944,8 +3903,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 grid_export_w=float(grid_export or 0.0),
             )
 
-            price_now = self._get_price_now()
-            price_points = self._parse_price_points(now)
+            import_market_price = self._get_import_market_price(now)
+            price_now = (
+                import_market_price.current_price
+                if import_market_price.valid
+                else None
+            )
+            price_points = list(
+                import_market_price.forecast.points
+                if import_market_price.forecast is not None
+                else ()
+            )
 
             forecast_summary = build_forecast_summary(
                 hass=self.hass,
@@ -4113,7 +4081,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 model=learned_slot_model,
                 readiness=learned_readiness,
                 now=now,
-                price_points=price_points,
+                market_price=import_market_price,
                 forecast=forecast_summary,
                 total_battery_capacity_kwh=float(battery_capacity_kwh),
                 current_soc=float(soc),
@@ -4303,13 +4271,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist.get("last_set_output_w", 0.0)
                     or 0.0
                 ),
-                price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
-                price_points=price_points,
-                feed_in_tariff=float(feed_in_tariff),
+                import_market_price=import_market_price,
+                export_market_price=export_market_price,
                 ai_mode=ai_mode,
                 manual_action=manual_action,
                 season=season,
@@ -4830,6 +4797,93 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision_reason=charge_pricing_reason,
             )
 
+            # V4.6.0 economics energy accounting uses measured battery/grid
+            # power and the already centralized charge-source attribution.
+            # Each physical direction is represented once: total grid export
+            # remains an export flow, while its battery-attributable subset is
+            # tracked separately for later benefit calculations.
+            battery_to_grid_w = min(
+                float(battery_discharge_w), float(grid_export)
+            )
+            battery_to_home_w = max(
+                0.0, float(battery_discharge_w) - battery_to_grid_w
+            )
+            economics_energy_result = self._energy_accumulator.add_sample(
+                sampled_at=now,
+                power=EconomicPowerFlows(
+                    grid_to_battery_w=float(
+                        current_charge_pricing.grid_part_w
+                        if current_charge_pricing.active
+                        else 0.0
+                    ),
+                    pv_to_battery_w=float(
+                        current_charge_pricing.pv_part_w
+                        if current_charge_pricing.active
+                        else 0.0
+                    ),
+                    grid_export_w=float(grid_export),
+                    battery_to_home_w=battery_to_home_w,
+                    battery_to_grid_w=battery_to_grid_w,
+                ),
+            )
+            economics_energy_snapshot = self._energy_accumulator.snapshot()
+            self._persist[
+                "economics_energy_state"
+            ] = self._energy_accumulator.to_state()
+            economics_day = economics_energy_snapshot.day.isoformat()
+            if self._persist.get("economics_money_day") != economics_day:
+                self._economics_engine.reset_daily()
+            self._economics_engine.record_grid_flows(
+                flows=economics_energy_result.energy,
+                daily_flows=economics_energy_result.daily_energy,
+                import_price=import_market_price,
+                export_price=export_market_price,
+            )
+            self._economics_engine.record_battery_value_flows(
+                flows=economics_energy_result.energy,
+                daily_flows=economics_energy_result.daily_energy,
+                import_price=import_market_price,
+                export_price=export_market_price,
+            )
+            economics_daily_snapshot = self._economics_engine.daily_snapshot()
+            economics_total_snapshot = self._economics_engine.total_snapshot()
+            self._persist["economics_money_day"] = economics_day
+            self._persist[
+                "economics_money_state"
+            ] = self._economics_engine.to_state()
+            economics_runtime_values = {
+                **{
+                    f"economics_daily_{key}": value
+                    for key, value in economics_daily_snapshot.as_dict().items()
+                    if key != "currency"
+                },
+                **{
+                    f"economics_total_{key}": value
+                    for key, value in economics_total_snapshot.as_dict().items()
+                    if key != "currency"
+                },
+                **{
+                    f"economics_daily_{key}": value
+                    for key, value in economics_energy_snapshot.daily.as_dict().items()
+                },
+                **{
+                    f"economics_total_{key}": value
+                    for key, value in economics_energy_snapshot.total.as_dict().items()
+                },
+                "economics_average_grid_charge_price": (
+                    economics_total_snapshot.average_grid_charge_price
+                ),
+                "economics_average_pv_opportunity_value": (
+                    economics_total_snapshot.average_pv_opportunity_value
+                ),
+                "economics_average_export_price": (
+                    economics_total_snapshot.average_export_price
+                ),
+                "economics_average_battery_discharge_value": (
+                    economics_total_snapshot.average_battery_discharge_value
+                ),
+            }
+
             sample_duration_seconds = float(UPDATE_INTERVAL)
             try:
                 previous_update = dt_util.parse_datetime(
@@ -5325,10 +5379,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # The PowerController does not decide whether charging or discharging
             # should start. It only uses these values to shift the small technical
             # target range toward slight export when that is economically preferable.
-            feed_in_tariff_configured = bool(
-                CONF_FEED_IN_TARIFF in self.entry.options
-                or CONF_FEED_IN_TARIFF in self.entry.data
-            )
+            feed_in_tariff_configured = bool(export_market_price.valid)
 
             battery_value_per_kwh = _to_float(
                 self._persist.get("trade_avg_charge_price"),
@@ -5880,13 +5931,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist.get("last_set_output_w", 0.0)
                     or 0.0
                 ),
-                price_now=price_now,
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
                 expensive_threshold=float(expensive),
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
-                price_points=price_points,
-                feed_in_tariff=float(feed_in_tariff),
+                import_market_price=import_market_price,
+                export_market_price=export_market_price,
                 ai_mode=ai_mode,
                 manual_action=manual_action,
                 season=season,
@@ -6055,6 +6105,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 
                 "price_now": price_now,
                 "feed_in_tariff": float(feed_in_tariff),
+                "feed_in_tariff_source": str(export_market_price.source),
+                "feed_in_tariff_is_dynamic": bool(
+                    export_market_price.is_dynamic
+                ),
+                "feed_in_tariff_is_fallback": bool(
+                    export_market_price.is_fallback
+                ),
+                "feed_in_tariff_validity": str(
+                    export_market_price.validity
+                ),
                 "pv_opportunity_price": float(feed_in_tariff),
                 "avg_charge_price": self._persist.get("trade_avg_charge_price"),
                 "economic_discharge_threshold": economic_discharge_threshold,
@@ -6076,6 +6136,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     float(charge_grid_part_w or 0.0) > 0.0
                     and float(charge_pv_part_w or 0.0) > 0.0
                 ),
+                "economics_energy_sample_status": economics_energy_result.status,
+                "economics_energy_elapsed_seconds": float(
+                    economics_energy_result.elapsed_seconds
+                ),
+                "economics_energy_accounted_seconds": float(
+                    economics_energy_result.accounted_seconds
+                ),
+                "economics_energy_day": economics_energy_snapshot.day.isoformat(),
+                "economics_energy_daily": (
+                    economics_energy_snapshot.daily.as_dict()
+                ),
+                "economics_energy_total": (
+                    economics_energy_snapshot.total.as_dict()
+                ),
+                "economics_daily": economics_daily_snapshot.as_dict(),
+                "economics_total": economics_total_snapshot.as_dict(),
+                **economics_runtime_values,
                 "battery_ac_power_raw": battery_power,
                 "battery_ac_power_sensor_valid": bool(
                     battery_ac_power_sensor_valid
