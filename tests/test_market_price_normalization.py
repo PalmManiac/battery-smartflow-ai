@@ -60,8 +60,25 @@ class MarketPriceValueNormalizationTests(unittest.TestCase):
         self.assertEqual(result.value, 0.122)
         self.assertEqual(result.unit, "EUR/kWh")
 
+    def test_epex_euro_symbol_units_are_supported_for_eur(self) -> None:
+        per_kwh = normalize(-0.125, unit="€/kWh")
+        per_mwh = normalize(122.0, unit="€/MWh")
+
+        self.assertEqual(per_kwh.validity, MarketPriceValidity.VALID)
+        self.assertEqual(per_kwh.value, -0.125)
+        self.assertEqual(per_kwh.currency, "EUR")
+        self.assertEqual(per_kwh.unit, "EUR/kWh")
+        self.assertEqual(per_mwh.validity, MarketPriceValidity.VALID)
+        self.assertEqual(per_mwh.value, 0.122)
+
+    def test_euro_symbol_unit_is_rejected_for_non_eur_system_currency(self) -> None:
+        result = normalize(0.25, unit="€/kWh", active_currency="CHF")
+
+        self.assertEqual(result.validity, MarketPriceValidity.INVALID)
+        self.assertIsNone(result.value)
+
     def test_zero_remains_valid_for_every_supported_scale(self) -> None:
-        for unit in ("EUR/kWh", "ct/kWh", "EUR/MWh"):
+        for unit in ("EUR/kWh", "ct/kWh", "EUR/MWh", "€/kWh", "€/MWh"):
             with self.subTest(unit=unit):
                 result = normalize(0.0, unit=unit)
                 self.assertEqual(result.validity, MarketPriceValidity.VALID)
@@ -87,7 +104,7 @@ class MarketPriceValueNormalizationTests(unittest.TestCase):
     def test_unknown_units_and_invalid_currency_metadata_are_rejected(self) -> None:
         for unit, currency in (
             ("EUR/Wh", "EUR"),
-            ("€/kWh", None),
+            ("$/kWh", None),
             ("W", "EUR"),
             ("EUR/kWh", "EURO"),
         ):
