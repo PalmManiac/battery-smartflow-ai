@@ -15,6 +15,7 @@ bootstrap()
 from custom_components.battery_smartflow_ai.economics import (
     EconomicEnergyFlows,
     EconomicsEngine,
+    priceable_energy_flows,
 )
 from custom_components.battery_smartflow_ai.market_price.models import (
     MarketPrice,
@@ -322,3 +323,120 @@ def test_battery_values_use_separate_daily_midnight_energy() -> None:
 
     assert engine.daily_snapshot().pv_opportunity_cost == pytest.approx(0.001)
     assert engine.total_snapshot().pv_opportunity_cost == pytest.approx(0.002)
+
+
+def test_missing_import_price_skips_only_import_dependent_money_flows() -> None:
+    missing_import = replace(
+        _price(MarketPriceDirection.IMPORT, 0.30),
+        current_price=None,
+        validity=MarketPriceValidity.MISSING,
+    )
+    export_price = _price(MarketPriceDirection.EXPORT, 0.10)
+    physical = EconomicEnergyFlows(
+        grid_to_battery_kwh=1.0,
+        pv_to_battery_kwh=2.0,
+        grid_export_kwh=3.0,
+        battery_to_home_kwh=4.0,
+        battery_to_grid_kwh=0.5,
+    )
+
+    result = priceable_energy_flows(
+        physical,
+        import_price=missing_import,
+        export_price=export_price,
+    )
+    engine = EconomicsEngine(currency="EUR")
+    engine.record_grid_flows(
+        flows=result.flows,
+        import_price=missing_import,
+        export_price=export_price,
+    )
+    engine.record_battery_value_flows(
+        flows=result.flows,
+        import_price=missing_import,
+        export_price=export_price,
+    )
+
+    snapshot = engine.total_snapshot()
+    assert result.status == "import_price_missing"
+    assert result.flows.grid_to_battery_kwh == 0.0
+    assert result.flows.battery_to_home_kwh == 0.0
+    assert snapshot.grid_charge_cost == 0.0
+    assert snapshot.avoided_grid_import_cost == 0.0
+    assert snapshot.export_revenue == pytest.approx(0.30)
+    assert snapshot.pv_opportunity_cost == pytest.approx(0.20)
+    assert snapshot.battery_benefit == pytest.approx(-0.15)
+    # The immutable physical sample remains available to energy statistics.
+    assert physical.grid_to_battery_kwh == 1.0
+    assert physical.battery_to_home_kwh == 4.0
+
+
+def test_missing_export_price_skips_only_export_dependent_money_flows() -> None:
+    import_price = _price(MarketPriceDirection.IMPORT, 0.30)
+    missing_export = replace(
+        _price(MarketPriceDirection.EXPORT, 0.10),
+        current_price=None,
+        validity=MarketPriceValidity.MISSING,
+    )
+    physical = EconomicEnergyFlows(
+        grid_to_battery_kwh=1.0,
+        pv_to_battery_kwh=2.0,
+        grid_export_kwh=3.0,
+        battery_to_home_kwh=4.0,
+        battery_to_grid_kwh=0.5,
+    )
+
+    result = priceable_energy_flows(
+        physical,
+        import_price=import_price,
+        export_price=missing_export,
+    )
+    engine = EconomicsEngine(currency="EUR")
+    engine.record_grid_flows(
+        flows=result.flows,
+        import_price=import_price,
+        export_price=missing_export,
+    )
+    engine.record_battery_value_flows(
+        flows=result.flows,
+        import_price=import_price,
+        export_price=missing_export,
+    )
+
+    snapshot = engine.total_snapshot()
+    assert result.status == "export_price_missing"
+    assert result.flows.pv_to_battery_kwh == 0.0
+    assert result.flows.grid_export_kwh == 0.0
+    assert result.flows.battery_to_grid_kwh == 0.0
+    assert snapshot.grid_charge_cost == pytest.approx(0.30)
+    assert snapshot.avoided_grid_import_cost == pytest.approx(1.20)
+    assert snapshot.export_revenue == 0.0
+    assert snapshot.pv_opportunity_cost == 0.0
+    assert snapshot.battery_benefit == pytest.approx(0.90)
+
+
+def test_both_missing_prices_produce_empty_money_projection_without_error() -> None:
+    missing_import = replace(
+        _price(MarketPriceDirection.IMPORT, 0.30),
+        current_price=None,
+        validity=MarketPriceValidity.UNAVAILABLE,
+    )
+    missing_export = replace(
+        _price(MarketPriceDirection.EXPORT, 0.10),
+        current_price=None,
+        validity=MarketPriceValidity.UNKNOWN,
+    )
+    result = priceable_energy_flows(
+        EconomicEnergyFlows(
+            grid_to_battery_kwh=1.0,
+            pv_to_battery_kwh=1.0,
+            grid_export_kwh=1.0,
+            battery_to_home_kwh=1.0,
+            battery_to_grid_kwh=1.0,
+        ),
+        import_price=missing_import,
+        export_price=missing_export,
+    )
+
+    assert result.status == "import_and_export_price_missing"
+    assert result.flows == EconomicEnergyFlows()

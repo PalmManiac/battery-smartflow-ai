@@ -91,7 +91,7 @@ def test_money_and_energy_statistics_use_safe_state_classes() -> None:
         for value in MONEY_VALUES:
             item = descriptions[f"economics_{period}_{value}"]
             assert _source(item["device_class"]) == "SensorDeviceClass.MONETARY"
-            assert _source(item["state_class"]) == "SensorStateClass.MEASUREMENT"
+            assert _source(item["state_class"]) == "SensorStateClass.TOTAL"
         for value in ENERGY_VALUES:
             item = descriptions[f"economics_{period}_{value}"]
             assert _source(item["device_class"]) == "SensorDeviceClass.ENERGY"
@@ -99,6 +99,13 @@ def test_money_and_energy_statistics_use_safe_state_classes() -> None:
             assert _source(item["native_unit_of_measurement"]) == (
                 "UnitOfEnergy.KILO_WATT_HOUR"
             )
+
+    for key, item in descriptions.items():
+        device_class = item.get("device_class")
+        if device_class is not None and _source(device_class) == (
+            "SensorDeviceClass.MONETARY"
+        ):
+            assert _source(item["state_class"]) == "SensorStateClass.TOTAL", key
 
 
 def test_translated_names_form_alphabetical_groups() -> None:
