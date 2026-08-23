@@ -988,6 +988,63 @@ class Maintenance431Tests(unittest.TestCase):
         self.assertEqual(input_command.input_limit_w, 1300.0)
         self.assertEqual(output_command.output_limit_w, 1300.0)
 
+    def test_idle_stops_live_output_when_internal_cache_is_already_zero(self) -> None:
+        command = DeviceCommandBuilder().build(
+            intent=StrategyIntent(
+                intent="idle",
+                requested_mode="idle",
+                requested_power_w=0.0,
+                reason="learned_charge_window_wait",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="idle",
+                resolved_mode="idle",
+                allowed=True,
+                reason="learned_charge_window_wait",
+            ),
+            power=PowerControllerResult(
+                final_power_w=0.0,
+                reason="idle_zero_power",
+            ),
+            current_ac_mode="output",
+            last_input_limit_w=0.0,
+            last_output_limit_w=0.0,
+            current_output_limit_w=667.0,
+        )
+
+        self.assertTrue(command.should_write_output)
+        self.assertFalse(command.skipped)
+        self.assertEqual(command.output_limit_w, 0.0)
+        self.assertEqual(command.metadata["current_output_limit_w"], 667.0)
+
+    def test_idle_does_not_repeat_zero_when_live_output_is_already_zero(self) -> None:
+        command = DeviceCommandBuilder().build(
+            intent=StrategyIntent(
+                intent="idle",
+                requested_mode="idle",
+                requested_power_w=0.0,
+                reason="learned_charge_window_wait",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="idle",
+                resolved_mode="idle",
+                allowed=True,
+                reason="learned_charge_window_wait",
+            ),
+            power=PowerControllerResult(
+                final_power_w=0.0,
+                reason="idle_zero_power",
+            ),
+            current_ac_mode="output",
+            last_input_limit_w=0.0,
+            last_output_limit_w=0.0,
+            current_output_limit_w=0.0,
+        )
+
+        self.assertFalse(command.should_write_output)
+        self.assertTrue(command.skipped)
+        self.assertEqual(command.skip_reason, "unchanged_within_tolerance")
+
 
 if __name__ == "__main__":
     unittest.main()

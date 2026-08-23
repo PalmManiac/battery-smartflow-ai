@@ -141,6 +141,7 @@ class DeviceCommandBuilder:
             current_ac_mode=current_ac_mode,
             last_input_limit_w=last_input_limit_w,
             last_output_limit_w=last_output_limit_w,
+            current_output_limit_w=current_output_limit_w,
         )
 
     def _build_input_command(
@@ -386,6 +387,7 @@ class DeviceCommandBuilder:
         current_ac_mode: str | None,
         last_input_limit_w: float,
         last_output_limit_w: float,
+        current_output_limit_w: float | None,
     ) -> DeviceCommand:
         ac_mode: Literal["input", "output"] = "output"
 
@@ -394,6 +396,10 @@ class DeviceCommandBuilder:
         has_power_to_stop = (
             self._zero_write_needed(old_value=last_input_limit_w)
             or self._zero_write_needed(old_value=last_output_limit_w)
+            or self._live_value_differs(
+                expected_value=0.0,
+                current_value=current_output_limit_w,
+            )
         )
 
         # Neutral idle is always represented by one outputLimit=0 command.
@@ -427,6 +433,7 @@ class DeviceCommandBuilder:
                 "current_ac_mode": current_ac_mode,
                 "last_input_limit_w": round(float(last_input_limit_w or 0.0), 2),
                 "last_output_limit_w": round(float(last_output_limit_w or 0.0), 2),
+                "current_output_limit_w": current_output_limit_w,
                 "single_stop_command": True,
                 "min_power_write_delta_w": float(
                     self.config.min_power_write_delta_w
