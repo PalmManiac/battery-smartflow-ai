@@ -325,6 +325,37 @@ def test_battery_values_use_separate_daily_midnight_energy() -> None:
     assert engine.total_snapshot().pv_opportunity_cost == pytest.approx(0.002)
 
 
+def test_total_economic_efficiency_uses_only_valued_energy_flows() -> None:
+    engine = EconomicsEngine(currency="EUR")
+    charge = EconomicEnergyFlows(grid_to_battery_kwh=1.0)
+    engine.record_grid_flows(
+        flows=charge,
+        import_price=_price(MarketPriceDirection.IMPORT, 0.20),
+        export_price=_price(MarketPriceDirection.EXPORT, 0.08),
+    )
+    engine.record_battery_value_flows(
+        flows=charge,
+        import_price=_price(MarketPriceDirection.IMPORT, 0.20),
+        export_price=_price(MarketPriceDirection.EXPORT, 0.08),
+    )
+
+    discharge = EconomicEnergyFlows(battery_to_home_kwh=1.0)
+    engine.record_grid_flows(
+        flows=discharge,
+        import_price=_price(MarketPriceDirection.IMPORT, 0.30),
+        export_price=_price(MarketPriceDirection.EXPORT, 0.08),
+    )
+    engine.record_battery_value_flows(
+        flows=discharge,
+        import_price=_price(MarketPriceDirection.IMPORT, 0.30),
+        export_price=_price(MarketPriceDirection.EXPORT, 0.08),
+    )
+
+    assert engine.total_economic_efficiency_pct() == 150.0
+    restored = EconomicsEngine.from_state(engine.to_state(), currency="EUR")
+    assert restored.total_economic_efficiency_pct() == 150.0
+
+
 def test_missing_import_price_skips_only_import_dependent_money_flows() -> None:
     missing_import = replace(
         _price(MarketPriceDirection.IMPORT, 0.30),

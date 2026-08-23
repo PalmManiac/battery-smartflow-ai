@@ -1005,25 +1005,26 @@ Adaptive peak detection detects expensive price windows.
 
 Not only a fixed price is taken into account, but also the daily price level.
 
-The peak factor determines when a price is considered a peak.
+The peak price markup determines how many percent above the daily average a
+price must be before it is considered a peak.
 
 Formula:
 
 ```text
-Peak-Schwelle = max(
-  Durchschnittspreis × Peak-Faktor,
-  Durchschnittspreis + 0,03 €
+Peak threshold = max(
+  Average price × (1 + peak price markup / 100),
+  Average price + €0.03
 )
 ```
 
 Default value:
 
 ```text
-1.35
+35%
 ```
 
-| Peak factor | Effect |
-| ----------- | ------------------------------- |
+| Peak price markup | Effect |
+| ----------------- | ------------------------------- |
 | lower | detects more peaks |
 | higher | only detects strong price spikes |
 
@@ -1416,6 +1417,34 @@ These sensors show the current economic allocation of charging power:
 The **applied charging price** can already be visible during charging.
 The **Ø charging price battery**, on the other hand, is only activated when a SoC or
 Energy increase permanently weighted.
+
+---
+
+## Economic efficiency since start
+
+This sensor does not measure the technical efficiency of the battery and
+inverter. The device-level Zendure-HA sensor remains responsible for that value.
+
+Instead, BSFAI compares the economic value of discharged battery energy since
+the start of accounting with the valued charging input:
+
+```text
+Economic efficiency =
+  Value of battery discharge
+  ÷ (grid charging cost + PV opportunity cost)
+  × 100
+```
+
+* below 100%: The valued charging input has not yet been fully recovered.
+* 100%: The valued charging input is exactly recovered.
+* above 100%: The battery has generated additional economic value.
+
+The sensor becomes available only after at least 0.1 kWh of both charging and
+discharging have been recorded since the start. A non-positive charging input,
+for example exclusively free or negatively priced charging energy, has no finite
+cost-recovery ratio and is therefore not represented by an invented percentage.
+The since-start value is more meaningful than a daily value because charging and
+discharging can span midnight.
 
 ---
 
@@ -1852,16 +1881,19 @@ SoC threshold above which emergency charging can be triggered.
 
 ---
 
-## Peak factor
+## Peak price markup
 
-Determines how sensitively adaptive price peaks are detected.
+Determines, as a percentage, how far a price must be above the daily level to
+be detected as an adaptive price peak. For example, the previous factor 1.27 is
+shown as 27% in the UI.
 
 ---
 
-## Valley factor
+## Valley price discount
 
-Determines how cheap a price must be relative to the daily level in order to be considered
-valley price is assessed. A lower value requires a more significant price valley.
+Determines, as a percentage, how far a price must be below the daily level to be
+considered a valley price. A higher discount requires a more significant price
+valley. For example, the previous factor 0.85 is shown as 15% in the UI.
 
 ---
 
@@ -2558,7 +2590,7 @@ Possible causes:
 
 * no price forecast available
 * current price is missing
-* Peak factor too high
+* Peak price markup too high
 * Daily prices are very consistent
 * Price is not far enough above the daily average
 

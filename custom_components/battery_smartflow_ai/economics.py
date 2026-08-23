@@ -8,6 +8,7 @@ from math import isfinite
 from typing import Any, Mapping
 
 from .market_price.models import MarketPrice, MarketPriceDirection
+from .economic_efficiency import economic_efficiency_pct
 
 
 @dataclass(frozen=True, slots=True)
@@ -508,6 +509,18 @@ class EconomicsEngine:
 
     def total_snapshot(self) -> EconomicsSnapshot:
         return self._snapshot(self._total)
+
+    def total_economic_efficiency_pct(self) -> float | None:
+        """Return the since-start cost-recovery ratio from valued flows."""
+        return economic_efficiency_pct(
+            grid_charge_cost=self._total.grid_charge_cost,
+            pv_opportunity_cost=self._total.pv_opportunity_cost,
+            battery_benefit=self._total.battery_benefit,
+            charged_energy_kwh=(
+                self._total.grid_charge_kwh + self._total.pv_charge_kwh
+            ),
+            discharged_energy_kwh=self._total.battery_discharge_kwh,
+        )
 
     def reset_daily(self) -> None:
         """Start a fresh daily bucket without changing lifetime totals."""

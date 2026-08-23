@@ -31,6 +31,7 @@ PRICE_KEYS = {
     "economics_average_export_price",
     "economics_average_battery_discharge_value",
 }
+EFFICIENCY_KEYS = {"economics_total_economic_efficiency_pct"}
 MIGRATED_KEYS = {
     "price_daily_average",
     "current_peak_threshold",
@@ -72,9 +73,10 @@ def test_all_new_economics_sensors_use_the_virtual_device() -> None:
         *(f"economics_{period}_{value}" for period in ("daily", "total") for value in MONEY_VALUES),
         *(f"economics_{period}_{value}" for period in ("daily", "total") for value in ENERGY_VALUES),
         *PRICE_KEYS,
+        *EFFICIENCY_KEYS,
     }
 
-    assert len(expected) == 24
+    assert len(expected) == 25
     for key in expected:
         assert key in descriptions
         assert _source(descriptions[key]["economics_device"]) == "True"
@@ -107,6 +109,10 @@ def test_money_and_energy_statistics_use_safe_state_classes() -> None:
             "SensorDeviceClass.MONETARY"
         ):
             assert _source(item["state_class"]) == "SensorStateClass.TOTAL", key
+
+    efficiency = descriptions["economics_total_economic_efficiency_pct"]
+    assert _source(efficiency["native_unit_of_measurement"]) == repr("%")
+    assert _source(efficiency["state_class"]) == "SensorStateClass.MEASUREMENT"
 
 
 def test_translated_names_form_alphabetical_groups() -> None:

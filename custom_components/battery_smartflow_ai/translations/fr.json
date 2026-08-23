@@ -327,10 +327,10 @@
         "name": "Marge bénéficiaire (%)"
       },
       "peak_factor": {
-        "name": "Facteur de pic"
+        "name": "Majoration du prix de pointe"
       },
       "valley_factor": {
-        "name": "Facteur de creux"
+        "name": "Réduction du prix bas"
       },
       "very_cheap_price": {
         "name": "Seuil très bon marché"
@@ -815,6 +815,7 @@
       "economics_total_export_revenue": {"name": "Bilan depuis le début – Revenu d’injection"},
       "economics_total_avoided_grid_import_cost": {"name": "Bilan depuis le début – Coût d’import évité"},
       "economics_total_battery_benefit": {"name": "Bilan depuis le début – Bénéfice de la batterie"},
+      "economics_total_economic_efficiency_pct": {"name": "Bilan depuis le début – Rendement économique"},
       "economics_daily_grid_to_battery_kwh": {"name": "Énergie aujourd’hui – Réseau vers batterie"},
       "economics_daily_pv_to_battery_kwh": {"name": "Énergie aujourd’hui – PV vers batterie"},
       "economics_daily_grid_export_kwh": {"name": "Énergie aujourd’hui – Injection réseau"},

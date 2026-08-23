@@ -413,21 +413,22 @@ Technical regulation holds are not allowed to override SoC or cell-voltage prote
 
 ---
 
-# 🧠 Peak factor (Adaptive Peak)
+# 🧠 Peak price markup (Adaptive Peak)
 
-The peak factor can be adjusted via the GUI and influences the detection of price peaks.
+The GUI setting is expressed as an understandable percentage above the average
+price and influences the detection of price peaks.
 
 Formula:
 
 Peak threshold = max(
-Average price × Peak factor,
+Average price × (1 + peak price markup / 100),
 Average price + €0.03
 )
 
-Default: **1.35**
+Default: **35%**
 
-* Lower → detects more peaks (more sensitive)
-* Higher → detects only strong price peaks (more conservative)
+* Lower markup → detects more peaks (more sensitive)
+* Higher markup → detects only strong price peaks (more conservative)
 
 ---
 
@@ -470,8 +471,14 @@ The integration can show:
 * Discharged energy
 * Price difference
 * Total profit / savings in €
+* Economic efficiency since start (100% = cost recovery)
 
 Technical support modes such as off-grid support or PV house-load passthrough are not counted as economic price discharge.
+
+The economic efficiency is intentionally different from the technical battery
+efficiency reported by Zendure-HA. It compares the value of discharged battery
+energy with valued grid-charge costs and PV opportunity costs. The value becomes
+available after at least 0.1 kWh of both charging and discharging have been observed.
 
 Note: Details about the calculation are in the **manual**.
 
@@ -898,21 +905,22 @@ Technische Haltezustände dürfen SoC- oder Zellspannungs-Schutz nicht überstim
 
 ---
 
-# 🧠 Peak-Faktor (Adaptive Peak)
+# 🧠 Peakpreis-Aufschlag (Adaptive Peak)
 
-Der Peak-Faktor ist über die GUI einstellbar und beeinflusst die Erkennung von Preisspitzen.
+Die GUI-Einstellung gibt verständlich an, wie viel Prozent ein Preis über dem
+Durchschnitt liegen muss, und beeinflusst so die Erkennung von Preisspitzen.
 
 Formel:
 
 Peak-Schwelle = max(
-Durchschnittspreis × Peak-Faktor,
+Durchschnittspreis × (1 + Peakpreis-Aufschlag / 100),
 Durchschnittspreis + 0,03 €
 )
 
-Standard: **1.35**
+Standard: **35 %**
 
-* Niedriger → erkennt mehr Peaks (sensitiver)
-* Höher → erkennt nur starke Preisspitzen (konservativer)
+* Niedrigerer Aufschlag → erkennt mehr Peaks (sensitiver)
+* Höherer Aufschlag → erkennt nur starke Preisspitzen (konservativer)
 
 ---
 

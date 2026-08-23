@@ -332,10 +332,10 @@
         "name": "Profit margin (%)"
       },
       "peak_factor": {
-        "name": "Peak factor"
+        "name": "Peak price markup"
       },
       "valley_factor": {
-        "name": "Valley factor"
+        "name": "Valley price discount"
       },
       "very_cheap_price": {
         "name": "Very-cheap threshold"
@@ -820,6 +820,7 @@
       "economics_total_export_revenue": {"name": "Balance since start – Export revenue"},
       "economics_total_avoided_grid_import_cost": {"name": "Balance since start – Avoided grid import cost"},
       "economics_total_battery_benefit": {"name": "Balance since start – Battery benefit"},
+      "economics_total_economic_efficiency_pct": {"name": "Balance since start – Economic efficiency"},
       "economics_daily_grid_to_battery_kwh": {"name": "Energy today – Grid to battery"},
       "economics_daily_pv_to_battery_kwh": {"name": "Energy today – PV to battery"},
       "economics_daily_grid_export_kwh": {"name": "Energy today – Grid export"},

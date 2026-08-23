@@ -4898,6 +4898,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economics_average_battery_discharge_value": (
                     economics_total_snapshot.average_battery_discharge_value
                 ),
+                "economics_total_economic_efficiency_pct": (
+                    self._economics_engine.total_economic_efficiency_pct()
+                ),
             }
 
             sample_duration_seconds = float(UPDATE_INTERVAL)
