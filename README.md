@@ -471,8 +471,14 @@ The integration can show:
 * Discharged energy
 * Price difference
 * Total profit / savings in €
+* Economic efficiency since start (100% = cost recovery)
 
 Technical support modes such as off-grid support or PV house-load passthrough are not counted as economic price discharge.
+
+The economic efficiency is intentionally different from the technical battery
+efficiency reported by Zendure-HA. It compares the value of discharged battery
+energy with valued grid-charge costs and PV opportunity costs. The value becomes
+available after at least 0.1 kWh of both charging and discharging have been observed.
 
 Note: Details about the calculation are in the **manual**.
 

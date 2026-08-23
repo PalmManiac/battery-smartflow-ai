@@ -815,6 +815,7 @@
       "economics_total_export_revenue": {"name": "Balans sinds start – Terugleveropbrengst"},
       "economics_total_avoided_grid_import_cost": {"name": "Balans sinds start – Vermeden netafnamekosten"},
       "economics_total_battery_benefit": {"name": "Balans sinds start – Batterijvoordeel"},
+      "economics_total_economic_efficiency_pct": {"name": "Balans sinds start – Economisch rendement"},
       "economics_daily_grid_to_battery_kwh": {"name": "Energie vandaag – Net naar batterij"},
       "economics_daily_pv_to_battery_kwh": {"name": "Energie vandaag – PV naar batterij"},
       "economics_daily_grid_export_kwh": {"name": "Energie vandaag – Teruglevering"},

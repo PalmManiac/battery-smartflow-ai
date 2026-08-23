@@ -1420,6 +1420,34 @@ Energy increase permanently weighted.
 
 ---
 
+## Economic efficiency since start
+
+This sensor does not measure the technical efficiency of the battery and
+inverter. The device-level Zendure-HA sensor remains responsible for that value.
+
+Instead, BSFAI compares the economic value of discharged battery energy since
+the start of accounting with the valued charging input:
+
+```text
+Economic efficiency =
+  Value of battery discharge
+  ÷ (grid charging cost + PV opportunity cost)
+  × 100
+```
+
+* below 100%: The valued charging input has not yet been fully recovered.
+* 100%: The valued charging input is exactly recovered.
+* above 100%: The battery has generated additional economic value.
+
+The sensor becomes available only after at least 0.1 kWh of both charging and
+discharging have been recorded since the start. A non-positive charging input,
+for example exclusively free or negatively priced charging energy, has no finite
+cost-recovery ratio and is therefore not represented by an invented percentage.
+The since-start value is more meaningful than a daily value because charging and
+discharging can span midnight.
+
+---
+
 ## Ø Daily price
 
 The average daily price is calculated from the available price forecast data.

@@ -926,6 +926,16 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         economics_device=True,
     ),
     ZendureSensorEntityDescription(
+        key="economics_total_economic_efficiency_pct",
+        translation_key="economics_total_economic_efficiency_pct",
+        runtime_key="economics_total_economic_efficiency_pct",
+        native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        icon="mdi:finance",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
         key="economics_daily_grid_to_battery_kwh",
         translation_key="economics_daily_grid_to_battery_kwh",
         runtime_key="economics_daily_grid_to_battery_kwh",

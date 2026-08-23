@@ -815,6 +815,7 @@
       "economics_total_export_revenue": {"name": "Bilanz seit Start – Einspeiseertrag"},
       "economics_total_avoided_grid_import_cost": {"name": "Bilanz seit Start – Vermiedene Netzbezugskosten"},
       "economics_total_battery_benefit": {"name": "Bilanz seit Start – Batterienutzen"},
+      "economics_total_economic_efficiency_pct": {"name": "Bilanz seit Start – Wirtschaftlicher Wirkungsgrad"},
       "economics_daily_grid_to_battery_kwh": {"name": "Energie heute – Netz zu Akku"},
       "economics_daily_pv_to_battery_kwh": {"name": "Energie heute – PV zu Akku"},
       "economics_daily_grid_export_kwh": {"name": "Energie heute – Netzeinspeisung"},

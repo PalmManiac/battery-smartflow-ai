@@ -1421,6 +1421,34 @@ Energiezuwachs dauerhaft gewichtet.
 
 ---
 
+## Wirtschaftlicher Wirkungsgrad seit Start
+
+Dieser Sensor bewertet nicht den technischen Wirkungsgrad von Akku und
+Wechselrichter. Dafür bleibt der gerätenahe Sensor aus Zendure-HA zuständig.
+
+BSFAI vergleicht stattdessen den wirtschaftlichen Wert der seit Beginn
+abgegebenen Batterieenergie mit dem bewerteten Ladeaufwand:
+
+```text
+Wirtschaftlicher Wirkungsgrad =
+  Wert der Batterieentladung
+  ÷ (Netzladekosten + PV-Opportunitätskosten)
+  × 100
+```
+
+* unter 100 %: Der bewertete Ladeaufwand ist noch nicht vollständig gedeckt.
+* 100 %: Der bewertete Ladeaufwand ist genau gedeckt.
+* über 100 %: Die Batterie hat einen wirtschaftlichen Mehrwert erzielt.
+
+Der Sensor wird erst verfügbar, wenn seit Beginn mindestens 0,1 kWh Ladeenergie
+und 0,1 kWh Entladeenergie erfasst wurden. Ein nicht positiver Ladeaufwand, etwa
+bei ausschließlich kostenloser oder negativ vergüteter Ladeenergie, besitzt
+keinen endlichen Kostendeckungsgrad und wird daher nicht als erfundene
+Prozentzahl dargestellt. Der Wert „seit Start“ ist aussagekräftiger als ein
+Tageswert, weil Lade- und Entladevorgänge über Mitternacht reichen können.
+
+---
+
 ## Ø Tagespreis
 
 Der durchschnittliche Tagespreis wird aus den verfügbaren Preisprognosedaten berechnet.
