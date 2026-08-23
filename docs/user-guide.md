@@ -1005,25 +1005,26 @@ Adaptive peak detection detects expensive price windows.
 
 Not only a fixed price is taken into account, but also the daily price level.
 
-The peak factor determines when a price is considered a peak.
+The peak price markup determines how many percent above the daily average a
+price must be before it is considered a peak.
 
 Formula:
 
 ```text
-Peak-Schwelle = max(
-  Durchschnittspreis × Peak-Faktor,
-  Durchschnittspreis + 0,03 €
+Peak threshold = max(
+  Average price × (1 + peak price markup / 100),
+  Average price + €0.03
 )
 ```
 
 Default value:
 
 ```text
-1.35
+35%
 ```
 
-| Peak factor | Effect |
-| ----------- | ------------------------------- |
+| Peak price markup | Effect |
+| ----------------- | ------------------------------- |
 | lower | detects more peaks |
 | higher | only detects strong price spikes |
 
@@ -1852,16 +1853,19 @@ SoC threshold above which emergency charging can be triggered.
 
 ---
 
-## Peak factor
+## Peak price markup
 
-Determines how sensitively adaptive price peaks are detected.
+Determines, as a percentage, how far a price must be above the daily level to
+be detected as an adaptive price peak. For example, the previous factor 1.27 is
+shown as 27% in the UI.
 
 ---
 
-## Valley factor
+## Valley price discount
 
-Determines how cheap a price must be relative to the daily level in order to be considered
-valley price is assessed. A lower value requires a more significant price valley.
+Determines, as a percentage, how far a price must be below the daily level to be
+considered a valley price. A higher discount requires a more significant price
+valley. For example, the previous factor 0.85 is shown as 15% in the UI.
 
 ---
 
@@ -2558,7 +2562,7 @@ Possible causes:
 
 * no price forecast available
 * current price is missing
-* Peak factor too high
+* Peak price markup too high
 * Daily prices are very consistent
 * Price is not far enough above the daily average
 

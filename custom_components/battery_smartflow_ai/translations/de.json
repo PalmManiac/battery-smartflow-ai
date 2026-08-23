@@ -327,10 +327,10 @@
         "name": "Gewinnmarge (%)"
       },
       "peak_factor": {
-        "name": "Peak-Faktor"
+        "name": "Peakpreis-Aufschlag"
       },
       "valley_factor": {
-        "name": "Tal-Faktor"
+        "name": "Talpreis-Abschlag"
       },
       "very_cheap_price": {
         "name": "Sehr-billig Schwelle"

@@ -327,10 +327,10 @@
         "name": "Winstmarge (%)"
       },
       "peak_factor": {
-        "name": "Piekfactor"
+        "name": "Piekprijsopslag"
       },
       "valley_factor": {
-        "name": "Dalfactor"
+        "name": "Dalprijskorting"
       },
       "very_cheap_price": {
         "name": "Zeer-goedkoop-drempel"

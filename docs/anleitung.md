@@ -1006,13 +1006,14 @@ Die adaptive Peak-Erkennung erkennt teure Preisfenster.
 
 Dabei wird nicht nur ein fixer Preis betrachtet, sondern das Preisniveau des Tages.
 
-Der Peak-Faktor bestimmt, ab wann ein Preis als Peak gilt.
+Der Peakpreis-Aufschlag bestimmt, wie viel Prozent ein Preis über dem
+Tagesdurchschnitt liegen muss, damit er als Peak gilt.
 
 Formel:
 
 ```text
 Peak-Schwelle = max(
-  Durchschnittspreis × Peak-Faktor,
+  Durchschnittspreis × (1 + Peakpreis-Aufschlag / 100),
   Durchschnittspreis + 0,03 €
 )
 ```
@@ -1020,13 +1021,13 @@ Peak-Schwelle = max(
 Standardwert:
 
 ```text
-1.35
+35 %
 ```
 
-| Peak-Faktor | Wirkung                         |
-| ----------- | ------------------------------- |
-| niedriger   | erkennt mehr Peaks              |
-| höher       | erkennt nur starke Preisspitzen |
+| Peakpreis-Aufschlag | Wirkung                         |
+| ------------------- | ------------------------------- |
+| niedriger           | erkennt mehr Peaks              |
+| höher               | erkennt nur starke Preisspitzen |
 
 ---
 
@@ -1853,16 +1854,19 @@ SoC-Schwelle, ab der eine Notladung ausgelöst werden kann.
 
 ---
 
-## Peak-Faktor
+## Peakpreis-Aufschlag
 
-Bestimmt, wie empfindlich adaptive Preispeaks erkannt werden.
+Bestimmt in Prozent, wie weit ein Preis über dem Tagesniveau liegen muss, damit
+er als adaptiver Preispeak erkannt wird. Beispiel: Der bisherige Faktor 1,27
+wird in der Oberfläche als 27 % angezeigt.
 
 ---
 
-## Tal-Faktor
+## Talpreis-Abschlag
 
-Bestimmt, wie günstig ein Preis relativ zum Tagesniveau sein muss, damit er als
-Talpreis bewertet wird. Ein niedrigerer Wert verlangt ein deutlicheres Preistal.
+Bestimmt in Prozent, wie weit ein Preis unter dem Tagesniveau liegen muss, damit
+er als Talpreis bewertet wird. Ein höherer Abschlag verlangt ein deutlicheres
+Preistal. Beispiel: Der bisherige Faktor 0,85 wird als 15 % angezeigt.
 
 ---
 
@@ -2569,7 +2573,7 @@ Mögliche Ursachen:
 
 * keine Preisprognose vorhanden
 * aktueller Preis fehlt
-* Peak-Faktor zu hoch
+* Peakpreis-Aufschlag zu hoch
 * Tagespreise sind sehr gleichmäßig
 * Preis liegt nicht weit genug über dem Tagesdurchschnitt
 
@@ -2869,7 +2873,7 @@ Empfohlen:
 
 * Automatikmodus
 * Preisverlauf vollständig prüfen
-* Peak-Faktor passend wählen
+* Peakpreis-Aufschlag passend wählen
 * Gewinnmarge nicht zu niedrig setzen
 * sehr-billig-Schwelle nutzen
 * Lernplanung aktivieren

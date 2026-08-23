@@ -41,6 +41,12 @@ from .const import (
     DEFAULT_FORECAST_BASE_LOAD,
 )
 from .price_currency import price_input_profile
+from .factor_display import (
+    discount_pct_to_valley_factor,
+    markup_pct_to_peak_factor,
+    peak_factor_to_markup_pct,
+    valley_factor_to_discount_pct,
+)
 
 
 PRICE_NUMBER_KEYS = frozenset(
@@ -54,6 +60,7 @@ PRICE_NUMBER_KEYS = frozenset(
 @dataclass(frozen=True, kw_only=True)
 class ZendureNumberEntityDescription(NumberEntityDescription):
     runtime_key: str
+    factor_percentage_kind: str | None = None
 
 
 NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
@@ -70,9 +77,11 @@ NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
         key=SETTING_PEAK_FACTOR,
         translation_key="peak_factor",
         runtime_key=SETTING_PEAK_FACTOR,
-        native_min_value=1.0,
-        native_max_value=2.5,
-        native_step=0.01,
+        factor_percentage_kind="peak_markup",
+        native_min_value=0,
+        native_max_value=150,
+        native_step=1,
+        native_unit_of_measurement="%",
         mode="box",
         icon="mdi:chart-bell-curve",
     ),
@@ -80,9 +89,11 @@ NUMBERS: tuple[ZendureNumberEntityDescription, ...] = (
         key=SETTING_VALLEY_FACTOR,
         translation_key="valley_factor",
         runtime_key=SETTING_VALLEY_FACTOR,
-        native_min_value=0.5,
-        native_max_value=1.0,
-        native_step=0.01,
+        factor_percentage_kind="valley_discount",
+        native_min_value=0,
+        native_max_value=50,
+        native_step=1,
+        native_unit_of_measurement="%",
         mode="box",
         icon="mdi:chart-bell-curve",
     ),
@@ -291,7 +302,7 @@ class ZendureSmartFlowNumber(NumberEntity):
 
     @property
     def native_value(self) -> float:
-        return float(
+        value = float(
             self.coordinator.runtime_settings.get(
                 self.entity_description.runtime_key,
                 _default_for_key(
@@ -301,8 +312,19 @@ class ZendureSmartFlowNumber(NumberEntity):
             )
         )
 
+        if self.entity_description.factor_percentage_kind == "peak_markup":
+            return peak_factor_to_markup_pct(value)
+        if self.entity_description.factor_percentage_kind == "valley_discount":
+            return valley_factor_to_discount_pct(value)
+        return value
+
     async def async_set_native_value(self, value: float) -> None:
         value = float(value)
+
+        if self.entity_description.factor_percentage_kind == "peak_markup":
+            value = markup_pct_to_peak_factor(value)
+        elif self.entity_description.factor_percentage_kind == "valley_discount":
+            value = discount_pct_to_valley_factor(value)
 
         self.coordinator.runtime_settings[self.entity_description.runtime_key] = value
 

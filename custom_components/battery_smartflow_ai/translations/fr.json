@@ -327,10 +327,10 @@
         "name": "Marge bénéficiaire (%)"
       },
       "peak_factor": {
-        "name": "Facteur de pic"
+        "name": "Majoration du prix de pointe"
       },
       "valley_factor": {
-        "name": "Facteur de creux"
+        "name": "Réduction du prix bas"
       },
       "very_cheap_price": {
         "name": "Seuil très bon marché"

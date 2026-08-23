@@ -327,10 +327,10 @@
         "name": "Profit margin (%)"
       },
       "peak_factor": {
-        "name": "Peak factor"
+        "name": "Peak price markup"
       },
       "valley_factor": {
-        "name": "Valley factor"
+        "name": "Valley price discount"
       },
       "very_cheap_price": {
         "name": "Very-cheap threshold"
