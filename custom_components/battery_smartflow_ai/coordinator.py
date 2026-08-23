@@ -12,6 +12,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from .ai_status import map_ai_status
 from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
@@ -98,14 +99,6 @@ from .const import (
     # statuses
     STATUS_OK,
     STATUS_SENSOR_INVALID,
-    AI_STATUS_STANDBY,
-    AI_STATUS_CHARGE_SURPLUS,
-    AI_STATUS_PRICE_CHARGE,
-    AI_STATUS_COVER_DEFICIT,
-    AI_STATUS_EXPENSIVE_DISCHARGE,
-    AI_STATUS_VERY_EXPENSIVE_FORCE,
-    AI_STATUS_EMERGENCY_CHARGE,
-    AI_STATUS_MANUAL,
     RECO_STANDBY,
     RECO_CHARGE,
     RECO_DISCHARGE,
@@ -3556,30 +3549,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return season
 
     def _map_ai_status(self, ai_mode: str, action: str, reason: str) -> str:
-        if ai_mode == AI_MODE_MANUAL:
-            return AI_STATUS_MANUAL
-        if action == "passthrough" or reason == "pv_house_load_passthrough":
-            return AI_STATUS_STANDBY
-        if action == "emergency":
-            return AI_STATUS_EMERGENCY_CHARGE
-        if action == "charge":
-            if reason == "pv_surplus_charge":
-                return AI_STATUS_CHARGE_SURPLUS
-            if (
-                "valley" in reason
-                or "planning" in reason
-                or "price" in reason
-                or reason == "summer_peak_reserve_charge"
-            ):
-                return AI_STATUS_PRICE_CHARGE
-            return AI_STATUS_CHARGE_SURPLUS
-        if action == "discharge":
-            if "very_expensive" in reason or "adaptive_peak" in reason:
-                return AI_STATUS_VERY_EXPENSIVE_FORCE
-            if "price" in reason:
-                return AI_STATUS_EXPENSIVE_DISCHARGE
-            return AI_STATUS_COVER_DEFICIT
-        return AI_STATUS_STANDBY
+        return map_ai_status(ai_mode, action, reason)
 
     def _map_reco(self, action: str) -> str:
         if action == "passthrough":

@@ -885,10 +885,7 @@ def optimize_charge_window(
 
     weights = _triangle_weights(window_slots)
 
-    best_start: datetime | None = None
-    best_end: datetime | None = None
-    best_score: float | None = None
-    best_prices: list[float] = []
+    candidates: list[tuple[float, datetime, datetime, list[float]]] = []
 
     for idx in range(0, len(future) - window_slots + 1):
         window = future[idx: idx + window_slots]
@@ -908,20 +905,9 @@ def optimize_charge_window(
         prices = [float(p.price) for p in window]
         score = sum(price * weight for price, weight in zip(prices, weights))
 
-        if best_score is None or score < best_score:
-            best_score = score
-            best_start = start
-            best_end = end
-            best_prices = prices
-        elif best_score is not None and math.isclose(score, best_score, rel_tol=0.0, abs_tol=0.000001):
-            # Tie breaker: later start wins.
-            if best_start is None or start > best_start:
-                best_score = score
-                best_start = start
-                best_end = end
-                best_prices = prices
+        candidates.append((score, start, end, prices))
 
-    if best_start is None or best_end is None:
+    if not candidates:
         return (
             now_local,
             now_local + timedelta(minutes=window_slots * SLOT_MINUTES),
@@ -930,6 +916,36 @@ def optimize_charge_window(
             [],
             LEARNED_REASON_DEADLINE_TOO_CLOSE_START_NOW,
         )
+
+    best_score = min(candidate[0] for candidate in candidates)
+    cheapest = [
+        candidate
+        for candidate in candidates
+        if math.isclose(
+            candidate[0],
+            best_score,
+            rel_tol=0.0,
+            abs_tol=0.000001,
+        )
+    ]
+
+    # Equal-cost windows used to be pushed as close to the deadline as possible.
+    # Keep a safety reserve after charging instead: aim up to one hour before the
+    # latest equal-cost start, without moving farther than the midpoint of the
+    # available tie range. This remains stable while waiting and still gives every
+    # real price difference priority over timing comfort.
+    earliest_start = min(candidate[1] for candidate in cheapest)
+    latest_start = max(candidate[1] for candidate in cheapest)
+    tied_span = latest_start - earliest_start
+    end_reserve = min(timedelta(hours=1), tied_span / 2)
+    preferred_start = latest_start - end_reserve
+    _, best_start, best_end, best_prices = min(
+        cheapest,
+        key=lambda candidate: (
+            abs((candidate[1] - preferred_start).total_seconds()),
+            candidate[1],
+        ),
+    )
 
     return best_start, best_end, best_score, weights, best_prices, None
 
