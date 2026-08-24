@@ -10,6 +10,40 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
 
+def forecast_supports_early_pv_passthrough(
+    *,
+    forecast_status: str,
+    pv_outlook: str,
+    remaining_today_kwh: float,
+    battery_capacity_kwh: float,
+    soc: float,
+    soc_max: float,
+) -> bool:
+    """Return whether forecast PV exceeds the battery's remaining headroom."""
+
+    if str(forecast_status or "").strip().lower() != "available":
+        return False
+    if str(pv_outlook or "").strip().lower() not in {
+        "good",
+        "high",
+        "very_good",
+        "excellent",
+        "gut",
+    }:
+        return False
+
+    capacity = max(0.0, float(battery_capacity_kwh or 0.0))
+    if capacity <= 0.0:
+        return False
+
+    free_capacity_kwh = capacity * max(
+        0.0,
+        float(soc_max) - float(soc),
+    ) / 100.0
+
+    return float(remaining_today_kwh or 0.0) > free_capacity_kwh + 0.25
+
+
 class AutomaticStrategy:
     """Build the high-level context for the unified automatic strategy.
 
@@ -279,6 +313,7 @@ class AutomaticStrategy:
         reserve_reason: str,
         pv_weight: float,
         pv_reason: str,
+        grid_import_w: float,
     ) -> tuple[bool, str]:
         """Return whether Automatic may consider economic discharge.
 
@@ -296,6 +331,7 @@ class AutomaticStrategy:
         if (
             pv_reason == "pv_covers_house_load"
             and float(pv_weight) >= 0.85
+            and float(grid_import_w or 0.0) <= 120.0
         ):
             return False, "pv_covers_load_blocks_discharge"
 
@@ -553,6 +589,7 @@ class AutomaticStrategy:
         pv_outlook: str = "unknown",
         forecast_remaining_today_kwh: float = 0.0,
         forecast_tomorrow_kwh: float = 0.0,
+        grid_import_w: float = 0.0,
         metadata: dict[str, Any] | None = None,
     ) -> StrategyContext:
         """Return the current automatic-strategy context."""
@@ -639,6 +676,7 @@ class AutomaticStrategy:
             reserve_reason=reserve_reason,
             pv_weight=pv_weight,
             pv_reason=pv_reason,
+            grid_import_w=float(grid_import_w or 0.0),
         )
         (
             automatic_peak_reserve_allowed,

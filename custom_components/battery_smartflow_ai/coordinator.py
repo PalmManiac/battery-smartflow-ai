@@ -155,7 +155,10 @@ from .economics import (
     EnergyAccumulator,
     priceable_energy_flows,
 )
-from .automatic_strategy import AutomaticStrategy
+from .automatic_strategy import (
+    AutomaticStrategy,
+    forecast_supports_early_pv_passthrough,
+)
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
@@ -3028,6 +3031,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cell_voltage_emergency_active: bool,
         additional_battery_charge_w: float,
         pv_charge_latched: bool,
+        forecast_status: str,
+        pv_outlook: str,
+        forecast_remaining_today_kwh: float,
+        battery_capacity_kwh: float,
     ) -> tuple[bool, float, str]:
         enabled = bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False))
 
@@ -3141,6 +3148,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             battery_near_full = bool(
                 float(soc) >= full_soc_release_threshold
             )
+            forecast_surplus_expected = forecast_supports_early_pv_passthrough(
+                forecast_status=str(forecast_status),
+                pv_outlook=str(pv_outlook),
+                remaining_today_kwh=float(forecast_remaining_today_kwh or 0.0),
+                battery_capacity_kwh=float(battery_capacity_kwh or 0.0),
+                soc=float(soc),
+                soc_max=float(soc_max),
+            )
             forced = bool(
                 mppt_clips_without_output
                 and daylight_available
@@ -3206,7 +3221,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 stop_reason = "full_battery_pv_passthrough"
 
-            elif mppt_clips_without_output and not battery_near_full:
+            elif (
+                mppt_clips_without_output
+                and not battery_near_full
+                and not forecast_surplus_expected
+            ):
                 active = False
                 export_counter = 0
                 target_w = 0.0
@@ -3254,7 +3273,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     and enough_house_load
                     and useful_target
                     and export_val < float(pv_charge_start_export_w or 0.0)
-                    and import_val <= max(250.0, house_val * 0.50)
+                    and (
+                        forecast_surplus_expected
+                        or import_val <= max(250.0, house_val * 0.50)
+                    )
                 ):
                     active = True
                     self._persist["pv_houseload_passthrough_started_ts"] = (
@@ -4117,6 +4139,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 forecast_tomorrow_kwh=float(
                     forecast_summary.tomorrow_kwh
                 ),
+                grid_import_w=float(grid_import or 0.0),
                 metadata={
                     "legacy_season_mode": str(season),
                     "grid_import_w": round(
@@ -4226,6 +4249,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         cell_voltage_emergency_active=bool(cell_voltage_emergency_active),
                         additional_battery_charge_w=float(additional_battery_charge_w or 0.0),
                         pv_charge_latched=bool(pv_charge_latched),
+                        forecast_status=str(forecast_summary.status),
+                        pv_outlook=str(forecast_summary.pv_outlook),
+                        forecast_remaining_today_kwh=float(
+                            forecast_summary.remaining_today_kwh
+                        ),
+                        battery_capacity_kwh=float(battery_capacity_kwh),
                     )
                 )
 
