@@ -78,6 +78,16 @@ class Rc2ChargeWindowRegressionTests(unittest.TestCase):
 
         self.assertEqual(status, AI_STATUS_PRICE_CHARGE)
 
+    def test_bound_learned_charge_uses_original_reason_for_status(self) -> None:
+        status = map_ai_status(
+            AI_MODE_AUTOMATIC,
+            "charge",
+            "charge_commit_active",
+            source_reason="learned_charge_window_active",
+        )
+
+        self.assertEqual(status, AI_STATUS_PRICE_CHARGE)
+
 
 if __name__ == "__main__":
     unittest.main()
