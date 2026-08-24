@@ -134,6 +134,7 @@ from .charge_commit_policy import (
     learned_commit_price_phase,
     learned_commit_should_yield_to_discharge,
     learned_plan_may_complete_active_commit,
+    preserved_learned_commit_power,
 )
 from .battery_protection import (
     cell_voltage_emergency_minimum_elapsed,
@@ -1465,26 +1466,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         commit=commit,
                     )
 
-                # Dev9.1: A binding restored from Dev9 may still contain the
-                # self-limited learned value (for example 1161 W). Refresh an
-                # active/forced learned binding directly from the newly
-                # calculated energy/window request, even when the base decision
-                # temporarily exposes another reason.
-                replanned_power_w = _to_float(
-                    getattr(
-                        learned_charge_plan,
-                        "requested_charge_power_w",
-                        None,
-                    ),
-                    None,
+                # The target, timing and power form one planning snapshot. A
+                # shrinking live need must not taper the stored 800 W request to
+                # the planner's 100 W minimum while the old target SoC remains.
+                commit.requested_power_w = preserved_learned_commit_power(
+                    requested_power_w=float(commit.requested_power_w or 0.0),
+                    max_charge_w=float(max_charge_w),
                 )
-                if replanned_power_w is not None and replanned_power_w > 0.0:
-                    commit.requested_power_w = min(
-                        float(replanned_power_w),
-                        float(max_charge_w),
-                    )
-                    commit.updated_at = now_utc
-                    self._store_charge_commit(commit)
+                commit.updated_at = now_utc
+                self._store_charge_commit(commit)
 
             # If the same charge reason is still present, refresh power and
             # price-window timeout for optional price commits.
@@ -3549,7 +3539,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return season
 
     def _map_ai_status(self, ai_mode: str, action: str, reason: str) -> str:
-        return map_ai_status(ai_mode, action, reason)
+        source_reason = None
+        if reason == "charge_commit_active":
+            source_reason = str(
+                self._persist.get("charge_commit_source_reason", "") or ""
+            )
+        return map_ai_status(
+            ai_mode,
+            action,
+            reason,
+            source_reason=source_reason,
+        )
 
     def _map_reco(self, action: str) -> str:
         if action == "passthrough":

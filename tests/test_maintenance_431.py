@@ -28,6 +28,7 @@ from custom_components.battery_smartflow_ai.charge_commit_policy import (  # noq
     learned_commit_should_yield_to_discharge,
     learned_plan_may_complete_active_commit,
     learned_plan_charge_need_satisfied,
+    preserved_learned_commit_power,
 )
 from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E402
     advance_pv_charge_hysteresis,
@@ -177,6 +178,43 @@ class Maintenance431Tests(unittest.TestCase):
                 commit=commit,
                 learned_charge_plan=plan,
             )
+        )
+
+    def test_forced_targeted_binding_stops_when_live_need_is_zero(self) -> None:
+        plan = SimpleNamespace(
+            status="ready",
+            decision_reason="learned_charge_window_no_charge_needed",
+            required_charge_energy_kwh=0.0,
+        )
+        commit = ChargeCommitState(
+            active=True,
+            phase="forced",
+            commit_type="learned",
+            target_soc=98.0,
+            requested_power_w=100.0,
+        )
+
+        self.assertTrue(
+            learned_plan_may_complete_active_commit(
+                commit=commit,
+                learned_charge_plan=plan,
+            )
+        )
+
+    def test_active_binding_keeps_snapshot_power_when_live_need_shrinks(self) -> None:
+        self.assertEqual(
+            preserved_learned_commit_power(
+                requested_power_w=800.0,
+                max_charge_w=800.0,
+            ),
+            800.0,
+        )
+        self.assertEqual(
+            preserved_learned_commit_power(
+                requested_power_w=800.0,
+                max_charge_w=600.0,
+            ),
+            600.0,
         )
 
     def test_active_learned_binding_ignores_later_price_increase(self) -> None:
