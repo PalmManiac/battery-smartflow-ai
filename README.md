@@ -76,11 +76,46 @@ Goal:
 * Profile editor for charge/discharge tuning
 * Hard-sync with real Zendure AC mode
 * Transparency and diagnostic sensors
-* Profit / savings calculation
+* Persistent energy-flow accounting and economic balance
+* Profit / savings calculation and economic efficiency
 * Season-neutral automatic strategy with seasonal context
 * Optional additional battery detection
 * Optional off-grid / island socket support
 * Optional cell-voltage protection
+
+---
+
+# ✨ V4.6.0 – Economics, prices and a clearer UI
+
+V4.6.0 adds a complete, persistent view of the battery's energy flows and
+economic result. Home Assistant now presents the integration as two clearly
+arranged devices while both remain part of one shared control system:
+
+* **Control & Planning** – operating mode, power control, charge planning,
+  protection and technical diagnostics
+* **Economics & Prices** – current prices, thresholds, energy flows, costs,
+  revenue, battery benefit and economic efficiency
+
+<img src="docs/images/v460_device_overview.png" width="800">
+
+New and improved capabilities include:
+
+* daily and persistent totals for grid-to-battery, PV-to-battery,
+  battery-to-home, battery-to-grid and grid-export energy
+* separate grid charging cost, PV opportunity cost, avoided grid cost and
+  feed-in revenue
+* battery benefit for today and since accounting started
+* economic efficiency since start, distinct from the battery's technical
+  conversion efficiency
+* understandable percentage controls for **Peak price markup** and **Valley
+  price discount** instead of technical multipliers
+* explicit peak, valley, effective and economic discharge thresholds
+* bounded JSON debug recordings that can be exported for support without
+  permanently filling Home Assistant Recorder with large diagnostic attributes
+
+Existing settings, learned data and accumulated economic values are preserved
+when updating. The detailed meaning of every new value is explained in the
+[English user guide](docs/user-guide.md).
 
 ---
 
@@ -430,6 +465,11 @@ Default: **35%**
 * Lower markup → detects more peaks (more sensitive)
 * Higher markup → detects only strong price peaks (more conservative)
 
+The corresponding **Valley price discount** states how far a price must fall
+below the daily level before BSFAI considers it a cheap valley. A lower discount
+detects more valleys; a higher discount requires a more pronounced low-price
+window. Both settings are displayed as percentages in the GUI.
+
 ---
 
 # 📊 Diagnostics and transparency sensors
@@ -457,6 +497,8 @@ Battery SmartFlow AI provides detailed diagnostic and transparency sensors, for 
 * Off-grid rule reason
 * Cell-voltage status
 * SoC limit status
+* Debug recording active / scheduled end
+* Captured debug samples, last package and last error
 
 <img src="docs/images/sensors_03_diagnose.png" width="350">
 
@@ -466,11 +508,11 @@ Battery SmartFlow AI provides detailed diagnostic and transparency sensors, for 
 
 The integration can show:
 
-* Ø charging price (weighted average)
-* Charged energy
-* Discharged energy
-* Price difference
-* Total profit / savings in €
+* weighted average charging price and discharge value
+* energy flows for today and since accounting started
+* grid charging cost and PV opportunity cost
+* avoided grid-import cost and feed-in revenue
+* battery benefit for today and since accounting started
 * Economic efficiency since start (100% = cost recovery)
 
 Technical support modes such as off-grid support or PV house-load passthrough are not counted as economic price discharge.
@@ -480,7 +522,10 @@ efficiency reported by Zendure-HA. It compares the value of discharged battery
 energy with valued grid-charge costs and PV opportunity costs. The value becomes
 available after at least 0.1 kWh of both charging and discharging have been observed.
 
-Note: Details about the calculation are in the **manual**.
+Daily values can temporarily be negative when energy is charged today but used
+later. For the overall result, the persistent **since start** balance is more
+meaningful. Details and practical examples are in the [English user
+guide](docs/user-guide.md).
 
 ---
 
@@ -568,11 +613,46 @@ Ziel:
 * Übersichtlicher Einstellungsbereich für Anlagen- und Expertenoptionen
 * Hard-Sync mit realem Zendure AC-Modus
 * Transparenz- und Diagnose-Sensoren
-* Gewinn-/Ersparnis-Berechnung
+* dauerhafte Energieflusszählung und Wirtschaftsbilanz
+* Gewinn-/Ersparnis-Berechnung und wirtschaftlicher Wirkungsgrad
 * Saisonneutrale Automatik mit saisonalem Kontext
 * Optionale Zusatzakku-Erkennung
 * Optionale Off-Grid-/Inselsteckdosen-Unterstützung
 * Optionaler Zellspannungs-Schutz
+
+---
+
+# ✨ V4.6.0 – Wirtschaft, Preise und eine übersichtlichere GUI
+
+V4.6.0 ergänzt eine vollständige, dauerhafte Erfassung der Energieflüsse und des
+wirtschaftlichen Ergebnisses. Home Assistant zeigt die Integration jetzt in zwei
+übersichtlichen Geräten an, die weiterhin zu einer gemeinsamen Steuerung gehören:
+
+* **Steuerung & Planung** – Betriebsmodus, Leistungsregelung, Ladeplanung,
+  Schutzfunktionen und technische Diagnose
+* **Wirtschaft & Preise** – aktuelle Preise, Schwellen, Energieflüsse, Kosten,
+  Erträge, Batterienutzen und wirtschaftlicher Wirkungsgrad
+
+<img src="docs/images/v460_device_overview.png" width="800">
+
+Neue und verbesserte Fähigkeiten:
+
+* Tages- und Gesamtzähler für Netz zu Akku, PV zu Akku, Akku zu Haus, Akku zu
+  Netz und Netzeinspeisung
+* getrennte Netzladekosten, PV-Opportunitätskosten, vermiedene
+  Netzbezugskosten und Einspeiseerträge
+* Batterienutzen für heute und seit Beginn der Bilanzierung
+* wirtschaftlicher Wirkungsgrad seit Start – bewusst getrennt vom technischen
+  Umwandlungswirkungsgrad des Batteriesystems
+* verständliche Prozentregler für **Peakpreis-Aufschlag** und
+  **Talpreis-Abschlag** anstelle technischer Faktoren
+* transparente Peak-, Valley-, effektive und ökonomische Entladeschwellen
+* begrenzte JSON-Debug-Aufzeichnungen für den Support, ohne den
+  Home-Assistant-Recorder dauerhaft mit großen Diagnoseattributen zu füllen
+
+Vorhandene Einstellungen, Lerndaten und bereits aufsummierte Wirtschaftswerte
+bleiben beim Update erhalten. Alle neuen Werte werden ausführlich in der
+[deutschen Benutzeranleitung](docs/anleitung.md) erklärt.
 
 ---
 
@@ -922,6 +1002,12 @@ Standard: **35 %**
 * Niedrigerer Aufschlag → erkennt mehr Peaks (sensitiver)
 * Höherer Aufschlag → erkennt nur starke Preisspitzen (konservativer)
 
+Der zugehörige **Talpreis-Abschlag** gibt an, wie weit ein Preis unter das
+Tagesniveau fallen muss, bevor BSFAI ihn als günstiges Preistal bewertet. Ein
+kleinerer Abschlag erkennt mehr Täler; ein größerer Abschlag verlangt ein
+deutlicheres Niedrigpreisfenster. Beide Einstellungen werden in der GUI als
+Prozentwerte dargestellt.
+
 ---
 
 # 📊 Diagnose- und Transparenzsensoren
@@ -949,6 +1035,8 @@ Battery SmartFlow AI stellt umfangreiche Diagnose- und Transparenzsensoren berei
 * Regelgrund Off-Grid
 * Zellspannungs-Status
 * SoC-Limit Status
+* Debug-Aufzeichnung aktiv / geplantes Ende
+* erfasste Debug-Samples, letztes Paket und letzter Fehler
 
 <img src="docs/images/sensors_03_diagnose.png" width="350">
 
@@ -958,15 +1046,19 @@ Battery SmartFlow AI stellt umfangreiche Diagnose- und Transparenzsensoren berei
 
 Die Integration kann sichtbar machen:
 
-* Ø Ladepreis (gewichteter Durchschnitt)
-* geladene Energie
-* entladene Energie
-* Preis-Differenz
-* Gesamtgewinn / Gesamtersparnis in €
+* gewichteter durchschnittlicher Ladepreis und Entladewert
+* Energieflüsse für heute und seit Beginn der Bilanzierung
+* Netzladekosten und PV-Opportunitätskosten
+* vermiedene Netzbezugskosten und Einspeiseerträge
+* Batterienutzen für heute und seit Beginn der Bilanzierung
+* wirtschaftlicher Wirkungsgrad seit Start (100 % = Kostendeckung)
 
 Technische Unterstützungsmodi wie Off-Grid-Support oder PV-Hauslast-Passthrough werden nicht als wirtschaftliche Preisentladung gezählt.
 
-Hinweis: Details zur Berechnung stehen in der **Anleitung**.
+Tageswerte können vorübergehend negativ sein, wenn Energie heute geladen, aber
+erst später genutzt wird. Für das Gesamtergebnis ist deshalb die dauerhafte
+Bilanz **seit Start** aussagekräftiger. Details und Praxisbeispiele stehen in der
+[deutschen Benutzeranleitung](docs/anleitung.md).
 
 ---
 
