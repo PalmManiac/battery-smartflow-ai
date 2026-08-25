@@ -73,9 +73,9 @@ Goal:
 * Dynamic grid regulation instead of simple full-power switching
 * Unified power regulation with grid history, mode arbitration and smoothed power control
 * Device profiles per Zendure model
-* Profile editor for charge/discharge tuning
+* Automatic device-specific limits and regulation parameters
 * Hard-sync with real Zendure AC mode
-* Transparency and diagnostic sensors
+* Focused status and transparency sensors
 * Persistent energy-flow accounting and economic balance
 * Profit / savings calculation and economic efficiency
 * Season-neutral automatic strategy with seasonal context
@@ -142,9 +142,15 @@ In the Zendure app:
 
 The following settings are mandatory:
 
-* Do not select a P1 sensor in the Zendure integration
+* The P1 sensor may be selected during initial Z-HA setup
 * Energy export: **Allowed**
-* Zendure Manager → Operating mode **OFF**
+* Afterwards: Z-HA Manager → Operating mode **OFF**, so Z-HA does not regulate
+  in parallel with BSFAI
+
+<img src="docs/images/zha_manager.png" width="350">
+
+The screenshot uses a German interface; `Betriebsmodus: Aus` corresponds to
+`Operating mode: Off`.
 
 Incorrect settings may lead to:
 
@@ -269,7 +275,6 @@ The expert menu provides access to:
 
 * Learned charge-window planning
 * Cell-voltage protection
-* Advanced diagnostics
 
 The unified power regulation is the mandatory command path for all installations.
 
@@ -318,7 +323,9 @@ The profile influences, among other things:
 * Off-grid capability
 * Device-specific safety behavior
 
-The profile editor allows advanced users to tune selected parameters directly from Home Assistant.
+The selected profile supplies device-specific limits and regulation parameters
+automatically. Legacy profile customizations remain compatible, but the normal
+settings dialog no longer exposes a separate profile editor.
 
 ---
 
@@ -347,7 +354,8 @@ This improves behavior during:
 * low-power regulation near 0 W
 * sensitive smaller systems such as 800 W class devices
 
-The improved regulation is optional and can be enabled in the expert menu.
+This regulation chain is mandatory for all installations. It is not an optional
+expert setting.
 
 ---
 
@@ -370,17 +378,11 @@ It only becomes active once enough training data is available.
 
 Until then, classic planning remains active.
 
-Diagnostic sensors show:
-
-* learning status
-* data coverage
-* usable history days
-* expected consumption
-* required charge energy
-* planned charge start
-* planning deadline
-* selected charge window
-* blocking reason
+The normal device view shows the user-facing planning results: learning status,
+planning mode, required charging energy, planned charge start, deadline and
+window size. Detailed history, coverage, reserve and blocking information is
+available in a time-limited JSON debug package instead of permanent diagnostic
+sensors.
 
 ---
 
@@ -472,9 +474,9 @@ window. Both settings are displayed as percentages in the GUI.
 
 ---
 
-# 📊 Diagnostics and transparency sensors
+# 📊 Status, transparency and debug information
 
-Battery SmartFlow AI provides detailed diagnostic and transparency sensors, for example:
+Battery SmartFlow AI provides focused status and transparency sensors, for example:
 
 * Ø daily price
 * Current peak threshold
@@ -486,21 +488,15 @@ Battery SmartFlow AI provides detailed diagnostic and transparency sensors, for 
 * Forecast status
 * PV outlook
 * Learned planning status
-* Learned planning blocking reason
-* Learned profile diagnostics
-* Grid history diagnostics
-* Regulation mode arbiter reason
-* Regulation target and final power
-* Device command diagnostics
-* Off-grid mode
-* Off-grid load active
-* Off-grid rule reason
+* Planned charge start, deadline and required charging energy
 * Cell-voltage status
 * SoC limit status
 * Debug recording active / scheduled end
 * Captured debug samples, last package and last error
 
-<img src="docs/images/sensors_03_diagnose.png" width="350">
+Deep strategy, charge-commitment, off-grid and regulation details are recorded
+only when a bounded debug recording is started. They are not permanent Home
+Assistant entities.
 
 ---
 
@@ -612,7 +608,7 @@ Ziel:
 * Geräteprofile pro Zendure-Modell
 * Übersichtlicher Einstellungsbereich für Anlagen- und Expertenoptionen
 * Hard-Sync mit realem Zendure AC-Modus
-* Transparenz- und Diagnose-Sensoren
+* gezielte Status- und Transparenzsensoren
 * dauerhafte Energieflusszählung und Wirtschaftsbilanz
 * Gewinn-/Ersparnis-Berechnung und wirtschaftlicher Wirkungsgrad
 * Saisonneutrale Automatik mit saisonalem Kontext
@@ -679,9 +675,12 @@ In der Zendure App:
 
 Folgende Einstellungen sind zwingend erforderlich:
 
-* Kein P1-Sensor in der Zendure-Integration auswählen
+* Bei der Ersteinrichtung von Z-HA darf der P1-Sensor ausgewählt werden
 * Energie-Export: **Erlaubt**
-* Zendure Manager → Betriebsmodus **AUS**
+* Anschließend: Z-HA-Manager → Betriebsmodus **AUS**, damit Z-HA nicht parallel
+  zu BSFAI regelt
+
+<img src="docs/images/zha_manager.png" width="350">
 
 Falsche Einstellungen können führen zu:
 
@@ -806,9 +805,8 @@ Im Expertenmenü findest du:
 
 * Lernbasierte Ladefenster-Planung
 * Zellspannungs-Schutz
-* Erweiterte Diagnosen
 
-Die verbesserte Leistungsregelung ist ab V4.3.0-Dev8.1 für alle Installationen
+Die verbesserte Leistungsregelung ist seit V4.3.0 für alle Installationen
 verbindlich aktiv und muss nicht mehr gesondert eingeschaltet werden.
 
 ---
@@ -856,13 +854,15 @@ Das Profil beeinflusst u. a.:
 * Off-Grid-Fähigkeiten
 * gerätespezifisches Schutzverhalten
 
-Der Profil-Editor erlaubt fortgeschrittenen Nutzern, ausgewählte Parameter direkt in Home Assistant feinzujustieren.
+Das ausgewählte Profil liefert gerätespezifische Grenzen und Regelparameter
+automatisch. Ältere Profilanpassungen bleiben kompatibel, im normalen
+Einstellungsdialog gibt es jedoch keinen separaten Profil-Editor mehr.
 
 ---
 
 # 🔁 Einheitliche Leistungsregelung
 
-Die verbesserte technische Regelkette ist ab V4.3.0-Dev8.1 der verbindliche
+Die verbesserte technische Regelkette ist seit V4.3.0 der verbindliche
 Befehlsweg:
 
 **Decision Engine → StrategyIntent → ModeArbiter → PowerController → DeviceCommand**
@@ -907,17 +907,11 @@ Sie wird erst aktiv, sobald genügend Lerndaten vorhanden sind.
 
 Bis dahin bleibt automatisch die klassische Planung aktiv.
 
-Diagnosesensoren zeigen:
-
-* Lernstatus
-* Datenabdeckung
-* nutzbare Historientage
-* erwarteten Verbrauch
-* benötigte Nachladeenergie
-* geplanten Ladestart
-* Planungs-Deadline
-* gewähltes Ladefenster
-* Blockierungsgrund
+Die normale Geräteansicht zeigt die anwenderrelevanten Planungsergebnisse:
+Lernstatus, Planungsmodus, benötigte Nachladeenergie, geplanten Ladestart,
+Deadline und Fenstergröße. Detaillierte Historien-, Abdeckungs-, Reserve- und
+Blockierungsinformationen stehen im zeitlich begrenzten JSON-Debug-Paket statt
+in dauerhaften Diagnosesensoren.
 
 ---
 
@@ -1010,9 +1004,9 @@ Prozentwerte dargestellt.
 
 ---
 
-# 📊 Diagnose- und Transparenzsensoren
+# 📊 Status-, Transparenz- und Debug-Informationen
 
-Battery SmartFlow AI stellt umfangreiche Diagnose- und Transparenzsensoren bereit, z. B.:
+Battery SmartFlow AI stellt gezielte Status- und Transparenzsensoren bereit, z. B.:
 
 * Ø Tagespreis
 * aktuelle Peak-Schwelle
@@ -1024,21 +1018,15 @@ Battery SmartFlow AI stellt umfangreiche Diagnose- und Transparenzsensoren berei
 * Prognose-Status
 * PV-Ausblick
 * Lernplanungsstatus
-* Lernplanung Blockierungsgrund
-* gelernte Profil-Diagnosen
-* Netz-Historie-Diagnosen
-* Regelgrund des ModeArbiters
-* Ziel- und Endleistung der Regelung
-* DeviceCommand-Diagnosen
-* Off-Grid-Modus
-* Off-Grid-Last aktiv
-* Regelgrund Off-Grid
+* geplanter Ladestart, Deadline und benötigte Nachladeenergie
 * Zellspannungs-Status
 * SoC-Limit Status
 * Debug-Aufzeichnung aktiv / geplantes Ende
 * erfasste Debug-Samples, letztes Paket und letzter Fehler
 
-<img src="docs/images/sensors_03_diagnose.png" width="350">
+Tiefe Strategie-, Ladebindungs-, Off-Grid- und Regelungsdetails werden nur bei
+einer begrenzten Debug-Aufzeichnung erfasst. Sie sind keine dauerhaften
+Home-Assistant-Entitäten.
 
 ---
 
