@@ -179,9 +179,12 @@ Battery SmartFlow AI benötigt eine möglichst saubere Hardwarekonfiguration ohn
 Folgende Einstellungen sind erforderlich:
 
 * Energie-Export: **Erlaubt**
-* kein P1-Sensor in der Zendure-Integration auswählen
-* Zendure Manager: **deaktiviert**
+* bei der Ersteinrichtung von Z-HA darf der P1-Sensor ausgewählt werden
+* anschließend im Z-HA-Manager den Betriebsmodus auf **AUS** stellen, damit Z-HA
+  nicht selbst parallel zu BSFAI regelt
 * keine parallelen Automationen, die AC-Modus oder Leistungsgrenzen verändern
+
+![Z-HA-Manager mit Betriebsmodus AUS](images/zha_manager.png)
 
 Falsche Einstellungen können führen zu:
 
@@ -902,7 +905,8 @@ Besonders kritisch sind:
 * automatische HEMS-Regelung
 * eigene Lade-/Entladepläne
 * dynamische Leistungsregelung außerhalb von BSFAI
-* P1-Regelung innerhalb der Zendure-Integration
+* ein Z-HA-Manager-Betriebsmodus ungleich **AUS**; die P1-Sensorauswahl bei der
+  Z-HA-Ersteinrichtung ist dagegen erlaubt
 * parallele Home-Assistant-Automationen auf denselben Entitäten
 
 ---
@@ -1051,8 +1055,8 @@ cell_voltage_cutoff_block
 
 > [!TIP]
 > Wenn das System nicht das tut, was erwartet wird, sollte zuerst der Entscheidungsgrund geprüft werden.
-> Für die Trennung von Strategie und technischer Umsetzung sind zusätzlich
-> **Sichtbarer Zustand**, **Strategischer Grund** und **Technischer Grund** hilfreich.
+> Wenn dieser sichtbare Wert nicht ausreicht, starte eine kurze Debug-Aufzeichnung.
+> Das JSON-Paket enthält Strategie, technische Freigaben und Gerätebefehl.
 
 ---
 
@@ -1147,6 +1151,10 @@ AutomaticStrategy-Kontext
 → DeviceCommand
 → Home Assistant / Zendure
 ```
+
+Diese Begriffe beschreiben interne Stufen des Regelwegs. Sie sind keine
+separaten Home-Assistant-Sensoren; ihre Details erscheinen bei Bedarf im
+Debug-Paket.
 
 Die Automatik erzeugt dabei keine zweite Decision Engine. Sie bewertet den
 Kontext und erteilt strategische Freigaben; die Decision Engine sammelt die
@@ -1300,17 +1308,18 @@ Besonders hilfreich sind:
 * KI-Status
 * KI-Empfehlung
 * Engine-Status
+* aktuelle Peak- und Valley-Schwelle
 * effektive Entladeschwelle
 * ökonomische Entladeschwelle
 * Lernplanungsstatus
-* Automatik-Gewichtung
-* Strategiezustand und sichtbarer Zustand
-* strategischer und technischer Grund
-* Status, Art und Ziel der AC-Ladebindung
-* Ladequelle, angerechneter Ladepreis und PV-/Netzanteil
-* Off-Grid-Regelgrund
-* Regelgrund des ModeArbiters
-* final gesetzte Leistung
+* geplanter Ladestart, Deadline und benötigte Nachladeenergie
+* die fünf sparsamen Statuswerte der Debug-Aufzeichnung
+
+Tiefe Strategie-, Ladebindungs-, Off-Grid- und Regelungsdetails werden seit
+V4.4 bewusst nicht mehr als dauerhaft aktive Diagnoseentitäten angelegt. Bei
+Bedarf erfasst eine zeitlich begrenzte Debug-Aufzeichnung diese Informationen in
+einem JSON-Paket. Dadurch bleibt die normale Geräteansicht verständlich und der
+Home-Assistant-Recorder wird nicht mit technischen Detailwerten belastet.
 
 ---
 
@@ -1491,17 +1500,12 @@ nächsten erkannten Energiezuwachs fortgeschrieben.
 
 ---
 
-## Ladequelle und angerechneter Ladepreis
+## Angerechneter Ladepreis
 
-Diese Sensoren zeigen die aktuelle wirtschaftliche Zuordnung einer Ladung:
-
-| Sensor                    | Bedeutung                                             |
-| ------------------------- | ----------------------------------------------------- |
-| Ladequelle                | PV-, Netz- oder gemischte Ladung                      |
-| Angerechneter Ladepreis   | Preis, der für den aktuellen Ladeanteil verwendet wird |
-| Ladeanteil Netz           | geschätzter Netzanteil der Ladeleistung               |
-| Ladeanteil PV             | geschätzter PV-Anteil der Ladeleistung                |
-| Mischpreis aktiv          | zeigt eine gleichzeitige PV-/Netzladung               |
+Dieser Sensor zeigt den Preis, mit dem der aktuelle Ladeanteil wirtschaftlich
+bewertet wird. Die intern ermittelte Ladequelle sowie PV-/Netzanteile und ein
+möglicher Mischpreis werden nicht als separate Sensoren angelegt. Bei Bedarf
+stehen sie im Debug-Paket.
 
 Der **angerechnete Ladepreis** kann bereits während der Ladung sichtbar sein.
 Der **Ø Ladepreis Akku** wird dagegen erst mit einem erkannten SoC- bzw.
@@ -1610,58 +1614,17 @@ Beispiele:
 
 ---
 
-## Strategiezustand und sichtbarer Zustand
+## Technische Entscheidungsdetails
 
-Der **Strategiezustand** beschreibt die intern ausgewählte Strategie, zum
-Beispiel PV-Ladung, gebundene AC-Ladung, Hauslastdeckung, wirtschaftliche
-Entladung oder Schutz.
+Strategiezustand, technische Freigaben, AC-Ladebindung, Ladequellen-Aufteilung
+und der endgültige Gerätebefehl existieren weiterhin als interne Bestandteile
+der Steuerung. Sie sind jedoch **keine Home-Assistant-Sensoren mehr**.
 
-Der **sichtbare Zustand** fasst diese Details bewusst ruhiger und verständlicher
-zusammen. Kurzlebige technische Korrekturen müssen dadurch nicht den sichtbaren
-Hauptstatus wechseln lassen.
-
----
-
-## Strategischer und technischer Grund
-
-Der **strategische Grund** erklärt, warum eine Strategie ausgewählt wurde. Der
-**technische Grund** beschreibt, wie der ModeArbiter oder Leistungsregler diese
-Strategie gerade umsetzt, begrenzt oder hält.
-
-Zusammen mit **Quellgrund**, **Quellaktion** und **Quell-AC-Modus** lässt sich der
-gesamte Weg von der ursprünglichen Regelentscheidung bis zum Gerätebefehl
-nachvollziehen. Die Quellwerte sind standardmäßig deaktivierte
-Diagnoseentitäten und können bei Bedarf in Home Assistant aktiviert werden.
-
----
-
-## Automatik-Gewichtung
-
-Zeigt den dominanten Kontext der einheitlichen Automatik:
-
-* PV-orientiert
-* ausgewogen
-* preisorientiert
-* reserveorientiert
-
-Die Gewichtung ist keine eigene Betriebsart. Sie erklärt nur, welche Faktoren
-im aktuellen Automatikkontext besonders relevant sind.
-
----
-
-## AC-Ladebindung
-
-Die Ladebindungs-Sensoren zeigen unter anderem:
-
-* ob eine Bindung aktiv ist
-* Art und ursprünglichen Auslöser
-* Ziel-SoC und angeforderte Leistung
-* Start- und Gültigkeitszeit
-* Abbruch- oder Abschlussgrund
-* ob ein PV-Anteil zugemischt werden darf
-* die berechnete Ladequellen-Aufteilung
-
-Einige Detailwerte sind standardmäßig deaktivierte Diagnoseentitäten.
+Für den normalen Betrieb genügen **KI-Status**, **KI-Empfehlung** und
+**Entscheidungsgrund**. Wenn sich ein Verhalten damit nicht erklären lässt,
+starte kurz vor der betreffenden Situation den Debug-Modus. Das exportierte
+JSON-Paket enthält den vollständigen Entscheidungsweg für Support und
+Fehleranalyse.
 
 ---
 
@@ -1693,9 +1656,9 @@ Zeigt die berechnete Ersparnis bzw. den berechneten Gewinn durch Preisarbitrage.
 
 # 6.3 Lernplanungssensoren
 
-Die Lernplanung erzeugt mehrere Diagnosewerte.
-
-![Diagnosewerte](images/sensors_03_diagnose.png)
+In der normalen Geräteansicht bleiben nur die wichtigsten Ergebnisse der
+Lernplanung sichtbar. Sie zeigen, ob die Planung bereit ist, wann sie laden will
+und wie viel Energie dafür benötigt wird.
 
 ---
 
@@ -1754,120 +1717,31 @@ Zeigt die Länge des geplanten Ladefensters.
 
 ---
 
-## Diagnose: Lernplanung Blockierungsgrund
+## Weitere Lernplanungsdetails
 
-Erklärt, warum Lernplanung noch nicht aktiv ist oder warum gerade keine Ladung geplant wird.
-
-Beispiele:
-
-* Kein Blocker
-* Nicht genügend Historientage
-* Datenqualität zu niedrig
-* Keine Preisdaten verfügbar
-* Keine Nachladung erforderlich
-* Deadline zu nah
+Historientage, Datenabdeckung, erwarteter Verbrauch, verfügbare Akkuenergie,
+Reserve, Prognose-Zuschlag und Blockierungsgrund werden intern weiterhin für die
+Planung berechnet. Sie werden seit V4.4 aber nicht mehr als dauerhafte
+Diagnosesensoren angelegt. Diese Details stehen bei einer gezielten
+Debug-Aufzeichnung im JSON-Paket zur Verfügung.
 
 ---
 
-## Datenabdeckung
+# 6.4 Off-Grid-Quelldaten
 
-Zeigt, wie gut das gelernte Lastprofil bereits mit Daten gefüllt ist.
+Die optional konfigurierten Off-Grid-Entitäten stammen vom Zendure-System und
+werden von BSFAI als **Quelldaten** gelesen. BSFAI legt dafür keine eigenen
+Off-Grid-Status- oder Diagnosesensoren mehr an.
 
-Eine hohe Datenabdeckung verbessert die Planung.
+Im Normalbetrieb erkennst du die Reaktion über **KI-Status** und
+**Entscheidungsgrund**. Für eine genaue Analyse enthält das zeitlich begrenzte
+Debug-Paket unter anderem die gelesene Off-Grid-Leistung, den Modus, eine
+erkannte Last und den internen Regelgrund.
 
----
-
-## Nutzbare Tage
-
-Zeigt, wie viele Tage für das Lernmodell verwendet werden können.
-
----
-
-## Erwarteter Verbrauch
-
-Zeigt den erwarteten Verbrauch bis zur Planungsdeadline.
-
----
-
-## Verfügbare Akkuenergie
-
-Zeigt, wie viel Energie oberhalb des SoC-Minimums verfügbar ist.
-
-Die Berechnung basiert auf:
-
-```text
-Gesamtkapazität × max(0, (aktueller SoC - SoC-Minimum) / 100)
-```
-
----
-
-## Reserve
-
-Zeigt die eingeplante Sicherheitsreserve.
-
----
-
-## Prognose-Zuschlag
-
-Zeigt, wie die PV-Prognose die Ladeplanung beeinflusst.
-
----
-
-# 6.4 Off-Grid-Sensoren
-
----
-
-## Off-Grid-Leistung
-
-Zeigt die gemessene Leistung an der Off-Grid-/Inselsteckdose.
-
-Positive Werte werden als Last interpretiert.
-
----
-
-## Off-Grid-Modus
-
-Zeigt den gelesenen Off-Grid-Modus.
-
-Mögliche normalisierte Werte:
-
-* nicht konfiguriert
-* unbekannt
-* aus
-* normal
-* ökonomisch
-
----
-
-## Off-Grid-Last aktiv
-
-Zeigt, ob eine relevante Last an der Inselsteckdose erkannt wurde.
-
----
-
-## Off-Grid-Quelle aktiv
-
-Diagnosewert für mögliche Off-Grid-Eingangsleistung.
-
-Dieser Bereich ist aktuell vorsichtig zu interpretieren, da nicht alle Geräte die Richtung gleich melden.
-
----
-
-## Regelgrund Off-Grid
-
-Zeigt, was die Off-Grid-Logik aktuell macht.
-
-Mögliche Gründe:
-
-```text
-none
-offgrid_load_observed
-```
-
-| Regelgrund                | Bedeutung                                      |
-| ------------------------- | ---------------------------------------------- |
-| `none`                    | Keine Off-Grid-Last erkannt                    |
-| `offgrid_load_observed`   | Off-Grid-Last erkannt und diagnostisch erfasst |
+> [!NOTE]
+> Battery SmartFlow AI schaltet die Inselsteckdose nicht und verändert deren
+> Modus nicht. Die Integration berücksichtigt die konfigurierten Quelldaten nur
+> bei ihrer eigenen Lade- und Entladeentscheidung.
 
 ---
 
@@ -1948,10 +1822,6 @@ lassen und erst nach mehreren vollständigen Preistagen anzupassen. Die Felder
 der angezeigten Währung pro kWh. **SoC Minimum** schützt die untere Reserve,
 **SoC Maximum** begrenzt das normale Ladeziel. Der PV-Ladestart legt fest, ab
 welcher stabilen Netzeinspeisung eine neue PV-Überschussladung beginnen darf.
-
-![Leistungs- & Schutzparameter](images/controls_01_limits.png)
-
----
 
 ## Max. Entladeleistung
 
@@ -2395,6 +2265,11 @@ Der ausgewählte Kandidat wird in ein einheitliches strategisches Modell
 Der sichtbare Zustand ist bewusst nutzerorientiert und stabiler als ein
 kurzlebiger technischer Reglergrund.
 
+> [!NOTE]
+> StrategyDecision, Strategiezustand, sichtbarer Zustand und Quellgrund sind
+> interne Steuerungswerte, keine dauerhaft angelegten Home-Assistant-Sensoren.
+> Für die Fehlersuche werden sie im Debug-Paket aufgezeichnet.
+
 ---
 
 ## StrategyIntent
@@ -2758,10 +2633,12 @@ Prüfe:
 * aktueller Strompreis
 * Entscheidungsgrund
 * Batterie-Leistung
-* delta_kwh
-* charge_source
 * Angerechneter Ladepreis
 * Einspeisevergütung in der Integrationskonfiguration
+
+Bleibt der Grund unklar, zeichne einen Lade- oder Entladevorgang im Debug-Modus
+auf. Energieänderung und intern erkannte Ladequelle stehen im JSON-Paket, nicht
+als eigene Sensoren.
 
 ---
 
@@ -2773,15 +2650,17 @@ Mögliche Ursachen:
 * falsches Geräteprofil
 * parallele Automationen
 * Zendure-App regelt mit
-* P1-Regelung in Zendure-Integration aktiv
+* Z-HA-Manager regelt parallel, weil sein Betriebsmodus nicht **AUS** ist
 
 Maßnahmen:
 
 * korrektes Geräteprofil wählen
 * parallele Automationen deaktivieren
 * Netzsensor prüfen
-* Zendure-App und P1-Regelung als parallele Steuerung ausschließen
-* Diagnosewerte und Geräteverlauf für eine Support-Anfrage sichern
+* Zendure-App als parallele Steuerung ausschließen
+* im Z-HA-Manager den Betriebsmodus auf **AUS** stellen; die P1-Sensorauswahl
+  aus der Z-HA-Ersteinrichtung darf bestehen bleiben
+* Debug-Paket und Geräteverlauf für eine Support-Anfrage sichern
 
 ---
 
@@ -2803,8 +2682,11 @@ Bleiben 30–100 W oder mehr dauerhaft stehen, prüfe:
 * Ziel-Netzbezug und Entladen Ziel-Netzbezug
 * Netzsensor-Aktualisierung und Vorzeichen
 * aktives Geräteprofil
-* technische Gründe und final gesetzte Leistung
 * parallele Zendure- oder Home-Assistant-Regelungen
+
+Sind diese sichtbaren Punkte unauffällig, zeichne die Situation im Debug-Modus
+auf. Technische Freigaben, Ziel- und Endleistung stehen im JSON-Paket und sind
+keine separaten Sensoren.
 
 ---
 
@@ -2818,8 +2700,7 @@ Mögliche Ursachen:
 * SoC-Maximum erreicht
 * SoC-Limit aktiv
 * Zellschutz aktiv
-* ModeArbiter wartet auf stabile Exportzyklen
-* post-output-hold aktiv
+* die interne Regelung wartet auf stabile Exportzyklen oder eine kurze Haltezeit
 
 Prüfe:
 
@@ -2827,9 +2708,10 @@ Prüfe:
 * Netzeinspeisung
 * PV-Ladestart ab Einspeisung
 * Entscheidungsgrund
-* regulation_mode_arbiter_reason
-* pv_charge_latched
-* additional_battery_discharge_active
+
+Wenn daraus kein Grund hervorgeht, erstelle während des fehlgeschlagenen Starts
+ein Debug-Paket. Interne Halte-, Latch- und Zusatzakkuwerte sind nur dort
+enthalten und keine eigenen Home-Assistant-Sensoren.
 
 Eine neue PV-Ladung startet anhand real gemessener Netzeinspeisung, nicht allein
 aufgrund einer hohen PV-Leistung. Während einer bereits aktiven Ladung wird die
@@ -2848,46 +2730,48 @@ Mögliche Ursachen:
 * Preis nicht hoch genug
 * Automatik-Kontext erlaubt aktuell keine wirtschaftliche Entladung
 * Autarkiemodus wartet noch auf eine technisch stabile Hauslastdeckung
-* ModeArbiter wartet auf stabile Importzyklen
+* die interne Regelung wartet auf stabile Importzyklen
 * Zusatzakku lädt
 
 Prüfe:
 
 * SoC
 * SoC-Minimum
-* discharge_resume_soc
-* discharge_blocked_by_soc_min
-* cell_voltage_discharge_blocked
-* soc_limit_status
 * Entscheidungsgrund
-* effective_discharge_threshold
-* regulation_mode_arbiter_reason
+* SoC-Limit Status
+* Zellspannungs-Status
+* effektive Entladeschwelle
+
+Bleibt die Ursache unklar, zeichne ein Debug-Paket auf. Wiederfreigabe,
+Entladesperre und technische Modusfreigabe werden dort ausgewiesen, nicht als
+separate Sensoren.
 
 ---
 
-## 9.8 Off-Grid-Diagnose funktioniert nicht wie erwartet
+## 9.8 Off-Grid-Unterstützung funktioniert nicht wie erwartet
 
 Prüfe:
 
 * Off-Grid-Leistung konfiguriert?
 * Off-Grid-Modus konfiguriert?
 * Off-Grid-Modus nicht `off`?
-* Off-Grid-Leistung positiv?
-* Off-Grid-Last aktiv?
-* Off-Grid-Regelgrund?
+* melden die konfigurierten **Quellentitäten** plausible aktuelle Werte?
+
+BSFAI legt keine eigenen Off-Grid-Statussensoren mehr an. Starte für eine genaue
+Prüfung eine Debug-Aufzeichnung; das Paket enthält die gelesene Leistung, den
+Modus, die erkannte Last und den internen Regelgrund.
 
 > [!NOTE]
 > Battery SmartFlow AI liest den Off-Grid-Modus nur und steuert die
-> Inselsteckdose nicht direkt. `offgrid_load_observed` bedeutet, dass die Last
-> erkannt und diagnostisch berücksichtigt wurde. Die tatsächlich bereitgestellte
+> Inselsteckdose nicht direkt. Die tatsächlich bereitgestellte
 > Off-Grid-Leistung bleibt Aufgabe von Zendure-Firmware und Gerätekonfiguration.
 
 ---
 
 ## 9.9 AC-Ladung bei aktiver Off-Grid-Last
 
-Eine erkannte Off-Grid-Dauerlast wird diagnostisch angezeigt, blockiert eine
-ansonsten gültige automatische AC-Ladung aber nicht mehr pauschal. Schutz,
+Eine erkannte Off-Grid-Dauerlast wird intern berücksichtigt, blockiert eine
+ansonsten gültige automatische AC-Ladung aber nicht pauschal. Schutz,
 Notladung, manuelle Vorgaben und die normale strategische Kandidatenauswahl
 bleiben maßgeblich.
 
@@ -3016,7 +2900,7 @@ Empfohlen:
 * Gewinnmarge nicht zu niedrig setzen
 * sehr-billig-Schwelle nutzen
 * Lernplanung aktivieren
-* Diagnosewerte beobachten
+* sichtbare Statuswerte beobachten und bei Bedarf ein Debug-Paket erstellen
 
 ---
 
@@ -3031,7 +2915,7 @@ Bei nervösem Verhalten:
 * zunächst Geräteprofil und Netzsensor prüfen
 * parallele Steuerungen ausschließen
 * tatsächliche INPUT-/OUTPUT-Grenzen kontrollieren
-* Diagnosewerte und Geräteverlauf sichern
+* Debug-Paket und Geräteverlauf sichern
 * das Verhalten mit Gerätemodell und Firmware melden
 
 ---
@@ -3046,7 +2930,7 @@ Empfohlen:
 * das exakte Geräteprofil auswählen
 * Geräte- und Netzsensoren auf laufende Aktualisierung prüfen
 * keine parallele Leistungsregelung aktivieren
-* auffälliges Verhalten mit Diagnosewerten melden
+* auffälliges Verhalten mit einem passend aufgezeichneten Debug-Paket melden
 
 ---
 
@@ -3057,7 +2941,7 @@ Empfohlen:
 * Off-Grid-Leistung konfigurieren
 * Off-Grid-Modus konfigurieren
 * ein passendes Geräteprofil verwenden
-* Diagnosewerte prüfen
+* sichtbare Statuswerte prüfen und bei Bedarf ein Debug-Paket erstellen
 * Verhalten mit und ohne AC testen
 * gerätespezifische Grenzen beachten
 
@@ -3126,9 +3010,8 @@ sind nicht Bestandteil des normalen Einstellungsdialogs.
 
 ## Zentrale Near-Zero- und Wirtschaftsparameter
 
-Diese Werte besitzen zentrale V4.3-Standardwerte und sind derzeit keine
-normalen Felder des Profil-Editors. Ein Geräteprofil kann sie technisch
-überschreiben.
+Diese Werte besitzen zentrale Standardwerte und sind keine Einstellungen in der
+Home-Assistant-Oberfläche. Ein Geräteprofil kann sie intern überschreiben.
 
 | Parameter                              | Bedeutung                                           |
 | -------------------------------------- | --------------------------------------------------- |
