@@ -2,8 +2,8 @@
 
 **Language:** [Deutsch](anleitung.md) | English
 
-> Applies to Battery SmartFlow AI V4.4.2 and later
-> Last content update: August 18, 2026
+> Applies to Battery SmartFlow AI V4.6.0 and later
+> Last content update: August 25, 2026
 
 **Intelligent, economical and stable control for Zendure SolarFlow systems in Home Assistant**
 
@@ -1319,9 +1319,97 @@ This chapter explains the most important sensors and controls.
 
 ---
 
+## Finding your way around the device view from V4.6.0
+
+![Device overview from V4.6.0](images/v460_device_overview.png)
+
+Battery SmartFlow AI splits its entities between two clearly arranged devices.
+They are still part of **one integration and one shared control system**:
+
+| Device | What does it contain? | When should I open it? |
+| ------ | --------------------- | ---------------------- |
+| **Battery SmartFlow AI – Control & Planning** | Operating mode, power control, charge planning, protection limits and technical diagnostic values | When you want to change operation or understand a control decision |
+| **Battery SmartFlow AI – Economics & Prices** | Current prices, price thresholds, energy flows, costs, revenue and economic efficiency | When you want to configure prices or assess the financial result |
+
+The second line below each name is only a short device description. Home
+Assistant also shows the assigned area for the control device. The virtual
+economics device has no physical location. Entity counts can differ slightly
+from the screenshot depending on configuration and Home Assistant version.
+
+> **For new users:** In everyday use, the **Control & Planning** device is
+> usually enough. Open **Economics & Prices** when you want to know why BSFAI
+> considers a price cheap or expensive and whether charging and discharging have
+> paid off so far.
+
+The screenshots use a German Home Assistant interface. The device layout and
+values are the same when Home Assistant is set to another supported language.
+
+---
+
 # 6.1 Status & Economic Sensors
 
-![Status & Economy](images/sensors_01_status.png)
+The economics and price sensors are grouped in the virtual **Battery SmartFlow
+AI – Economics & Prices** device.
+
+![Economic, balance and energy sensors](images/v460_economics_sensors_1.png)
+
+![Price and threshold sensors](images/v460_economics_sensors_2.png)
+
+Entity names follow a consistent pattern: the text before the dash identifies
+the group; the text after it identifies the specific value.
+
+| Group | Plain-language meaning |
+| ----- | ---------------------- |
+| **Current** | Values currently used for the economic assessment |
+| **Balance today** | Costs, revenue and benefits accumulated since midnight |
+| **Balance since start** | Persistent economic totals since BSFAI accounting began |
+| **Energy today** | Energy measured today, grouped by flow direction |
+| **Energy since start** | Persistent energy totals, grouped by flow direction |
+| **Prices** | Calculated average prices and the charge/discharge thresholds currently in effect |
+
+### Reading the flow direction
+
+Names such as **Grid to battery**, **PV to battery** and **Battery to home** are
+always read from left to right. For example, **Energy today – Grid to battery**
+is the energy charged from the public grid into the battery today. **Battery to
+grid** is battery energy deliberately exported to the grid.
+
+### Reading the balance
+
+* **Grid charging cost** is the cost of energy charged from the grid into the
+  battery.
+* **PV opportunity cost** is not an amount on your electricity bill. It is the
+  feed-in revenue you gave up by storing PV energy instead of exporting it.
+* **Avoided grid cost** values energy supplied from the battery to the home,
+  avoiding more expensive grid consumption.
+* **Feed-in revenue** values exported energy using the configured feed-in tariff.
+* **Battery benefit** is BSFAI's calculated economic benefit of the battery. A
+  single daily value can temporarily be negative when energy is charged today
+  but discharged later. The **since start** balance is therefore more meaningful
+  for the overall result.
+
+### Understanding prices and thresholds
+
+The displayed thresholds are **calculated decision limits**, not additional
+costs:
+
+* **Current peak threshold:** BSFAI detects a costly dynamic price peak at or
+  above this price.
+* **Current valley threshold:** BSFAI detects an inexpensive valley below this
+  value.
+* **Effective discharge threshold:** The price boundary actually used after all
+  active rules have been applied.
+* **Economic discharge threshold:** The minimum price at which discharging pays
+  off after the valued charging price and profit margin are considered.
+* **Average battery charging price:** Estimated average cost of the energy
+  currently stored in the battery.
+* **Average battery discharge value:** Average economic value of the battery
+  energy delivered so far.
+
+`Unknown` immediately after startup does not automatically indicate a fault. A
+value may need source data or sufficient recorded charging/discharging energy
+before it can be calculated. If an important value remains unknown, first check
+its configured source entities.
 
 ---
 
@@ -1839,6 +1927,28 @@ Examples:
 
 # 6.6 Controls
 
+The main price and protection controls are available in the **Control** section
+of the device:
+
+![Price and protection controls from V4.6.0](images/v460_price_controls.png)
+
+The percentages are deliberately shown as easy-to-understand markups and
+discounts:
+
+* **Peak price markup 27%** means that a price must be approximately 27% above
+  the relevant daily level before it is considered a peak. A lower setting
+  detects more peaks; a higher setting detects only more pronounced peaks.
+* **Valley price discount 15%** means that a price must be approximately 15%
+  below the daily level before it is considered a valley. A lower setting
+  detects more valleys; a higher setting requires a more pronounced valley.
+
+New users should initially leave both values unchanged and observe several
+complete price days before adjusting them. **Very cheap** and **Very expensive**
+are fixed absolute price limits in the displayed currency per kWh. **Minimum
+SoC** protects the lower reserve and **Maximum SoC** limits the normal charging
+target. The PV charging start threshold defines how much stable grid export is
+required before a new PV-surplus charge may begin.
+
 ![Performance & Protection Parameters](images/controls_01_limits.png)
 
 ---
@@ -1984,6 +2094,8 @@ V4.4 introduces a time-limited internal debug recording. To avoid burdening the
 Home Assistant Recorder with extensive diagnostic attributes during normal
 operation, only a small number of lightweight status entities appear in the
 device view:
+
+![Debug status in the device view](images/v460_debug_status.png)
 
 * **Debug recording active** – shows `Yes` or `No`
 * **Debug recording ends at** – scheduled automatic end

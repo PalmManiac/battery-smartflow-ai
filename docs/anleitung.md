@@ -2,8 +2,8 @@
 
 **Sprache:** Deutsch | [English](user-guide.md)
 
-> Gültig ab Battery SmartFlow AI V4.4.2
-> Letzte inhaltliche Aktualisierung: 18. August 2026
+> Gültig ab Battery SmartFlow AI V4.6.0
+> Letzte inhaltliche Aktualisierung: 25. August 2026
 
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
 
@@ -1320,9 +1320,97 @@ Dieses Kapitel erklärt die wichtigsten Sensoren und Bedienelemente.
 
 ---
 
+## Orientierung in der Geräteansicht ab V4.6.0
+
+![Geräteübersicht ab V4.6.0](images/v460_device_overview.png)
+
+Battery SmartFlow AI teilt die Entitäten auf zwei übersichtliche Geräte auf. Es
+handelt sich trotzdem um **eine Integration und eine gemeinsame Steuerung**:
+
+| Gerät | Was befindet sich dort? | Wann öffne ich es? |
+| ----- | ------------------------ | ------------------ |
+| **Battery SmartFlow AI – Steuerung & Planung** | Betriebsmodus, Leistungsregelung, Ladeplanung, Schutzgrenzen und technische Diagnosewerte | Wenn du den Betrieb ändern oder eine Entscheidung nachvollziehen möchtest |
+| **Battery SmartFlow AI – Wirtschaft & Preise** | aktuelle Preise, Preisgrenzen, Energieflüsse, Kosten, Erträge und wirtschaftlicher Wirkungsgrad | Wenn du Preise einstellen oder den wirtschaftlichen Erfolg beurteilen möchtest |
+
+Die zweite Zeile unter dem Namen ist nur eine kurze Gerätebeschreibung. Beim
+Steuerungsgerät zeigt Home Assistant zusätzlich den zugeordneten Bereich an; das
+virtuelle Wirtschaftsgerät besitzt keinen physischen Standort. Die Anzahl der
+Entitäten kann sich je nach Konfiguration und Home-Assistant-Version leicht von
+der Abbildung unterscheiden.
+
+> **Für Einsteiger:** Im Alltag genügt meist das Gerät **Steuerung & Planung**.
+> Öffne **Wirtschaft & Preise**, wenn du wissen möchtest, warum BSFAI einen
+> Preis als günstig oder teuer bewertet und ob sich Laden und Entladen bisher
+> finanziell gelohnt haben.
+
+---
+
 # 6.1 Status- & Wirtschaftssensoren
 
-![Status & Wirtschaft](images/sensors_01_status.png)
+Die Wirtschafts- und Preissensoren sind im virtuellen Gerät **Battery SmartFlow
+AI – Wirtschaft & Preise** zusammengefasst.
+
+![Wirtschafts-, Bilanz- und Energiesensoren](images/v460_economics_sensors_1.png)
+
+![Preis- und Schwellenwerte](images/v460_economics_sensors_2.png)
+
+Die Namen folgen einem einheitlichen Muster: Der Text vor dem Gedankenstrich
+nennt die Gruppe, der Text danach den konkreten Wert.
+
+| Gruppe | Einfache Bedeutung |
+| ------ | ------------------ |
+| **Aktuell** | Werte, die gerade jetzt für die wirtschaftliche Bewertung gelten |
+| **Bilanz heute** | Kosten, Erträge und Nutzen seit Mitternacht |
+| **Bilanz seit Start** | dauerhaft aufsummierte wirtschaftliche Werte seit Beginn der BSFAI-Bilanzierung |
+| **Energie heute** | heute gemessene Energiemengen nach Flussrichtung |
+| **Energie seit Start** | dauerhaft aufsummierte Energiemengen nach Flussrichtung |
+| **Preise** | berechnete Durchschnittspreise und die momentan wirksamen Lade-/Entladegrenzen |
+
+### So liest du die Flussrichtung
+
+Bezeichnungen wie **Netz zu Akku**, **PV zu Akku** oder **Akku zu Haus** werden
+immer von links nach rechts gelesen. Beispiel: **Energie heute – Netz zu Akku**
+ist die Strommenge, die heute aus dem öffentlichen Netz in den Akku geladen
+wurde. **Akku zu Netz** ist dagegen bewusst ins Netz abgegebene Batterieenergie.
+
+### So liest du die Bilanz
+
+* **Netzladekosten** sind die Kosten für Energie, die aus dem Netz in den Akku
+  geladen wurde.
+* **PV-Opportunitätskosten** sind kein Rechnungsbetrag. Sie zeigen den
+  Einspeiseerlös, auf den du verzichtet hast, weil PV-Energie im Akku gespeichert
+  statt verkauft wurde.
+* **Vermiedene Netzbezugskosten** bewerten Energie, die der Akku an das Haus
+  abgegeben und damit einen teureren Netzbezug vermieden hat.
+* **Einspeiseertrag** bewertet die ins Netz eingespeiste Energie mit der
+  hinterlegten Einspeisevergütung.
+* **Batterienutzen** ist der von BSFAI berechnete wirtschaftliche Nutzen der
+  Batterie. Ein einzelner Tageswert kann vorübergehend negativ sein, etwa wenn
+  heute geladen, aber erst später entladen wird. Für die Gesamtbewertung ist
+  deshalb **Bilanz seit Start** aussagekräftiger.
+
+### Preise und Schwellen richtig einordnen
+
+Die angezeigten Schwellen sind **berechnete Entscheidungsgrenzen**, keine
+zusätzlichen Kosten:
+
+* **Aktuelle Peak-Schwelle:** Ab diesem Preis erkennt BSFAI einen teuren
+  dynamischen Preispeak.
+* **Aktuelle Valley-Schwelle:** Unterhalb dieses Werts erkennt BSFAI ein
+  günstiges Preistal.
+* **Effektive Entladeschwelle:** Preisgrenze, die nach allen aktiven Regeln
+  tatsächlich für eine Entladung gilt.
+* **Ökonomische Entladeschwelle:** Mindestpreis, ab dem sich die Entladung unter
+  Berücksichtigung des bewerteten Ladepreises und der Gewinnmarge rechnet.
+* **Ø bisheriger Akku-Ladepreis:** geschätzter Durchschnittswert der aktuell
+  gespeicherten Energie.
+* **Ø Wert der Batterieentladung:** durchschnittlicher wirtschaftlicher Wert der
+  bisher abgegebenen Batterieenergie.
+
+`Unbekannt` direkt nach dem Start ist nicht automatisch ein Fehler. Ein Wert
+kann erst berechnet werden, wenn seine Quelldaten verfügbar sind oder bereits
+genügend Lade- beziehungsweise Entladeenergie erfasst wurde. Bleibt ein wichtiger
+Wert dauerhaft unbekannt, prüfe zuerst die zugeordneten Quellsensoren.
 
 ---
 
@@ -1840,6 +1928,27 @@ Beispiele:
 
 # 6.6 Steuerelemente
 
+Die wichtigsten Preis- und Schutzregler befinden sich im Gerätebereich
+**Steuerung**:
+
+![Preis- und Schutzregler ab V4.6.0](images/v460_price_controls.png)
+
+Die Prozentwerte sind bewusst als verständliche Auf- und Abschläge dargestellt:
+
+* **Peakpreis-Aufschlag 27 %** bedeutet: Ein Preis muss ungefähr 27 % über dem
+  maßgeblichen Tagesniveau liegen, bevor er als Peak gilt. Ein kleinerer Wert
+  erkennt mehr, ein größerer Wert nur deutlichere Preisspitzen.
+* **Talpreis-Abschlag 15 %** bedeutet: Ein Preis muss ungefähr 15 % unter dem
+  Tagesniveau liegen, bevor er als Tal gilt. Ein kleinerer Wert erkennt mehr,
+  ein größerer Wert nur deutlichere Preistäler.
+
+Für den Einstieg empfiehlt es sich, diese beiden Werte zunächst unverändert zu
+lassen und erst nach mehreren vollständigen Preistagen anzupassen. Die Felder
+**Sehr-billig** und **Sehr-teuer** sind dagegen feste absolute Preisgrenzen in
+der angezeigten Währung pro kWh. **SoC Minimum** schützt die untere Reserve,
+**SoC Maximum** begrenzt das normale Ladeziel. Der PV-Ladestart legt fest, ab
+welcher stabilen Netzeinspeisung eine neue PV-Überschussladung beginnen darf.
+
 ![Leistungs- & Schutzparameter](images/controls_01_limits.png)
 
 ---
@@ -1985,6 +2094,8 @@ V4.4 führt eine zeitlich begrenzte interne Debug-Aufzeichnung ein. Damit der
 Home-Assistant-Recorder im Normalbetrieb nicht mit umfangreichen
 Diagnoseattributen belastet wird, erscheinen in der Geräteansicht nur wenige
 sparsame Statusentitäten:
+
+![Debug-Status in der Geräteansicht](images/v460_debug_status.png)
 
 * **Debug-Aufzeichnung aktiv** – zeigt `Ja` oder `Nein`
 * **Debug-Aufzeichnung endet um** – geplantes automatisches Ende
