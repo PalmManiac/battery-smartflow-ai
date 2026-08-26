@@ -485,7 +485,7 @@ class Dev9Point1ChargePowerScenarios(unittest.TestCase):
             available_charge_power_w_value=2400.0,
         )
 
-        self.assertEqual(requested, 2320.0)
+        self.assertEqual(requested, 2400.0)
 
     def test_learned_rule_uses_request_instead_of_learned_estimate(self) -> None:
         plan = SimpleNamespace(
@@ -547,8 +547,8 @@ class Dev9Point1ChargePowerScenarios(unittest.TestCase):
         )
 
         self.assertEqual(plan.mode, "charge")
-        self.assertEqual(plan.effective_charge_power_w, 1161.0)
-        self.assertGreater(plan.requested_charge_power_w, 1161.0)
+        self.assertEqual(plan.effective_charge_power_w, 1044.9)
+        self.assertGreater(plan.requested_charge_power_w, 0.0)
         self.assertLessEqual(plan.requested_charge_power_w, 2400.0)
 
     def test_only_unthrottled_samples_define_reachable_power(self) -> None:

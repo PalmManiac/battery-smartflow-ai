@@ -53,7 +53,7 @@
           "additional_battery_charge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief laadvermogen meldt, blokkeert Battery SmartFlow AI het ontladen.",
           "additional_battery_discharge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief ontlaadvermogen meldt, blokkeert Battery SmartFlow AI het laden, zodat er geen batterij-naar-batterij-laden ontstaat.",
           "capacity_entity": "Optionele sensor met automatisch berekende beschikbare batterijcapaciteit in kWh, bijvoorbeeld uit de Zendure-integratie. Indien ingesteld, overschrijft deze de handmatige berekening.",
-          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica.",
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve PV-contextdrempels en andere PV-logica.",
           "pv_entity": "Sensor met het actuele PV-vermogen in watt. Wordt gebruikt om overschot te herkennen.",
           "pv_forecast_today_entity": "Optionele sensor met de PV-dagvoorspelling voor vandaag, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
           "pv_forecast_tomorrow_entity": "Optionele sensor met de PV-dagvoorspelling voor morgen, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
@@ -139,7 +139,7 @@
           "additional_battery_charge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief laadvermogen meldt, blokkeert Battery SmartFlow AI het ontladen.",
           "additional_battery_discharge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief ontlaadvermogen meldt, blokkeert Battery SmartFlow AI het laden, zodat er geen batterij-naar-batterij-laden ontstaat.",
           "capacity_entity": "Optionele sensor met automatisch berekende beschikbare batterijcapaciteit in kWh, bijvoorbeeld uit de Zendure-integratie. Indien ingesteld, overschrijft deze de handmatige berekening.",
-          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica.",
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve PV-contextdrempels en andere PV-logica.",
           "pv_entity": "Sensor met het actuele PV-vermogen in watt.",
           "pv_forecast_today_entity": "Optionele sensor met de PV-dagvoorspelling voor vandaag, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
           "pv_forecast_tomorrow_entity": "Optionele sensor met de PV-dagvoorspelling voor morgen, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
@@ -178,7 +178,7 @@
           "installed_pv_wp": "Geïnstalleerd PV-vermogen (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve zomer-/winterdrempels en andere PV-logica."
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve PV-contextdrempels en andere PV-logica."
         }
       },
       "debug_start": {
@@ -608,11 +608,11 @@
         }
       },
       "season_mode": {
-        "name": "Herkende bedrijfsmodus",
+        "name": "Regelcontext",
         "state": {
-          "winter": "Winterbedrijf",
-          "summer": "Zomerbedrijf",
-          "manual": "Handmatig bedrijf"
+          "winter": "Prijs",
+          "summer": "PV",
+          "manual": "Handmatig"
         }
       },
       "soc_limit_status": {

@@ -55,6 +55,7 @@ MIN_CORE_WINDOW_DAYS = 4
 MIN_DATA_COVERAGE = 0.80
 
 DEFAULT_FALLBACK_CHARGE_POWER_W = 1200.0
+DEFAULT_PLANNING_CHARGE_EFFICIENCY = 0.90
 MIN_EFFECTIVE_CHARGE_POWER_W = 100.0
 
 MIN_LEARNED_CHARGE_POWER_SAMPLE_W = 300.0
@@ -689,7 +690,14 @@ def effective_charge_power_w(
         candidates.append(DEFAULT_FALLBACK_CHARGE_POWER_W)
 
     power = min(v for v in candidates if v > 0) if any(v > 0 for v in candidates) else 0.0
-    return max(0.0, float(power))
+
+    # Device input power is not fully stored as usable battery energy. Keep the
+    # physical command ceiling unchanged, but schedule against a conservative
+    # net value so inverter and cell losses cannot make the plan finish late.
+    return max(
+        0.0,
+        float(power) * DEFAULT_PLANNING_CHARGE_EFFICIENCY,
+    )
 
 
 def available_charge_power_w(
@@ -760,7 +768,10 @@ def requested_charge_power_w(
     if remaining_hours <= 0.0:
         return available_power
 
-    required_power = (required_kwh / remaining_hours) * 1000.0
+    required_net_power = (required_kwh / remaining_hours) * 1000.0
+    required_power = (
+        required_net_power / DEFAULT_PLANNING_CHARGE_EFFICIENCY
+    )
     return min(
         available_power,
         max(MIN_EFFECTIVE_CHARGE_POWER_W, required_power),
@@ -929,16 +940,17 @@ def optimize_charge_window(
         )
     ]
 
-    # Equal-cost windows used to be pushed as close to the deadline as possible.
-    # Keep a safety reserve after charging instead: aim up to one hour before the
-    # latest equal-cost start, without moving farther than the midpoint of the
-    # available tie range. This remains stable while waiting and still gives every
-    # real price difference priority over timing comfort.
+    # Keep equal-cost windows stable while time advances. Basing the preferred
+    # start on the midpoint of the *remaining* tie range moved the plan by one
+    # slot whenever an old price slot expired (01:15 -> 01:30 -> 01:45 in the
+    # RC5 field trace). Anchor it to a fixed one-hour reserve before the latest
+    # equal-cost start instead. Real price differences still take precedence.
     earliest_start = min(candidate[1] for candidate in cheapest)
     latest_start = max(candidate[1] for candidate in cheapest)
-    tied_span = latest_start - earliest_start
-    end_reserve = min(timedelta(hours=1), tied_span / 2)
-    preferred_start = latest_start - end_reserve
+    preferred_start = max(
+        earliest_start,
+        latest_start - timedelta(hours=1),
+    )
     _, best_start, best_end, best_prices = min(
         cheapest,
         key=lambda candidate: (
@@ -1079,12 +1091,12 @@ def build_learned_charge_plan(
             decision_reason=LEARNED_REASON_NOT_READY,
         )
 
-    # The learned value remains a conservative scheduling estimate. The core
-    # economic window, however, is sized with the actually available limit so
-    # a self-learned low value cannot stretch the cheap window and cap INPUT.
+    # Size the economic window with net storable power. The separate available
+    # power remains the physical command ceiling, so planning losses can make
+    # the window start earlier without reducing the device's permitted INPUT.
     core_window_slots = required_window_slots(
         required_charge_energy_kwh=required_kwh,
-        available_charge_power_w_value=available_power_w,
+        available_charge_power_w_value=eff_power_w,
     )
 
     start, end, score, weights, selected_prices, optimizer_reason = optimize_charge_window(

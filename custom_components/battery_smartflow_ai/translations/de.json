@@ -55,7 +55,7 @@
           "offgrid_power_entity": "Optionaler Sensor für die Leistung der Zendure-Off-Grid-/Inselsteckdose. Positive Werte werden als aktive Last an der Inselsteckdose interpretiert.",
           "offgrid_mode_entity": "Optionaler Select-Sensor für den Off-Grid-Modus der Zendure-Off-Grid-/Inselsteckdose. Der Modus wird nur gelesen und niemals von Battery SmartFlow AI gesetzt.",
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
-          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
+          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative PV-Kontextschwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt. Wird zur Erkennung von Überschuss verwendet.",
 		  "feed_in_tariff": "Vergütung pro eingespeister kWh in ganzer Währung. Sie dient als Rückfallwert, wenn kein gültiger dynamischer Einspeisepreis verfügbar ist.",
           "dynamic_feed_in_price_entity": "Optionaler numerischer Home-Assistant-Sensor für den aktuellen dynamischen Einspeisepreis. Ein gültiger Sensorwert einschließlich null oder eines negativen Preises hat Vorrang vor der festen Einspeisevergütung.",
@@ -141,7 +141,7 @@
           "offgrid_power_entity": "Optionaler Sensor für die Leistung der Zendure-Off-Grid-/Inselsteckdose. Positive Werte werden als aktive Last an der Inselsteckdose interpretiert.",
           "offgrid_mode_entity": "Optionaler Select-Sensor für den Off-Grid-Modus der Zendure-Off-Grid-/Inselsteckdose. Der Modus wird nur gelesen und niemals von Battery SmartFlow AI gesetzt.",
           "capacity_entity": "Optionaler Sensor mit der automatisch berechneten verfügbaren Batteriekapazität in kWh (z. B. aus der Zendure-Integration). Falls gesetzt, überschreibt er die manuelle Berechnung.",
-          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird künftig für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet.",
+          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative PV-Kontextschwellen und weitere PV-bezogene Logik verwendet.",
           "pv_entity": "Sensor mit der aktuellen PV-Leistung in Watt.",
 		  "feed_in_tariff": "Vergütung pro eingespeister kWh in ganzer Währung. Sie dient als Rückfallwert, wenn kein gültiger dynamischer Einspeisepreis verfügbar ist.",
           "dynamic_feed_in_price_entity": "Optionaler numerischer Home-Assistant-Sensor für den aktuellen dynamischen Einspeisepreis. Ein gültiger Sensorwert einschließlich null oder eines negativen Preises hat Vorrang vor der festen Einspeisevergütung.",
@@ -178,7 +178,7 @@
           "installed_pv_wp": "Installierte PV-Leistung (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative Sommer-/Winter-Schwellen und weitere PV-bezogene Logik verwendet."
+          "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative PV-Kontextschwellen und weitere PV-bezogene Logik verwendet."
         }
       },
       "debug_start": {
@@ -608,11 +608,11 @@
         }
       },
       "season_mode": {
-        "name": "Erkannter Betriebsmodus",
+        "name": "Regelungskontext",
         "state": {
-          "winter": "Winterbetrieb",
-          "summer": "Sommerbetrieb",
-          "manual": "Manueller Betrieb"
+          "winter": "Preis",
+          "summer": "PV",
+          "manual": "Manuell"
         }
       },
       "soc_limit_status": {

@@ -1636,15 +1636,18 @@ Dieser Wert ist bei Support-Anfragen sehr wichtig.
 
 ---
 
-## Erkannter Betriebsmodus
+## Regelungskontext
 
-Zeigt den internen Kontextwert `summer`, `winter` oder `manual`.
+Zeigt kurz, welcher weiche Gewichtungskontext gerade gilt:
+
+* **PV** – die aktuelle PV-Lage erhält mehr Gewicht
+* **Preis** – Preisfenster und Reserve erhalten mehr Gewicht
+* **Manuell** – der manuelle Betrieb ist aktiv
 
 > [!NOTE]
-> Dieser Sensor ist kein auswählbarer Betriebsmodus. In der Automatik dienen
-> `summer` und `winter` nur noch als weicher Diagnosekontext; sie schalten keine
-> getrennten Strategien um. Die auswählbaren Modi sind Automatik, Autarkie und
-> Manuell.
+> Der Regelungskontext ist kein auswählbarer Betriebsmodus und keine erkannte
+> Jahreszeit. Auch im Sommer kann bei schwacher PV-Lage **Preis** erscheinen.
+> Die auswählbaren Betriebsmodi bleiben Automatik, Autarkie und Manuell.
 
 ---
 
@@ -2085,6 +2088,31 @@ Bestätigung quittiert.
 > erwartet wird. Für kurze Regelungsprobleme reichen meist 10 Minuten. Für
 > Ladeplanung, Ladefenster oder wechselnde Preise sind 30 bis 120 Minuten oft
 > aussagekräftiger.
+
+### Aufzeichnung zeitgesteuert starten
+
+Die vorhandenen Home-Assistant-Aktionen
+`battery_smartflow_ai.start_debug_recording` und
+`battery_smartflow_ai.stop_debug_recording` können auch in Automationen
+verwendet werden. Dieses Beispiel startet um 00:30 Uhr automatisch eine
+zweistündige Aufzeichnung:
+
+```yaml
+alias: BSFAI Debug-Aufzeichnung nachts starten
+triggers:
+  - trigger: time
+    at: "00:30:00"
+actions:
+  - action: battery_smartflow_ai.start_debug_recording
+    data:
+      duration_minutes: "120"
+mode: single
+```
+
+Bei nur einem BSFAI-Konfigurationseintrag ist keine `entry_id` erforderlich.
+Bei mehreren Einträgen muss die gewünschte Konfiguration zusätzlich in den
+Aktionsdaten ausgewählt werden. Die Aufzeichnung endet nach der gewählten Dauer
+automatisch; der Stop-Dienst ist nur für ein vorzeitiges Ende nötig.
 
 ### Fortschritt beobachten
 

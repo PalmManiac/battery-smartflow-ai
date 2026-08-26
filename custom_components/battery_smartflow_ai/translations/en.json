@@ -53,7 +53,7 @@
           "additional_battery_charge_entity": "Optional sensor of a second battery system. If this sensor reports positive charge power, Battery SmartFlow AI blocks discharging.",
           "additional_battery_discharge_entity": "Optional sensor of a second battery system. If this sensor reports positive discharge power, Battery SmartFlow AI blocks charging to avoid battery-to-battery charging.",
           "capacity_entity": "Optional sensor with automatically calculated available battery capacity in kWh, for example from the Zendure integration. If set, it overrides the manual calculation.",
-          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative summer/winter thresholds and other PV-related logic.",
+          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative PV-context thresholds and other PV-related logic.",
           "pv_entity": "Sensor with the current PV power in watts. Used to detect surplus.",
           "pv_forecast_today_entity": "Optional sensor with today's PV daily forecast, for example from Solcast PV Forecast. The forecast is only an additional planning input and is not required for the integration.",
           "pv_forecast_tomorrow_entity": "Optional sensor with tomorrow's PV daily forecast, for example from Solcast PV Forecast. The forecast is only an additional planning input and is not required for the integration.",
@@ -139,7 +139,7 @@
           "additional_battery_charge_entity": "Optional sensor of a second battery system. If this sensor reports positive charge power, Battery SmartFlow AI blocks discharging.",
           "additional_battery_discharge_entity": "Optional sensor of a second battery system. If this sensor reports positive discharge power, Battery SmartFlow AI blocks charging to avoid battery-to-battery charging.",
           "capacity_entity": "Optional sensor with automatically calculated available battery capacity in kWh, for example from the Zendure integration. If set, it overrides the manual calculation.",
-          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative summer/winter thresholds and other PV-related logic.",
+          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative PV-context thresholds and other PV-related logic.",
           "pv_entity": "Sensor with the current PV power in watts.",
           "pv_forecast_today_entity": "Optional sensor with today's PV daily forecast, for example from Solcast PV Forecast. The forecast is only an additional planning input and is not required for the integration.",
           "pv_forecast_tomorrow_entity": "Optional sensor with tomorrow's PV daily forecast, for example from Solcast PV Forecast. The forecast is only an additional planning input and is not required for the integration.",
@@ -178,7 +178,7 @@
           "installed_pv_wp": "Installed PV power (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative summer/winter thresholds and other PV-related logic."
+          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative PV-context thresholds and other PV-related logic."
         }
       },
       "debug_start": {
@@ -608,11 +608,11 @@
         }
       },
       "season_mode": {
-        "name": "Detected operating mode",
+        "name": "Control context",
         "state": {
-          "winter": "Winter operation",
-          "summer": "Summer operation",
-          "manual": "Manual operation"
+          "winter": "Price",
+          "summer": "PV",
+          "manual": "Manual"
         }
       },
       "soc_limit_status": {

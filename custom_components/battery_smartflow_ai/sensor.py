@@ -1191,7 +1191,7 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="season_mode",
         device_class=SensorDeviceClass.ENUM,
         options=SEASON_MODE_ENUMS,
-        icon="mdi:weather-partly-snowy",
+        icon="mdi:tune-variant",
     ),
     ZendureSensorEntityDescription(
         key="soc_limit_status",
