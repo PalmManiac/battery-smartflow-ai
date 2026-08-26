@@ -112,6 +112,10 @@ New and improved capabilities include:
 * explicit peak, valley, effective and economic discharge thresholds
 * bounded JSON debug recordings that can be exported for support without
   permanently filling Home Assistant Recorder with large diagnostic attributes
+* schedulable debug recordings through the existing Home Assistant start and
+  stop actions
+* compact **Control context: PV / Price / Manual** instead of misleading
+  summer and winter labels
 
 Existing settings, learned data and accumulated economic values are preserved
 when updating. The detailed meaning of every new value is explained in the
@@ -645,6 +649,10 @@ Neue und verbesserte Fähigkeiten:
 * transparente Peak-, Valley-, effektive und ökonomische Entladeschwellen
 * begrenzte JSON-Debug-Aufzeichnungen für den Support, ohne den
   Home-Assistant-Recorder dauerhaft mit großen Diagnoseattributen zu füllen
+* zeitgesteuerte Debug-Aufzeichnungen über die vorhandenen Home-Assistant-
+  Aktionen zum Starten und Stoppen
+* kompakter **Regelungskontext: PV / Preis / Manuell** statt missverständlicher
+  Sommer- und Winterbezeichnungen
 
 Vorhandene Einstellungen, Lerndaten und bereits aufsummierte Wirtschaftswerte
 bleiben beim Update erhalten. Alle neuen Werte werden ausführlich in der

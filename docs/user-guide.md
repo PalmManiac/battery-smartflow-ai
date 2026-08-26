@@ -1637,15 +1637,19 @@ This value is very important for support requests.
 
 ---
 
-## Detected operating mode
+## Control context
 
-Shows the internal context value `summer`, `winter`, or `manual`.
+Briefly shows which soft weighting context currently applies:
+
+* **PV** – the current PV situation receives more weight
+* **Price** – price windows and battery reserve receive more weight
+* **Manual** – manual operation is active
 
 > [!NOTE]
-> This sensor is not a selectable operating mode. Serve in automation
-> `summer` and `winter` only as a soft diagnostic context; they don't switch
-> separate strategies. The selectable modes are automatic, self-sufficiency and
-> Manually.
+> The control context is neither a selectable operating mode nor a detected
+> season. **Price** can therefore appear during summer when current PV
+> conditions are weak. The selectable modes remain Automatic, Autarky and
+> Manual.
 
 ---
 
@@ -2082,6 +2086,30 @@ required. Home Assistant confirms that recording has started.
 > Start recording shortly before the unusual behavior is expected. Ten minutes
 > is usually sufficient for short control problems. For charge planning,
 > charging windows or changing prices, 30 to 120 minutes is often more useful.
+
+### Start a recording on a schedule
+
+The existing Home Assistant actions
+`battery_smartflow_ai.start_debug_recording` and
+`battery_smartflow_ai.stop_debug_recording` can also be used in automations.
+This example automatically starts a two-hour recording at 00:30:
+
+```yaml
+alias: Start BSFAI debug recording at night
+triggers:
+  - trigger: time
+    at: "00:30:00"
+actions:
+  - action: battery_smartflow_ai.start_debug_recording
+    data:
+      duration_minutes: "120"
+mode: single
+```
+
+No `entry_id` is required when only one BSFAI config entry exists. With
+multiple entries, select the intended config entry in the action data. The
+recording ends automatically after the selected duration; the stop action is
+only needed to end it early.
 
 ### Monitor progress
 
