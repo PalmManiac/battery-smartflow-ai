@@ -110,10 +110,10 @@ from .device_profiles import DEVICE_PROFILES, merge_profile_with_overrides
 from .decision_engine import (
     advance_pv_charge_hysteresis,
     compute_pv_attributable_export_w,
-    DecisionContext,
     DecisionEngine,
     DecisionResult,
 )
+from .core.models.runtime import RuntimeSnapshot
 from .forecast import build_forecast_summary
 from .learned_planning import (
     LearningSample,
@@ -4259,7 +4259,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                 )
 
-            ctx = DecisionContext(
+            ctx = RuntimeSnapshot(
                 now=now,
                 soc=soc,
                 soc_min=float(soc_min),
@@ -5952,7 +5952,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 reason=display_decision.reason,
             )
 
-            transparency_ctx = DecisionContext(
+            transparency_ctx = RuntimeSnapshot(
                 now=now,
                 soc=soc,
                 soc_min=float(soc_min),

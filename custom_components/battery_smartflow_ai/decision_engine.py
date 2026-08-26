@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, List, Literal, Optional
 
 from .const import MANUAL_CONST_DISCHARGE
-from .forecast import ForecastSummary
+from .core.models.runtime import AiMode, DecisionContext, RuntimeSnapshot
 from .market_price import (
     MarketPrice,
     MarketPriceDirection,
@@ -17,7 +17,6 @@ from .price_math import peak_threshold
 from .power_controller import PowerController, PowerContext
 
 
-AiMode = Literal["automatic", "summer", "manual"]
 ZendureMode = Literal["input", "output"]
 ActionType = Literal["idle", "charge", "discharge", "emergency", "passthrough"]
 
@@ -185,122 +184,6 @@ def advance_pv_charge_hysteresis(
 
 
 PricePoint = MarketPricePoint
-
-
-@dataclass
-class DecisionContext:
-    now: datetime
-
-    soc: float
-    soc_min: float
-    soc_max: float
-
-    emergency_soc: float
-    emergency_charge_w: float
-
-    max_charge_w: float
-    max_discharge_w: float
-
-    grid_import_w: float
-    grid_export_w: float
-    pv_w: float
-    house_load_w: float
-
-    avg_charge_price: Optional[float]
-    expensive_threshold: float
-    very_expensive_threshold: float
-    profit_margin_pct: float
-
-    ai_mode: AiMode
-    manual_action: Optional[str]
-    season: Literal["winter", "summer"]
-
-    profile: dict
-    prev_discharge_w: float
-    prev_charge_w: float
-
-    battery_capacity_kwh: float
-    battery_discharge_w: float = 0.0
-    last_output_w: float = 0.0
-
-    additional_battery_charge_w: float = 0.0
-    additional_battery_discharge_w: float = 0.0
-    pv_charge_start_export_w: float = 80.0
-
-    peak_factor: float = 1.35
-    valley_factor: float = 0.85
-    very_cheap_price: Optional[float] = None
-    
-    # V4.2.3-Beta3:
-    # Opportunity cost of using PV for charging instead of exporting it.
-    # If no feed-in tariff is available, 0.0 is conservative: only zero/negative
-    # grid prices may override currently useful PV.
-
-    # V3.5.0 cell voltage protection
-    cell_voltage_emergency_active: bool = False
-
-    # V4.0.0 optional forecast input
-    forecast: Optional[ForecastSummary] = None
-
-    # V4.1.0 learned charge-window planning
-    # Passed in from coordinator as an object from learned_planning.py.
-    # Keep this typed as Any to avoid circular imports.
-    learned_charge_plan: Any | None = None
-    learned_planning_enabled: bool = False
-    import_market_price: MarketPrice | None = None
-    export_market_price: MarketPrice | None = None
-
-    # Runtime counters / debounce
-    pv_charge_start_counter: int = 0
-    pv_charge_stop_counter: int = 0
-    forecast_wait_block_counter: int = 0
-    pv_charge_latched: bool = False
-
-    # Protection state from coordinator
-    discharge_blocked_by_soc_min: bool = False
-    cell_voltage_discharge_blocked: bool = False
-
-    # SF800Pro PV house-load passthrough state
-    pv_houseload_passthrough_active: bool = False
-    pv_houseload_passthrough_target_w: float = 0.0
-    pv_houseload_passthrough_stop_reason: str = "none"
-    
-    # V4.2.x Off-Grid / Inselsteckdose
-    offgrid_power_w: float = 0.0
-    offgrid_mode: str = "not_configured"
-    offgrid_available: bool = False
-    offgrid_active: bool = False
-    offgrid_load_active: bool = False
-    offgrid_source_active: bool = False
-    
-    # V4.3.0-dev5.2 unified AutomaticStrategy context
-    automatic_strategy_active: bool = False
-    automatic_weighting: str = "inactive"
-    automatic_pv_weight: float = 0.0
-    automatic_price_weight: float = 0.0
-    automatic_reserve_weight: float = 0.0
-    automatic_forecast_weight: float = 0.0
-    automatic_discharge_allowed: bool = False
-    automatic_discharge_reason: str = "not_evaluated"
-    
-    # V4.3.0-dev5.3 strategic peak-reserve context
-    automatic_peak_reserve_allowed: bool = False
-    automatic_peak_reserve_reason: str = "not_evaluated"
-
-    # V4.3.0-dev5.4 optional valley-charge context
-    automatic_valley_charge_allowed: bool = False
-    automatic_valley_charge_reason: str = "not_evaluated"
-
-    # V4.3.0-dev5.5 strategic charge-planning context
-    automatic_planning_allowed: bool = False
-    automatic_planning_reason: str = "not_evaluated"
-
-    # V4.3.0-dev9 data-quality context.
-    grid_sensor_configured: bool = True
-    grid_sensor_valid: bool = True
-    pv_sensor_valid: bool = True
-    soc_limits_valid: bool = True
-    power_limits_valid: bool = True
 
 
 @dataclass
@@ -2608,7 +2491,7 @@ class DecisionEngine:
 
         return None
 
-    def evaluate(self, ctx: DecisionContext) -> DecisionResult:
+    def evaluate(self, ctx: RuntimeSnapshot) -> DecisionResult:
         """Evaluate every admissible rule and select the highest priority.
 
         Rule order remains the deterministic tie-breaker only. It no longer
