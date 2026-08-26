@@ -817,19 +817,51 @@ def choose_deadline(
 
     now_local = _as_local(now)
 
-    future_prices = [
+    remaining_prices = [
         p for p in price_points
-        if _as_local(p.start) > now_local and _as_local(p.end) > now_local
+        if _as_local(p.end) > now_local
     ]
 
-    if future_prices:
-        prices = [float(p.price) for p in future_prices]
+    if remaining_prices:
+        prices = [float(p.price) for p in remaining_prices]
         learned_peak_threshold = peak_threshold(prices, 1.35)
 
         peak_candidates = [
-            p for p in future_prices
+            p for p in remaining_prices
             if float(p.price) >= learned_peak_threshold
         ]
+
+        # RC7: Do not invent a "before peak" deadline inside a peak that is
+        # already active. The former future-only scan discarded the current
+        # slot and repeatedly treated the next equally expensive 15-minute
+        # slot as a new upcoming peak. Near SoC reserve this made learned
+        # planning alternate between expensive grid charging and the correctly
+        # selected economic discharge every few minutes.
+        active_peak = next(
+            (
+                point
+                for point in peak_candidates
+                if _as_local(point.start) <= now_local < _as_local(point.end)
+            ),
+            None,
+        )
+
+        if active_peak is not None:
+            active_peak_end = _as_local(active_peak.end)
+            for point in sorted(
+                peak_candidates,
+                key=lambda item: _as_local(item.start),
+            ):
+                point_start = _as_local(point.start)
+                point_end = _as_local(point.end)
+                if point_start <= active_peak_end and point_end > active_peak_end:
+                    active_peak_end = point_end
+
+            peak_candidates = [
+                point
+                for point in peak_candidates
+                if _as_local(point.start) >= active_peak_end
+            ]
 
         if peak_candidates:
             first_peak = min(peak_candidates, key=lambda p: _as_local(p.start))
