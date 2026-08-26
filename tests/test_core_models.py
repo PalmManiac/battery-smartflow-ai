@@ -18,6 +18,7 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     BatteryState,
     DeviceCapabilities,
     DeviceCommand,
+    DecisionContext,
     GridState,
     MarketPrice,
     MarketPriceDirection,
@@ -25,6 +26,7 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     MeasuredValue,
     OffGridState,
     PVState,
+    RuntimeSnapshot,
     StrategyContext,
     StrategyIntent,
     ValueValidity,
@@ -36,12 +38,45 @@ from custom_components.battery_smartflow_ai.regulation_models import (  # noqa: 
     DeviceCommand as LegacyDeviceCommand,
     StrategyIntent as LegacyStrategyIntent,
 )
+from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E402
+    DecisionEngine,
+)
 
 
 NOW = datetime(2026, 8, 26, 12, 0, tzinfo=timezone.utc)
 
 
 class CoreModelTests(unittest.TestCase):
+    @staticmethod
+    def runtime_snapshot(**overrides: object) -> RuntimeSnapshot:
+        values: dict[str, object] = {
+            "now": NOW,
+            "soc": 50.0,
+            "soc_min": 10.0,
+            "soc_max": 90.0,
+            "emergency_soc": 5.0,
+            "emergency_charge_w": 500.0,
+            "max_charge_w": 1000.0,
+            "max_discharge_w": 800.0,
+            "grid_import_w": 100.0,
+            "grid_export_w": 0.0,
+            "pv_w": 200.0,
+            "house_load_w": 300.0,
+            "avg_charge_price": None,
+            "expensive_threshold": 0.30,
+            "very_expensive_threshold": 0.40,
+            "profit_margin_pct": 5.0,
+            "ai_mode": "automatic",
+            "manual_action": None,
+            "season": "summer",
+            "profile": {"MAX_INPUT_W": 1000.0, "MAX_OUTPUT_W": 800.0},
+            "prev_discharge_w": 0.0,
+            "prev_charge_w": 0.0,
+            "battery_capacity_kwh": 2.0,
+        }
+        values.update(overrides)
+        return RuntimeSnapshot(**values)  # type: ignore[arg-type]
+
     def test_measurement_keeps_absence_distinct_from_zero(self) -> None:
         zero = MeasuredValue.available(0.0, observed_at=NOW)
         unavailable = MeasuredValue[float].absent(
@@ -97,6 +132,33 @@ class CoreModelTests(unittest.TestCase):
         self.assertIs(LegacyStrategyIntent, StrategyIntent)
         self.assertIs(LegacyDeviceCommand, DeviceCommand)
         self.assertIs(StrategyContext, AutomaticStrategyResult)
+
+    def test_decision_context_is_the_runtime_snapshot_not_a_second_model(self) -> None:
+        self.assertIs(DecisionContext, RuntimeSnapshot)
+
+    def test_decision_engine_evaluates_a_prepared_runtime_snapshot(self) -> None:
+        snapshot = self.runtime_snapshot(soc=4.0)
+
+        decision = DecisionEngine().evaluate(snapshot)
+
+        self.assertEqual(decision.action, "emergency")
+        self.assertEqual(decision.charge_w, 500.0)
+
+    def test_runtime_snapshot_exposes_typed_states_and_validity(self) -> None:
+        snapshot = self.runtime_snapshot(
+            grid_sensor_configured=True,
+            grid_sensor_valid=False,
+            pv_sensor_valid=True,
+        )
+
+        self.assertFalse(snapshot.grid.import_power_w.valid)
+        self.assertEqual(
+            snapshot.grid.import_power_w.validity,
+            ValueValidity.INVALID,
+        )
+        self.assertTrue(snapshot.pv.production_power_w.valid)
+        self.assertEqual(snapshot.capabilities.max_output_w, 800.0)
+        self.assertFalse(hasattr(snapshot, "entity_id"))
 
     def test_market_price_legacy_path_exports_canonical_type(self) -> None:
         price = MarketPrice(

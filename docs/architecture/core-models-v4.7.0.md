@@ -3,7 +3,7 @@
 - Status: Implementierungsentscheidung für Issue #267
 - Basis: `main` nach Merge von PR #293
 - Zielarchitektur: `core-ha-target-architecture-v4.7.0.md`
-- Scope: neutrale Modellgrenzen und kompatible Konsolidierung, kein RuntimeSnapshot
+- Scope: neutrale Modellgrenzen und kompatible Konsolidierung; ergänzt durch #268
 
 ## Ergebnis
 
@@ -46,9 +46,11 @@ Die Modelle enthalten keine Entity-ID, HA-State-Objekte, Registries, Services
 oder Übersetzungsschlüssel. Der spätere HA-Adapter ist dafür verantwortlich,
 Home-Assistant-Zustände in diese neutralen Kategorien zu übersetzen.
 
-Die Teilzustände werden in #267 noch nicht zu einem weiteren Sammelkontext
-zusammengesetzt. Issue #268 führt genau eine zentrale Runtime-Eingabe ein und
-ordnet dort auch Zeitstempel, Konfiguration, Forecast und Teilzustände zu.
+Die Teilzustände wurden in #267 noch nicht zu einem weiteren Sammelkontext
+zusammengesetzt. Issue #268 hat anschließend genau eine zentrale
+`RuntimeSnapshot`-Eingabe eingeführt. Sie stellt diese Teilzustände als
+typisierte Sichten bereit und bewahrt während der Migration den etablierten
+Decision-Engine-Vertrag.
 
 ### Strategie und Regelung
 
@@ -69,7 +71,7 @@ liegen kanonisch unter `core/models/`:
 Der bisherige Name `StrategyContext` bleibt als Alias für
 `AutomaticStrategyResult` erhalten. Das Modell ist das Ergebnis der
 AutomaticStrategy und keine zweite Runtime-Eingabe. Diese Einordnung verhindert
-eine Doppelung mit dem in #268 entstehenden Eingabemodell.
+eine Doppelung mit dem in #268 eingeführten Eingabemodell.
 
 `StrategyIntent` bleibt die fachliche gewünschte Wirkung. `DeviceCommand`
 bleibt der technisch freigegebene neutrale Gerätebefehl. Die vorhandenen
@@ -160,7 +162,7 @@ Strategie-, Regelungs-, Marktpreis-, Wirtschafts- und Home-Assistant-Verhalten.
 
 ## Bewusst nicht Teil von #267
 
-- kein `RuntimeSnapshot`; dieser entsteht in #268
+- kein zweiter Snapshot neben dem in #268 eingeführten `RuntimeSnapshot`
 - keine Umstellung des Coordinators auf die neuen Teilzustände
 - keine neue Command-Ausführung oder DeviceBackend-Implementierung
 - keine StateStore- oder Clock-Abstraktion
