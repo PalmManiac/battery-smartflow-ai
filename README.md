@@ -73,14 +73,53 @@ Goal:
 * Dynamic grid regulation instead of simple full-power switching
 * Unified power regulation with grid history, mode arbitration and smoothed power control
 * Device profiles per Zendure model
-* Profile editor for charge/discharge tuning
+* Automatic device-specific limits and regulation parameters
 * Hard-sync with real Zendure AC mode
-* Transparency and diagnostic sensors
-* Profit / savings calculation
+* Focused status and transparency sensors
+* Persistent energy-flow accounting and economic balance
+* Profit / savings calculation and economic efficiency
 * Season-neutral automatic strategy with seasonal context
 * Optional additional battery detection
 * Optional off-grid / island socket support
 * Optional cell-voltage protection
+
+---
+
+# ✨ V4.6.0 – Economics, prices and a clearer UI
+
+V4.6.0 adds a complete, persistent view of the battery's energy flows and
+economic result. Home Assistant now presents the integration as two clearly
+arranged devices while both remain part of one shared control system:
+
+* **Control & Planning** – operating mode, power control, charge planning,
+  protection and technical diagnostics
+* **Economics & Prices** – current prices, thresholds, energy flows, costs,
+  revenue, battery benefit and economic efficiency
+
+<img src="docs/images/v460_device_overview.png" width="800">
+
+New and improved capabilities include:
+
+* daily and persistent totals for grid-to-battery, PV-to-battery,
+  battery-to-home, battery-to-grid and grid-export energy
+* separate grid charging cost, PV opportunity cost, avoided grid cost and
+  feed-in revenue
+* battery benefit for today and since accounting started
+* economic efficiency since start, distinct from the battery's technical
+  conversion efficiency
+* understandable percentage controls for **Peak price markup** and **Valley
+  price discount** instead of technical multipliers
+* explicit peak, valley, effective and economic discharge thresholds
+* bounded JSON debug recordings that can be exported for support without
+  permanently filling Home Assistant Recorder with large diagnostic attributes
+* schedulable debug recordings through the existing Home Assistant start and
+  stop actions
+* compact **Control context: PV / Price / Manual** instead of misleading
+  summer and winter labels
+
+Existing settings, learned data and accumulated economic values are preserved
+when updating. The detailed meaning of every new value is explained in the
+[English user guide](docs/user-guide.md).
 
 ---
 
@@ -107,9 +146,15 @@ In the Zendure app:
 
 The following settings are mandatory:
 
-* Do not select a P1 sensor in the Zendure integration
+* The P1 sensor may be selected during initial Z-HA setup
 * Energy export: **Allowed**
-* Zendure Manager → Operating mode **OFF**
+* Afterwards: Z-HA Manager → Operating mode **OFF**, so Z-HA does not regulate
+  in parallel with BSFAI
+
+<img src="docs/images/zha_manager.png" width="350">
+
+The screenshot uses a German interface; `Betriebsmodus: Aus` corresponds to
+`Operating mode: Off`.
 
 Incorrect settings may lead to:
 
@@ -234,7 +279,6 @@ The expert menu provides access to:
 
 * Learned charge-window planning
 * Cell-voltage protection
-* Advanced diagnostics
 
 The unified power regulation is the mandatory command path for all installations.
 
@@ -283,7 +327,9 @@ The profile influences, among other things:
 * Off-grid capability
 * Device-specific safety behavior
 
-The profile editor allows advanced users to tune selected parameters directly from Home Assistant.
+The selected profile supplies device-specific limits and regulation parameters
+automatically. Legacy profile customizations remain compatible, but the normal
+settings dialog no longer exposes a separate profile editor.
 
 ---
 
@@ -312,7 +358,8 @@ This improves behavior during:
 * low-power regulation near 0 W
 * sensitive smaller systems such as 800 W class devices
 
-The improved regulation is optional and can be enabled in the expert menu.
+This regulation chain is mandatory for all installations. It is not an optional
+expert setting.
 
 ---
 
@@ -335,17 +382,11 @@ It only becomes active once enough training data is available.
 
 Until then, classic planning remains active.
 
-Diagnostic sensors show:
-
-* learning status
-* data coverage
-* usable history days
-* expected consumption
-* required charge energy
-* planned charge start
-* planning deadline
-* selected charge window
-* blocking reason
+The normal device view shows the user-facing planning results: learning status,
+planning mode, required charging energy, planned charge start, deadline and
+window size. Detailed history, coverage, reserve and blocking information is
+available in a time-limited JSON debug package instead of permanent diagnostic
+sensors.
 
 ---
 
@@ -430,11 +471,16 @@ Default: **35%**
 * Lower markup → detects more peaks (more sensitive)
 * Higher markup → detects only strong price peaks (more conservative)
 
+The corresponding **Valley price discount** states how far a price must fall
+below the daily level before BSFAI considers it a cheap valley. A lower discount
+detects more valleys; a higher discount requires a more pronounced low-price
+window. Both settings are displayed as percentages in the GUI.
+
 ---
 
-# 📊 Diagnostics and transparency sensors
+# 📊 Status, transparency and debug information
 
-Battery SmartFlow AI provides detailed diagnostic and transparency sensors, for example:
+Battery SmartFlow AI provides focused status and transparency sensors, for example:
 
 * Ø daily price
 * Current peak threshold
@@ -446,19 +492,15 @@ Battery SmartFlow AI provides detailed diagnostic and transparency sensors, for 
 * Forecast status
 * PV outlook
 * Learned planning status
-* Learned planning blocking reason
-* Learned profile diagnostics
-* Grid history diagnostics
-* Regulation mode arbiter reason
-* Regulation target and final power
-* Device command diagnostics
-* Off-grid mode
-* Off-grid load active
-* Off-grid rule reason
+* Planned charge start, deadline and required charging energy
 * Cell-voltage status
 * SoC limit status
+* Debug recording active / scheduled end
+* Captured debug samples, last package and last error
 
-<img src="docs/images/sensors_03_diagnose.png" width="350">
+Deep strategy, charge-commitment, off-grid and regulation details are recorded
+only when a bounded debug recording is started. They are not permanent Home
+Assistant entities.
 
 ---
 
@@ -466,11 +508,11 @@ Battery SmartFlow AI provides detailed diagnostic and transparency sensors, for 
 
 The integration can show:
 
-* Ø charging price (weighted average)
-* Charged energy
-* Discharged energy
-* Price difference
-* Total profit / savings in €
+* weighted average charging price and discharge value
+* energy flows for today and since accounting started
+* grid charging cost and PV opportunity cost
+* avoided grid-import cost and feed-in revenue
+* battery benefit for today and since accounting started
 * Economic efficiency since start (100% = cost recovery)
 
 Technical support modes such as off-grid support or PV house-load passthrough are not counted as economic price discharge.
@@ -480,7 +522,10 @@ efficiency reported by Zendure-HA. It compares the value of discharged battery
 energy with valued grid-charge costs and PV opportunity costs. The value becomes
 available after at least 0.1 kWh of both charging and discharging have been observed.
 
-Note: Details about the calculation are in the **manual**.
+Daily values can temporarily be negative when energy is charged today but used
+later. For the overall result, the persistent **since start** balance is more
+meaningful. Details and practical examples are in the [English user
+guide](docs/user-guide.md).
 
 ---
 
@@ -567,12 +612,51 @@ Ziel:
 * Geräteprofile pro Zendure-Modell
 * Übersichtlicher Einstellungsbereich für Anlagen- und Expertenoptionen
 * Hard-Sync mit realem Zendure AC-Modus
-* Transparenz- und Diagnose-Sensoren
-* Gewinn-/Ersparnis-Berechnung
+* gezielte Status- und Transparenzsensoren
+* dauerhafte Energieflusszählung und Wirtschaftsbilanz
+* Gewinn-/Ersparnis-Berechnung und wirtschaftlicher Wirkungsgrad
 * Saisonneutrale Automatik mit saisonalem Kontext
 * Optionale Zusatzakku-Erkennung
 * Optionale Off-Grid-/Inselsteckdosen-Unterstützung
 * Optionaler Zellspannungs-Schutz
+
+---
+
+# ✨ V4.6.0 – Wirtschaft, Preise und eine übersichtlichere GUI
+
+V4.6.0 ergänzt eine vollständige, dauerhafte Erfassung der Energieflüsse und des
+wirtschaftlichen Ergebnisses. Home Assistant zeigt die Integration jetzt in zwei
+übersichtlichen Geräten an, die weiterhin zu einer gemeinsamen Steuerung gehören:
+
+* **Steuerung & Planung** – Betriebsmodus, Leistungsregelung, Ladeplanung,
+  Schutzfunktionen und technische Diagnose
+* **Wirtschaft & Preise** – aktuelle Preise, Schwellen, Energieflüsse, Kosten,
+  Erträge, Batterienutzen und wirtschaftlicher Wirkungsgrad
+
+<img src="docs/images/v460_device_overview.png" width="800">
+
+Neue und verbesserte Fähigkeiten:
+
+* Tages- und Gesamtzähler für Netz zu Akku, PV zu Akku, Akku zu Haus, Akku zu
+  Netz und Netzeinspeisung
+* getrennte Netzladekosten, PV-Opportunitätskosten, vermiedene
+  Netzbezugskosten und Einspeiseerträge
+* Batterienutzen für heute und seit Beginn der Bilanzierung
+* wirtschaftlicher Wirkungsgrad seit Start – bewusst getrennt vom technischen
+  Umwandlungswirkungsgrad des Batteriesystems
+* verständliche Prozentregler für **Peakpreis-Aufschlag** und
+  **Talpreis-Abschlag** anstelle technischer Faktoren
+* transparente Peak-, Valley-, effektive und ökonomische Entladeschwellen
+* begrenzte JSON-Debug-Aufzeichnungen für den Support, ohne den
+  Home-Assistant-Recorder dauerhaft mit großen Diagnoseattributen zu füllen
+* zeitgesteuerte Debug-Aufzeichnungen über die vorhandenen Home-Assistant-
+  Aktionen zum Starten und Stoppen
+* kompakter **Regelungskontext: PV / Preis / Manuell** statt missverständlicher
+  Sommer- und Winterbezeichnungen
+
+Vorhandene Einstellungen, Lerndaten und bereits aufsummierte Wirtschaftswerte
+bleiben beim Update erhalten. Alle neuen Werte werden ausführlich in der
+[deutschen Benutzeranleitung](docs/anleitung.md) erklärt.
 
 ---
 
@@ -599,9 +683,12 @@ In der Zendure App:
 
 Folgende Einstellungen sind zwingend erforderlich:
 
-* Kein P1-Sensor in der Zendure-Integration auswählen
+* Bei der Ersteinrichtung von Z-HA darf der P1-Sensor ausgewählt werden
 * Energie-Export: **Erlaubt**
-* Zendure Manager → Betriebsmodus **AUS**
+* Anschließend: Z-HA-Manager → Betriebsmodus **AUS**, damit Z-HA nicht parallel
+  zu BSFAI regelt
+
+<img src="docs/images/zha_manager.png" width="350">
 
 Falsche Einstellungen können führen zu:
 
@@ -726,9 +813,8 @@ Im Expertenmenü findest du:
 
 * Lernbasierte Ladefenster-Planung
 * Zellspannungs-Schutz
-* Erweiterte Diagnosen
 
-Die verbesserte Leistungsregelung ist ab V4.3.0-Dev8.1 für alle Installationen
+Die verbesserte Leistungsregelung ist seit V4.3.0 für alle Installationen
 verbindlich aktiv und muss nicht mehr gesondert eingeschaltet werden.
 
 ---
@@ -776,13 +862,15 @@ Das Profil beeinflusst u. a.:
 * Off-Grid-Fähigkeiten
 * gerätespezifisches Schutzverhalten
 
-Der Profil-Editor erlaubt fortgeschrittenen Nutzern, ausgewählte Parameter direkt in Home Assistant feinzujustieren.
+Das ausgewählte Profil liefert gerätespezifische Grenzen und Regelparameter
+automatisch. Ältere Profilanpassungen bleiben kompatibel, im normalen
+Einstellungsdialog gibt es jedoch keinen separaten Profil-Editor mehr.
 
 ---
 
 # 🔁 Einheitliche Leistungsregelung
 
-Die verbesserte technische Regelkette ist ab V4.3.0-Dev8.1 der verbindliche
+Die verbesserte technische Regelkette ist seit V4.3.0 der verbindliche
 Befehlsweg:
 
 **Decision Engine → StrategyIntent → ModeArbiter → PowerController → DeviceCommand**
@@ -827,17 +915,11 @@ Sie wird erst aktiv, sobald genügend Lerndaten vorhanden sind.
 
 Bis dahin bleibt automatisch die klassische Planung aktiv.
 
-Diagnosesensoren zeigen:
-
-* Lernstatus
-* Datenabdeckung
-* nutzbare Historientage
-* erwarteten Verbrauch
-* benötigte Nachladeenergie
-* geplanten Ladestart
-* Planungs-Deadline
-* gewähltes Ladefenster
-* Blockierungsgrund
+Die normale Geräteansicht zeigt die anwenderrelevanten Planungsergebnisse:
+Lernstatus, Planungsmodus, benötigte Nachladeenergie, geplanten Ladestart,
+Deadline und Fenstergröße. Detaillierte Historien-, Abdeckungs-, Reserve- und
+Blockierungsinformationen stehen im zeitlich begrenzten JSON-Debug-Paket statt
+in dauerhaften Diagnosesensoren.
 
 ---
 
@@ -922,11 +1004,17 @@ Standard: **35 %**
 * Niedrigerer Aufschlag → erkennt mehr Peaks (sensitiver)
 * Höherer Aufschlag → erkennt nur starke Preisspitzen (konservativer)
 
+Der zugehörige **Talpreis-Abschlag** gibt an, wie weit ein Preis unter das
+Tagesniveau fallen muss, bevor BSFAI ihn als günstiges Preistal bewertet. Ein
+kleinerer Abschlag erkennt mehr Täler; ein größerer Abschlag verlangt ein
+deutlicheres Niedrigpreisfenster. Beide Einstellungen werden in der GUI als
+Prozentwerte dargestellt.
+
 ---
 
-# 📊 Diagnose- und Transparenzsensoren
+# 📊 Status-, Transparenz- und Debug-Informationen
 
-Battery SmartFlow AI stellt umfangreiche Diagnose- und Transparenzsensoren bereit, z. B.:
+Battery SmartFlow AI stellt gezielte Status- und Transparenzsensoren bereit, z. B.:
 
 * Ø Tagespreis
 * aktuelle Peak-Schwelle
@@ -938,19 +1026,15 @@ Battery SmartFlow AI stellt umfangreiche Diagnose- und Transparenzsensoren berei
 * Prognose-Status
 * PV-Ausblick
 * Lernplanungsstatus
-* Lernplanung Blockierungsgrund
-* gelernte Profil-Diagnosen
-* Netz-Historie-Diagnosen
-* Regelgrund des ModeArbiters
-* Ziel- und Endleistung der Regelung
-* DeviceCommand-Diagnosen
-* Off-Grid-Modus
-* Off-Grid-Last aktiv
-* Regelgrund Off-Grid
+* geplanter Ladestart, Deadline und benötigte Nachladeenergie
 * Zellspannungs-Status
 * SoC-Limit Status
+* Debug-Aufzeichnung aktiv / geplantes Ende
+* erfasste Debug-Samples, letztes Paket und letzter Fehler
 
-<img src="docs/images/sensors_03_diagnose.png" width="350">
+Tiefe Strategie-, Ladebindungs-, Off-Grid- und Regelungsdetails werden nur bei
+einer begrenzten Debug-Aufzeichnung erfasst. Sie sind keine dauerhaften
+Home-Assistant-Entitäten.
 
 ---
 
@@ -958,15 +1042,19 @@ Battery SmartFlow AI stellt umfangreiche Diagnose- und Transparenzsensoren berei
 
 Die Integration kann sichtbar machen:
 
-* Ø Ladepreis (gewichteter Durchschnitt)
-* geladene Energie
-* entladene Energie
-* Preis-Differenz
-* Gesamtgewinn / Gesamtersparnis in €
+* gewichteter durchschnittlicher Ladepreis und Entladewert
+* Energieflüsse für heute und seit Beginn der Bilanzierung
+* Netzladekosten und PV-Opportunitätskosten
+* vermiedene Netzbezugskosten und Einspeiseerträge
+* Batterienutzen für heute und seit Beginn der Bilanzierung
+* wirtschaftlicher Wirkungsgrad seit Start (100 % = Kostendeckung)
 
 Technische Unterstützungsmodi wie Off-Grid-Support oder PV-Hauslast-Passthrough werden nicht als wirtschaftliche Preisentladung gezählt.
 
-Hinweis: Details zur Berechnung stehen in der **Anleitung**.
+Tageswerte können vorübergehend negativ sein, wenn Energie heute geladen, aber
+erst später genutzt wird. Für das Gesamtergebnis ist deshalb die dauerhafte
+Bilanz **seit Start** aussagekräftiger. Details und Praxisbeispiele stehen in der
+[deutschen Benutzeranleitung](docs/anleitung.md).
 
 ---
 

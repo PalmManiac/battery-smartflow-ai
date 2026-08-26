@@ -53,7 +53,7 @@
           "additional_battery_charge_entity": "Capteur optionnel d’un second système de batterie. Si ce capteur indique une puissance de charge positive, Battery SmartFlow AI bloque la décharge.",
           "additional_battery_discharge_entity": "Capteur optionnel d’un second système de batterie. Si ce capteur indique une puissance de décharge positive, Battery SmartFlow AI bloque la charge afin d’éviter une charge batterie-à-batterie.",
           "capacity_entity": "Capteur optionnel de capacité batterie disponible calculée automatiquement en kWh, par exemple depuis l’intégration Zendure. S’il est défini, il remplace le calcul manuel.",
-          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et d’autres logiques liées au PV.",
+          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils relatifs du contexte PV et d’autres logiques liées au PV.",
           "pv_entity": "Capteur de puissance PV actuelle en watts. Utilisé pour détecter le surplus.",
           "pv_forecast_today_entity": "Capteur optionnel avec la prévision journalière PV pour aujourd’hui, par exemple Solcast PV Forecast. La prévision n’est qu’une entrée de planification supplémentaire et n’est pas obligatoire.",
           "pv_forecast_tomorrow_entity": "Capteur optionnel avec la prévision journalière PV pour demain, par exemple Solcast PV Forecast. La prévision n’est qu’une entrée de planification supplémentaire et n’est pas obligatoire.",
@@ -139,7 +139,7 @@
           "additional_battery_charge_entity": "Capteur optionnel d’un second système de batterie. Si ce capteur indique une puissance de charge positive, Battery SmartFlow AI bloque la décharge.",
           "additional_battery_discharge_entity": "Capteur optionnel d’un second système de batterie. Si ce capteur indique une puissance de décharge positive, Battery SmartFlow AI bloque la charge afin d’éviter une charge batterie-à-batterie.",
           "capacity_entity": "Capteur optionnel de capacité batterie disponible calculée automatiquement en kWh, par exemple depuis l’intégration Zendure. S’il est défini, il remplace le calcul manuel.",
-          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et d’autres logiques liées au PV.",
+          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils relatifs du contexte PV et d’autres logiques liées au PV.",
           "pv_entity": "Capteur de puissance PV actuelle en watts.",
           "pv_forecast_today_entity": "Capteur optionnel avec la prévision journalière PV pour aujourd’hui, par exemple Solcast PV Forecast. La prévision n’est qu’une entrée de planification supplémentaire et n’est pas obligatoire.",
           "pv_forecast_tomorrow_entity": "Capteur optionnel avec la prévision journalière PV pour demain, par exemple Solcast PV Forecast. La prévision n’est qu’une entrée de planification supplémentaire et n’est pas obligatoire.",
@@ -178,7 +178,7 @@
           "installed_pv_wp": "Puissance PV installée (Wp)"
         },
         "data_description": {
-          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils été/hiver relatifs et d’autres logiques liées au PV."
+          "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils relatifs du contexte PV et d’autres logiques liées au PV."
         }
       },
       "debug_start": {
@@ -608,11 +608,11 @@
         }
       },
       "season_mode": {
-        "name": "Mode de fonctionnement détecté",
+        "name": "Contexte de régulation",
         "state": {
-          "winter": "Mode hiver",
-          "summer": "Mode été",
-          "manual": "Mode manuel"
+          "winter": "Prix",
+          "summer": "PV",
+          "manual": "Manuel"
         }
       },
       "soc_limit_status": {

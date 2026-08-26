@@ -2,8 +2,8 @@
 
 **Language:** [Deutsch](anleitung.md) | English
 
-> Applies to Battery SmartFlow AI V4.4.2 and later
-> Last content update: August 18, 2026
+> Applies to Battery SmartFlow AI V4.6.0 and later
+> Last content update: August 25, 2026
 
 **Intelligent, economical and stable control for Zendure SolarFlow systems in Home Assistant**
 
@@ -179,9 +179,15 @@ Battery SmartFlow AI requires the cleanest possible hardware configuration witho
 The following settings are required:
 
 * Energy export: **Allowed**
-* do not select a P1 sensor in the Zendure integration
-* Zendure Manager: **disabled**
+* the P1 sensor may be selected during initial Z-HA setup
+* afterwards, set Z-HA Manager operating mode to **OFF** so Z-HA does not
+  regulate in parallel with BSFAI
 * no parallel automations that change AC mode or power limits
+
+![Z-HA Manager with operating mode Off](images/zha_manager.png)
+
+The screenshot uses a German interface; `Betriebsmodus: Aus` means `Operating
+mode: Off`.
 
 Incorrect settings can lead to:
 
@@ -902,7 +908,8 @@ The following are particularly critical:
 * automatic HEMS control
 * own charging/discharging plans
 * dynamic power control outside BSFAI
-* P1-control within the Zendure integration
+* a Z-HA Manager operating mode other than **OFF**; selecting the P1 sensor
+  during initial Z-HA setup is allowed
 * parallel home assistant automations on the same entities
 
 ---
@@ -1050,8 +1057,8 @@ cell_voltage_cutoff_block
 
 > [!TIP]
 > If the system does not do what is expected, the decision reason should be checked first.
-> For the separation of strategy and technical implementation are additional
-> **Visible Condition**, **Strategic Reason** and **Technical Reason** helpful.
+> If this visible value is not sufficient, start a short debug recording. The
+> JSON package contains strategy, technical permissions and the device command.
 
 ---
 
@@ -1146,6 +1153,10 @@ AutomaticStrategy context
 → DeviceCommand
 → Home Assistant / Zendure
 ```
+
+These terms describe internal stages of the control path. They are not separate
+Home Assistant sensors; their details are available in the debug package when
+needed.
 
 AutomaticStrategy does not create a second decision engine. It evaluates the
 context and provides strategic approvals. The Decision Engine collects eligible
@@ -1299,17 +1310,18 @@ The following are particularly helpful:
 * AI status
 * AI recommendation
 * Engine status
+* current peak and valley thresholds
 * effective discharge threshold
 * economic discharge threshold
 * Learning planning status
-* Automatic weighting
-* Strategy state and visible state
-* strategic and technical reason
-* Status, type and goal of the AC charge commitment
-* charging source, charged charging price and PV/grid share
-* Off-grid rule reason
-* ModeArbiter rule reason
-* final set performance
+* planned charge start, deadline and required charging energy
+* the five lightweight debug-recording status values
+
+Deep strategy, charge-commitment, off-grid and regulation details have
+deliberately not been created as permanently active diagnostic entities since
+V4.4. When needed, a time-limited debug recording captures this information in
+a JSON package. This keeps the normal device view understandable and avoids
+filling Home Assistant Recorder with technical detail values.
 
 ---
 
@@ -1319,9 +1331,97 @@ This chapter explains the most important sensors and controls.
 
 ---
 
+## Finding your way around the device view from V4.6.0
+
+![Device overview from V4.6.0](images/v460_device_overview.png)
+
+Battery SmartFlow AI splits its entities between two clearly arranged devices.
+They are still part of **one integration and one shared control system**:
+
+| Device | What does it contain? | When should I open it? |
+| ------ | --------------------- | ---------------------- |
+| **Battery SmartFlow AI – Control & Planning** | Operating mode, power control, charge planning, protection limits and technical diagnostic values | When you want to change operation or understand a control decision |
+| **Battery SmartFlow AI – Economics & Prices** | Current prices, price thresholds, energy flows, costs, revenue and economic efficiency | When you want to configure prices or assess the financial result |
+
+The second line below each name is only a short device description. Home
+Assistant also shows the assigned area for the control device. The virtual
+economics device has no physical location. Entity counts can differ slightly
+from the screenshot depending on configuration and Home Assistant version.
+
+> **For new users:** In everyday use, the **Control & Planning** device is
+> usually enough. Open **Economics & Prices** when you want to know why BSFAI
+> considers a price cheap or expensive and whether charging and discharging have
+> paid off so far.
+
+The screenshots use a German Home Assistant interface. The device layout and
+values are the same when Home Assistant is set to another supported language.
+
+---
+
 # 6.1 Status & Economic Sensors
 
-![Status & Economy](images/sensors_01_status.png)
+The economics and price sensors are grouped in the virtual **Battery SmartFlow
+AI – Economics & Prices** device.
+
+![Economic, balance and energy sensors](images/v460_economics_sensors_1.png)
+
+![Price and threshold sensors](images/v460_economics_sensors_2.png)
+
+Entity names follow a consistent pattern: the text before the dash identifies
+the group; the text after it identifies the specific value.
+
+| Group | Plain-language meaning |
+| ----- | ---------------------- |
+| **Current** | Values currently used for the economic assessment |
+| **Balance today** | Costs, revenue and benefits accumulated since midnight |
+| **Balance since start** | Persistent economic totals since BSFAI accounting began |
+| **Energy today** | Energy measured today, grouped by flow direction |
+| **Energy since start** | Persistent energy totals, grouped by flow direction |
+| **Prices** | Calculated average prices and the charge/discharge thresholds currently in effect |
+
+### Reading the flow direction
+
+Names such as **Grid to battery**, **PV to battery** and **Battery to home** are
+always read from left to right. For example, **Energy today – Grid to battery**
+is the energy charged from the public grid into the battery today. **Battery to
+grid** is battery energy deliberately exported to the grid.
+
+### Reading the balance
+
+* **Grid charging cost** is the cost of energy charged from the grid into the
+  battery.
+* **PV opportunity cost** is not an amount on your electricity bill. It is the
+  feed-in revenue you gave up by storing PV energy instead of exporting it.
+* **Avoided grid cost** values energy supplied from the battery to the home,
+  avoiding more expensive grid consumption.
+* **Feed-in revenue** values exported energy using the configured feed-in tariff.
+* **Battery benefit** is BSFAI's calculated economic benefit of the battery. A
+  single daily value can temporarily be negative when energy is charged today
+  but discharged later. The **since start** balance is therefore more meaningful
+  for the overall result.
+
+### Understanding prices and thresholds
+
+The displayed thresholds are **calculated decision limits**, not additional
+costs:
+
+* **Current peak threshold:** BSFAI detects a costly dynamic price peak at or
+  above this price.
+* **Current valley threshold:** BSFAI detects an inexpensive valley below this
+  value.
+* **Effective discharge threshold:** The price boundary actually used after all
+  active rules have been applied.
+* **Economic discharge threshold:** The minimum price at which discharging pays
+  off after the valued charging price and profit margin are considered.
+* **Average battery charging price:** Estimated average cost of the energy
+  currently stored in the battery.
+* **Average battery discharge value:** Average economic value of the battery
+  energy delivered so far.
+
+`Unknown` immediately after startup does not automatically indicate a fault. A
+value may need source data or sufficient recorded charging/discharging energy
+before it can be calculated. If an important value remains unknown, first check
+its configured source entities.
 
 ---
 
@@ -1402,17 +1502,12 @@ updated with the next detected energy increase.
 
 ---
 
-## Charging source and applied charging price
+## Applied charging price
 
-These sensors show the current economic allocation of charging power:
-
-| Sensor | Meaning |
-| ------------------------- | ----------------------------------------------------- |
-| charging source | PV, grid or mixed charging |
-| Credited charging price | Price used for current charging share |
-| Grid charging share | estimated grid share of the charging power |
-| Charging share PV | estimated PV share of the charging power |
-| Mixed price active | shows simultaneous PV/grid charging |
+This sensor shows the price used to value the current charging share. The
+internally determined charging source, PV/grid shares and any mixed-price state
+are not created as separate sensors. They are available in the debug package
+when required.
 
 The **applied charging price** can already be visible during charging.
 The **Ø charging price battery**, on the other hand, is only activated when a SoC or
@@ -1521,58 +1616,16 @@ Examples:
 
 ---
 
-## Strategy state and visible state
+## Technical decision details
 
-The **strategy state** describes the internally selected strategy, for example
-PV charging, committed AC charging, household load coverage, economic
-discharging or protection.
+Strategy state, technical permissions, AC charge commitment, charging-source
+allocation and the final device command still exist as internal parts of the
+control system. However, they are **no longer Home Assistant sensors**.
 
-The **visible state** deliberately summarizes these details in a calmer and more
-understandable form. Short-lived technical corrections do not have to change the
-visible primary status.
-
----
-
-## Strategic and technical reason
-
-The **strategic reason** explains why a strategy was chosen. The
-**technical reason** describes how the ModeArbiter or power controller does this
-Strategy is currently being implemented, limited or maintained.
-
-Together, **Source Reason**, **Source Action** and **Source AC Mode** make the
-entire path from the original control decision to the device command
-understandable. These source values are diagnostic entities that are disabled by
-default and can be enabled in Home Assistant if required.
-
----
-
-## Automatic weighting
-
-Shows the dominant context of the unified automatic mode:
-
-* PV oriented
-* balanced
-* price-oriented
-* reserve-oriented
-
-Weighting is not a separate operating mode. It just explains which factors
-are particularly relevant in the current automation context.
-
----
-
-## AC charge commitment
-
-The charge-commitment sensors show, among other things:
-
-* whether a commitment is active
-* Type and original trigger
-* Target SoC and requested power
-* Start and validity time
-* Reason for termination or completion
-* whether a PV share can be added
-* the calculated charging source distribution
-
-Some detail values are disabled diagnostic entities by default.
+For normal operation, **AI status**, **AI recommendation** and **Decision
+reason** provide the relevant explanation. If they do not explain a particular
+behavior, start debug mode shortly before the situation occurs. The exported
+JSON package contains the complete decision path for support and troubleshooting.
 
 ---
 
@@ -1584,15 +1637,19 @@ This value is very important for support requests.
 
 ---
 
-## Detected operating mode
+## Control context
 
-Shows the internal context value `summer`, `winter`, or `manual`.
+Briefly shows which soft weighting context currently applies:
+
+* **PV** – the current PV situation receives more weight
+* **Price** – price windows and battery reserve receive more weight
+* **Manual** – manual operation is active
 
 > [!NOTE]
-> This sensor is not a selectable operating mode. Serve in automation
-> `summer` and `winter` only as a soft diagnostic context; they don't switch
-> separate strategies. The selectable modes are automatic, self-sufficiency and
-> Manually.
+> The control context is neither a selectable operating mode nor a detected
+> season. **Price** can therefore appear during summer when current PV
+> conditions are weak. The selectable modes remain Automatic, Autarky and
+> Manual.
 
 ---
 
@@ -1604,9 +1661,9 @@ Shows the calculated savings or profit through price arbitrage.
 
 # 6.3 Learning planning sensors
 
-Learning planning produces multiple diagnostic values.
-
-![Diagnostic values](images/sensors_03_diagnose.png)
+The normal device view keeps only the most important learning-planning results.
+They show whether planning is ready, when it intends to charge and how much
+energy is required.
 
 ---
 
@@ -1665,120 +1722,31 @@ Shows the length of the planned charging window.
 
 ---
 
-## Diagnostics: learned-planning blocking reason
+## Additional learning-planning details
 
-Explains why learning planning is not yet active or why charging is not currently being planned.
-
-Examples:
-
-* No blocker
-* Not enough history days
-* Data quality too low
-* No pricing data available
-* No recharging required
-* Deadline too close
+History days, data coverage, expected consumption, available battery energy,
+reserve margin, forecast adjustment and blocking reason are still calculated
+internally. Since V4.4, however, they are no longer created as permanent
+diagnostic sensors. These details are available in the JSON package from a
+targeted debug recording.
 
 ---
 
-## Data coverage
+# 6.4 Off-grid source data
 
-Shows how well the learned load profile is already filled with data.
+The optionally configured off-grid entities come from the Zendure system and
+are read by BSFAI as **source data**. BSFAI no longer creates separate off-grid
+status or diagnostic sensors for them.
 
-High data coverage improves planning.
+During normal operation, the response is visible through **AI status** and
+**Decision reason**. For detailed analysis, the time-limited debug package
+includes the read off-grid power, mode, detected load and internal control
+reason.
 
----
-
-## Usable days
-
-Shows how many days can be used for the learning model.
-
----
-
-## Expected consumption
-
-Shows the expected consumption up to the planning deadline.
-
----
-
-## Available battery energy
-
-Shows how much power is available above the SoC minimum.
-
-The calculation is based on:
-
-```text
-Total capacity × max(0, (current SoC - minimum SoC) / 100)
-```
-
----
-
-## Reserve
-
-Shows the planned safety reserve.
-
----
-
-## Forecast adjustment
-
-Shows how the PV forecast influences charge planning.
-
----
-
-# 6.4 Off-grid sensors
-
----
-
-## Off-grid power
-
-Shows the measured power at the off-grid/island socket.
-
-Positive values are interpreted as load.
-
----
-
-## Off-grid mode
-
-Shows the read off-grid mode.
-
-Possible normalized values:
-
-* not configured
-* unknown
-* out of
-* normal
-* economically
-
----
-
-## Off-grid load active
-
-Shows whether a relevant load was detected on the island socket.
-
----
-
-## Off-grid source active
-
-Diagnostic value for possible off-grid input power.
-
-This area currently needs to be interpreted carefully as not all devices report the direction in the same way.
-
----
-
-## Off-grid control reason
-
-Shows what the off-grid logic is currently doing.
-
-Possible reasons:
-
-```text
-none
-offgrid_load_observed
-```
-
-| Rule reason | Meaning |
-| ------------------------- | ---------------------------------------------- |
-| `none` | No off-grid load detected |
-| `offgrid_load_observed` | Off-grid load detected and recorded in diagnostics |
+> [!NOTE]
+> Battery SmartFlow AI does not switch the island socket or change its mode. It
+> only considers the configured source data in its own charging and discharging
+> decisions.
 
 ---
 
@@ -1839,9 +1807,27 @@ Examples:
 
 # 6.6 Controls
 
-![Performance & Protection Parameters](images/controls_01_limits.png)
+The main price and protection controls are available in the **Control** section
+of the device:
 
----
+![Price and protection controls from V4.6.0](images/v460_price_controls.png)
+
+The percentages are deliberately shown as easy-to-understand markups and
+discounts:
+
+* **Peak price markup 27%** means that a price must be approximately 27% above
+  the relevant daily level before it is considered a peak. A lower setting
+  detects more peaks; a higher setting detects only more pronounced peaks.
+* **Valley price discount 15%** means that a price must be approximately 15%
+  below the daily level before it is considered a valley. A lower setting
+  detects more valleys; a higher setting requires a more pronounced valley.
+
+New users should initially leave both values unchanged and observe several
+complete price days before adjusting them. **Very cheap** and **Very expensive**
+are fixed absolute price limits in the displayed currency per kWh. **Minimum
+SoC** protects the lower reserve and **Maximum SoC** limits the normal charging
+target. The PV charging start threshold defines how much stable grid export is
+required before a new PV-surplus charge may begin.
 
 ## Max. discharging power
 
@@ -1985,6 +1971,8 @@ Home Assistant Recorder with extensive diagnostic attributes during normal
 operation, only a small number of lightweight status entities appear in the
 device view:
 
+![Debug status in the device view](images/v460_debug_status.png)
+
 * **Debug recording active** – shows `Yes` or `No`
 * **Debug recording ends at** – scheduled automatic end
 * **Debug Samples Captured** – Number of measurement points saved so far
@@ -2098,6 +2086,30 @@ required. Home Assistant confirms that recording has started.
 > Start recording shortly before the unusual behavior is expected. Ten minutes
 > is usually sufficient for short control problems. For charge planning,
 > charging windows or changing prices, 30 to 120 minutes is often more useful.
+
+### Start a recording on a schedule
+
+The existing Home Assistant actions
+`battery_smartflow_ai.start_debug_recording` and
+`battery_smartflow_ai.stop_debug_recording` can also be used in automations.
+This example automatically starts a two-hour recording at 00:30:
+
+```yaml
+alias: Start BSFAI debug recording at night
+triggers:
+  - trigger: time
+    at: "00:30:00"
+actions:
+  - action: battery_smartflow_ai.start_debug_recording
+    data:
+      duration_minutes: "120"
+mode: single
+```
+
+No `entry_id` is required when only one BSFAI config entry exists. With
+multiple entries, select the intended config entry in the action data. The
+recording ends automatically after the selected duration; the stop action is
+only needed to end it early.
 
 ### Monitor progress
 
@@ -2272,6 +2284,11 @@ transferred. It contains:
 
 The visible state is deliberately user-oriented and more stable than one
 short-lived technical controller reason.
+
+> [!NOTE]
+> StrategyDecision, strategy state, visible state and source reason are internal
+> control values, not permanently created Home Assistant sensors. They are
+> recorded in the debug package for troubleshooting.
 
 ---
 
@@ -2636,10 +2653,12 @@ Check:
 * current electricity price
 * decision reason
 * Battery performance
-* delta_kwh
-* charge_source
 * Charged charging price
 * feed-in tariff in the integration configuration
+
+If the reason remains unclear, record one charging or discharging process in
+debug mode. Energy change and the internally detected charging source are in the
+JSON package, not separate sensors.
 
 ---
 
@@ -2651,15 +2670,17 @@ Possible causes:
 * incorrect device profile
 * parallel automations
 * Zendure app regulates
-* P1-control active in Zendure integration
+* Z-HA Manager regulates in parallel because its operating mode is not **OFF**
 
 Measures:
 
 * Select correct device profile
 * Disable parallel automations
 * Check grid sensor
-* Exclude Zendure app and P1-control as parallel control
-* Save diagnostic values and device history for a support request
+* Exclude the Zendure app as a parallel control
+* set Z-HA Manager operating mode to **OFF**; the P1 sensor selection from the
+  initial Z-HA setup may remain in place
+* Save a debug package and device history for a support request
 
 ---
 
@@ -2681,8 +2702,11 @@ If 30-100 W or more stays permanently, check:
 * Target-grid import and Discharging Target-grid import
 * grid sensor update and sign
 * active device profile
-* technical reasons and final performance
 * parallel Zendure or Home Assistant controls
+
+If these visible checks are inconspicuous, record the situation in debug mode.
+Technical permissions, target power and final power are available in the JSON
+package rather than as separate sensors.
 
 ---
 
@@ -2696,8 +2720,7 @@ Possible causes:
 * SoC maximum reached
 * SoC limit active
 * Cell protection active
-* ModeArbiter waits for stable export cycles
-* post-output hold active
+* internal regulation is waiting for stable export cycles or a short hold time
 
 Check:
 
@@ -2705,9 +2728,10 @@ Check:
 * grid export
 * PV charging start from grid export
 * decision reason
-* regulation_mode_arbiter_reason
-* pv_charge_latched
-* additional_battery_discharge_active
+
+If these do not explain the cause, create a debug package while the start is
+being missed. Internal hold, latch and additional-battery values are available
+only there and are not separate Home Assistant sensors.
 
 A new PV charging starts based on real measured grid export, not alone
 due to high PV output. During an already active charging the
@@ -2726,46 +2750,48 @@ Possible causes:
 * Price not high enough
 * Automatic context currently does not allow economic discharging
 * Self-sufficiency mode is still waiting for a technically stable household load coverage
-* ModeArbiter waits for stable import cycles
+* internal regulation is waiting for stable import cycles
 * Additional battery is charging
 
 Check:
 
 * SoC
 * SoC minimum
-* discharge_resume_soc
-* discharge_blocked_by_soc_min
-* cell_voltage_discharge_blocked
-* soc_limit_status
 * decision reason
-* effective_discharge_threshold
-* regulation_mode_arbiter_reason
+* SoC limit status
+* cell-voltage status
+* effective discharge threshold
+
+If the cause remains unclear, record a debug package. Resume thresholds,
+discharge blocks and technical mode permission are reported there rather than
+as separate sensors.
 
 ---
 
-## 9.8 Off-grid diagnostics does not work as expected
+## 9.8 Off-grid support does not work as expected
 
 Check:
 
 * Off-grid power configured?
 * Off-grid mode configured?
 * Off-grid mode not `off`?
-* Off-grid power positive?
-* Off-grid load active?
-* Off-grid rule reason?
+* do the configured **source entities** report plausible current values?
+
+BSFAI no longer creates its own off-grid status sensors. For a detailed check,
+start a debug recording; the package contains the read power, mode, detected
+load and internal control reason.
 
 > [!NOTE]
 > Battery SmartFlow AI only reads the off-grid mode and does not directly
-> control the off-grid socket. `offgrid_load_observed` means that a load was
-> detected and included in diagnostics. The actual off-grid power remains the
+> control the off-grid socket. The actual off-grid power remains the
 > responsibility of Zendure firmware and the device configuration.
 
 ---
 
 ## 9.9 AC charging with active off-grid load
 
-A detected continuous off-grid load is shown in diagnostics but no longer
-generally blocks an otherwise valid automatic AC charge. Protection, emergency
+A detected continuous off-grid load is considered internally but does not
+generally block an otherwise valid automatic AC charge. Protection, emergency
 charging, manual commands and normal strategic candidate selection remain in
 effect.
 
@@ -2893,7 +2919,7 @@ Recommended:
 * Don't set your profit margin too low
 * Use the very cheap threshold
 * Activate learning planning
-* Observe diagnostic values
+* Observe visible status values and create a debug package if needed
 
 ---
 
@@ -2908,7 +2934,7 @@ If you behave nervously:
 * First check the device profile and grid sensor
 * exclude parallel controls
 * Check actual INPUT/OUTPUT limits
-* Save diagnostic values and device history
+* Save a debug package and device history
 * Report the behavior with device model and firmware
 
 ---
@@ -2923,7 +2949,7 @@ Recommended:
 * select the exact device profile
 * Check device and grid sensors for ongoing updates
 * do not activate parallel power control
-* Report unusual behavior with diagnostic values
+* Report unusual behavior with a debug package recorded for that situation
 
 ---
 
@@ -2934,7 +2960,7 @@ Recommended:
 * Configure off-grid power
 * Configure off-grid mode
 * Use a suitable device profile
-* Check diagnostic values
+* Check visible status values and create a debug package if needed
 * Test behavior with and without AC
 * Observe device-specific limits
 
@@ -3003,9 +3029,8 @@ are not part of the normal settings dialog.
 
 ## Key near-zero and economic parameters
 
-These values have central V4.3 default values and are currently none
-normal fields of the profile editor. A device profile can technically do this
-overwrite.
+These values have central defaults and are not settings in the Home Assistant
+UI. A device profile may override them internally.
 
 | Parameters | Meaning |
 | -------------------------------------- | --------------------------------------------------- |

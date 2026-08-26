@@ -44,6 +44,37 @@ def forecast_supports_early_pv_passthrough(
     return float(remaining_today_kwh or 0.0) > free_capacity_kwh + 0.25
 
 
+def maintain_active_economic_discharge(
+    *,
+    automatic_mode_active: bool,
+    strategy_active: bool,
+    strategy_allows_discharge: bool,
+    effective_price_reached: bool,
+    previous_regulation_state: str,
+    active_output_w: float,
+) -> bool:
+    """Keep self-reducing grid import from cancelling active discharge.
+
+    An SF800Pro can report net battery charging while simultaneously supplying
+    AC output from its DC bus. Therefore the commanded output, rather than the
+    signed battery-power sensor alone, identifies an active discharge cycle.
+    The hold is only inherited from a real discharge state; PV passthrough must
+    not accidentally become an economic discharge latch.
+    """
+
+    inherited_active_discharge = bool(
+        str(previous_regulation_state) == "discharge_active"
+        and float(active_output_w or 0.0) > 0.0
+    )
+
+    return bool(
+        automatic_mode_active
+        and strategy_active
+        and effective_price_reached
+        and (strategy_allows_discharge or inherited_active_discharge)
+    )
+
+
 class AutomaticStrategy:
     """Build the high-level context for the unified automatic strategy.
 

@@ -158,6 +158,7 @@ from .economics import (
 from .automatic_strategy import (
     AutomaticStrategy,
     forecast_supports_early_pv_passthrough,
+    maintain_active_economic_discharge,
 )
 from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
@@ -4510,16 +4511,29 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ai_mode == AI_MODE_SUMMER
             )
 
-            automatic_economic_hold_active = bool(
-                ai_mode == AI_MODE_AUTOMATIC
-                and automatic_strategy_context.active
-                and bool(
+            previous_regulation_state = str(
+                self._persist.get("regulation_active_state", "none") or "none"
+            )
+
+            last_output_w = max(
+                0.0,
+                float(self._persist.get("last_set_output_w", 0.0) or 0.0),
+            )
+
+            automatic_economic_hold_active = maintain_active_economic_discharge(
+                automatic_mode_active=(ai_mode == AI_MODE_AUTOMATIC),
+                strategy_active=bool(automatic_strategy_context.active),
+                strategy_allows_discharge=bool(
                     automatic_strategy_context.metadata.get(
                         "automatic_discharge_allowed",
                         False,
                     )
-                )
-                and self._engine._is_effective_discharge_price_reached(ctx)
+                ),
+                effective_price_reached=(
+                    self._engine._is_effective_discharge_price_reached(ctx)
+                ),
+                previous_regulation_state=previous_regulation_state,
+                active_output_w=last_output_w,
             )
 
             discharge_hold_mode_active = bool(
@@ -4538,6 +4552,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     )
                     or 0.0
                 ),
+            )
+
+            active_discharge_output_w = max(
+                previous_discharge_w,
+                last_output_w,
             )
 
             stable_export_cycles = int(
@@ -4587,7 +4606,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "state_idle",
                     "standby",
                 }
-                and previous_discharge_w > 0.0
+                and active_discharge_output_w > 0.0
                 and float(soc) > float(soc_min)
                 and not bool(discharge_blocked_by_soc_min)
                 and not bool(cell_voltage_discharge_blocked)
@@ -4599,7 +4618,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 hold_discharge_w = max(
                     self._engine._discharge_keepalive_w(ctx),
                     min(
-                        previous_discharge_w,
+                        active_discharge_output_w,
                         float(max_discharge),
                     ),
                 )

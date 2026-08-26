@@ -29,7 +29,7 @@ class DebugIntegrationContractTests(unittest.TestCase):
             and isinstance(node.value, ast.Constant)
         )
 
-        self.assertEqual(manifest_version, "4.6.0-RC4")
+        self.assertEqual(manifest_version, "4.6.0")
         self.assertEqual(runtime_version, manifest_version)
 
     def test_services_expose_only_supported_durations(self) -> None:
