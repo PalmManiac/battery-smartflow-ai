@@ -1,8 +1,9 @@
 # V4.7.0: Inventar der Home-Assistant-Abhängigkeiten
 
-Status: Bestandsaufnahme für Issue #265  
-Analysierter Stand: `main` bei `563e51c0e4184def3a17412e356d63e68d088078`  
-Analyseumfang: `custom_components/battery_smartflow_ai/**/*.py` und die zugehörigen Tests
+- Status: Bestandsaufnahme für Issue #265, gegen 4.6.0 final nachgeprüft
+- Analysierter Release-Stand: Tag `4.6.0` bei `9b2ae4f4e04b0b0624dbbcf85dbe86664f687162`
+- Aktualisierter `main`-Stand: `8fdc7f48593923fe6f436e8e560cbbb64a7b4427`
+- Analyseumfang: `custom_components/battery_smartflow_ai/**/*.py` und die zugehörigen Tests
 
 ## Zweck und Abgrenzung
 
@@ -22,6 +23,37 @@ Als direkte HA-Abhängigkeit gelten insbesondere:
 Eine Entity-ID in einer ausdrücklichen HA-Adapterklasse ist dabei kein Fehler.
 Entscheidend ist, ob Fachlogik sie als Pflichtinformation benötigt.
 
+## Nachprüfung gegen 4.6.0 final
+
+Die ursprüngliche Inventur entstand auf `main` bei `563e51c`, unmittelbar vor
+den RC5- bis RC7-Korrekturen und der Finalisierung. Nach Veröffentlichung von
+4.6.0 wurde der vollständige funktionale Diff bis zum Release-Tag `9b2ae4f`
+erneut geprüft. Der spätere `main`-Commit `8fdc7f4` enthält den Merge der
+ursprünglichen Inventur und ändert den Laufzeitcode gegenüber dem Release-Tag
+nicht.
+
+Die Finalisierung verändert die Architekturklassifikation nicht:
+
+- Die Zahl der Dateien mit direkten `homeassistant.*`-Importen bleibt bei 11.
+- `maintain_active_economic_discharge()` wurde als neutraler Helfer in
+  `automatic_strategy.py` ergänzt. Er erhält primitive Werte und kennt weder
+  `hass` noch Entity-IDs oder HA Services. Das stärkt die bereits vorhandene
+  Core-Grenze.
+- Der Coordinator ruft diesen Helfer innerhalb seiner HA-gebundenen
+  Update-Pipeline auf und bleibt der zentrale Orchestrierungs- und
+  Kopplungsknoten.
+- Die RC6-/RC7-Korrekturen für Ladeverlust, stabile Preisfenster und aktive
+  Peak-Deadlines liegen in `learned_planning.py`. Die vorhandene Abhängigkeit
+  von `homeassistant.util.dt` für Lokalzeit und Standardzeitzone bleibt dabei
+  unverändert.
+- Die Release-Finalisierung ändert `INTEGRATION_VERSION` und Manifest-Version
+  von `4.6.0-RC4` auf `4.6.0`; daraus entsteht keine neue Core-Kopplung.
+- Neue Regressionstests schützen die fachlichen Änderungen aus RC5, RC6 und
+  RC7, ohne neue HA-Laufzeitabhängigkeiten einzuführen.
+
+Die folgenden Tabellen und Empfehlungen wurden gegen diesen Finalstand erneut
+verifiziert.
+
 ## Kurzfazit
 
 Die Codebasis ist weiter auf dem Weg zur Core-Trennung als die aktuelle
@@ -35,7 +67,7 @@ Verzeichnisstruktur vermuten lässt:
 - `EconomicsEngine`, `MarketPrice`-Modelle, `AutomaticStrategy`,
   `RegulationPowerController`, `DeviceCommandBuilder` und zahlreiche
   Schutz-/Hilfsmodule sind bereits weitgehend deterministisch und neutral.
-- Der zentrale Engpass ist `coordinator.py`: In 7.287 Zeilen bündelt er HA-I/O,
+- Der zentrale Engpass ist `coordinator.py`: In 7.306 Zeilen bündelt er HA-I/O,
   Config, Snapshot-Aufbau, Persistenz, Zeit, Strategie-Orchestrierung,
   ChargeCommit, Hysteresen, Planung, Economics, Geräteausführung und Diagnose.
 - Drei überschaubare Importkopplungen verhindern heute trotz neutraler
