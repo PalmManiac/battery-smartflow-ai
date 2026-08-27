@@ -1,6 +1,10 @@
 """Canonical platform-independent models shared across the BSFAI core."""
 
-from .device import DeviceCapabilities
+from .device import (
+    CommandExecutionResult,
+    CommandExecutionStatus,
+    DeviceCapabilities,
+)
 from .market import (
     MarketPrice,
     MarketPriceDirection,
@@ -43,6 +47,8 @@ __all__ = [
     "BatteryState",
     "ChargeCommitState",
     "ChargeSourceAllocation",
+    "CommandExecutionResult",
+    "CommandExecutionStatus",
     "DeviceCapabilities",
     "DeviceCommand",
     "DecisionContext",
