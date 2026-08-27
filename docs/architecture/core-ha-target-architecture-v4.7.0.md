@@ -328,6 +328,9 @@ Eine Clock-Abstraktion darf persistierte Holds/Cooldowns nicht blind auf
 monotone Zeit umstellen. Issue #271 legt je Zustand fest, ob Kalender- oder
 Laufzeitsemantik gilt.
 
+Die umgesetzte Clock-Grenze und das vollständige Zeitsemantik-Inventar sind in
+[`clock-v4.7.0.md`](clock-v4.7.0.md) dokumentiert.
+
 ### DeviceBackend
 
 Der Core definiert langfristig eine kleine Ausführungsgrenze für

@@ -11,6 +11,7 @@ import tempfile
 import re
 
 from .debug_package import DebugPackage, redact_secrets
+from .core.clock import SystemClock
 
 
 DEBUG_DIRECTORY = Path("bsfai") / "debug"
@@ -173,7 +174,7 @@ def export_debug_package(
         directory.mkdir(parents=True, exist_ok=True)
         destination = _available_destination(
             directory,
-            _filename(package.created_at or datetime.now(timezone.utc)),
+            _filename(package.created_at or SystemClock().utc_now()),
         )
         descriptor, temporary_name = tempfile.mkstemp(
             prefix=".bsfai_debug_",

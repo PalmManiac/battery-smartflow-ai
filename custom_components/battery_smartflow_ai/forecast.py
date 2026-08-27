@@ -16,6 +16,8 @@ from .const import (
     PV_OUTLOOK_POOR,
     PV_OUTLOOK_UNKNOWN,
 )
+from .core.clock import SystemClock
+from .core.ports import Clock
 
 
 @dataclass
@@ -233,6 +235,7 @@ def _compute_peak_kw_for_date(
 def _compute_peaks_for_sensor(
     hass: HomeAssistant,
     entity_id: str | None,
+    now_local: datetime,
 ) -> tuple[float, float]:
     """
     Returns:
@@ -242,7 +245,6 @@ def _compute_peaks_for_sensor(
     if not found:
         return 0.0, 0.0
 
-    now_local = dt_util.as_local(dt_util.utcnow())
     today = now_local.date()
     tomorrow = (now_local + timedelta(days=1)).date()
 
@@ -320,6 +322,7 @@ def _compute_subday_metrics(
     today_entity_id: str | None,
     tomorrow_entity_id: str | None,
     forecast_base_load_w: float,
+    now_local: datetime,
 ) -> tuple[float, float, float, float]:
     """
     Returns:
@@ -330,10 +333,10 @@ def _compute_subday_metrics(
     """
     attrs, found = _read_sensor_attrs(hass, today_entity_id)
     if not found:
-        _, peak_tomorrow_w = _compute_peaks_for_sensor(hass, tomorrow_entity_id)
+        _, peak_tomorrow_w = _compute_peaks_for_sensor(
+            hass, tomorrow_entity_id, now_local
+        )
         return 0.0, 0.0, 0.0, peak_tomorrow_w
-
-    now_local = dt_util.as_local(dt_util.utcnow())
 
     hourly = _iter_hourly_intervals(attrs)
     if hourly:
@@ -351,8 +354,12 @@ def _compute_subday_metrics(
             slot_minutes=60,
             forecast_base_load_w=forecast_base_load_w,
         )
-        peak_today_w, _ = _compute_peaks_for_sensor(hass, today_entity_id)
-        _, peak_tomorrow_w = _compute_peaks_for_sensor(hass, tomorrow_entity_id)
+        peak_today_w, _ = _compute_peaks_for_sensor(
+            hass, today_entity_id, now_local
+        )
+        _, peak_tomorrow_w = _compute_peaks_for_sensor(
+            hass, tomorrow_entity_id, now_local
+        )
         return next_3h_kwh, next_6h_kwh, peak_today_w, peak_tomorrow_w
 
     halfhour = _iter_halfhour_intervals(attrs)
@@ -371,11 +378,17 @@ def _compute_subday_metrics(
             slot_minutes=30,
             forecast_base_load_w=forecast_base_load_w,
         )
-        peak_today_w, _ = _compute_peaks_for_sensor(hass, today_entity_id)
-        _, peak_tomorrow_w = _compute_peaks_for_sensor(hass, tomorrow_entity_id)
+        peak_today_w, _ = _compute_peaks_for_sensor(
+            hass, today_entity_id, now_local
+        )
+        _, peak_tomorrow_w = _compute_peaks_for_sensor(
+            hass, tomorrow_entity_id, now_local
+        )
         return next_3h_kwh, next_6h_kwh, peak_today_w, peak_tomorrow_w
 
-    _, peak_tomorrow_w = _compute_peaks_for_sensor(hass, tomorrow_entity_id)
+    _, peak_tomorrow_w = _compute_peaks_for_sensor(
+        hass, tomorrow_entity_id, now_local
+    )
     return 0.0, 0.0, 0.0, peak_tomorrow_w
 
 
@@ -385,6 +398,8 @@ def build_forecast_summary(
     tomorrow_entity_id: str | None,
     installed_pv_wp: float = 0.0,
     forecast_base_load_w: float = 300.0,
+    *,
+    clock: Clock | None = None,
 ) -> ForecastSummary:
     """
     Build a normalized optional forecast summary from two daily forecast sensors.
@@ -415,7 +430,7 @@ def build_forecast_summary(
             pv_outlook=PV_OUTLOOK_UNKNOWN,
         )
 
-    now_local = dt_util.as_local(dt_util.utcnow())
+    now_local = (clock or SystemClock()).local_now()
     today = now_local.date()
     tomorrow = (now_local + timedelta(days=1)).date()
 
@@ -440,6 +455,7 @@ def build_forecast_summary(
         today_entity_id=today_entity_id,
         tomorrow_entity_id=tomorrow_entity_id,
         forecast_base_load_w=forecast_base_load_w,
+        now_local=now_local,
     )
 
     pv_outlook = _classify_pv_outlook(

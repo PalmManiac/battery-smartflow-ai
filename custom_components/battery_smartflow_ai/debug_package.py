@@ -14,6 +14,8 @@ from enum import Enum
 import re
 from typing import Any, Mapping
 
+from .core.clock import SystemClock
+
 
 DEBUG_SCHEMA_NAME = "battery_smartflow_ai.debug"
 DEBUG_SCHEMA_VERSION = 1
@@ -179,7 +181,7 @@ class DebugPackage:
     def as_dict(self) -> dict[str, Any]:
         """Build a complete, JSON-safe and secret-filtered package."""
 
-        created_at = self.created_at or datetime.now(timezone.utc)
+        created_at = self.created_at or SystemClock().utc_now()
         if self.recording_end is not None and self.recording_end < self.recording_start:
             raise ValueError("recording_end must not be before recording_start")
 

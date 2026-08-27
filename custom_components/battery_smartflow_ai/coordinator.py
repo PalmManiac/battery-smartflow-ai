@@ -164,6 +164,7 @@ from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
 from .core.models import CommandExecutionResult, DeviceCommand
+from .core.ports import Clock
 from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
@@ -173,6 +174,7 @@ from .adapters.home_assistant.device_command_executor import (
     DeviceCommandExecutionError,
     HomeAssistantEntityCommandExecutor,
 )
+from .adapters.home_assistant.clock import HomeAssistantClock
 from .adapters.home_assistant.state_store import HomeAssistantStateStore
 from .command_effectiveness import (
     CommandEffectivenessConfig,
@@ -316,7 +318,13 @@ class SelectedEntities:
 
 
 class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        *,
+        clock: Clock | None = None,
+    ) -> None:
         self.hass = hass
         self.entry = entry
         self.price_currency: PriceCurrency = resolve_price_currency(
@@ -415,6 +423,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             set_output_limit=self._set_output_limit,
         )
         self._command_effectiveness_config = CommandEffectivenessConfig()
+        self._clock = clock or HomeAssistantClock()
 
         self._state_store = HomeAssistantStateStore(
             hass,
@@ -1777,7 +1786,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._debug_recorder.start(
             duration_minutes=duration_minutes,
-            now=dt_util.utcnow(),
+            now=self._clock.utc_now(),
             device_profile=self.device_profile_key,
             ai_mode=str(self.runtime_mode.get("ai_mode") or AI_MODE_AUTOMATIC),
             season_mode=str(self._persist.get("season_mode", "winter")),
@@ -1798,7 +1807,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_stop_debug_recording(self) -> None:
         """Stop the active debug recording and write its JSON package."""
 
-        package = self._debug_recorder.stop(now=dt_util.utcnow())
+        package = self._debug_recorder.stop(now=self._clock.utc_now())
         if package is not None:
             await self._async_export_debug_package(package)
         await self.async_request_refresh()
@@ -3443,7 +3452,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self,
         global_lowest_cell_voltage: float | None,
     ) -> bool:
-        now_utc = dt_util.utcnow()
+        now_utc = self._clock.utc_now()
         previously_active = bool(
             self._persist.get("cell_voltage_emergency_active", False)
         )
@@ -3572,7 +3581,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         
         try:
-            local_now = dt_util.as_local(now or dt_util.utcnow())
+            local_now = dt_util.as_local(now or self._clock.utc_now())
             season_eval_hour = local_now.hour + (local_now.minute / 60.0)
         except Exception:
             season_eval_hour = 12.0
@@ -3702,7 +3711,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> dict[str, Any]:
         """Stop the active command and expose a deterministic safe-idle state."""
 
-        package = self._debug_recorder.tick(now=dt_util.utcnow())
+        package = self._debug_recorder.tick(now=self._clock.utc_now())
         if package is not None:
             await self._async_export_debug_package(package)
 
@@ -3756,7 +3765,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._persist["regulation_last_resolved_mode"] = "idle"
         self._persist["regulation_skipped_write_reason"] = reason
         self._persist["debug"] = reason.upper()
-        self._persist["last_ts"] = dt_util.utcnow().isoformat()
+        self._persist["last_ts"] = self._clock.utc_now().isoformat()
         await self._save()
 
         details = {
@@ -3794,9 +3803,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             if self._persist.get("last_ts") is None:
                 await self._load()
-                self._persist["last_ts"] = dt_util.utcnow().isoformat()
+                self._persist["last_ts"] = self._clock.utc_now().isoformat()
 
-            now = dt_util.utcnow()
+            now = self._clock.utc_now()
 
             soc = _to_float(self._state(self.entities.soc), None)
             pv = _to_float(self._state(self.entities.pv), None)
@@ -4009,6 +4018,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 tomorrow_entity_id=self.entities.pv_forecast_tomorrow,
                 installed_pv_wp=self._get_installed_pv_wp(),
                 forecast_base_load_w=float(forecast_base_load_w),
+                clock=self._clock,
             )
 
             additional_battery_charge_w = _to_float(
