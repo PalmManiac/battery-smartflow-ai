@@ -8,7 +8,6 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -174,6 +173,7 @@ from .adapters.home_assistant.device_command_executor import (
     DeviceCommandExecutionError,
     HomeAssistantEntityCommandExecutor,
 )
+from .adapters.home_assistant.state_store import HomeAssistantStateStore
 from .command_effectiveness import (
     CommandEffectivenessConfig,
     CommandEffectivenessState,
@@ -416,7 +416,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._command_effectiveness_config = CommandEffectivenessConfig()
 
-        self._store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
+        self._state_store = HomeAssistantStateStore(
+            hass,
+            version=STORE_VERSION,
+            key=f"{DOMAIN}.{entry.entry_id}",
+        )
         self._persist: dict[str, Any] = {
             "runtime_mode": dict(self.runtime_mode),
 
@@ -563,9 +567,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
 
     async def _load(self) -> None:
-        data = await self._store.async_load()
-        if isinstance(data, dict):
-            loaded_data = dict(data)
+        load_result = await self._state_store.load()
+        if load_result.usable:
+            loaded_data = dict(load_result.data)
             migrate_legacy_price_fields(loaded_data)
             self._persist.update(loaded_data)
 
@@ -604,10 +608,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist.get("economics_money_state"),
                 currency=self.price_currency.code,
             )
+        elif load_result.error:
+            _LOGGER.warning(
+                "Persistent state load skipped (%s): %s",
+                load_result.status,
+                load_result.error,
+            )
 
     async def _save(self) -> None:
         self._persist["runtime_mode"] = dict(self.runtime_mode)
-        await self._store.async_save(self._persist)
+        save_result = await self._state_store.save(self._persist)
+        if not save_result.saved:
+            _LOGGER.warning(
+                "Persistent state save failed (%s): %s",
+                save_result.status,
+                save_result.error or "unknown error",
+            )
         
     def _charge_pricing_reason(self, decision_reason: str | None) -> str:
         """Return the reason that should be used for charge price attribution.

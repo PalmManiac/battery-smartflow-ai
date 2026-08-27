@@ -311,6 +311,9 @@ HA-Implementierung:
 Das heutige flache `_persist`-Dictionary wird nicht auf einmal ersetzt. Issue
 #270 ordnet zuerst Besitz und Serialisierung der Teilzustände zu.
 
+Die umgesetzte Grenze und die kompatible Zuordnung sind in
+[`state-store-v4.7.0.md`](state-store-v4.7.0.md) dokumentiert.
+
 ### Clock
 
 Zeit wird semantisch getrennt:
