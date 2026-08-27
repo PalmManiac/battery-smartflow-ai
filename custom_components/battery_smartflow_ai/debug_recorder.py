@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any, Mapping
 
 from .debug_package import DebugPackage, DebugSample, redact_secrets
@@ -158,7 +158,7 @@ class DebugRecorder:
             integration_version=self._integration_version,
             recording_start=self._recording_start,
             recording_end=now,
-            created_at=datetime.now(timezone.utc),
+            created_at=now,
             device_profile=self._device_profile,
             ai_mode=self._ai_mode,
             season_mode=self._season_mode,
