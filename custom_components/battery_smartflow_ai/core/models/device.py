@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Mapping
 
 
@@ -39,3 +40,23 @@ class DeviceCapabilities:
                 profile.get("OFFGRID_MAX_INTERNAL_SUPPLY_W", 0.0) or 0.0
             ),
         )
+
+
+class CommandExecutionStatus(StrEnum):
+    """Platform-neutral result status of one backend execution attempt."""
+
+    APPLIED = "applied"
+    SKIPPED = "skipped"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True, slots=True)
+class CommandExecutionResult:
+    """Neutral feedback from a platform adapter after command execution."""
+
+    status: CommandExecutionStatus
+    reason: str
+    mode_written: bool = False
+    input_written: bool = False
+    output_written: bool = False
+    error: str | None = None

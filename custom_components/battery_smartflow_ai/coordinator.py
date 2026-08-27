@@ -164,11 +164,16 @@ from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
+from .core.models import CommandExecutionResult, DeviceCommand
 from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
 )
 from .device_command import DeviceCommandBuilder, clamp_number_power_request
+from .adapters.home_assistant.device_command_executor import (
+    DeviceCommandExecutionError,
+    HomeAssistantEntityCommandExecutor,
+)
 from .command_effectiveness import (
     CommandEffectivenessConfig,
     CommandEffectivenessState,
@@ -404,6 +409,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         
         self._device_command_builder = DeviceCommandBuilder()
+        self._device_command_executor = HomeAssistantEntityCommandExecutor(
+            set_ac_mode=self._set_ac_mode,
+            set_input_limit=self._set_input_limit,
+            set_output_limit=self._set_output_limit,
+        )
         self._command_effectiveness_config = CommandEffectivenessConfig()
 
         self._store = Store(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}")
@@ -2016,6 +2026,47 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ] = effective_int != requested_int
 
         return effective_int
+
+    def _store_command_execution_result(
+        self,
+        result: CommandExecutionResult,
+    ) -> None:
+        """Expose neutral backend feedback without leaking HA details to core."""
+
+        self._persist["command_execution_status"] = str(result.status)
+        self._persist["command_execution_reason"] = str(result.reason)
+        self._persist["command_execution_mode_written"] = bool(
+            result.mode_written
+        )
+        self._persist["command_execution_input_written"] = bool(
+            result.input_written
+        )
+        self._persist["command_execution_output_written"] = bool(
+            result.output_written
+        )
+        self._persist["command_execution_error"] = result.error
+
+    async def _execute_device_command(
+        self,
+        command: DeviceCommand,
+        *,
+        force_power: bool = True,
+        power_before_mode: bool = False,
+    ) -> CommandExecutionResult:
+        """Execute one neutral command through the HA entity adapter."""
+
+        try:
+            result = await self._device_command_executor.execute(
+                command,
+                force_power=force_power,
+                power_before_mode=power_before_mode,
+            )
+        except DeviceCommandExecutionError as err:
+            self._store_command_execution_result(err.result)
+            raise
+
+        self._store_command_execution_result(result)
+        return result
 
     async def _set_ac_mode(self, mode: str) -> None:
         """Write the AC mode reliably.
@@ -3651,10 +3702,32 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist.get("last_set_output_w", 0.0) or 0.0
         )
 
-        if current_mode == ZENDURE_MODE_INPUT or last_input_w > 0.0:
-            await self._set_input_limit(0.0, force=True)
-        elif current_mode == ZENDURE_MODE_OUTPUT or last_output_w > 0.0:
-            await self._set_output_limit(0.0, force=True)
+        stop_input = bool(
+            current_mode == ZENDURE_MODE_INPUT or last_input_w > 0.0
+        )
+        stop_output = bool(
+            not stop_input
+            and (
+                current_mode == ZENDURE_MODE_OUTPUT
+                or last_output_w > 0.0
+            )
+        )
+        safe_idle_command = DeviceCommand(
+            ac_mode=("input" if stop_input else "output"),
+            input_limit_w=0.0,
+            output_limit_w=0.0,
+            reason=reason,
+            should_write_mode=False,
+            should_write_input=stop_input,
+            should_write_output=stop_output,
+            skipped=not (stop_input or stop_output),
+            skip_reason=("none" if stop_input or stop_output else "unchanged"),
+            metadata={"command_path": "safe_idle"},
+        )
+        await self._execute_device_command(
+            safe_idle_command,
+            force_power=True,
+        )
 
         self._persist["last_set_input_w"] = 0
         self._persist["last_set_output_w"] = 0
@@ -5707,11 +5780,29 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         measured_discharge_w=battery_discharge_w,
                     )
 
-                    if standby_direction == "input":
-                        await self._set_input_limit(0.0, force=True)
-                        await self._set_ac_mode(ZENDURE_MODE_OUTPUT)
-                    elif standby_direction == "output":
-                        await self._set_output_limit(0.0, force=True)
+                    standby_command = DeviceCommand(
+                        ac_mode=ZENDURE_MODE_OUTPUT,
+                        input_limit_w=0.0,
+                        output_limit_w=0.0,
+                        reason="manual_standby",
+                        should_write_mode=standby_direction == "input",
+                        should_write_input=standby_direction == "input",
+                        should_write_output=standby_direction == "output",
+                        skipped=standby_direction is None,
+                        skip_reason=(
+                            "none"
+                            if standby_direction is not None
+                            else "unchanged"
+                        ),
+                        metadata={"command_path": "manual_standby"},
+                    )
+                    await self._execute_device_command(
+                        standby_command,
+                        force_power=True,
+                        # Preserve the established INPUT-stop then OUTPUT-mode
+                        # sequence used when entering passive manual standby.
+                        power_before_mode=standby_direction == "input",
+                    )
 
                     self._persist["last_set_input_w"] = 0
                     self._persist["last_set_output_w"] = 0
@@ -5730,28 +5821,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             else:
                 self._persist["manual_standby_stop_applied"] = False
-                if regulation_device_command.should_write_mode:
-                    await self._set_ac_mode(ac_mode)
+                # DeviceCommandBuilder already applied the write tolerance.
+                # Force the selected active-side command so a direction change
+                # cannot be skipped merely because the Number entity still
+                # displays the same watt value as an earlier cycle.
+                execution_result = await self._execute_device_command(
+                    regulation_device_command,
+                    force_power=True,
+                )
 
-                if regulation_device_command.should_write_input:
-                    # DeviceCommandBuilder already applied the write tolerance.
-                    # Force the selected active-side command so a direction
-                    # change cannot be skipped merely because the Number entity
-                    # still displays the same watt value as an earlier cycle.
-                    await self._set_input_limit(in_w, force=True)
-                    if effectiveness_retry_direction == "input":
-                        self._record_command_effectiveness_retry(
-                            now=now,
-                            direction="input",
-                        )
-
-                if regulation_device_command.should_write_output:
-                    await self._set_output_limit(out_w, force=True)
-                    if effectiveness_retry_direction == "output":
-                        self._record_command_effectiveness_retry(
-                            now=now,
-                            direction="output",
-                        )
+                if (
+                    effectiveness_retry_direction == "input"
+                    and execution_result.input_written
+                ):
+                    self._record_command_effectiveness_retry(
+                        now=now,
+                        direction="input",
+                    )
+                elif (
+                    effectiveness_retry_direction == "output"
+                    and execution_result.output_written
+                ):
+                    self._record_command_effectiveness_retry(
+                        now=now,
+                        direction="output",
+                    )
 
             is_charging = ac_mode == ZENDURE_MODE_INPUT and in_w > 0.0
 
