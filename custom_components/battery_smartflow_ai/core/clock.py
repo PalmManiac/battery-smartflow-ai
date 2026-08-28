@@ -6,6 +6,14 @@ from datetime import UTC, datetime, timedelta, tzinfo
 import time
 
 
+def as_utc(value: datetime) -> datetime:
+    """Normalize an aware domain timestamp without a platform dependency."""
+
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("value must be timezone-aware")
+    return value.astimezone(UTC)
+
+
 class SystemClock:
     """Read calendar and monotonic time from the host system."""
 

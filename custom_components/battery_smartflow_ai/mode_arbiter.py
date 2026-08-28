@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from .core.clock import as_utc
 from .core.models import DeviceCapabilities
-
-from homeassistant.util import dt as dt_util
 
 from .regulation_models import (
     GridHistoryState,
@@ -286,7 +285,7 @@ class ModeArbiter:
         offgrid_load_active: bool = False,
         offgrid_source_active: bool = False,
     ) -> ModeArbiterResult:
-        now_utc = dt_util.as_utc(now)
+        now_utc = as_utc(now)
         requested_mode = intent.requested_mode
 
         metadata: dict[str, Any] = {
@@ -913,7 +912,7 @@ class ModeArbiter:
             return 0.0
 
         try:
-            until_utc = dt_util.as_utc(until_ts)
+            until_utc = as_utc(until_ts)
             return max(0.0, (until_utc - now_utc).total_seconds())
         except Exception:
             return 0.0
@@ -929,7 +928,7 @@ class ModeArbiter:
             return 0.0
 
         try:
-            started_utc = dt_util.as_utc(started_ts)
+            started_utc = as_utc(started_ts)
             elapsed_s = (now_utc - started_utc).total_seconds()
             return max(0.0, float(hold_s) - elapsed_s)
         except Exception:
@@ -1304,7 +1303,7 @@ class ModeArbiter:
         if runtime.last_mode_change_ts is None:
             return 0.0
 
-        last_change = dt_util.as_utc(runtime.last_mode_change_ts)
+        last_change = as_utc(runtime.last_mode_change_ts)
         elapsed_s = (now_utc - last_change).total_seconds()
 
         if previous_mode == "output" and requested_mode == "input":
