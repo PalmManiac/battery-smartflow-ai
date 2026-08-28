@@ -663,6 +663,10 @@ ist kein zusätzliches Architektur-Issue erforderlich.
 - keine stärkere Zendure-/HA-Bindung: **durch verbotene Core-Abhängigkeiten abgesichert**
 - Grundlage für Folge-Issues: **Modulabbildung, Migrationsstufen und Stopppunkte dokumentiert**
 
+Der ausführbare Nachweis der später umgesetzten Testgrenze ist in
+[Core ohne Home Assistant testen](core-without-home-assistant-v4.7.0.md)
+dokumentiert.
+
 ## Nicht Teil dieser Änderung
 
 - keine neue Python-Paketstruktur im Laufzeitcode

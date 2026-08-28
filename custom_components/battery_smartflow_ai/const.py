@@ -1,6 +1,19 @@
 from __future__ import annotations
 
-from homeassistant.const import Platform
+try:
+    from homeassistant.const import Platform
+except ModuleNotFoundError as err:
+    if err.name is None or not err.name.startswith("homeassistant"):
+        raise
+
+    from enum import StrEnum
+
+    class Platform(StrEnum):
+        """Minimal platform names for standalone core imports."""
+
+        SENSOR = "sensor"
+        NUMBER = "number"
+        SELECT = "select"
 
 # ==================================================
 # Integration meta
