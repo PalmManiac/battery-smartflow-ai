@@ -629,7 +629,7 @@
         "state": {"no": "Nein", "yes": "Ja"}
       },
       "debug_recording_ends_at": {"name": "Debug-Aufzeichnung endet um"},
-      "debug_sample_count": {"name": "Erfasste Debug-Samples"},
+      "debug_sample_count": {"name": "Erfasste Debug-Datensätze"},
       "debug_last_package": {"name": "Letztes Debug-Paket"},
       "debug_last_error": {"name": "Letzter Debug-Fehler"},
       "fault_level_status": {

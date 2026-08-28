@@ -46,6 +46,7 @@ from .const import (
     AUTOMATIC_WEIGHTING_ENUMS,
 )
 from .device_profiles import DEVICE_PROFILES
+from .diagnostic_values import safe_diagnostic_sensor_value
 from .price_currency import price_input_profile
 
 _LOGGER = logging.getLogger(__name__)
@@ -1335,6 +1336,9 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         if val is None:
             return None
+
+        if key in {"debug_last_package", "debug_last_error"}:
+            return safe_diagnostic_sensor_value(key, val)
 
         if key == "learned_planning_data_coverage":
             try:
