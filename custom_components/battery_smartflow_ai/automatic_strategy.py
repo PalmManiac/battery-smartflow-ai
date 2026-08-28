@@ -55,7 +55,7 @@ def maintain_active_economic_discharge(
 ) -> bool:
     """Keep self-reducing grid import from cancelling active discharge.
 
-    An SF800Pro can report net battery charging while simultaneously supplying
+    A DC-PV passthrough-capable device can report net battery charging while supplying
     AC output from its DC bus. Therefore the commanded output, rather than the
     signed battery-power sensor alone, identifies an active discharge cycle.
     The hold is only inherited from a real discharge state; PV passthrough must

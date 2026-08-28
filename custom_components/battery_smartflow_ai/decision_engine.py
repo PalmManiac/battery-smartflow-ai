@@ -17,7 +17,7 @@ from .price_math import peak_threshold
 from .power_controller import PowerController, PowerContext
 
 
-ZendureMode = Literal["input", "output"]
+DeviceACMode = Literal["input", "output"]
 ActionType = Literal["idle", "charge", "discharge", "emergency", "passthrough"]
 
 # V4.3.0-dev5.8.2:
@@ -189,7 +189,7 @@ PricePoint = MarketPricePoint
 @dataclass
 class DecisionResult:
     action: ActionType
-    ac_mode: ZendureMode
+    ac_mode: DeviceACMode
     charge_w: float
     discharge_w: float
     reason: str
@@ -852,7 +852,7 @@ class PvRule(BaseRule):
         charge_w = engine._delta_charge(ctx)
 
         if protection_active and engine._low_soc_pv_charge_requires_export(ctx):
-            # SF800Pro / Low-SoC-Schutz:
+            # Capability-driven DC-PV / low-SoC protection:
             # In der Entlade-Sperrzone darf PV nur dann in den Akku,
             # wenn wirklich stabiler Export vorhanden ist.
             # Kein Soft-Start, kein Akku-Vorrang, kein Laden bei Netzbezug.
@@ -871,7 +871,7 @@ class PvRule(BaseRule):
         # nicht der ganze Ladezustand verloren gehen.
         if keepalive_charge:
             if sf800_passthrough_enabled:
-                # Beim SF800Pro darf INPUT nicht künstlich über 80 W gehalten werden,
+                # Devices without safe INPUT keepalive must not be held above 80 W,
                 # wenn kein echter stabiler Export vorhanden ist.
                 if not has_direct_surplus:
                     return None
@@ -1242,7 +1242,7 @@ class DecisionEngine:
         return self._profile_flag(ctx, "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME", False)
 
     def _pv_houseload_passthrough_enabled(self, ctx: DecisionContext) -> bool:
-        return self._profile_flag(ctx, "PV_HOUSELOAD_PASSTHROUGH", False)
+        return ctx.capabilities.supports_pv_house_load_passthrough
         
     def _automatic_valley_charge_context_allows(
         self,
