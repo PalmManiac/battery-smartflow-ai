@@ -228,7 +228,7 @@ class EnergyAccumulator:
         return EnergyAccumulatorSnapshot(day=day, daily=self._daily, total=self._total)
 
     def to_state(self) -> dict[str, Any]:
-        """Serialize totals for the Home Assistant Store."""
+        """Serialize totals as plain state for any StateStore adapter."""
 
         return {
             "version": self.STATE_VERSION,
