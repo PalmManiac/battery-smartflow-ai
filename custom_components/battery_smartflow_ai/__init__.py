@@ -1,16 +1,29 @@
 from __future__ import annotations
 
 import logging
-import voluptuous as vol
-
-import homeassistant.helpers.config_validation as cv
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
 
 from .const import DOMAIN, PLATFORMS
-from .coordinator import ZendureSmartFlowCoordinator
 
-CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+try:
+    import homeassistant.helpers.config_validation as cv
+    from homeassistant.config_entries import ConfigEntry
+    from homeassistant.core import HomeAssistant, ServiceCall
+except ModuleNotFoundError as err:
+    if err.name is None or not err.name.startswith("homeassistant"):
+        raise
+
+    # Importing a neutral submodule first executes this package module.  Keep
+    # that import path usable for standalone core tests without pretending
+    # that Home Assistant is installed.
+    cv = None
+else:
+    import voluptuous as vol
+
+    from .coordinator import ZendureSmartFlowCoordinator
+
+CONFIG_SCHEMA = (
+    cv.config_entry_only_config_schema(DOMAIN) if cv is not None else None
+)
 
 _LOGGER = logging.getLogger(__name__)
 
