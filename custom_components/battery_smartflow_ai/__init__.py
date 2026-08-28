@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from .const import DOMAIN, PLATFORMS
+
 try:
     import homeassistant.helpers.config_validation as cv
     from homeassistant.config_entries import ConfigEntry
@@ -13,14 +15,15 @@ except ModuleNotFoundError as err:
     # Importing a neutral submodule first executes this package module.  Keep
     # that import path usable for standalone core tests without pretending
     # that Home Assistant is installed.
-    CONFIG_SCHEMA = None
+    cv = None
 else:
     import voluptuous as vol
 
-    from .const import DOMAIN, PLATFORMS
     from .coordinator import ZendureSmartFlowCoordinator
 
-    CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+CONFIG_SCHEMA = (
+    cv.config_entry_only_config_schema(DOMAIN) if cv is not None else None
+)
 
 _LOGGER = logging.getLogger(__name__)
 
