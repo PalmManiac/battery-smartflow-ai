@@ -282,7 +282,7 @@ def build_grid_history_config(profile: dict) -> GridHistoryConfig:
     # the legacy DEADBAND_W, otherwise a safe default.
     near_target_band_w = _profile_float(
         "DISCHARGE_DEADBAND_W",
-        _profile_float("DEADBAND_W", DEFAULT_NEAR_TARGET_BAND_W),
+        DEFAULT_NEAR_TARGET_BAND_W,
     )
 
     return GridHistoryConfig(

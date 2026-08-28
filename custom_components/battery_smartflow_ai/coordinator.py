@@ -5890,7 +5890,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 + float(
                     profile.get(
                         "DISCHARGE_DEADBAND_W",
-                        profile.get("DEADBAND_W", 30.0),
+                        30.0,
                     )
                     or 30.0
                 ),
