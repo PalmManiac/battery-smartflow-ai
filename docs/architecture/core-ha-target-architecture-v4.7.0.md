@@ -5,6 +5,7 @@
 - Release-Basis: Tag `4.6.0` bei `9b2ae4f4e04b0b0624dbbcf85dbe86664f687162`
 - Vorarbeit: `ha-dependency-inventory-v4.7.0.md`
 - Fachmodul: `decision-engine-v4.7.0.md`
+- Regelung: `technical-regulation-v4.7.0.md`
 - Scope: Zielgrenzen und Migrationsroute, keine Laufzeitänderung
 
 ## Entscheidung in Kürze
