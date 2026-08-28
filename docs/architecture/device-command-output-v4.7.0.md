@@ -135,6 +135,10 @@ Hersteller-Backend.
 Issue #273 kann die formale DeviceBackend-Port-Signatur aus dem nun realen
 Ausführungsvertrag ableiten, ohne den Core-Command erneut zu ändern.
 
+Dies ist mit [`device-backend-v4.7.0.md`](device-backend-v4.7.0.md) umgesetzt.
+Der frühere Executor-Name bleibt als kompatibler Alias der kanonischen
+`HomeAssistantEntityBackend`-Implementierung erhalten.
+
 ## Nachweis
 
 Die Tests prüfen:

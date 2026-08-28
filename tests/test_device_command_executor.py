@@ -14,9 +14,16 @@ from custom_components.battery_smartflow_ai.adapters.home_assistant.device_comma
     DeviceCommandExecutionError,
     HomeAssistantEntityCommandExecutor,
 )
+from custom_components.battery_smartflow_ai.adapters.home_assistant.device_backend import (  # noqa: E402
+    HomeAssistantEntityBackend,
+)
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     CommandExecutionStatus,
+    DeviceCapabilities,
     DeviceCommand,
+)
+from custom_components.battery_smartflow_ai.core.ports import (  # noqa: E402
+    DeviceBackendExecutionError,
 )
 
 
@@ -26,7 +33,7 @@ class DeviceCommandExecutorTests(unittest.IsolatedAsyncioTestCase):
         calls: list[tuple[str, object]],
         *,
         fail_output: bool = False,
-    ) -> HomeAssistantEntityCommandExecutor:
+    ) -> HomeAssistantEntityBackend:
         async def set_mode(mode: str) -> None:
             calls.append(("mode", mode))
 
@@ -38,7 +45,12 @@ class DeviceCommandExecutorTests(unittest.IsolatedAsyncioTestCase):
             if fail_output:
                 raise RuntimeError("entity unavailable")
 
-        return HomeAssistantEntityCommandExecutor(
+        return HomeAssistantEntityBackend(
+            capabilities=DeviceCapabilities(
+                max_input_w=2400.0,
+                max_output_w=800.0,
+                supports_passthrough=True,
+            ),
             set_ac_mode=set_mode,
             set_input_limit=set_input,
             set_output_limit=set_output,
@@ -65,6 +77,13 @@ class DeviceCommandExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.mode_written)
         self.assertTrue(result.input_written)
         self.assertFalse(result.output_written)
+
+    async def test_backend_exposes_profile_owned_capabilities(self) -> None:
+        backend = self.executor([])
+
+        self.assertEqual(backend.capabilities.max_input_w, 2400.0)
+        self.assertEqual(backend.capabilities.max_output_w, 800.0)
+        self.assertTrue(backend.capabilities.supports_passthrough)
 
     async def test_manual_standby_can_stop_power_before_mode(self) -> None:
         calls: list[tuple[str, object]] = []
@@ -126,7 +145,29 @@ class DeviceCommandExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("entity unavailable", result.error or "")
         self.assertFalse(result.output_written)
 
-    def test_coordinator_routes_all_product_writes_through_executor(self) -> None:
+    def test_issue_269_names_remain_compatibility_aliases(self) -> None:
+        self.assertIs(
+            HomeAssistantEntityCommandExecutor,
+            HomeAssistantEntityBackend,
+        )
+        self.assertIs(DeviceCommandExecutionError, DeviceBackendExecutionError)
+
+    def test_backend_port_is_platform_independent(self) -> None:
+        port = (
+            Path(__file__).resolve().parents[1]
+            / "custom_components"
+            / "battery_smartflow_ai"
+            / "core"
+            / "ports"
+            / "device_backend.py"
+        ).read_text(encoding="utf-8")
+
+        self.assertNotIn("homeassistant", port)
+        self.assertIn("class DeviceBackend(Protocol)", port)
+        self.assertIn("def capabilities(self) -> DeviceCapabilities", port)
+        self.assertIn("async def execute(", port)
+
+    def test_coordinator_routes_all_product_writes_through_backend(self) -> None:
         coordinator = (
             Path(__file__).resolve().parents[1]
             / "custom_components"
@@ -137,6 +178,9 @@ class DeviceCommandExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("await self._set_ac_mode(", coordinator)
         self.assertNotIn("await self._set_input_limit(", coordinator)
         self.assertNotIn("await self._set_output_limit(", coordinator)
+        self.assertIn("self._device_backend: DeviceBackend", coordinator)
+        self.assertIn("await self._device_backend.execute(", coordinator)
+        self.assertNotIn("self._device_command_executor", coordinator)
         self.assertGreaterEqual(
             coordinator.count("await self._execute_device_command("),
             3,
