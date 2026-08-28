@@ -667,6 +667,10 @@ Der ausführbare Nachweis der später umgesetzten Testgrenze ist in
 [Core ohne Home Assistant testen](core-without-home-assistant-v4.7.0.md)
 dokumentiert.
 
+Die abschließende Rückwärtskompatibilitäts- und Regressionsmatrix ist unter
+[Refactoring-Regression und Rückwärtskompatibilität](regression-compatibility-v4.7.0.md)
+festgehalten.
+
 ## Nicht Teil dieser Änderung
 
 - keine neue Python-Paketstruktur im Laufzeitcode
