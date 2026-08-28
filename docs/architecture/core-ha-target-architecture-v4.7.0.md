@@ -7,6 +7,7 @@
 - Fachmodul: `decision-engine-v4.7.0.md`
 - Regelung: `technical-regulation-v4.7.0.md`
 - Markt und Wirtschaft: `market-economics-core-v4.7.0.md`
+- Legacy-Cleanup: `legacy-cleanup-v4.7.0.md`
 - Scope: Zielgrenzen und Migrationsroute, keine Laufzeitänderung
 
 ## Entscheidung in Kürze
