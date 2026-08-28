@@ -40,7 +40,7 @@ class PriceSource(Protocol):
 
 
 class StateLike(Protocol):
-    """Minimal Home Assistant state shape used by the generic source."""
+    """Minimal platform-state shape accepted by the boundary adapter."""
 
     state: object
     attributes: Mapping[str, Any]
@@ -52,7 +52,7 @@ StateGetter = Callable[[str], StateLike | None]
 
 @dataclass(frozen=True, slots=True)
 class GenericStatePriceSource:
-    """Read a price from the state of any configured Home Assistant sensor."""
+    """Adapt a configured platform state to a raw price-source reading."""
 
     entity_id: str
     state_getter: StateGetter

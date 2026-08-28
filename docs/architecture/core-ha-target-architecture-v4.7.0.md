@@ -6,6 +6,7 @@
 - Vorarbeit: `ha-dependency-inventory-v4.7.0.md`
 - Fachmodul: `decision-engine-v4.7.0.md`
 - Regelung: `technical-regulation-v4.7.0.md`
+- Markt und Wirtschaft: `market-economics-core-v4.7.0.md`
 - Scope: Zielgrenzen und Migrationsroute, keine Laufzeitänderung
 
 ## Entscheidung in Kürze
