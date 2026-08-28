@@ -2491,101 +2491,93 @@ class DecisionEngine:
 
         return None
 
-    def evaluate(self, ctx: RuntimeSnapshot) -> DecisionResult:
-        """Evaluate every admissible rule and select the highest priority.
+    def _context_error_candidate(
+        self,
+        ctx: RuntimeSnapshot,
+        reason: str,
+    ) -> dict[str, Any]:
+        """Build the sole candidate for an invalid critical context."""
 
-        Rule order remains the deterministic tie-breaker only. It no longer
-        decides which strategy wins before the V4.3 priority model is applied.
-        """
+        result = self._idle_result(ctx, reason=reason)
+        strategy = self._strategy_for_candidate(result)
+        return self._evaluated_candidate(
+            index=-1,
+            rule_name="ContextValidation",
+            result=result,
+            strategy=strategy,
+        )
 
-        context_error = self._context_validation_reason(ctx)
-        if context_error is not None:
-            result = self._idle_result(ctx, reason=context_error)
-            strategy = self._strategy_for_candidate(result)
-            state = str(getattr(strategy.state, "value", strategy.state))
-            self._last_strategy_selection = {
-                "candidate_count": 1,
-                "eligible_candidate_count": 1,
-                "selected_rule": "ContextValidation",
-                "selected_reason": context_error,
-                "selected_state": state,
-                "selected_priority": int(strategy.priority),
-                "candidates": [
-                    {
-                        "rule": "ContextValidation",
-                        "state": state,
-                        "reason": context_error,
-                        "priority": int(strategy.priority),
-                        "requested_mode": "idle",
-                        "status": "selected",
-                        "selection_reason": "critical_context_invalid",
-                    }
-                ],
-            }
-            return result
+    def _collect_rule_candidates(
+        self,
+        ctx: RuntimeSnapshot,
+    ) -> list[tuple[int, str, DecisionResult]]:
+        """Collect every admissible rule result in deterministic rule order."""
 
-        raw_candidates: list[tuple[int, str, DecisionResult]] = []
-
+        candidates: list[tuple[int, str, DecisionResult]] = []
         self._collecting_candidates = True
         try:
             for index, rule in enumerate(self._rules):
                 result = rule.evaluate(self, ctx)
                 if result is not None:
-                    raw_candidates.append(
-                        (
-                            index,
-                            rule.__class__.__name__,
-                            result,
-                        )
-                    )
+                    candidates.append((index, rule.__class__.__name__, result))
         finally:
             self._collecting_candidates = False
 
-        if not raw_candidates:
-            raw_candidates.append(
+        if not candidates:
+            candidates.append(
                 (
                     len(self._rules),
                     "SafeIdleFallback",
-                    self._idle_result(
-                        ctx,
-                        reason="idle",
+                    self._idle_result(ctx, reason="idle"),
+                )
+            )
+        return candidates
+
+    def _evaluated_candidate(
+        self,
+        *,
+        index: int,
+        rule_name: str,
+        result: DecisionResult,
+        strategy: Any,
+        rejection_reason: str | None = None,
+    ) -> dict[str, Any]:
+        """Create the normalized representation used by candidate selection."""
+
+        return {
+            "index": int(index),
+            "rule": rule_name,
+            "result": result,
+            "strategy": strategy,
+            "state": str(getattr(strategy.state, "value", strategy.state)),
+            "reason": str(result.reason or "idle"),
+            "priority": int(strategy.priority),
+            "requested_mode": str(strategy.requested_mode or "idle"),
+            "rejection_reason": rejection_reason,
+        }
+
+    def _evaluate_candidates(
+        self,
+        ctx: RuntimeSnapshot,
+        raw_candidates: list[tuple[int, str, DecisionResult]],
+    ) -> list[dict[str, Any]]:
+        """Normalize candidates and apply central strategic permissions."""
+
+        evaluated: list[dict[str, Any]] = []
+        for index, rule_name, result in raw_candidates:
+            strategy = self._strategy_for_candidate(result)
+            evaluated.append(
+                self._evaluated_candidate(
+                    index=index,
+                    rule_name=rule_name,
+                    result=result,
+                    strategy=strategy,
+                    rejection_reason=self._candidate_rejection_reason(
+                        ctx, strategy, result
                     ),
                 )
             )
 
-        evaluated: list[dict[str, Any]] = []
-
-        for index, rule_name, result in raw_candidates:
-            strategy = self._strategy_for_candidate(result)
-            rejection_reason = self._candidate_rejection_reason(
-                ctx,
-                strategy,
-                result,
-            )
-
-            evaluated.append(
-                {
-                    "index": int(index),
-                    "rule": rule_name,
-                    "result": result,
-                    "strategy": strategy,
-                    "state": str(
-                        getattr(
-                            strategy.state,
-                            "value",
-                            strategy.state,
-                        )
-                    ),
-                    "reason": str(result.reason or "idle"),
-                    "priority": int(strategy.priority),
-                    "requested_mode": str(
-                        strategy.requested_mode or "idle"
-                    ),
-                    "rejection_reason": rejection_reason,
-                }
-            )
-
-        # V4.3.1-dev3:
         # A normal learned charge window must not outrank an actually available
         # economic-discharge candidate. Deadline/latest-start reasons remain
         # eligible because those are the explicitly forced planning fallback.
@@ -2595,31 +2587,49 @@ class DecisionEngine:
             and str(candidate["result"].action or "") == "discharge"
             for candidate in evaluated
         )
-
         if economic_discharge_available:
             for candidate in evaluated:
                 if (
                     candidate["state"] == "ac_charge_learned"
-                    and candidate["reason"]
-                    in NON_FORCED_LEARNED_CHARGE_REASONS
+                    and candidate["reason"] in NON_FORCED_LEARNED_CHARGE_REASONS
                     and candidate["rejection_reason"] is None
                 ):
-                    candidate["rejection_reason"] = (
-                        "economic_discharge_window"
-                    )
+                    candidate["rejection_reason"] = "economic_discharge_window"
+        return evaluated
+
+    def _safe_idle_candidate(
+        self,
+        ctx: RuntimeSnapshot,
+        *,
+        reason: str,
+        rule_name: str,
+        index: int,
+    ) -> dict[str, Any]:
+        """Build an eligible safe-idle candidate."""
+
+        result = self._idle_result(ctx, reason=reason)
+        return self._evaluated_candidate(
+            index=index,
+            rule_name=rule_name,
+            result=result,
+            strategy=self._strategy_for_candidate(result),
+        )
+
+    def _select_candidate(
+        self,
+        ctx: RuntimeSnapshot,
+        evaluated: list[dict[str, Any]],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Select by protections first, then priority and stable rule order."""
 
         eligible = [
             candidate
             for candidate in evaluated
             if candidate["rejection_reason"] is None
         ]
-
         eligible_active = [
-            candidate
-            for candidate in eligible
-            if int(candidate["priority"]) > 300
+            candidate for candidate in eligible if int(candidate["priority"]) > 300
         ]
-
         safe_idle_rejections = [
             candidate
             for candidate in evaluated
@@ -2631,111 +2641,73 @@ class DecisionEngine:
             }
         ]
 
-        grid_sensor_block = not bool(ctx.grid_sensor_valid)
-
         # A critical grid-data outage always becomes safe idle unless an
         # emergency or explicit manual action is already eligible. Directional
         # blockers become terminal only when no valid opposite strategy remains.
-        if (safe_idle_rejections or grid_sensor_block) and not eligible_active:
-            blocker_reason = (
+        if (
+            safe_idle_rejections or not bool(ctx.grid_sensor_valid)
+        ) and not eligible_active:
+            reason = (
                 "grid_sensor_invalid"
-                if grid_sensor_block
+                if not bool(ctx.grid_sensor_valid)
                 else str(safe_idle_rejections[0]["rejection_reason"])
             )
-            blocker_result = self._idle_result(
+            selected = self._safe_idle_candidate(
                 ctx,
-                reason=blocker_reason,
+                reason=reason,
+                rule_name="DirectionalBlocker",
+                index=len(self._rules) + 1,
             )
-            blocker_strategy = self._strategy_for_candidate(
-                blocker_result
-            )
-            selected = {
-                "index": len(self._rules) + 1,
-                "rule": "DirectionalBlocker",
-                "result": blocker_result,
-                "strategy": blocker_strategy,
-                "state": str(
-                    getattr(
-                        blocker_strategy.state,
-                        "value",
-                        blocker_strategy.state,
-                    )
-                ),
-                "reason": blocker_reason,
-                "priority": int(blocker_strategy.priority),
-                "requested_mode": str(
-                    blocker_strategy.requested_mode or "idle"
-                ),
-                "rejection_reason": None,
-            }
             eligible.append(selected)
             evaluated.append(selected)
         elif eligible:
-            # max() is stable for equal keys, so the earlier rule remains the
-            # deterministic tie-breaker without overriding higher priorities.
-            selected = max(
-                eligible,
-                key=lambda candidate: int(candidate["priority"]),
-            )
+            # max() is stable for equal keys, preserving the rule-order tie-break.
+            selected = max(eligible, key=lambda candidate: int(candidate["priority"]))
         else:
-            fallback_result = self._idle_result(
+            selected = self._safe_idle_candidate(
                 ctx,
                 reason="idle",
+                rule_name="SafeIdleFallback",
+                index=len(self._rules) + 2,
             )
-            fallback_strategy = self._strategy_for_candidate(
-                fallback_result
-            )
-            selected = {
-                "index": len(self._rules) + 2,
-                "rule": "SafeIdleFallback",
-                "result": fallback_result,
-                "strategy": fallback_strategy,
-                "state": str(
-                    getattr(
-                        fallback_strategy.state,
-                        "value",
-                        fallback_strategy.state,
-                    )
-                ),
-                "reason": "idle",
-                "priority": int(fallback_strategy.priority),
-                "requested_mode": "idle",
-                "rejection_reason": None,
-            }
             eligible.append(selected)
             evaluated.append(selected)
+        return selected, eligible
 
-        candidate_diagnostics: list[dict[str, Any]] = []
+    def _record_strategy_selection(
+        self,
+        evaluated: list[dict[str, Any]],
+        eligible: list[dict[str, Any]],
+        selected: dict[str, Any],
+        *,
+        selected_reason: str = "highest_priority",
+    ) -> None:
+        """Publish a stable diagnostic view without leaking internal objects."""
 
+        diagnostics: list[dict[str, Any]] = []
         for candidate in evaluated:
             if candidate is selected:
                 status = "selected"
-                selection_reason = "highest_priority"
+                reason = selected_reason
             elif candidate["rejection_reason"] is not None:
                 status = "rejected"
-                selection_reason = str(
-                    candidate["rejection_reason"]
-                )
+                reason = str(candidate["rejection_reason"])
             else:
                 status = "not_selected"
-                selection_reason = (
+                reason = (
                     "lower_priority"
-                    if int(candidate["priority"])
-                    < int(selected["priority"])
+                    if int(candidate["priority"]) < int(selected["priority"])
                     else "rule_order_tiebreak"
                 )
-
-            candidate_diagnostics.append(
+            diagnostics.append(
                 {
                     "rule": str(candidate["rule"]),
                     "state": str(candidate["state"]),
                     "reason": str(candidate["reason"]),
                     "priority": int(candidate["priority"]),
-                    "requested_mode": str(
-                        candidate["requested_mode"]
-                    ),
+                    "requested_mode": str(candidate["requested_mode"]),
                     "status": status,
-                    "selection_reason": selection_reason,
+                    "selection_reason": reason,
                 }
             )
 
@@ -2746,7 +2718,31 @@ class DecisionEngine:
             "selected_reason": str(selected["reason"]),
             "selected_state": str(selected["state"]),
             "selected_priority": int(selected["priority"]),
-            "candidates": candidate_diagnostics,
+            "candidates": diagnostics,
         }
 
+    def evaluate(self, ctx: RuntimeSnapshot) -> DecisionResult:
+        """Evaluate every admissible rule and select the highest priority.
+
+        Rule order remains the deterministic tie-breaker only. It no longer
+        decides which strategy wins before the V4.3 priority model is applied.
+        """
+
+        context_error = self._context_validation_reason(ctx)
+        if context_error is not None:
+            selected = self._context_error_candidate(ctx, context_error)
+            self._record_strategy_selection(
+                [selected],
+                [selected],
+                selected,
+                selected_reason="critical_context_invalid",
+            )
+            return selected["result"]
+
+        evaluated = self._evaluate_candidates(
+            ctx,
+            self._collect_rule_candidates(ctx),
+        )
+        selected, eligible = self._select_candidate(ctx, evaluated)
+        self._record_strategy_selection(evaluated, eligible, selected)
         return selected["result"]
