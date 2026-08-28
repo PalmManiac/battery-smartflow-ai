@@ -105,7 +105,7 @@ from .const import (
     ZENDURE_MODE_INPUT,
     ZENDURE_MODE_OUTPUT,
 )
-from .device_profiles import DEVICE_PROFILES, merge_profile_with_overrides
+from .device_profiles import get_device_profile, merge_profile_with_overrides
 from .decision_engine import (
     advance_pv_charge_hysteresis,
     compute_pv_attributable_export_w,
@@ -163,7 +163,7 @@ from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
-from .core.models import CommandExecutionResult, DeviceCommand
+from .core.models import CommandExecutionResult, DeviceCapabilities, DeviceCommand
 from .core.ports import Clock
 from .regulation_power_controller import (
     RegulationPowerController,
@@ -347,10 +347,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or DEFAULT_DEVICE_PROFILE
         )
 
-        self._device_profile_cfg = DEVICE_PROFILES.get(
-            self.device_profile_key,
-            DEVICE_PROFILES[DEFAULT_DEVICE_PROFILE],
-        )
+        self._device_profile = get_device_profile(self.device_profile_key)
+        self._device_profile_cfg = self._device_profile.as_legacy_mapping()
 
         self.runtime_settings: dict[str, float] = dict(entry.options)
 
@@ -406,12 +404,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         
         self._mode_arbiter = ModeArbiter(
-            build_mode_arbiter_config(self._get_active_profile())
+            build_mode_arbiter_config(
+                self._get_active_profile(),
+                self._device_profile.capabilities,
+            )
         )
         
         self._regulation_power_controller = RegulationPowerController(
             build_regulation_power_config(
                 self._get_active_profile(),
+                capabilities=self._device_profile.capabilities,
                 price_step=price_input_profile(self.price_currency).step,
             )
         )
@@ -3113,7 +3115,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         forecast_remaining_today_kwh: float,
         battery_capacity_kwh: float,
     ) -> tuple[bool, float, str]:
-        enabled = bool(profile.get("PV_HOUSELOAD_PASSTHROUGH", False))
+        capabilities = DeviceCapabilities.from_profile(profile)
+        enabled = capabilities.supports_pv_house_load_passthrough
 
         active = bool(self._persist.get("pv_houseload_passthrough_active", False))
         started_ts_raw = self._persist.get("pv_houseload_passthrough_started_ts")
@@ -3208,12 +3211,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     except (TypeError, ValueError):
                         daylight_available = False
 
-            mppt_clips_without_output = bool(
-                profile.get(
-                    "MPPT_CLIPS_WITHOUT_OUTPUT",
-                    False,
-                )
-            )
+            mppt_clips_without_output = capabilities.mppt_clips_without_output
             full_soc_threshold = max(
                 float(soc_min),
                 float(soc_max) - 1.0,
@@ -3835,6 +3833,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist["prev_soc"] = soc
 
             profile = self._get_active_profile()
+            device_capabilities = self._device_profile.capabilities
             
             export_market_price = self._get_export_market_price(now)
             feed_in_tariff = float(
@@ -3852,12 +3851,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             offgrid_mode = self._normalize_offgrid_mode(offgrid_mode_raw)
 
             supports_offgrid_socket = bool(
-                profile.get("SUPPORTS_OFFGRID_SOCKET", False)
+                device_capabilities.supports_offgrid_socket
             ) or bool(self.entities.offgrid_power)
 
-            supports_offgrid_input = bool(
-                profile.get("SUPPORTS_OFFGRID_INPUT", False)
-            )
+            supports_offgrid_input = device_capabilities.supports_offgrid_input
 
             offgrid_load_active_w = float(
                 profile.get("OFFGRID_LOAD_ACTIVE_W", 50.0) or 50.0
@@ -4117,8 +4114,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     additional_battery_discharge_w=float(
                         additional_battery_discharge_w or 0.0
                     ),
-                    mppt_clips_without_output=bool(
-                        profile.get("MPPT_CLIPS_WITHOUT_OUTPUT", False)
+                    mppt_clips_without_output=(
+                        device_capabilities.mppt_clips_without_output
                     ),
                 )
             )

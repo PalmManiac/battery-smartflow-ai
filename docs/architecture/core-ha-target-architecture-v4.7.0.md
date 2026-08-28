@@ -345,6 +345,9 @@ Vorläufiger Verantwortungszuschnitt:
 - DeviceCapabilities beschreiben erlaubte Fähigkeiten; sie führen keine
   Herstellerabfrage im Core aus.
 
+Die umgesetzte Profil-/Capability-Trennung und die kompatiblen Legacy-Fallbacks
+sind in [`device-profiles-v4.7.0.md`](device-profiles-v4.7.0.md) dokumentiert.
+
 Safe-Idle, Manual-Standby und Schutzstopps müssen dieselbe Grenze verwenden wie
 der Normalpfad. Das Backend darf nicht nur den glücklichen DeviceCommand-Pfad
 abdecken.

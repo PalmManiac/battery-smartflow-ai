@@ -58,7 +58,7 @@ from .const import (
     DEFAULT_LEARNED_PLANNING_ENABLED,
 )
 
-from .device_profiles import DEVICE_PROFILES
+from .device_profiles import DEVICE_PROFILE_MODELS
 from .price_currency import price_input_profile, resolve_price_currency
 
 EMPTY_ENTITY_VALUES = {
@@ -292,9 +292,9 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 options=[
                     {
                         "value": key,
-                        "label": DEVICE_PROFILES[key].get("label", key),
+                        "label": DEVICE_PROFILE_MODELS[key].label,
                     }
-                    for key in DEVICE_PROFILES
+                    for key in DEVICE_PROFILE_MODELS
                 ],
                 mode=selector.SelectSelectorMode.DROPDOWN,
             )

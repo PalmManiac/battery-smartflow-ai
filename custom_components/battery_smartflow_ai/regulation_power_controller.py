@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .core.models import DeviceCapabilities
+
 from .regulation_models import (
     GridHistoryState,
     ModeArbiterResult,
@@ -101,6 +103,7 @@ def _profile_int(profile: dict[str, Any], key: str, default: int) -> int:
 def build_regulation_power_config(
     profile: dict[str, Any],
     *,
+    capabilities: DeviceCapabilities | None = None,
     price_step: float = 0.0,
 ) -> RegulationPowerConfig:
     """Build technical power-controller config from device profile."""
@@ -220,8 +223,16 @@ def build_regulation_power_config(
             "CHARGE_MAX_STEP_DOWN",
             _profile_float(profile, "MAX_STEP_DOWN", DEFAULT_CHARGE_MAX_STEP_DOWN),
         ),
-        max_input_w=_profile_float(profile, "MAX_INPUT_W", 2400.0),
-        max_output_w=_profile_float(profile, "MAX_OUTPUT_W", 2400.0),
+        max_input_w=(
+            capabilities.max_input_w
+            if capabilities is not None
+            else _profile_float(profile, "MAX_INPUT_W", 2400.0)
+        ),
+        max_output_w=(
+            capabilities.max_output_w
+            if capabilities is not None
+            else _profile_float(profile, "MAX_OUTPUT_W", 2400.0)
+        ),
     )
 
 

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from .core.models import DeviceCapabilities
+
 from homeassistant.util import dt as dt_util
 
 from .regulation_models import (
@@ -113,7 +115,10 @@ def _profile_bool(profile: dict[str, Any], key: str, default: bool) -> bool:
         return bool(default)
 
 
-def build_mode_arbiter_config(profile: dict[str, Any]) -> ModeArbiterConfig:
+def build_mode_arbiter_config(
+    profile: dict[str, Any],
+    capabilities: DeviceCapabilities | None = None,
+) -> ModeArbiterConfig:
     """Build ModeArbiterConfig from device profile/capabilities."""
 
     return ModeArbiterConfig(
@@ -195,40 +200,48 @@ def build_mode_arbiter_config(profile: dict[str, Any]) -> ModeArbiterConfig:
             "EXTERNAL_BATTERY_DISCHARGE_BLOCK_W",
             DEFAULT_EXTERNAL_BATTERY_DISCHARGE_BLOCK_W,
         ),
-        supports_passthrough=_profile_bool(
-            profile,
-            "SUPPORTS_PASSTHROUGH",
-            _profile_bool(profile, "PV_HOUSELOAD_PASSTHROUGH", False),
+        supports_passthrough=(
+            capabilities.supports_passthrough
+            if capabilities is not None
+            else _profile_bool(
+                profile,
+                "SUPPORTS_PASSTHROUGH",
+                _profile_bool(profile, "PV_HOUSELOAD_PASSTHROUGH", False),
+            )
         ),
-        input_keepalive_safe=_profile_bool(
-            profile,
-            "INPUT_KEEPALIVE_SAFE",
-            True,
+        input_keepalive_safe=(
+            capabilities.input_keepalive_safe
+            if capabilities is not None
+            else _profile_bool(profile, "INPUT_KEEPALIVE_SAFE", True)
         ),
-        requires_stable_export_for_input=_profile_bool(
-            profile,
-            "REQUIRES_STABLE_EXPORT_FOR_INPUT",
-            False,
+        requires_stable_export_for_input=(
+            capabilities.requires_stable_export_for_input
+            if capabilities is not None
+            else _profile_bool(
+                profile,
+                "REQUIRES_STABLE_EXPORT_FOR_INPUT",
+                False,
+            )
         ),
-        supports_fast_mode_switch=_profile_bool(
-            profile,
-            "SUPPORTS_FAST_MODE_SWITCH",
-            True,
+        supports_fast_mode_switch=(
+            capabilities.supports_fast_mode_switch
+            if capabilities is not None
+            else _profile_bool(profile, "SUPPORTS_FAST_MODE_SWITCH", True)
         ),
-        supports_offgrid_socket=_profile_bool(
-            profile,
-            "SUPPORTS_OFFGRID_SOCKET",
-            False,
+        supports_offgrid_socket=(
+            capabilities.supports_offgrid_socket
+            if capabilities is not None
+            else _profile_bool(profile, "SUPPORTS_OFFGRID_SOCKET", False)
         ),
-        supports_offgrid_input=_profile_bool(
-            profile,
-            "SUPPORTS_OFFGRID_INPUT",
-            False,
+        supports_offgrid_input=(
+            capabilities.supports_offgrid_input
+            if capabilities is not None
+            else _profile_bool(profile, "SUPPORTS_OFFGRID_INPUT", False)
         ),
-        offgrid_max_internal_supply_w=_profile_float(
-            profile,
-            "OFFGRID_MAX_INTERNAL_SUPPLY_W",
-            0.0,
+        offgrid_max_internal_supply_w=(
+            capabilities.offgrid_max_internal_supply_w
+            if capabilities is not None
+            else _profile_float(profile, "OFFGRID_MAX_INTERNAL_SUPPLY_W", 0.0)
         ),
         offgrid_load_active_w=_profile_float(
             profile,

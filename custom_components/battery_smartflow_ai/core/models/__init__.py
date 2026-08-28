@@ -4,6 +4,7 @@ from .device import (
     CommandExecutionResult,
     CommandExecutionStatus,
     DeviceCapabilities,
+    DeviceProfile,
 )
 from .market import (
     MarketPrice,
@@ -50,6 +51,7 @@ __all__ = [
     "CommandExecutionResult",
     "CommandExecutionStatus",
     "DeviceCapabilities",
+    "DeviceProfile",
     "DeviceCommand",
     "DecisionContext",
     "GridHistoryState",
