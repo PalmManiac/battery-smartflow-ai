@@ -164,15 +164,14 @@ from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
 from .core.models import CommandExecutionResult, DeviceCapabilities, DeviceCommand
-from .core.ports import Clock
+from .core.ports import Clock, DeviceBackend, DeviceBackendExecutionError
 from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
 )
 from .device_command import DeviceCommandBuilder, clamp_number_power_request
-from .adapters.home_assistant.device_command_executor import (
-    DeviceCommandExecutionError,
-    HomeAssistantEntityCommandExecutor,
+from .adapters.home_assistant.device_backend import (
+    HomeAssistantEntityBackend,
 )
 from .adapters.home_assistant.clock import HomeAssistantClock
 from .adapters.home_assistant.state_store import HomeAssistantStateStore
@@ -419,7 +418,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         
         self._device_command_builder = DeviceCommandBuilder()
-        self._device_command_executor = HomeAssistantEntityCommandExecutor(
+        self._device_backend: DeviceBackend = HomeAssistantEntityBackend(
+            capabilities=self._device_profile.capabilities,
             set_ac_mode=self._set_ac_mode,
             set_input_limit=self._set_input_limit,
             set_output_limit=self._set_output_limit,
@@ -2080,15 +2080,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         force_power: bool = True,
         power_before_mode: bool = False,
     ) -> CommandExecutionResult:
-        """Execute one neutral command through the HA entity adapter."""
+        """Execute one neutral command through the configured backend."""
 
         try:
-            result = await self._device_command_executor.execute(
+            result = await self._device_backend.execute(
                 command,
                 force_power=force_power,
                 power_before_mode=power_before_mode,
             )
-        except DeviceCommandExecutionError as err:
+        except DeviceBackendExecutionError as err:
             self._store_command_execution_result(err.result)
             raise
 

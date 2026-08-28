@@ -352,6 +352,9 @@ Safe-Idle, Manual-Standby und Schutzstopps müssen dieselbe Grenze verwenden wie
 der Normalpfad. Das Backend darf nicht nur den glücklichen DeviceCommand-Pfad
 abdecken.
 
+Der formale Port, die HA-Erstimplementierung und das Availability-/Fehlerverhalten
+sind in [`device-backend-v4.7.0.md`](device-backend-v4.7.0.md) dokumentiert.
+
 Issue #273 führt ausschließlich diese Grenze und den vorhandenen
 Home-Assistant-Entity-Adapter ein. Es entstehen weder ein Zendure-Direct-
 Backend noch eine zweite Hardwareanbindung.
