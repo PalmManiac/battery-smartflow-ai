@@ -955,7 +955,7 @@ class AutarkyLoadCoverageRule(BaseRule):
                         + float(
                             ctx.profile.get(
                                 "DISCHARGE_DEADBAND_W",
-                                ctx.profile.get("DEADBAND_W", 30.0),
+                                30.0,
                             )
                             or 30.0
                         ),
@@ -1237,9 +1237,6 @@ class DecisionEngine:
 
     def _low_soc_pv_charge_requires_export(self, ctx: DecisionContext) -> bool:
         return self._profile_flag(ctx, "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT", False)
-
-    def _low_soc_discharge_requires_cell_resume(self, ctx: DecisionContext) -> bool:
-        return self._profile_flag(ctx, "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME", False)
 
     def _pv_houseload_passthrough_enabled(self, ctx: DecisionContext) -> bool:
         return ctx.capabilities.supports_pv_house_load_passthrough
@@ -1597,61 +1594,6 @@ class DecisionEngine:
 
         return True
         
-    def _pv_surplus_should_prefer_pv_charge(self, ctx: DecisionContext) -> bool:
-        """Return True when normal valley-opportunity charging should not
-        replace PV surplus charging.
-
-        Valley opportunity charging is only an optional cheap-price charge.
-        If PV surplus charging is already active/latched or clearly possible,
-        PV charging should keep priority. This prevents strategy flapping
-        between pv_surplus_charge and valley_opportunity_charge.
-
-        Important:
-        During an active INPUT/PV charge phase the charge itself can create
-        temporary grid import. That import must not be interpreted as a reason
-        to switch from PV surplus charging to valley-opportunity charging.
-        """
-
-        if ctx.soc >= ctx.soc_max:
-            return False
-
-        export_w = self._pv_attributable_export_w(ctx)
-        import_w = float(ctx.grid_import_w or 0.0)
-        pv_w = float(ctx.pv_w or 0.0)
-        house_load_w = float(ctx.house_load_w or 0.0)
-        start_export_threshold = float(ctx.pv_charge_start_export_w or 0.0)
-
-        # Strongest rule:
-        # If PV charge is latched, ValleyOpportunity must not take over.
-        # The PV charge hysteresis / latch logic is responsible for deciding
-        # when PV charging has really ended.
-        if bool(ctx.pv_charge_latched):
-            return True
-
-        # If PV charge start confirmation is currently running, do not switch
-        # to valley opportunity for one or two cycles.
-        if int(ctx.pv_charge_start_counter or 0) > 0:
-            return True
-
-        # If PV charge stop confirmation is counting, keep ValleyOpportunity out
-        # until the PV hysteresis has fully released.
-        if int(ctx.pv_charge_stop_counter or 0) > 0:
-            return True
-
-        # Direct export means PV surplus is actually available.
-        if export_w >= max(40.0, start_export_threshold * 0.50):
-            return True
-
-        # Fallback when the grid export signal is noisy or delayed:
-        # PV clearly exceeds the known house load and there is no strong import.
-        if (
-            pv_w >= house_load_w + max(80.0, start_export_threshold * 0.50)
-            and import_w <= 180.0
-        ):
-            return True
-
-        return False
-
     def _compute_base_price(self, prices: List[float]) -> float:
         return sum(prices) / len(prices)
 
@@ -2288,33 +2230,12 @@ class DecisionEngine:
 
         return pv_nearly_covers_load and small_import and some_export
 
-    def _profile_for_discharge(self, profile: dict) -> dict:
-        mapped = dict(profile)
-        mapped["TARGET_IMPORT_W"] = profile.get(
-            "DISCHARGE_TARGET_IMPORT_W",
-            profile.get("TARGET_IMPORT_W"),
-        )
-        mapped["DEADBAND_W"] = profile.get("DISCHARGE_DEADBAND_W", profile.get("DEADBAND_W"))
-        mapped["KP_UP"] = profile.get("DISCHARGE_KP_UP", profile.get("KP_UP"))
-        mapped["KP_DOWN"] = profile.get("DISCHARGE_KP_DOWN", profile.get("KP_DOWN"))
-        mapped["MAX_STEP_UP"] = profile.get("DISCHARGE_MAX_STEP_UP", profile.get("MAX_STEP_UP"))
-        mapped["MAX_STEP_DOWN"] = profile.get("DISCHARGE_MAX_STEP_DOWN", profile.get("MAX_STEP_DOWN"))
-        return mapped
-
-    def _profile_for_charge(self, profile: dict) -> dict:
-        mapped = dict(profile)
-        mapped["DEADBAND_W"] = profile.get("CHARGE_DEADBAND_W", profile.get("DEADBAND_W"))
-        mapped["KP_UP"] = profile.get("CHARGE_KP_UP", profile.get("KP_UP"))
-        mapped["KP_DOWN"] = profile.get("CHARGE_KP_DOWN", profile.get("KP_DOWN"))
-        mapped["MAX_STEP_UP"] = profile.get("CHARGE_MAX_STEP_UP", profile.get("MAX_STEP_UP"))
-        mapped["MAX_STEP_DOWN"] = profile.get("CHARGE_MAX_STEP_DOWN", profile.get("MAX_STEP_DOWN"))
-        return mapped
-
     def _to_power_ctx(self, ctx: DecisionContext, mode: Literal["charge", "discharge"]) -> PowerContext:
-        effective_profile = (
-            self._profile_for_discharge(ctx.profile)
+        prefix = "DISCHARGE" if mode == "discharge" else "CHARGE"
+        target_grid_w = (
+            float(ctx.profile["DISCHARGE_TARGET_IMPORT_W"])
             if mode == "discharge"
-            else self._profile_for_charge(ctx.profile)
+            else float(ctx.profile.get("TARGET_EXPORT_W", 10.0))
         )
 
         return PowerContext(
@@ -2327,7 +2248,19 @@ class DecisionEngine:
             grid_export_w=ctx.grid_export_w,
             prev_discharge_w=ctx.prev_discharge_w,
             prev_charge_w=ctx.prev_charge_w,
-            profile=effective_profile,
+            target_grid_w=target_grid_w,
+            deadband_w=float(ctx.profile[f"{prefix}_DEADBAND_W"]),
+            export_guard_w=float(ctx.profile["EXPORT_GUARD_W"]),
+            kp_up=float(ctx.profile[f"{prefix}_KP_UP"]),
+            kp_down=float(ctx.profile[f"{prefix}_KP_DOWN"]),
+            max_step_up_w=float(ctx.profile[f"{prefix}_MAX_STEP_UP"]),
+            max_step_down_w=float(ctx.profile[f"{prefix}_MAX_STEP_DOWN"]),
+            keepalive_min_deficit_w=float(
+                ctx.profile["KEEPALIVE_MIN_DEFICIT_W"]
+            ),
+            keepalive_min_output_w=float(
+                ctx.profile["KEEPALIVE_MIN_OUTPUT_W"]
+            ),
         )
 
     def _delta_discharge(self, ctx: DecisionContext) -> float:

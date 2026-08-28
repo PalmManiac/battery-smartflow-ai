@@ -830,15 +830,6 @@ def get_profile_config(profile_key: str) -> dict:
     return get_device_profile(profile_key).as_legacy_mapping()
 
 
-def get_profile_defaults(profile_key: str) -> dict:
-    profile = get_profile_config(profile_key)
-    return {
-        key: value
-        for key, value in profile.items()
-        if key in PROFILE_OVERRIDE_FIELDS
-    }
-
-
 def merge_profile_with_overrides(profile_key: str, overrides: dict | None) -> dict:
     profile = dict(get_profile_config(profile_key))
     if not overrides:

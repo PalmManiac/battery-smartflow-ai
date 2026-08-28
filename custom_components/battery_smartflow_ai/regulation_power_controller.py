@@ -137,27 +137,27 @@ def build_regulation_power_config(
         discharge_deadband_w=_profile_float(
             profile,
             "DISCHARGE_DEADBAND_W",
-            _profile_float(profile, "DEADBAND_W", DEFAULT_DISCHARGE_DEADBAND_W),
+            DEFAULT_DISCHARGE_DEADBAND_W,
         ),
         discharge_kp_up=_profile_float(
             profile,
             "DISCHARGE_KP_UP",
-            _profile_float(profile, "KP_UP", DEFAULT_DISCHARGE_KP_UP),
+            DEFAULT_DISCHARGE_KP_UP,
         ),
         discharge_kp_down=_profile_float(
             profile,
             "DISCHARGE_KP_DOWN",
-            _profile_float(profile, "KP_DOWN", DEFAULT_DISCHARGE_KP_DOWN),
+            DEFAULT_DISCHARGE_KP_DOWN,
         ),
         discharge_max_step_up=_profile_float(
             profile,
             "DISCHARGE_MAX_STEP_UP",
-            _profile_float(profile, "MAX_STEP_UP", DEFAULT_DISCHARGE_MAX_STEP_UP),
+            DEFAULT_DISCHARGE_MAX_STEP_UP,
         ),
         discharge_max_step_down=_profile_float(
             profile,
             "DISCHARGE_MAX_STEP_DOWN",
-            _profile_float(profile, "MAX_STEP_DOWN", DEFAULT_DISCHARGE_MAX_STEP_DOWN),
+            DEFAULT_DISCHARGE_MAX_STEP_DOWN,
         ),
         discharge_near_zero_deadband_w=_profile_float(
             profile,
@@ -201,27 +201,27 @@ def build_regulation_power_config(
         charge_deadband_w=_profile_float(
             profile,
             "CHARGE_DEADBAND_W",
-            _profile_float(profile, "DEADBAND_W", DEFAULT_CHARGE_DEADBAND_W),
+            DEFAULT_CHARGE_DEADBAND_W,
         ),
         charge_kp_up=_profile_float(
             profile,
             "CHARGE_KP_UP",
-            _profile_float(profile, "KP_UP", DEFAULT_CHARGE_KP_UP),
+            DEFAULT_CHARGE_KP_UP,
         ),
         charge_kp_down=_profile_float(
             profile,
             "CHARGE_KP_DOWN",
-            _profile_float(profile, "KP_DOWN", DEFAULT_CHARGE_KP_DOWN),
+            DEFAULT_CHARGE_KP_DOWN,
         ),
         charge_max_step_up=_profile_float(
             profile,
             "CHARGE_MAX_STEP_UP",
-            _profile_float(profile, "MAX_STEP_UP", DEFAULT_CHARGE_MAX_STEP_UP),
+            DEFAULT_CHARGE_MAX_STEP_UP,
         ),
         charge_max_step_down=_profile_float(
             profile,
             "CHARGE_MAX_STEP_DOWN",
-            _profile_float(profile, "MAX_STEP_DOWN", DEFAULT_CHARGE_MAX_STEP_DOWN),
+            DEFAULT_CHARGE_MAX_STEP_DOWN,
         ),
         max_input_w=(
             capabilities.max_input_w
