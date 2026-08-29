@@ -38,7 +38,7 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "4.7.0-Beta1"
+INTEGRATION_VERSION = "4.7.0"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,

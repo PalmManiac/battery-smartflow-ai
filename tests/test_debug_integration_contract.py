@@ -13,7 +13,7 @@ COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
 
 
 class DebugIntegrationContractTests(unittest.TestCase):
-    def test_manifest_and_runtime_version_match_v470_beta1_release(self) -> None:
+    def test_manifest_and_runtime_version_match_v470_release(self) -> None:
         manifest_version = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )["version"]
@@ -29,7 +29,7 @@ class DebugIntegrationContractTests(unittest.TestCase):
             and isinstance(node.value, ast.Constant)
         )
 
-        self.assertEqual(manifest_version, "4.7.0-Beta1")
+        self.assertEqual(manifest_version, "4.7.0")
         self.assertEqual(runtime_version, manifest_version)
 
     def test_services_expose_only_supported_durations(self) -> None:
