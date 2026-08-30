@@ -11,6 +11,7 @@ bootstrap()
 
 from custom_components.battery_smartflow_ai.automatic_strategy import (  # noqa: E402
     AutomaticStrategy,
+    economic_discharge_continuation_reason,
     maintain_active_economic_discharge,
 )
 
@@ -111,6 +112,48 @@ class Rc5DischargeFeedbackRegressionTests(unittest.TestCase):
                     "automatic_mode_active": False,
                     "effective_price_reached": True,
                 }
+            )
+        )
+
+    def test_learned_wait_preserves_active_adaptive_peak_source(self) -> None:
+        self.assertEqual(
+            economic_discharge_continuation_reason(
+                hold_active=True,
+                decision_action="idle",
+                decision_reason="learned_charge_window_wait",
+                previous_source_reason="adaptive_peak_discharge",
+            ),
+            "adaptive_peak_discharge",
+        )
+
+    def test_neutral_hold_without_source_uses_economic_fallback(self) -> None:
+        self.assertEqual(
+            economic_discharge_continuation_reason(
+                hold_active=True,
+                decision_action="idle",
+                decision_reason="learned_charge_window_wait",
+                previous_source_reason="",
+            ),
+            "price_based_discharge",
+        )
+
+    def test_protection_reason_cannot_continue_economic_discharge(self) -> None:
+        self.assertIsNone(
+            economic_discharge_continuation_reason(
+                hold_active=True,
+                decision_action="idle",
+                decision_reason="cell_voltage_cutoff_block",
+                previous_source_reason="adaptive_peak_discharge",
+            )
+        )
+
+    def test_inactive_hold_clears_previous_peak_source(self) -> None:
+        self.assertIsNone(
+            economic_discharge_continuation_reason(
+                hold_active=False,
+                decision_action="idle",
+                decision_reason="learned_charge_window_wait",
+                previous_source_reason="adaptive_peak_discharge",
             )
         )
 
