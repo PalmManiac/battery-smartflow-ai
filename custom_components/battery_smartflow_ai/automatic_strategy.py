@@ -5,6 +5,20 @@ from typing import Any
 from .regulation_models import SeasonContext, StrategyContext
 
 
+ECONOMIC_DISCHARGE_REASONS = {
+    "adaptive_peak_discharge",
+    "very_expensive_force_discharge",
+    "price_based_discharge",
+}
+
+ECONOMIC_DISCHARGE_NEUTRAL_HOLD_REASONS = {
+    "idle",
+    "state_idle",
+    "standby",
+    "learned_charge_window_wait",
+}
+
+
 def _clamp01(value: float) -> float:
     """Clamp a numeric value to the range 0.0 ... 1.0."""
     return max(0.0, min(1.0, float(value)))
@@ -73,6 +87,41 @@ def maintain_active_economic_discharge(
         and effective_price_reached
         and (strategy_allows_discharge or inherited_active_discharge)
     )
+
+
+def economic_discharge_continuation_reason(
+    *,
+    hold_active: bool,
+    decision_action: str,
+    decision_reason: str,
+    previous_source_reason: str,
+) -> str | None:
+    """Return the economic source reason that may continue through neutral hold.
+
+    A waiting learned charge plan is neutral with respect to an already active
+    economic discharge.  It must not turn the output off merely because the
+    discharge itself, together with PV, reduced visible grid import.  Preserve
+    the source reason as well so the adaptive-peak diagnostic does not flap
+    while the same peak discharge remains active.
+    """
+
+    action = str(decision_action or "")
+    reason = str(decision_reason or "")
+    previous = str(previous_source_reason or "")
+
+    if action == "discharge" and reason in ECONOMIC_DISCHARGE_REASONS:
+        return reason
+
+    if not bool(hold_active) or action != "idle":
+        return None
+
+    if reason not in ECONOMIC_DISCHARGE_NEUTRAL_HOLD_REASONS:
+        return None
+
+    if previous in ECONOMIC_DISCHARGE_REASONS:
+        return previous
+
+    return "price_based_discharge"
 
 
 class AutomaticStrategy:

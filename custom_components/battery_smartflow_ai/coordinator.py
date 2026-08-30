@@ -156,6 +156,7 @@ from .economics import (
 )
 from .automatic_strategy import (
     AutomaticStrategy,
+    economic_discharge_continuation_reason,
     forecast_supports_early_pv_passthrough,
     maintain_active_economic_discharge,
 )
@@ -522,6 +523,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "regulation_post_output_overshoot_hold_until": None,
             "regulation_pv_charge_latch_started_ts": None,
             "regulation_discharge_latch_started_ts": None,
+            "automatic_economic_discharge_source_reason": "",
             "regulation_passthrough_latch_started_ts": None,
             "regulation_skipped_write_reason": "none",
 
@@ -4639,6 +4641,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             original_discharge_reason = str(decision.reason or "")
 
+            previous_economic_discharge_source_reason = str(
+                self._persist.get(
+                    "automatic_economic_discharge_source_reason",
+                    "",
+                )
+                or ""
+            )
+
+            economic_discharge_source_reason = (
+                economic_discharge_continuation_reason(
+                    hold_active=automatic_economic_hold_active,
+                    decision_action=str(decision.action or ""),
+                    decision_reason=original_discharge_reason,
+                    previous_source_reason=(
+                        previous_economic_discharge_source_reason
+                    ),
+                )
+            )
+
             previous_discharge_w = max(
                 0.0,
                 float(
@@ -4697,11 +4718,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 discharge_hold_mode_active
                 and ai_mode != AI_MODE_MANUAL
                 and decision.action == "idle"
-                and original_discharge_reason in {
-                    "idle",
-                    "state_idle",
-                    "standby",
-                }
+                and (
+                    (
+                        autarky_cover_mode_active
+                        and original_discharge_reason
+                        in {"idle", "state_idle", "standby"}
+                    )
+                    or (
+                        automatic_economic_hold_active
+                        and economic_discharge_source_reason is not None
+                    )
+                )
                 and active_discharge_output_w > 0.0
                 and float(soc) > float(soc_min)
                 and not bool(discharge_blocked_by_soc_min)
@@ -4722,7 +4749,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 hold_reason = (
                     "summer_cover_deficit"
                     if autarky_cover_mode_active
-                    else "price_based_discharge"
+                    else economic_discharge_source_reason
                 )
 
                 decision = DecisionResult(
@@ -4762,6 +4789,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 self._persist["summer_discharge_latch_reason"] = "none"
                 self._persist["automatic_discharge_latch_reason"] = "none"
+
+            if (
+                ai_mode == AI_MODE_AUTOMATIC
+                and economic_discharge_source_reason is not None
+                and str(decision.action or "") == "discharge"
+            ):
+                self._persist[
+                    "automatic_economic_discharge_source_reason"
+                ] = economic_discharge_source_reason
+            else:
+                self._persist[
+                    "automatic_economic_discharge_source_reason"
+                ] = ""
             
             regulation_runtime = self._get_regulation_runtime_state()
 
