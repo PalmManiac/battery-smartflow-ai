@@ -236,6 +236,7 @@ Here you select:
 * Battery SoC sensor
 * Battery AC power sensor
 * PV power sensor
+* Native battery PV power sensor (optional, for directly connected modules)
 * Electricity price (optional)
 * Price history / forecast (optional)
 * PV forecast today / tomorrow (optional)
@@ -770,6 +771,7 @@ Hier werden ausgewählt:
 * Batterie-SoC Sensor
 * Batterie-AC-Leistungssensor
 * PV-Leistungssensor
+* Nativer PV-Leistungssensor des Batteriesystems (optional, für direkt angeschlossene Module)
 * Strompreis (optional)
 * Preisverlauf / Preisprognose (optional)
 * PV-Prognose heute / morgen (optional)

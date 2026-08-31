@@ -97,6 +97,8 @@ def classify_charge_pricing(
     feed_in_tariff: float,
     battery_charge_w: float,
     decision_reason: str | None = None,
+    native_pv_w: float = 0.0,
+    native_pv_valid: bool = False,
 ) -> ChargePricing:
     """Classify one active charge sample and its opportunity cost.
 
@@ -176,7 +178,12 @@ def classify_charge_pricing(
             pv_part_w=charge_w,
         )
 
-    grid_part_w = min(import_w, charge_w)
+    native_pv_part_w = (
+        min(charge_w, max(0.0, float(native_pv_w or 0.0)))
+        if bool(native_pv_valid)
+        else 0.0
+    )
+    grid_part_w = min(import_w, max(0.0, charge_w - native_pv_part_w))
     pv_part_w = max(0.0, charge_w - grid_part_w)
     mixed_price = (
         (grid_part_w * float(price_now)) + (pv_part_w * pv_price)

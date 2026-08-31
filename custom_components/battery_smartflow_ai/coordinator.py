@@ -19,6 +19,7 @@ from .const import (
     # config keys
     CONF_SOC_ENTITY,
     CONF_PV_ENTITY,
+    CONF_NATIVE_PV_ENTITY,
     CONF_PV_FORECAST_TODAY_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
@@ -296,6 +297,7 @@ def _clamp_season_counter(value: Any) -> int:
 class SelectedEntities:
     soc: str
     pv: str
+    native_pv: str | None
     pv_forecast_today: str | None
     pv_forecast_tomorrow: str | None
     price_export: str | None
@@ -355,6 +357,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.entities = SelectedEntities(
             soc=str(entry.data[CONF_SOC_ENTITY]),
             pv=str(entry.data[CONF_PV_ENTITY]),
+            native_pv=entry.data.get(CONF_NATIVE_PV_ENTITY),
             pv_forecast_today=entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY),
             pv_forecast_tomorrow=entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY),
             battery_ac_power=str(
@@ -1736,6 +1739,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return {
             "soc": self.entities.soc,
             "pv": self.entities.pv,
+            "native_pv": self.entities.native_pv,
             "pv_forecast_today": self.entities.pv_forecast_today,
             "pv_forecast_tomorrow": self.entities.pv_forecast_tomorrow,
             "price_now": self.entities.price_now,
@@ -3809,6 +3813,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             soc = _to_float(self._state(self.entities.soc), None)
             pv = _to_float(self._state(self.entities.pv), None)
+            native_pv = _to_float(self._state(self.entities.native_pv), None)
 
             if soc is None or not 0.0 <= float(soc) <= 100.0:
                 return await self._enter_safe_idle(
@@ -3822,6 +3827,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             soc = float(soc)
             pv_sensor_valid = pv is not None
             pv_w = float(pv or 0.0)
+            native_pv_configured = bool(self.entities.native_pv)
+            native_pv_sensor_valid = native_pv is not None
+            native_pv_w = float(native_pv or 0.0)
 
             battery_capacity_kwh = self._get_battery_capacity()
 
@@ -4955,6 +4963,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 feed_in_tariff=float(feed_in_tariff),
                 battery_charge_w=float(battery_charge_w),
                 decision_reason=charge_pricing_reason,
+                native_pv_w=float(native_pv_w),
+                native_pv_valid=bool(
+                    native_pv_configured and native_pv_sensor_valid
+                ),
             )
 
             # V4.6.0 economics energy accounting uses measured battery/grid
@@ -5292,6 +5304,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_w=float(pv_w or 0.0),
                 house_load_w=float(house_load or 0.0),
                 max_grid_input_w=float(max_charge),
+                native_pv_w=float(native_pv_w),
+                native_pv_valid=bool(
+                    native_pv_configured and native_pv_sensor_valid
+                ),
             )
 
             if (
@@ -5428,6 +5444,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ),
                     "charge_pv_allocated_w": float(
                         charge_source_allocation.pv_allocated_w
+                    ),
+                    "charge_native_pv_available_w": float(
+                        charge_source_allocation.native_pv_available_w
+                    ),
+                    "charge_native_pv_allocated_w": float(
+                        charge_source_allocation.native_pv_allocated_w
                     ),
                     "charge_grid_requested_w": float(
                         charge_source_allocation.grid_requested_w
@@ -6264,6 +6286,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "soc": soc,
                 "pv_w": pv_w,
                 "pv_sensor_valid": bool(pv_sensor_valid),
+                "native_pv_w": native_pv_w,
+                "native_pv_configured": native_pv_configured,
+                "native_pv_sensor_valid": native_pv_sensor_valid,
                 "deficit": float(grid_import),
                 "surplus": float(grid_export),
                 "grid_sensor_configured": bool(grid_sensor_configured),
@@ -7254,6 +7279,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "charge_pv_allocated_w": float(
                     charge_source_allocation.pv_allocated_w
                 ),
+                "charge_native_pv_available_w": float(
+                    charge_source_allocation.native_pv_available_w
+                ),
+                "charge_native_pv_allocated_w": float(
+                    charge_source_allocation.native_pv_allocated_w
+                ),
                 "charge_grid_requested_w": float(
                     charge_source_allocation.grid_requested_w
                 ),
@@ -7438,6 +7469,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "charge_pv_allocated_w": float(
                     charge_source_allocation.pv_allocated_w
+                ),
+                "charge_native_pv_available_w": float(
+                    charge_source_allocation.native_pv_available_w
+                ),
+                "charge_native_pv_allocated_w": float(
+                    charge_source_allocation.native_pv_allocated_w
                 ),
                 "charge_grid_requested_w": float(
                     charge_source_allocation.grid_requested_w

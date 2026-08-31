@@ -162,6 +162,8 @@ CHARGE_SOURCE_ALLOCATION_REASON_ENUMS = [
     "no_charge_target",
     "pv_blend_disabled",
     "grid_only_no_pv_surplus",
+    "native_pv_priority_grid_fills_remainder",
+    "native_pv_covers_total_charge_target",
     "pv_covers_total_charge_target",
     "mixed_charge_grid_limit_reached",
     "mixed_pv_grid_charge",

@@ -523,6 +523,22 @@ Wird genutzt für:
 
 ---
 
+### Native PV-Leistung des Batteriesystems (optional)
+
+Hier darf nur ein Sensor ausgewählt werden, der die direkt am Batteriesystem
+angeschlossene PV-Leistung meldet, beispielsweise die summierte Solar-Eingangsleistung
+eines SF2400Pro. Während einer aktiven AC-Ladung reserviert Battery SmartFlow AI
+diese Leistung innerhalb der eingestellten maximalen Ladeleistung und fordert
+über den steuerbaren AC-Eingang nur den verbleibenden Anteil an. Dadurch kann
+Netzladung an der physischen Ladegrenze keine kostenlose native PV-Leistung
+mehr verdrängen.
+
+Hier nicht den Sensor der gesamten Haus-PV auswählen. Ist kein nativer
+PV-Sensor konfiguriert oder ist er vorübergehend nicht verfügbar, bleibt das
+bisherige kompatible Ladeverhalten erhalten.
+
+---
+
 ### Nutzung ohne PV-Anlage
 
 Wenn keine PV-Anlage vorhanden ist, kann ein einfacher Template-Sensor verwendet werden, der dauerhaft **0 W** liefert.

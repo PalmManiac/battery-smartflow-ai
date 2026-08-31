@@ -11,6 +11,7 @@ from .const import (
     DOMAIN,
     CONF_SOC_ENTITY,
     CONF_PV_ENTITY,
+    CONF_NATIVE_PV_ENTITY,
     CONF_PV_FORECAST_TODAY_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_BATTERY_AC_POWER_ENTITY,
@@ -71,6 +72,7 @@ EMPTY_ENTITY_VALUES = {
 
 
 OPTIONAL_ENTITY_KEYS = (
+    CONF_NATIVE_PV_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
     CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
@@ -354,6 +356,18 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         ] = selector.EntitySelector(
             selector.EntitySelectorConfig(domain="sensor")
         )
+
+        native_pv_val = _val(CONF_NATIVE_PV_ENTITY)
+        if native_pv_val:
+            schema[
+                vol.Optional(CONF_NATIVE_PV_ENTITY, default=native_pv_val)
+            ] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
+        else:
+            schema[vol.Optional(CONF_NATIVE_PV_ENTITY)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor")
+            )
         
         schema[
             vol.Optional(
