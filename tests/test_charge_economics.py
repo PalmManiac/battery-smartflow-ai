@@ -313,6 +313,24 @@ class ChargeEconomicsTests(unittest.TestCase):
         self.assertAlmostEqual(pricing.price_per_kwh, 0.122)
         self.assertEqual(pricing.pv_part_w, 240.0)
 
+    def test_native_pv_is_not_priced_as_grid_during_house_import(self) -> None:
+        pricing = classify_charge_pricing(
+            grid_import_w=5000.0,
+            grid_export_w=0.0,
+            decision_charge_w=2050.0,
+            decision_ac_mode="input",
+            price_now=0.20,
+            feed_in_tariff=0.0,
+            battery_charge_w=2400.0,
+            decision_reason="charge_commit_active",
+            native_pv_w=350.0,
+            native_pv_valid=True,
+        )
+
+        self.assertEqual(pricing.grid_part_w, 2050.0)
+        self.assertEqual(pricing.pv_part_w, 350.0)
+        self.assertEqual(pricing.source, "mixed_grid_pv_charge")
+
 
 if __name__ == "__main__":
     unittest.main()

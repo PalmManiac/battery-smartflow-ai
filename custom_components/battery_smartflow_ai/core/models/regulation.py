@@ -209,14 +209,18 @@ class ChargeSourceAllocation:
         Estimated PV power remaining after house load.
 
     pv_allocated_w:
-        PV contribution assigned to the total charge target.
+        AC-coupled PV contribution assigned to the total charge target.
+
+    native_pv_available_w / native_pv_allocated_w:
+        PV connected directly to the battery system. It is reserved first
+        inside the physical total charge limit.
 
     grid_requested_w:
         Remaining AC/grid contribution required to reach the total target.
 
     device_input_w:
-        Total AC input power to request from the battery. This includes the PV
-        contribution and must never be replaced by the grid contribution alone.
+        AC input power to request from the battery. It includes AC-coupled PV
+        but excludes native PV, which reaches the battery through its MPPTs.
 
     unfilled_w:
         Part of the total target that cannot be covered because the grid input
@@ -228,6 +232,8 @@ class ChargeSourceAllocation:
     total_target_w: float = 0.0
     pv_available_w: float = 0.0
     pv_allocated_w: float = 0.0
+    native_pv_available_w: float = 0.0
+    native_pv_allocated_w: float = 0.0
     grid_requested_w: float = 0.0
     device_input_w: float = 0.0
     unfilled_w: float = 0.0

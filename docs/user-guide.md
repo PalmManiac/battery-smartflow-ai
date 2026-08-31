@@ -526,6 +526,21 @@ Used for:
 
 ---
 
+### Native battery-system PV power sensor (optional)
+
+Select this sensor only when it reports the PV power connected directly to the
+battery system, for example the combined solar input power of an SF2400Pro.
+During an active AC charge, Battery SmartFlow AI reserves this power inside the
+configured maximum charge limit and requests only the remaining power from the
+controllable AC input. This prevents grid charging from displacing free native
+PV at the device's physical charge limit.
+
+Do not select the total house PV sensor here. If the sensor is not configured
+or is temporarily unavailable, the previous compatible charging behaviour is
+retained.
+
+---
+
 ### Use without a PV system
 
 If there is no PV system, a simple template sensor that permanently supplies **0 W** can be used.
