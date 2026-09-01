@@ -7,62 +7,16 @@ and persistence are added by the later V4.4.0 work items.
 
 from __future__ import annotations
 
-from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from enum import Enum
-import re
 from typing import Any, Mapping
 
 from .core.clock import SystemClock
+from .zendure_privacy import sanitize_zendure_diagnostics
 
 
 DEBUG_SCHEMA_NAME = "battery_smartflow_ai.debug"
 DEBUG_SCHEMA_VERSION = 1
-
-_SECRET_KEY_PARTS = (
-    "access_token",
-    "api_key",
-    "apikey",
-    "auth",
-    "bearer",
-    "client_secret",
-    "credential",
-    "password",
-    "private_key",
-    "refresh_token",
-    "secret",
-    "token",
-)
-_REDACTED = "[REDACTED]"
-_AUTHORIZATION_PATTERN = re.compile(
-    r"(?i)\bauthorization(\s*[:=]\s*)(?:(bearer|basic)\s+)?[^\s,;&]+"
-)
-_BEARER_PATTERN = re.compile(r"(?i)\bbearer\s+[A-Za-z0-9._~+/=-]+")
-_SECRET_ASSIGNMENT_PATTERN = re.compile(
-    r"(?i)\b("
-    r"access[_ -]?token|refresh[_ -]?token|api[_ -]?key|client[_ -]?secret|"
-    r"password|secret|token"
-    r")\b(\s*[:=]\s*)([^\s,;&]+)"
-)
-
-
-def _redact_text(value: str) -> str:
-    """Remove common inline credential forms from free diagnostic text."""
-
-    value = _AUTHORIZATION_PATTERN.sub(
-        lambda match: (
-            f"Authorization{match.group(1)}"
-            f"{match.group(2).title() + ' ' if match.group(2) else ''}{_REDACTED}"
-        ),
-        value,
-    )
-    value = _BEARER_PATTERN.sub(f"Bearer {_REDACTED}", value)
-    return _SECRET_ASSIGNMENT_PATTERN.sub(
-        lambda match: f"{match.group(1)}{match.group(2)}{_REDACTED}",
-        value,
-    )
-
 
 def _iso_utc(value: datetime) -> str:
     """Return a stable ISO-8601 UTC timestamp."""
@@ -72,24 +26,6 @@ def _iso_utc(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _json_safe(value: Any) -> Any:
-    """Convert common runtime values into deterministic JSON-safe values."""
-
-    if isinstance(value, str):
-        return _redact_text(value)
-    if value is None or isinstance(value, (bool, int, float)):
-        return value
-    if isinstance(value, datetime):
-        return _iso_utc(value)
-    if isinstance(value, Enum):
-        return _json_safe(value.value)
-    if isinstance(value, Mapping):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple, set, frozenset)):
-        return [_json_safe(item) for item in value]
-    return str(value)
-
-
 def redact_secrets(value: Any) -> Any:
     """Return a JSON-safe deep copy with secret-looking mapping values removed.
 
@@ -97,26 +33,7 @@ def redact_secrets(value: Any) -> Any:
     accidentally persist an unfiltered package through the supported API.
     """
 
-    safe = _json_safe(deepcopy(value))
-    return _redact_json_safe(safe)
-
-
-def _redact_json_safe(value: Any) -> Any:
-    """Redact an already copied and normalized JSON-compatible value."""
-
-    safe = value
-    if isinstance(safe, dict):
-        redacted: dict[str, Any] = {}
-        for key, item in safe.items():
-            normalized = key.casefold().replace("-", "_").replace(" ", "_")
-            if any(part in normalized for part in _SECRET_KEY_PARTS):
-                redacted[key] = _REDACTED
-            else:
-                redacted[key] = _redact_json_safe(item)
-        return redacted
-    if isinstance(safe, list):
-        return [_redact_json_safe(item) for item in safe]
-    return safe
+    return sanitize_zendure_diagnostics(value)
 
 
 @dataclass(slots=True)
