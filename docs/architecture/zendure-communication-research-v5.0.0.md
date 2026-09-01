@@ -567,6 +567,7 @@ initial read model.
 
 ### Issue #320: secrets and privacy
 
+- Binding model: `zendure-secrets-privacy-v5.0.0.md`.
 - secure token/MQTT credential storage and reauth;
 - salted diagnostic identity fingerprints;
 - signing implementation isolation;
