@@ -2474,6 +2474,12 @@ Bis dahin bleibt klassische Planung aktiv. Sobald eine gelernte Planung eine
 Ladung anstößt, gelten dieselben Phasen und Abbruchbedingungen der
 AC-Ladebindung wie bei der klassischen Planung.
 
+Ein nach Zielerreichung neu berechneter Bedarf muss mindestens einer sinnvoll
+steuerbaren Energiemenge entsprechen. Als Untergrenze gilt ein SoC-Prozentpunkt
+der Gesamtkapazität, mindestens jedoch 0,05 kWh. Kleinere Abweichungen bleiben
+in der Diagnose sichtbar, erzeugen aber keine neue Ladebindung. Sobald der
+Bedarf diese Schwelle erreicht, plant BSFAI weiterhin normal neu.
+
 ---
 
 # 8.5 Stabilitätsmechanismen

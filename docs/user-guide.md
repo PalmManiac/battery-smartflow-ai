@@ -2465,6 +2465,12 @@ Until then, classic planning remains active. As soon as a learned planning a
 charging, the same phases and termination conditions apply
 AC charge commitment as with classic planning.
 
+A newly calculated need after reaching the target must represent a technically
+controllable amount of energy. The floor is one percentage point of total
+battery capacity, but never less than 0.05 kWh. Smaller deviations remain
+visible in diagnostics but do not start another charge commitment. Once the
+need reaches this threshold, BSFAI continues to replan normally.
+
 ---
 
 # 8.5 Stability mechanisms
