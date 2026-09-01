@@ -575,6 +575,7 @@ initial read model.
 
 ### Issue #321: identity
 
+- Binding model: `zendure-device-identity-v5.0.0.md`.
 - prove `deviceKey` stability;
 - exact device/pack identity schema;
 - duplicate/moved pack behaviour;
