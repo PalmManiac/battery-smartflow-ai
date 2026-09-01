@@ -57,6 +57,8 @@ MIN_DATA_COVERAGE = 0.80
 DEFAULT_FALLBACK_CHARGE_POWER_W = 1200.0
 DEFAULT_PLANNING_CHARGE_EFFICIENCY = 0.90
 MIN_EFFECTIVE_CHARGE_POWER_W = 100.0
+MIN_ACTIONABLE_CHARGE_ENERGY_KWH = 0.05
+MIN_ACTIONABLE_CHARGE_SOC_PERCENT = 1.0
 
 MIN_LEARNED_CHARGE_POWER_SAMPLE_W = 300.0
 MIN_LEARNED_CHARGE_POWER_SAMPLES = 4
@@ -148,6 +150,7 @@ class LearnedChargePlan:
     forecast_adjustment_kwh: float = 0.0
     raw_required_charge_energy_kwh: float = 0.0
     required_charge_energy_kwh: float = 0.0
+    minimum_actionable_charge_energy_kwh: float = 0.0
     max_chargeable_energy_kwh: float = 0.0
 
     effective_charge_power_w: float = 0.0
@@ -614,6 +617,38 @@ def compute_required_charge_energy_kwh(
     return float(raw), float(required)
 
 
+def minimum_actionable_charge_energy_kwh(
+    total_battery_capacity_kwh: float,
+) -> float:
+    """Return the smallest learned charge need worth a new binding.
+
+    A learned plan cannot control less than one 100 W / 30 minute effective
+    window reliably, and many battery SoC sensors expose whole percentages.
+    Starting a new binding below both practical resolutions turns a few Wh of
+    recalculated need into a much larger charge pulse.
+    """
+
+    one_soc_step_kwh = max(
+        0.0,
+        float(total_battery_capacity_kwh or 0.0),
+    ) * (MIN_ACTIONABLE_CHARGE_SOC_PERCENT / 100.0)
+    return max(MIN_ACTIONABLE_CHARGE_ENERGY_KWH, one_soc_step_kwh)
+
+
+def actionable_required_charge_energy_kwh(
+    required_charge_energy_kwh: float,
+    total_battery_capacity_kwh: float,
+) -> float:
+    """Suppress a new learned binding below the actionable energy floor."""
+
+    required_kwh = max(0.0, float(required_charge_energy_kwh or 0.0))
+    if required_kwh < minimum_actionable_charge_energy_kwh(
+        total_battery_capacity_kwh,
+    ):
+        return 0.0
+    return required_kwh
+
+
 def learned_typical_charge_power_w(
     samples: list[LearningChargePowerSample],
     now: datetime,
@@ -1061,6 +1096,13 @@ def build_learned_charge_plan(
         available_energy_kwh=available_kwh,
         max_chargeable_kwh=chargeable_kwh,
     )
+    minimum_actionable_kwh = minimum_actionable_charge_energy_kwh(
+        total_battery_capacity_kwh,
+    )
+    required_kwh = actionable_required_charge_energy_kwh(
+        required_kwh,
+        total_battery_capacity_kwh,
+    )
 
     eff_power_w = effective_charge_power_w(
         profile_charge_limit_w=profile_charge_limit_w,
@@ -1085,6 +1127,10 @@ def build_learned_charge_plan(
             forecast_adjustment_kwh=round(forecast_kwh, 3),
             raw_required_charge_energy_kwh=round(raw_required_kwh, 3),
             required_charge_energy_kwh=0.0,
+            minimum_actionable_charge_energy_kwh=round(
+                minimum_actionable_kwh,
+                3,
+            ),
             max_chargeable_energy_kwh=round(chargeable_kwh, 3),
             effective_charge_power_w=round(eff_power_w, 1),
             requested_charge_power_w=0.0,
@@ -1113,6 +1159,10 @@ def build_learned_charge_plan(
             forecast_adjustment_kwh=round(forecast_kwh, 3),
             raw_required_charge_energy_kwh=round(raw_required_kwh, 3),
             required_charge_energy_kwh=round(required_kwh, 3),
+            minimum_actionable_charge_energy_kwh=round(
+                minimum_actionable_kwh,
+                3,
+            ),
             max_chargeable_energy_kwh=round(chargeable_kwh, 3),
             effective_charge_power_w=round(eff_power_w, 1),
             requested_charge_power_w=0.0,
@@ -1208,6 +1258,10 @@ def build_learned_charge_plan(
         forecast_adjustment_kwh=round(forecast_kwh, 3),
         raw_required_charge_energy_kwh=round(raw_required_kwh, 3),
         required_charge_energy_kwh=round(required_kwh, 3),
+        minimum_actionable_charge_energy_kwh=round(
+            minimum_actionable_kwh,
+            3,
+        ),
         max_chargeable_energy_kwh=round(chargeable_kwh, 3),
         effective_charge_power_w=round(eff_power_w, 1),
         requested_charge_power_w=round(requested_power_w, 1),

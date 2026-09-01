@@ -7096,6 +7096,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "learned_planning_required_charge_energy_kwh": float(
                     learned_charge_plan.required_charge_energy_kwh
                 ),
+                "learned_planning_minimum_actionable_charge_energy_kwh": float(
+                    learned_charge_plan.minimum_actionable_charge_energy_kwh
+                ),
                 "learned_planning_effective_charge_power_w": float(
                     learned_charge_plan.effective_charge_power_w
                 ),
