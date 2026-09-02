@@ -213,6 +213,64 @@ class Dev9ModeScenarios(unittest.TestCase):
         )
 
         self.assertEqual(result.reason, "summer_cover_deficit")
+
+    def test_active_pv_charge_reduces_input_before_autarky_handover(self) -> None:
+        """Issue #190: 53 W import must not collapse 278 W INPUT to zero."""
+
+        result = DecisionEngine().evaluate(
+            context(
+                ai_mode=AI_MODE_SUMMER,
+                soc=45.0,
+                soc_min=12.0,
+                grid_import_w=53.0,
+                grid_export_w=0.0,
+                pv_w=417.0,
+                house_load_w=179.0,
+                prev_charge_w=278.0,
+                # Reproduce the stale prior OUTPUT evidence from the trace.
+                # Before #360 this prevents the PV-charge keepalive and lets
+                # Autarky request the blocked INPUT -> OUTPUT handover.
+                last_output_w=800.0,
+                pv_charge_start_export_w=0.0,
+                pv_charge_latched=True,
+                pv_charge_stop_counter=0,
+                profile={
+                    **PROFILE,
+                    "PV_HOUSELOAD_PASSTHROUGH": True,
+                },
+            )
+        )
+
+        self.assertEqual(result.action, "charge")
+        self.assertEqual(result.reason, "pv_surplus_charge")
+        self.assertGreater(result.charge_w, 0.0)
+        self.assertLess(result.charge_w, 278.0)
+
+    def test_real_deficit_still_hands_active_pv_charge_to_autarky(self) -> None:
+        """A load deficit remaining after INPUT removal still permits OUTPUT."""
+
+        result = DecisionEngine().evaluate(
+            context(
+                ai_mode=AI_MODE_SUMMER,
+                soc=45.0,
+                soc_min=12.0,
+                grid_import_w=1073.0,
+                grid_export_w=0.0,
+                pv_w=1232.0,
+                house_load_w=1748.0,
+                prev_charge_w=566.0,
+                pv_charge_start_export_w=0.0,
+                pv_charge_latched=True,
+                pv_charge_stop_counter=8,
+                profile={
+                    **PROFILE,
+                    "PV_HOUSELOAD_PASSTHROUGH": True,
+                },
+            )
+        )
+
+        self.assertEqual(result.action, "discharge")
+        self.assertEqual(result.reason, "summer_cover_deficit")
         self.assertEqual(result.action, "discharge")
         self.assertGreater(result.discharge_w, 0.0)
 
