@@ -63,6 +63,7 @@ _IDENTITY_CONTAINERS = {
     "packs": "PACK",
     "packmap": "PACK",
 }
+_PERSONAL_KEYS = {"devicename"}
 _AUTHORIZATION_PATTERN = re.compile(
     r"(?i)\bauthorization(\s*[:=]\s*)(?:(bearer|basic)\s+)?[^\s,;&]+"
 )
@@ -97,6 +98,10 @@ def _is_network_key(key: Any) -> bool:
     return normalized in {"host", "ip", "server", "url"} or any(
         marker in normalized for marker in _NETWORK_MARKERS
     )
+
+
+def _is_personal_key(key: Any) -> bool:
+    return _normalized_key(key) in _PERSONAL_KEYS
 
 
 def _iso_utc(value: datetime) -> str:
@@ -185,7 +190,11 @@ class ZendureDiagnosticSanitizer:
             result: dict[str, Any] = {}
             for key, item in value.items():
                 safe_key = self._sanitize_mapping_key(str(key))
-                if _is_secret_key(key) or _is_network_key(key):
+                if (
+                    _is_secret_key(key)
+                    or _is_network_key(key)
+                    or _is_personal_key(key)
+                ):
                     result[safe_key] = REDACTED
                     continue
                 kind = _identity_kind(key)
