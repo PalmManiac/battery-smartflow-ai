@@ -207,6 +207,14 @@ class ZendurePrivacyTests(unittest.TestCase):
         self.assertEqual(first["deviceKey"], "ZD_DEVICE_A1")
         self.assertEqual(second["deviceKey"], "ZD_DEVICE_A1")
 
+    def test_user_defined_device_name_is_not_exported(self) -> None:
+        result = ZendureDiagnosticSanitizer().sanitize(
+            {"deviceName": "Thomas Garage Battery", "productModel": "SF2400AC"}
+        )
+
+        self.assertEqual(result["deviceName"], REDACTED)
+        self.assertEqual(result["productModel"], "SF2400AC")
+
 
 if __name__ == "__main__":
     unittest.main()

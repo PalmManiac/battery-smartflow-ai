@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from base64 import b64decode
 import binascii
+from copy import deepcopy
 from dataclasses import dataclass, field
 import hashlib
 import secrets
@@ -111,6 +112,9 @@ class ZendureCloudBootstrap:
 
     devices: tuple[ZendureCloudDevice, ...]
     mqtt: CloudMqttCredentials = field(repr=False)
+    raw_device_list: tuple[Mapping[str, Any], ...] = field(
+        default=(), repr=False
+    )
 
     def __repr__(self) -> str:
         return f"ZendureCloudBootstrap(devices={len(self.devices)}, mqtt=[REDACTED])"
@@ -239,7 +243,14 @@ def _parse_bootstrap(payload: Any) -> ZendureCloudBootstrap:
     if len(candidate_ids) != len(set(candidate_ids)):
         raise ZendureCloudError("duplicate_device_id")
     mqtt = _parse_mqtt(data.get("mqtt"))
-    return ZendureCloudBootstrap(devices=devices, mqtt=mqtt)
+    raw_device_list = tuple(
+        deepcopy(dict(item)) for item in raw_devices if isinstance(item, Mapping)
+    )
+    return ZendureCloudBootstrap(
+        devices=devices,
+        mqtt=mqtt,
+        raw_device_list=raw_device_list,
+    )
 
 
 _KNOWN_DEVICE_FIELDS = {
