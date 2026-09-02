@@ -782,6 +782,11 @@ class PvRule(BaseRule):
             and engine._discharge_protection_active(ctx)
         )
 
+        charge_already_active = bool(ctx.pv_charge_latched)
+        active_charge_can_ramp_down = (
+            engine._active_pv_charge_can_ramp_down(ctx)
+        )
+
         # A previous 60 W discharge keepalive must not suppress PV surplus charge.
         # If there is real PV surplus, PV charging may take over even when
         # prev_discharge_w is still > 0 from the previous cycle.
@@ -789,13 +794,16 @@ class PvRule(BaseRule):
             prev_discharge_w,
             float(ctx.last_output_w or 0.0),
         ) > 0.0
+        if charge_already_active and active_charge_can_ramp_down:
+            # Confirmed current INPUT wins over stale OUTPUT evidence from a
+            # preceding regulation phase. The input controller will reduce the
+            # charge before any real direction handover is considered.
+            discharge_active = False
         if discharge_active and not engine._pv_surplus_blocks_discharge(ctx):
             return None
 
         start_counter = int(ctx.pv_charge_start_counter or 0)
         stop_counter = int(ctx.pv_charge_stop_counter or 0)
-
-        charge_already_active = bool(ctx.pv_charge_latched)
 
         sf800_passthrough_enabled = engine._pv_houseload_passthrough_enabled(ctx)
 
@@ -843,6 +851,10 @@ class PvRule(BaseRule):
             and (
                 not battery_discharge_source_active
                 or source_verified_hold_surplus
+                # Issue #360: a stale previous OUTPUT value must not suppress
+                # the currently confirmed INPUT latch when reducing that input
+                # would explain the complete grid import.
+                or active_charge_can_ramp_down
             )
         )
 
@@ -877,6 +889,20 @@ class PvRule(BaseRule):
                     return None
             else:
                 charge_w = max(charge_w, engine._charge_keepalive_w(ctx))
+
+            # V4.7.4 / issue #360:
+            # A small import during active PV charging can be caused by the
+            # current battery input itself.  Keep the PV-charge intent alive so
+            # the technical delta controller can reduce INPUT progressively.
+            # Falling through to AutarkyLoadCoverageRule would request OUTPUT;
+            # the arbiter correctly blocks that immediate direction change but
+            # the blocked command would otherwise collapse INPUT straight to
+            # 0 W and create export before charging starts again.
+            if (
+                charge_w <= 0.0
+                and active_charge_can_ramp_down
+            ):
+                charge_w = prev_charge_w
 
         if (
             soft_start_ready
@@ -1474,6 +1500,35 @@ class DecisionEngine:
         # No real active discharge, only idle/old keepalive:
         # PV surplus should block starting or keeping economic discharge.
         return True
+
+    @staticmethod
+    def _active_pv_charge_can_ramp_down(ctx: DecisionContext) -> bool:
+        """Return whether removing current INPUT explains the grid import.
+
+        If the residual import after subtracting the previous battery input is
+        still above the configured target band, there is a real house deficit
+        and the normal Autarky handover remains authoritative.
+        """
+
+        if not bool(ctx.pv_charge_latched):
+            return False
+
+        previous_input_w = max(0.0, float(ctx.prev_charge_w or 0.0))
+        if previous_input_w <= 0.0:
+            return False
+
+        import_w = max(0.0, float(ctx.grid_import_w or 0.0))
+        target_import_w = max(
+            0.0,
+            float(ctx.profile.get("TARGET_IMPORT_W", 0.0) or 0.0),
+        )
+        charge_deadband_w = max(
+            0.0,
+            float(ctx.profile.get("CHARGE_DEADBAND_W", 0.0) or 0.0),
+        )
+
+        residual_import_w = max(0.0, import_w - previous_input_w)
+        return residual_import_w <= target_import_w + charge_deadband_w
 
     def _pv_attributable_export_w(self, ctx: DecisionContext) -> float:
         """Return export that cannot be explained by battery discharge.
