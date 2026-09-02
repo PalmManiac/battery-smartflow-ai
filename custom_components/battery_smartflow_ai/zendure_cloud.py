@@ -23,6 +23,7 @@ from .core.models import (
     NativeDeviceIdentity,
     ZendureTransport,
 )
+from .zendure_device_matrix import resolve_zendure_device
 
 
 DEVICE_LIST_PATH = "/api/ha/deviceList"
@@ -30,31 +31,6 @@ CLIENT_ID = "zenHa"
 # Required by Zendure's HA endpoint.  Keep this protocol signing material in
 # the transport adapter; it is not user/account data and must not leave it.
 _SIGNING_KEY = "C*dafwArEOXK"
-
-_KNOWN_PRODUCT_MODELS = frozenset(
-    {
-        "ace1500",
-        "aio2400",
-        "solarflowaiozy",
-        "hub1200",
-        "solarflow2.0",
-        "hub2000",
-        "solarflowhub2000",
-        "hyper2000",
-        "hyper2000_3.0",
-        "solarflow800",
-        "solarflow800pro",
-        "solarflow800pro2",
-        "solarflow800plus",
-        "solarflow1600ac+",
-        "solarflow2400ac",
-        "solarflow2400ac+",
-        "solarflow2400pro",
-        "solarflow4000ac+",
-        "superbasev6400",
-        "superbasev4600",
-    }
-)
 
 
 class ZendureCloudError(Exception):
@@ -295,10 +271,7 @@ def _parse_device(value: Any) -> ZendureCloudDevice:
     candidate = DiscoveryCandidate(
         identity=identity,
         display_name=name,
-        supported=(
-            model is not None
-            and model.casefold().replace(" ", "") in _KNOWN_PRODUCT_MODELS
-        ),
+        supported=resolve_zendure_device(identity) is not None,
         pack_count=pack_count,
     )
     return ZendureCloudDevice(
