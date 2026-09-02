@@ -19,6 +19,7 @@ from .core.models import (
 )
 from .zendure_cloud import ZendureCloudBootstrap
 from .zendure_cloud_mqtt import CloudMqttMessage
+from .zendure_device_matrix import resolve_zendure_device
 
 
 DEFAULT_STALE_AFTER_SECONDS = 30.0
@@ -218,14 +219,6 @@ PACK_PROPERTY_MAPPINGS = {
 }
 
 
-_DEVICE_TARGETS = frozenset(
-    item.target for item in MAIN_PROPERTY_MAPPINGS.values()
-)
-_PACK_TARGETS = frozenset(
-    item.target for item in PACK_PROPERTY_MAPPINGS.values()
-) | {"charge_power_w", "discharge_power_w"}
-
-
 @dataclass(frozen=True, slots=True)
 class NormalizationResult:
     state: NeutralDeviceState
@@ -283,8 +276,26 @@ class ZendureCloudNormalizer:
         self._unknown_pack = {
             candidate_id: set() for candidate_id in self._models
         }
-        self._supported_device_targets = supported_device_targets or {}
-        self._supported_pack_targets = supported_pack_targets or {}
+        matrix_device_targets: dict[str, frozenset[str]] = {}
+        matrix_pack_targets: dict[str, frozenset[str]] = {}
+        for item in bootstrap.devices:
+            entry = resolve_zendure_device(item.candidate.identity)
+            candidate_id = item.candidate.candidate_id
+            matrix_device_targets[candidate_id] = (
+                entry.neutral_device_targets if entry is not None else frozenset()
+            )
+            if entry is not None:
+                matrix_pack_targets[candidate_id] = entry.neutral_pack_targets
+        self._supported_device_targets = (
+            dict(supported_device_targets)
+            if supported_device_targets is not None
+            else matrix_device_targets
+        )
+        self._supported_pack_targets = (
+            dict(supported_pack_targets)
+            if supported_pack_targets is not None
+            else matrix_pack_targets
+        )
 
     def apply(
         self,
@@ -331,7 +342,7 @@ class ZendureCloudNormalizer:
         current = now or datetime.now(timezone.utc)
         online = self._online[system_id]
         values = self._device_values[system_id]
-        supported = self._supported_device_targets.get(system_id, _DEVICE_TARGETS)
+        supported = self._supported_device_targets.get(system_id, frozenset())
 
         def device_value(target: str) -> MeasuredValue[Any]:
             return self._value(values, target, supported, online, current)
@@ -471,7 +482,7 @@ class ZendureCloudNormalizer:
         now: datetime,
         online: bool | None,
     ) -> NeutralPackState:
-        supported = self._supported_pack_targets.get(pack_id, _PACK_TARGETS)
+        supported = self._supported_pack_targets.get(system_id, frozenset())
 
         def value(target: str) -> MeasuredValue[Any]:
             return self._value(
