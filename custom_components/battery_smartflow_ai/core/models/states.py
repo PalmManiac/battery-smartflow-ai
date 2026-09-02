@@ -27,6 +27,9 @@ class ValueValidity(StrEnum):
     UNAVAILABLE = "unavailable"
     STALE = "stale"
     INVALID = "invalid"
+    UNSUPPORTED = "unsupported"
+    OFFLINE = "offline"
+    NEVER_RECEIVED = "never_received"
 
 
 @dataclass(frozen=True, slots=True)

@@ -296,7 +296,9 @@ def _build_summary(
         )
         topic["updates"] += 1
         topic["last_seen"] = _iso(message.received_at)
-        for path, value in _property_items(message.parsed_payload):
+        for path, value, mapping_status in _summary_property_items(
+            message.parsed_payload
+        ):
             entry = properties.setdefault(
                 path,
                 {
@@ -305,7 +307,7 @@ def _build_summary(
                     "updates": 0,
                     "first_seen": _iso(message.received_at),
                     "last_seen": None,
-                    "mapping_status": "unmapped",
+                    "mapping_status": mapping_status,
                 },
             )
             value_type = _type_name(value)
@@ -347,6 +349,39 @@ def _property_items(value: Any, prefix: str = "") -> list[tuple[str, Any]]:
 
 def _property_paths(value: Any) -> set[str]:
     return {path for path, _value in _property_items(value)}
+
+
+def _summary_property_items(value: Any) -> list[tuple[str, Any, str]]:
+    """Expose mapper coverage without dropping unknown main or pack fields."""
+
+    from .zendure_normalizer import (  # avoid coupling the raw recorder at import
+        MAIN_PROPERTY_MAPPINGS,
+        PACK_PROPERTY_MAPPINGS,
+    )
+
+    result = [
+        (
+            path,
+            item,
+            "mapped" if path.split(".", 1)[0] in MAIN_PROPERTY_MAPPINGS else "unmapped",
+        )
+        for path, item in _property_items(value)
+    ]
+    if not isinstance(value, Mapping):
+        return result
+    packs = value.get("packData")
+    if not isinstance(packs, list):
+        return result
+    for pack in packs:
+        if not isinstance(pack, Mapping):
+            continue
+        for raw_name, item in pack.items():
+            if raw_name in {"sn", "packId", "packKey"}:
+                continue
+            path = f"packData[].{raw_name}"
+            mapped = raw_name in PACK_PROPERTY_MAPPINGS or raw_name == "power"
+            result.append((path, item, "mapped" if mapped else "unmapped"))
+    return result
 
 
 def _type_name(value: Any) -> str:

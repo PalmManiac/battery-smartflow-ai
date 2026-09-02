@@ -24,6 +24,12 @@ from .market import (
     MarketPricePoint,
     MarketPriceValidity,
 )
+from .native_device_state import (
+    DeviceOperatingMode,
+    NeutralDeviceState,
+    NeutralPackState,
+    ReportedDeviceSetpoints,
+)
 from .regulation import (
     AutomaticStrategyResult,
     ChargeSourceAllocation,
@@ -68,6 +74,7 @@ __all__ = [
     "DeviceControlState",
     "DeviceInventory",
     "DeviceProfile",
+    "DeviceOperatingMode",
     "DeviceCommand",
     "DecisionContext",
     "GridHistoryState",
@@ -82,10 +89,13 @@ __all__ = [
     "MainDevice",
     "ModeArbiterResult",
     "NativeDeviceIdentity",
+    "NeutralDeviceState",
+    "NeutralPackState",
     "OffGridState",
     "PVState",
     "PowerControllerResult",
     "RegulationRuntimeState",
+    "ReportedDeviceSetpoints",
     "RuntimeSnapshot",
     "StrategicState",
     "StrategyContext",
