@@ -1,0 +1,447 @@
+"""Strictly read-only Zendure Cloud MQTT transport.
+
+The public transport surface deliberately contains no publish or command API.
+Raw inbound messages are retained for the V5 initial-sync capture while
+credentials remain inside the transport boundary.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections import deque
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import StrEnum
+import json
+import logging
+import random
+import ssl
+from typing import Any, Callable, Mapping, Protocol
+from urllib.parse import urlsplit
+
+from .zendure_cloud import CloudMqttCredentials, ZendureCloudBootstrap
+from .zendure_privacy import ZendureDiagnosticSanitizer
+
+
+_LOGGER = logging.getLogger(__name__)
+_MAX_RETAINED_MESSAGES = 10_000
+
+
+class CloudMqttError(Exception):
+    """Safe, classified Cloud MQTT failure."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(reason)
+
+
+class ConnectionState(StrEnum):
+    """Observable state of the read-only Cloud transport."""
+
+    DISCONNECTED = "disconnected"
+    CONNECTING = "connecting"
+    CONNECTED = "connected"
+    RECONNECTING = "reconnecting"
+    STOPPED = "stopped"
+
+
+@dataclass(frozen=True, slots=True)
+class CloudMqttMessage:
+    """One lossless inbound MQTT message plus safe routing metadata."""
+
+    received_at: datetime
+    topic: str
+    payload: bytes = field(repr=False)
+    parsed_payload: Any = field(repr=False)
+    payload_format: str
+    device_candidate_id: str | None
+    pack_id: str | None
+    known_topic: bool
+    session_number: int
+
+
+@dataclass(slots=True)
+class CloudMqttDeviceState:
+    """Freshness facts observed for one discovered main device."""
+
+    last_message_at: datetime | None = None
+    online: bool | None = None
+    property_updated_at: dict[str, datetime] = field(default_factory=dict)
+
+
+MessageCallback = Callable[[str, bytes], None]
+ConnectCallback = Callable[[bool, str | None], None]
+DisconnectCallback = Callable[[str | None], None]
+
+
+class ReadOnlyMqttSession(Protocol):
+    """Minimal subscriber-only backend contract (intentionally no publish)."""
+
+    def set_callbacks(
+        self,
+        on_connect: ConnectCallback,
+        on_disconnect: DisconnectCallback,
+        on_message: MessageCallback,
+    ) -> None: ...
+
+    def connect(self) -> None: ...
+
+    def subscribe(self, topics: tuple[str, ...]) -> None: ...
+
+    def disconnect(self) -> None: ...
+
+
+SessionFactory = Callable[[CloudMqttCredentials], ReadOnlyMqttSession]
+
+
+class ZendureCloudMqttTransport:
+    """Receive all Cloud MQTT traffic for every discovered Zendure system."""
+
+    def __init__(
+        self,
+        bootstrap: ZendureCloudBootstrap,
+        *,
+        session_factory: SessionFactory | None = None,
+        clock: Callable[[], datetime] | None = None,
+        reconnect_delays: tuple[float, ...] = (1.0, 2.0, 5.0, 15.0, 30.0),
+        max_messages: int = _MAX_RETAINED_MESSAGES,
+    ) -> None:
+        self._bootstrap = bootstrap
+        self._session_factory = session_factory or PahoReadOnlyMqttSession
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._reconnect_delays = reconnect_delays
+        self._messages: deque[CloudMqttMessage] = deque(maxlen=max_messages)
+        self._state = ConnectionState.DISCONNECTED
+        self._session: ReadOnlyMqttSession | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._connected = asyncio.Event()
+        self._stopping = False
+        self._reconnect_task: asyncio.Task[None] | None = None
+        self._session_number = 0
+        self._last_message_at: datetime | None = None
+        self._devices = {
+            item.candidate.candidate_id: CloudMqttDeviceState(
+                online=item.online
+            )
+            for item in bootstrap.devices
+        }
+        self._routes: list[tuple[str, str, str | None]] = []
+        for item in bootstrap.devices:
+            identity = item.candidate.identity
+            if identity.device_id:
+                self._routes.append(
+                    (identity.device_id, item.candidate.candidate_id, identity.product_id)
+                )
+
+    @property
+    def state(self) -> ConnectionState:
+        return self._state
+
+    @property
+    def messages(self) -> tuple[CloudMqttMessage, ...]:
+        return tuple(self._messages)
+
+    @property
+    def last_message_at(self) -> datetime | None:
+        return self._last_message_at
+
+    @property
+    def device_states(self) -> Mapping[str, CloudMqttDeviceState]:
+        return dict(self._devices)
+
+    @property
+    def topics(self) -> tuple[str, ...]:
+        """Return broad read-only subscriptions without guessing properties."""
+
+        topics: set[str] = set()
+        for device_id, _candidate_id, product_id in self._routes:
+            if product_id:
+                topics.add(f"/{product_id}/{device_id}/#")
+            else:
+                topics.add(f"/+/{device_id}/#")
+        return tuple(sorted(topics))
+
+    async def async_start(self, *, timeout: float = 15.0) -> None:
+        """Start the subscriber and wait for the initial broker connection."""
+
+        if self._state not in {ConnectionState.DISCONNECTED, ConnectionState.STOPPED}:
+            return
+        if not self.topics:
+            raise CloudMqttError("no_routable_devices")
+        self._loop = asyncio.get_running_loop()
+        self._stopping = False
+        self._connected.clear()
+        self._state = ConnectionState.CONNECTING
+        self._open_session()
+        try:
+            await asyncio.wait_for(self._connected.wait(), timeout=timeout)
+        except TimeoutError:
+            await self.async_stop()
+            raise CloudMqttError("connection_timeout") from None
+
+    async def async_stop(self) -> None:
+        """Stop reconnects and disconnect the read-only subscriber."""
+
+        self._stopping = True
+        task = self._reconnect_task
+        self._reconnect_task = None
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+        session, self._session = self._session, None
+        if session is not None:
+            session.disconnect()
+        self._connected.clear()
+        self._state = ConnectionState.STOPPED
+
+    def _open_session(self) -> None:
+        self._session_number += 1
+        session = self._session_factory(self._bootstrap.mqtt)
+        session.set_callbacks(self._on_connect, self._on_disconnect, self._on_message)
+        self._session = session
+        session.connect()
+
+    def _threadsafe(self, callback: Callable[..., None], *args: Any) -> None:
+        if self._loop is not None:
+            self._loop.call_soon_threadsafe(callback, *args)
+
+    def _on_connect(self, successful: bool, reason: str | None) -> None:
+        self._threadsafe(self._handle_connect, successful, reason)
+
+    def _handle_connect(self, successful: bool, reason: str | None) -> None:
+        if self._stopping:
+            return
+        if not successful:
+            safe = ZendureDiagnosticSanitizer().sanitize(reason or "unknown")
+            _LOGGER.warning(
+                "Zendure Cloud MQTT authentication/connect failed: %s", safe
+            )
+            self._schedule_reconnect()
+            return
+        if self._session is None:
+            return
+        self._session.subscribe(self.topics)
+        self._state = ConnectionState.CONNECTED
+        self._connected.set()
+        _LOGGER.info(
+            "Zendure Cloud MQTT connected; subscribed to %d read-only topics",
+            len(self.topics),
+        )
+
+    def _on_disconnect(self, reason: str | None) -> None:
+        self._threadsafe(self._handle_disconnect, reason)
+
+    def _handle_disconnect(self, reason: str | None) -> None:
+        self._connected.clear()
+        if self._stopping:
+            return
+        safe = ZendureDiagnosticSanitizer().sanitize(reason or "unknown")
+        _LOGGER.warning("Zendure Cloud MQTT disconnected: %s", safe)
+        self._schedule_reconnect()
+
+    def _schedule_reconnect(self) -> None:
+        if self._reconnect_task is None or self._reconnect_task.done():
+            self._state = ConnectionState.RECONNECTING
+            self._reconnect_task = asyncio.create_task(self._reconnect())
+
+    async def _reconnect(self) -> None:
+        attempt = 0
+        while not self._stopping:
+            delay = self._reconnect_delays[
+                min(attempt, len(self._reconnect_delays) - 1)
+            ]
+            if self._stopping:
+                return
+            await asyncio.sleep(delay + random.uniform(0, min(0.25, delay / 4)))
+            self._connected.clear()
+            old, self._session = self._session, None
+            if old is not None:
+                old.disconnect()
+            try:
+                self._open_session()
+                await asyncio.wait_for(self._connected.wait(), timeout=15.0)
+                return
+            except Exception as error:  # backend errors are sanitized before logging
+                safe = ZendureDiagnosticSanitizer().sanitize_exception(error)
+                _LOGGER.warning("Zendure Cloud MQTT reconnect failed: %s", safe)
+                attempt += 1
+
+    def _on_message(self, topic: str, payload: bytes) -> None:
+        self._threadsafe(self._handle_message, topic, bytes(payload))
+
+    def _handle_message(self, topic: str, payload: bytes) -> None:
+        received_at = self._clock()
+        parsed, payload_format = _parse_payload(payload)
+        candidate_id, pack_id = self._route_message(topic, parsed)
+        known_topic = topic.endswith("/properties/report") or topic.endswith("/state")
+        message = CloudMqttMessage(
+            received_at=received_at,
+            topic=topic,
+            payload=payload,
+            parsed_payload=parsed,
+            payload_format=payload_format,
+            device_candidate_id=candidate_id,
+            pack_id=pack_id,
+            known_topic=known_topic,
+            session_number=self._session_number,
+        )
+        self._messages.append(message)
+        self._last_message_at = received_at
+        if candidate_id is not None:
+            state = self._devices[candidate_id]
+            state.last_message_at = received_at
+            for name in _property_names(parsed):
+                state.property_updated_at[name] = received_at
+            online = _online_value(parsed)
+            if online is not None:
+                state.online = online
+
+    def _route_message(self, topic: str, parsed: Any) -> tuple[str | None, str | None]:
+        segments = {part for part in topic.split("/") if part}
+        payload_ids = _identity_values(parsed)
+        for device_id, candidate_id, _product_id in self._routes:
+            if device_id in segments or device_id in payload_ids:
+                return candidate_id, _pack_identity(parsed, device_id)
+        return None, _pack_identity(parsed, None)
+
+
+def _parse_payload(payload: bytes) -> tuple[Any, str]:
+    try:
+        text = payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return payload, "binary"
+    try:
+        return json.loads(text), "json"
+    except (json.JSONDecodeError, ValueError):
+        return text, "text"
+
+
+def _identity_values(value: Any) -> set[str]:
+    found: set[str] = set()
+    if isinstance(value, Mapping):
+        for key, item in value.items():
+            if str(key).casefold() in {"devicekey", "deviceid", "sn", "snnumber"} and isinstance(item, (str, int)):
+                found.add(str(item))
+            found.update(_identity_values(item))
+    elif isinstance(value, list):
+        for item in value:
+            found.update(_identity_values(item))
+    return found
+
+
+def _pack_identity(value: Any, main_device_id: str | None) -> str | None:
+    if not isinstance(value, Mapping):
+        return None
+    for key in ("packId", "packKey", "packSn", "packSN"):
+        item = value.get(key)
+        if isinstance(item, (str, int)) and str(item) != main_device_id:
+            return str(item)
+    return None
+
+
+def _property_names(value: Any) -> set[str]:
+    if not isinstance(value, Mapping):
+        return set()
+    properties = value.get("properties")
+    if isinstance(properties, Mapping):
+        return {str(name) for name in properties}
+    return set()
+
+
+def _online_value(value: Any) -> bool | None:
+    if not isinstance(value, Mapping):
+        return None
+    raw = value.get("online")
+    if isinstance(raw, bool):
+        return raw
+    if raw in (0, 1):
+        return bool(raw)
+    return None
+
+
+class PahoReadOnlyMqttSession:
+    """Production paho subscriber wrapper with no exposed publish method."""
+
+    def __init__(self, credentials: CloudMqttCredentials) -> None:
+        try:
+            import paho.mqtt.client as mqtt
+        except ImportError as error:
+            raise CloudMqttError("mqtt_dependency_missing") from error
+
+        parsed = urlsplit(
+            credentials.url
+            if "://" in credentials.url
+            else f"mqtts://{credentials.url}"
+        )
+        if not parsed.hostname or parsed.scheme not in {"mqtt", "mqtts", "ssl", "tcp"}:
+            raise CloudMqttError("invalid_broker_url")
+        self._host = parsed.hostname
+        self._tls = parsed.scheme in {"mqtts", "ssl"}
+        self._port = parsed.port or (8883 if self._tls else 1883)
+        self._client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION2,
+            client_id=credentials.client_id,
+        )
+        self._client.username_pw_set(credentials.username, credentials.password)
+        if self._tls:
+            self._client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
+        self._on_connect: ConnectCallback | None = None
+        self._on_disconnect: DisconnectCallback | None = None
+        self._on_message: MessageCallback | None = None
+
+    def set_callbacks(
+        self,
+        on_connect: ConnectCallback,
+        on_disconnect: DisconnectCallback,
+        on_message: MessageCallback,
+    ) -> None:
+        self._on_connect = on_connect
+        self._on_disconnect = on_disconnect
+        self._on_message = on_message
+        self._client.on_connect = self._paho_connect
+        self._client.on_disconnect = self._paho_disconnect
+        self._client.on_message = self._paho_message
+
+    def connect(self) -> None:
+        self._client.connect_async(self._host, self._port, keepalive=60)
+        self._client.loop_start()
+
+    def subscribe(self, topics: tuple[str, ...]) -> None:
+        for topic in topics:
+            result, _mid = self._client.subscribe(topic, qos=0)
+            if result != 0:
+                raise CloudMqttError("subscribe_failed")
+
+    def disconnect(self) -> None:
+        self._client.disconnect()
+        self._client.loop_stop()
+
+    def _paho_connect(
+        self,
+        _client: Any,
+        _userdata: Any,
+        _flags: Any,
+        reason_code: Any,
+        _properties: Any,
+    ) -> None:
+        if self._on_connect is not None:
+            successful = int(reason_code) == 0
+            self._on_connect(successful, None if successful else str(reason_code))
+
+    def _paho_disconnect(
+        self,
+        _client: Any,
+        _userdata: Any,
+        _flags: Any,
+        reason_code: Any,
+        _properties: Any,
+    ) -> None:
+        if self._on_disconnect is not None:
+            self._on_disconnect(None if int(reason_code) == 0 else str(reason_code))
+
+    def _paho_message(self, _client: Any, _userdata: Any, message: Any) -> None:
+        if self._on_message is not None:
+            self._on_message(str(message.topic), bytes(message.payload))
