@@ -126,6 +126,17 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         new_options.pop("regulation_v42_enabled", None)
         new_version = 3
 
+    if new_version == 3:
+        from .v5_migration import initial_v5_migration_state
+
+        # Retain every V4.7 setting and the authoritative Z-HA path. Native
+        # discovery and identity migration are not native-write consent.
+        new_data.setdefault(
+            "v5_migration",
+            dict(initial_v5_migration_state(entry.entry_id).as_dict()),
+        )
+        new_version = 4
+
     if (
         new_version != entry.version
         or new_data != dict(entry.data)

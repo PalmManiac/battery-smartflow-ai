@@ -83,16 +83,25 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
 
                 assert await integration.async_migrate_entry(hass, entry)
                 update = hass.config_entries.updates[-1][1]
-                assert update["version"] == 3
+                assert update["version"] == 4
                 assert update["data"] == {
                     "soc_entity": "sensor.existing_soc",
                     "custom": "keep",
                     "pack_capacity_kwh": 2.88,
+                    "v5_migration": {
+                        "schema_version": 1,
+                        "phase": "zha_transition",
+                        "legacy_system_id": "config_entry:existing-entry-id",
+                        "binding_state": "unmatched",
+                        "native_candidate_id": None,
+                        "native_control_enabled": False,
+                        "legacy_zha_enabled": True,
+                    },
                 }
                 assert update["options"] == {"soc_min": 12.0}
 
                 current = SimpleNamespace(
-                    entry_id="current-entry-id", version=3,
+                    entry_id="current-entry-id", version=4,
                     data={"soc_entity": "sensor.current_soc"},
                     options={"soc_min": 10.0},
                 )
