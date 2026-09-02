@@ -177,6 +177,7 @@ from .adapters.home_assistant.device_backend import (
 )
 from .adapters.home_assistant.clock import HomeAssistantClock
 from .adapters.home_assistant.state_store import HomeAssistantStateStore
+from .v5_migration import migrate_persisted_v47_state
 from .command_effectiveness import (
     CommandEffectivenessConfig,
     CommandEffectivenessState,
@@ -585,7 +586,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _load(self) -> None:
         load_result = await self._state_store.load()
         if load_result.usable:
-            loaded_data = dict(load_result.data)
+            loaded_data = migrate_persisted_v47_state(
+                load_result.data,
+                legacy_system_id=f"config_entry:{self.entry.entry_id}",
+            )
             migrate_legacy_price_fields(loaded_data)
             self._persist.update(loaded_data)
 

@@ -147,7 +147,7 @@ def _validate_feed_in_tariff(value: Any) -> float:
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Battery SmartFlow AI."""
 
-    VERSION = 3
+    VERSION = 4
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
