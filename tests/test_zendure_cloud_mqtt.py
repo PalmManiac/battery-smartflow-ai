@@ -15,6 +15,7 @@ from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudCli
 from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     ConnectionState,
     ZendureCloudMqttTransport,
+    _bsfai_client_id,
     _parse_broker_url,
     _reason_code_success,
     _safe_peer_scope,
@@ -253,6 +254,20 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(_reason_code_success(ReasonCode(is_failure=True, value=135)))
         self.assertTrue(_reason_code_success(0))
         self.assertFalse(_reason_code_success(5))
+
+    def test_bsfai_uses_a_stable_private_mqtt31_client_identity(self):
+        first = _bsfai_client_id("zendure-cloud-client-secret")
+        second = _bsfai_client_id("zendure-cloud-client-secret")
+
+        self.assertEqual(first, second)
+        self.assertTrue(first.startswith("bsfai-"))
+        self.assertLessEqual(len(first), 23)
+        self.assertNotIn("zendure-cloud-client-secret", first)
+        self.assertNotEqual(first, "zendure-cloud-client-secret")
+        self.assertNotEqual(
+            first,
+            _bsfai_client_id("another-zendure-cloud-client"),
+        )
 
 
 if __name__ == "__main__":
