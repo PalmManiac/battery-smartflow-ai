@@ -311,6 +311,7 @@ def _build_summary(
             seen_devices.add(message.device_candidate_id)
         if message.pack_id:
             packs.add(message.pack_id)
+        packs.update(_payload_pack_ids(message.parsed_payload))
         topic = topics.setdefault(
             message.topic,
             {"updates": 0, "first_seen": _iso(message.received_at), "last_seen": None},
@@ -351,6 +352,28 @@ def _build_summary(
         "topics": topics,
         "properties": properties,
     }
+
+
+def _payload_pack_ids(value: Any) -> set[str]:
+    """Collect every stable pack identity embedded in a main-device report."""
+
+    if not isinstance(value, Mapping):
+        return set()
+    raw_packs = value.get("packData")
+    if not isinstance(raw_packs, list):
+        return set()
+    result: set[str] = set()
+    for raw_pack in raw_packs:
+        if not isinstance(raw_pack, Mapping):
+            continue
+        for key in ("sn", "packId", "packKey", "packSn", "packSN"):
+            raw_id = raw_pack.get(key)
+            if isinstance(raw_id, (str, int)) and not isinstance(raw_id, bool):
+                pack_id = str(raw_id).strip()
+                if pack_id:
+                    result.add(pack_id)
+                    break
+    return result
 
 
 def _property_items(value: Any, prefix: str = "") -> list[tuple[str, Any]]:

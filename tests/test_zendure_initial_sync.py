@@ -244,6 +244,34 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("futureUnknown", properties)
         self.assertEqual(properties["futureUnknown"]["types"], ["array"])
 
+    async def test_summary_collects_all_pack_ids_from_main_device_report(self):
+        recorder = self.recorder()
+        recorder.observe_message(
+            message(
+                self.time.clock(),
+                "cloud_mqtt:real-device-1",
+                "real-device-1",
+                {
+                    "properties": {"packNum": 2},
+                    "packData": [
+                        {"sn": "pack-b", "socLevel": 52},
+                        {"sn": "pack-a", "socLevel": 48},
+                    ],
+                },
+            )
+        )
+
+        summary = recorder.finish(complete=True, reason="test").as_dict()[
+            "bsfai_interpretation"
+        ]
+
+        pack_ids = summary["pack_ids"]
+        self.assertEqual(len(pack_ids), 2)
+        self.assertEqual(len(set(pack_ids)), 2)
+        self.assertTrue(all(item.startswith("ZD_SERIAL_A") for item in pack_ids))
+        self.assertNotIn("pack-a", pack_ids)
+        self.assertNotIn("pack-b", pack_ids)
+
     async def test_all_secrets_and_identities_are_consistently_sanitized(self):
         recorder = self.recorder()
         recorder.observe_message(

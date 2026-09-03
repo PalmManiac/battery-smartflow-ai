@@ -12,6 +12,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
+import hashlib
 import ipaddress
 import json
 import logging
@@ -437,7 +438,7 @@ class PahoReadOnlyMqttSession:
         self._connect_packet_sent = False
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
-            client_id=credentials.client_id,
+            client_id=_bsfai_client_id(credentials.client_id),
             clean_session=False,
             protocol=mqtt.MQTTv31,
         )
@@ -567,6 +568,18 @@ def _reason_code_success(reason_code: Any) -> bool:
         return int(value) == 0
     except (TypeError, ValueError):
         return str(reason_code).strip().casefold() == "success"
+
+
+def _bsfai_client_id(cloud_client_id: str) -> str:
+    """Return a stable MQTT 3.1 ID distinct from Zendure-HA's identity.
+
+    MQTT 3.1 brokers may restrict client IDs to 23 characters.  Hashing the
+    account-provided ID keeps the BSFAI identity stable without exposing the
+    original identifier in the broker session name.
+    """
+
+    digest = hashlib.sha256(cloud_client_id.encode("utf-8")).hexdigest()[:16]
+    return f"bsfai-{digest}"
 
 
 def _safe_peer_scope(mqtt_socket: Any) -> str:
