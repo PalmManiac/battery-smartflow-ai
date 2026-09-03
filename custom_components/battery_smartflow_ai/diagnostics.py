@@ -38,16 +38,30 @@ async def async_get_config_entry_diagnostics(
     """Return the latest completed recording through HA's diagnostics download."""
 
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-    path = coordinator.debug_last_package_path if coordinator is not None else None
+    native = getattr(coordinator, "native_zendure", None)
+    native_path = native.capture_path if native is not None else None
+    debug_path = (
+        coordinator.debug_last_package_path if coordinator is not None else None
+    )
+    path = native_path or debug_path
     if not path:
         return {
             "status": "debug_package_unavailable",
-            "message": "Create a debug recording before downloading diagnostics.",
+            "message": "Create a debug recording or configure the native Zendure test first.",
+            "native_zendure": (
+                native.diagnostic_data() if native is not None else None
+            ),
         }
-    return await hass.async_add_executor_job(
+    package = await hass.async_add_executor_job(
         partial(
             _load_latest_package,
             path,
             config_directory=hass.config.config_dir,
         )
     )
+    if native_path:
+        return {
+            "native_zendure": native.diagnostic_data(),
+            "package": package,
+        }
+    return package

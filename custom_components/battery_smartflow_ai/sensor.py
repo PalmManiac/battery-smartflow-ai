@@ -1233,6 +1233,75 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = tuple(
     if description.key not in RETIRED_DIAGNOSTIC_SENSOR_KEYS
 )
 
+NATIVE_ZENDURE_SENSOR_KEYS = frozenset(
+    {
+        "native_zendure_status",
+        "native_zendure_control",
+        "native_zendure_device_count",
+        "native_zendure_message_count",
+        "native_zendure_last_message",
+        "native_zendure_last_capture",
+        "native_zendure_error",
+    }
+)
+
+SENSORS += (
+    ZendureSensorEntityDescription(
+        key="native_zendure_status",
+        translation_key="native_zendure_status",
+        runtime_key="native_zendure_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=["disabled", "discovering", "connecting", "capturing", "observing", "error"],
+        icon="mdi:cloud-search-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="native_zendure_control",
+        translation_key="native_zendure_control",
+        runtime_key="native_zendure_control",
+        device_class=SensorDeviceClass.ENUM,
+        options=["disabled_zha_active"],
+        icon="mdi:shield-lock-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="native_zendure_device_count",
+        translation_key="native_zendure_device_count",
+        runtime_key="native_zendure_device_count",
+        icon="mdi:battery-multiple",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="native_zendure_message_count",
+        translation_key="native_zendure_message_count",
+        runtime_key="native_zendure_message_count",
+        icon="mdi:message-processing-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="native_zendure_last_message",
+        translation_key="native_zendure_last_message",
+        runtime_key="native_zendure_last_message",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:clock-check-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="native_zendure_last_capture",
+        translation_key="native_zendure_last_capture",
+        runtime_key="native_zendure_last_capture",
+        icon="mdi:file-download-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="native_zendure_error",
+        translation_key="native_zendure_error",
+        runtime_key="native_zendure_error",
+        icon="mdi:alert-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -1297,9 +1366,15 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self):
+        key = self.entity_description.runtime_key
+        if key in NATIVE_ZENDURE_SENSOR_KEYS:
+            val = self.coordinator.native_zendure.sensor_data().get(key)
+            if self.device_class == SensorDeviceClass.TIMESTAMP:
+                return dt_util.as_utc(val) if val is not None else None
+            return val
+
         data = self.coordinator.data or {}
         details = data.get("details") or {}
-        key = self.entity_description.runtime_key
 
         if self.device_class == SensorDeviceClass.TIMESTAMP:
             val = details.get(key, data.get(key))
@@ -1359,5 +1434,10 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         """Keep recorder-facing entities attribute-free in normal operation."""
 
-        self._attr_extra_state_attributes = None
+        if self.entity_description.runtime_key == "native_zendure_device_count":
+            self._attr_extra_state_attributes = (
+                self.coordinator.native_zendure.overview_attributes()
+            )
+        else:
+            self._attr_extra_state_attributes = None
         super()._handle_coordinator_update()
