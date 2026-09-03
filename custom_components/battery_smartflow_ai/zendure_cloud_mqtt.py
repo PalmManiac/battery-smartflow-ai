@@ -174,7 +174,7 @@ class ZendureCloudMqttTransport:
         self._stopping = False
         self._connected.clear()
         self._state = ConnectionState.CONNECTING
-        self._open_session()
+        await self._open_session()
         try:
             await asyncio.wait_for(self._connected.wait(), timeout=timeout)
         except TimeoutError:
@@ -195,16 +195,21 @@ class ZendureCloudMqttTransport:
                 pass
         session, self._session = self._session, None
         if session is not None:
-            session.disconnect()
+            try:
+                await asyncio.to_thread(session.disconnect)
+            except Exception:
+                _LOGGER.warning("Zendure Cloud MQTT cleanup failed")
         self._connected.clear()
         self._state = ConnectionState.STOPPED
 
-    def _open_session(self) -> None:
+    async def _open_session(self) -> None:
         self._session_number += 1
         session = self._session_factory(self._bootstrap.mqtt)
         session.set_callbacks(self._on_connect, self._on_disconnect, self._on_message)
         self._session = session
-        session.connect()
+        # Zendure-HA establishes its Cloud connection with paho's synchronous
+        # connect call. Run that DNS/TCP operation outside HA's event loop.
+        await asyncio.to_thread(session.connect)
 
     def _threadsafe(self, callback: Callable[..., None], *args: Any) -> None:
         if self._loop is not None:
@@ -261,9 +266,12 @@ class ZendureCloudMqttTransport:
             self._connected.clear()
             old, self._session = self._session, None
             if old is not None:
-                old.disconnect()
+                try:
+                    await asyncio.to_thread(old.disconnect)
+                except Exception:
+                    _LOGGER.warning("Zendure Cloud MQTT reconnect cleanup failed")
             try:
-                self._open_session()
+                await self._open_session()
                 await asyncio.wait_for(self._connected.wait(), timeout=15.0)
                 return
             except Exception as error:  # backend errors are sanitized before logging
@@ -400,7 +408,7 @@ class PahoReadOnlyMqttSession:
         self._client.on_message = self._paho_message
 
     def connect(self) -> None:
-        self._client.connect_async(self._host, self._port, keepalive=60)
+        self._client.connect(self._host, self._port, keepalive=60)
         self._client.loop_start()
 
     def subscribe(self, topics: tuple[str, ...]) -> None:
@@ -410,8 +418,10 @@ class PahoReadOnlyMqttSession:
                 raise CloudMqttError("subscribe_failed")
 
     def disconnect(self) -> None:
-        self._client.disconnect()
-        self._client.loop_stop()
+        try:
+            self._client.disconnect()
+        finally:
+            self._client.loop_stop()
 
     def _paho_connect(
         self,

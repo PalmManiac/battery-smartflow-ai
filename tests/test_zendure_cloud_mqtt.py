@@ -49,6 +49,15 @@ class FakeSession:
     def drop(self): self.on_disconnect("network lost")
 
 
+class HangingSession(FakeSession):
+    def connect(self):
+        return None
+
+    def disconnect(self):
+        self.disconnected = True
+        raise RuntimeError("not connected")
+
+
 class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.sessions = []
@@ -144,6 +153,17 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         transport = ZendureCloudMqttTransport(data, session_factory=self.factory)
         with self.assertRaisesRegex(Exception, "no_routable_devices"):
             await transport.async_start()
+
+    async def test_cleanup_failure_does_not_mask_connection_timeout(self):
+        session = HangingSession(None)
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=lambda _credentials: session,
+        )
+        with self.assertRaisesRegex(Exception, "connection_timeout"):
+            await transport.async_start(timeout=0.01)
+        self.assertEqual(transport.state, ConnectionState.STOPPED)
+        self.assertTrue(session.disconnected)
 
     def test_schema_free_port_1883_is_plain_mqtt(self):
         self.assertEqual(
