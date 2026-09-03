@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import inspect
 import json
 from pathlib import Path
+import socket
 import unittest
 
 from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudClient
@@ -15,6 +16,8 @@ from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     ConnectionState,
     ZendureCloudMqttTransport,
     _parse_broker_url,
+    _safe_peer_scope,
+    _safe_socket_family,
 )
 
 
@@ -207,6 +210,31 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("protocol=mqtt.MQTTv31", source)
         self.assertIn("clean_session=False", source)
         self.assertIn("connect_async", source)
+
+    def test_socket_metadata_is_classified_without_retaining_addresses(self):
+        class FakeSocket:
+            family = socket.AF_INET
+
+            def getpeername(self):
+                return ("192.168.10.20", 1883)
+
+        mqtt_socket = FakeSocket()
+        self.assertEqual(_safe_socket_family(mqtt_socket), "ipv4")
+        self.assertEqual(_safe_peer_scope(mqtt_socket), "private")
+        self.assertNotIn("192.168.10.20", repr(_safe_peer_scope(mqtt_socket)))
+
+    def test_public_and_loopback_peers_are_distinguished(self):
+        class FakeSocket:
+            family = socket.AF_INET6
+
+            def __init__(self, address):
+                self.address = address
+
+            def getpeername(self):
+                return (self.address, 1883, 0, 0)
+
+        self.assertEqual(_safe_peer_scope(FakeSocket("2606:4700:4700::1111")), "public")
+        self.assertEqual(_safe_peer_scope(FakeSocket("::1")), "loopback")
 
 
 if __name__ == "__main__":

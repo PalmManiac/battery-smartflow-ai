@@ -12,9 +12,11 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
+import ipaddress
 import json
 import logging
 import random
+import socket
 import ssl
 from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
@@ -93,6 +95,9 @@ class ReadOnlyMqttSession(Protocol):
     @property
     def connection_phase(self) -> str: ...
 
+    @property
+    def connection_diagnostics(self) -> Mapping[str, str | bool]: ...
+
 
 SessionFactory = Callable[[CloudMqttCredentials], ReadOnlyMqttSession]
 
@@ -123,6 +128,13 @@ class ZendureCloudMqttTransport:
         self._session_number = 0
         self._last_message_at: datetime | None = None
         self._last_connection_phase = "not_started"
+        self._last_connection_diagnostics: dict[str, str | bool] = {
+            "credential_source": "cloud_mqtt_block",
+            "transport_security": "unknown",
+            "endpoint_scope": "unknown",
+            "socket_family": "unknown",
+            "connect_packet_sent": False,
+        }
         self._devices = {
             item.candidate.candidate_id: CloudMqttDeviceState(
                 online=item.online
@@ -168,6 +180,16 @@ class ZendureCloudMqttTransport:
                 getattr(self._session, "connection_phase", self._last_connection_phase)
             )
         return self._last_connection_phase
+
+    @property
+    def connection_diagnostics(self) -> Mapping[str, str | bool]:
+        """Return only allow-listed, non-identifying connection facts."""
+
+        if self._session is not None:
+            value = getattr(self._session, "connection_diagnostics", None)
+            if isinstance(value, Mapping):
+                return dict(value)
+        return dict(self._last_connection_diagnostics)
 
     @property
     def topics(self) -> tuple[str, ...]:
@@ -218,6 +240,9 @@ class ZendureCloudMqttTransport:
             self._last_connection_phase = str(
                 getattr(session, "connection_phase", self._last_connection_phase)
             )
+            value = getattr(session, "connection_diagnostics", None)
+            if isinstance(value, Mapping):
+                self._last_connection_diagnostics = dict(value)
             try:
                 await asyncio.to_thread(session.disconnect)
             except Exception:
@@ -230,8 +255,9 @@ class ZendureCloudMqttTransport:
         session = self._session_factory(self._bootstrap.mqtt)
         session.set_callbacks(self._on_connect, self._on_disconnect, self._on_message)
         self._session = session
-        # Zendure-HA establishes its Cloud connection with paho's synchronous
-        # connect call. Run that DNS/TCP operation outside HA's event loop.
+        # The production backend starts Paho's non-blocking network loop here.
+        # A custom backend may still perform blocking setup, so retain the
+        # thread boundary to protect Home Assistant's event loop.
         await asyncio.to_thread(session.connect)
 
     def _threadsafe(self, callback: Callable[..., None], *args: Any) -> None:
@@ -406,6 +432,9 @@ class PahoReadOnlyMqttSession:
 
         self._host, self._port, self._tls = _parse_broker_url(credentials.url)
         self._connection_phase = "created"
+        self._endpoint_scope = "unknown"
+        self._socket_family = "unknown"
+        self._connect_packet_sent = False
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=credentials.client_id,
@@ -423,6 +452,16 @@ class PahoReadOnlyMqttSession:
     def connection_phase(self) -> str:
         return self._connection_phase
 
+    @property
+    def connection_diagnostics(self) -> Mapping[str, str | bool]:
+        return {
+            "credential_source": "cloud_mqtt_block",
+            "transport_security": "tls" if self._tls else "plain",
+            "endpoint_scope": self._endpoint_scope,
+            "socket_family": self._socket_family,
+            "connect_packet_sent": self._connect_packet_sent,
+        }
+
     def set_callbacks(
         self,
         on_connect: ConnectCallback,
@@ -436,6 +475,8 @@ class PahoReadOnlyMqttSession:
         self._client.on_disconnect = self._paho_disconnect
         self._client.on_message = self._paho_message
         self._client.on_socket_open = self._paho_socket_open
+        self._client.on_socket_register_write = self._paho_register_write
+        self._client.on_socket_unregister_write = self._paho_unregister_write
 
     def connect(self) -> None:
         self._connection_phase = "dns_or_tcp_connect"
@@ -469,8 +510,22 @@ class PahoReadOnlyMqttSession:
             successful = int(reason_code) == 0
             self._on_connect(successful, None if successful else str(reason_code))
 
-    def _paho_socket_open(self, _client: Any, _userdata: Any, _socket: Any) -> None:
+    def _paho_socket_open(self, _client: Any, _userdata: Any, mqtt_socket: Any) -> None:
+        self._socket_family = _safe_socket_family(mqtt_socket)
+        self._endpoint_scope = _safe_peer_scope(mqtt_socket)
         self._connection_phase = "tcp_connected_waiting_for_mqtt_connack"
+
+    def _paho_register_write(self, _client: Any, _userdata: Any, _socket: Any) -> None:
+        if self._connection_phase.startswith("tcp_connected"):
+            self._connection_phase = "mqtt_connect_queued"
+
+    def _paho_unregister_write(self, _client: Any, _userdata: Any, _socket: Any) -> None:
+        if self._connection_phase in {
+            "tcp_connected_waiting_for_mqtt_connack",
+            "mqtt_connect_queued",
+        }:
+            self._connect_packet_sent = True
+            self._connection_phase = "mqtt_connect_sent_waiting_for_connack"
 
     def _paho_disconnect(
         self,
@@ -486,6 +541,35 @@ class PahoReadOnlyMqttSession:
     def _paho_message(self, _client: Any, _userdata: Any, message: Any) -> None:
         if self._on_message is not None:
             self._on_message(str(message.topic), bytes(message.payload))
+
+
+def _safe_socket_family(mqtt_socket: Any) -> str:
+    """Classify a socket family without exporting an address."""
+
+    family = getattr(mqtt_socket, "family", None)
+    if family == socket.AF_INET:
+        return "ipv4"
+    if family == socket.AF_INET6:
+        return "ipv6"
+    return "other"
+
+
+def _safe_peer_scope(mqtt_socket: Any) -> str:
+    """Classify the connected peer without retaining its address."""
+
+    try:
+        peer = mqtt_socket.getpeername()
+        raw_address = peer[0] if isinstance(peer, tuple) and peer else peer
+        address = ipaddress.ip_address(str(raw_address).split("%", 1)[0])
+    except (OSError, TypeError, ValueError):
+        return "unknown"
+    if address.is_loopback:
+        return "loopback"
+    if address.is_private or address.is_link_local:
+        return "private"
+    if address.is_global:
+        return "public"
+    return "other"
 
 
 def _parse_broker_url(value: str) -> tuple[str, int, bool]:
