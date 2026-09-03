@@ -27,6 +27,9 @@ from custom_components.battery_smartflow_ai.zendure_initial_sync import (  # noq
     async_capture_initial_sync,
     export_initial_sync_capture,
 )
+from custom_components.battery_smartflow_ai.zendure_zensdk import (  # noqa: E402
+    ZenSdkReadAttempt,
+)
 
 
 class Response:
@@ -341,6 +344,58 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertFalse(data["meta"]["complete"])
             self.assertFalse(list(exported.path.parent.glob("*.tmp")))
+
+    async def test_zensdk_report_and_attempt_are_exported_without_lan_identity(self):
+        local_report = message(
+            self.time.clock(),
+            "cloud_mqtt:real-device-1",
+            "real-device-1",
+            {
+                "properties": {"electricLevel": 75},
+                "packData": [{"sn": "real-pack-1", "socLevel": 74}],
+            },
+        )
+        local_report = CloudMqttMessage(
+            received_at=local_report.received_at,
+            topic="zensdk/properties/report",
+            payload=local_report.payload,
+            parsed_payload=local_report.parsed_payload,
+            payload_format="json",
+            device_candidate_id=local_report.device_candidate_id,
+            pack_id=None,
+            known_topic=True,
+            session_number=0,
+            transport="zensdk",
+        )
+        recorder = ZendureInitialSyncRecorder(
+            self.bootstrap,
+            clock=self.time.clock,
+            monotonic=self.time.monotonic,
+            initial_messages=(local_report,),
+            zensdk_attempts=(
+                ZenSdkReadAttempt(
+                    "cloud_mqtt:real-device-1",
+                    "device_list_ip",
+                    "success",
+                    200,
+                ),
+            ),
+        )
+        package = recorder.finish(complete=True, reason="initial_sync_quiet").as_dict()
+
+        self.assertEqual(
+            package["raw_communication"]["zensdk_responses"][0]["transport"],
+            "zensdk",
+        )
+        self.assertEqual(package["raw_communication"]["mqtt_messages"], [])
+        self.assertEqual(
+            package["raw_communication"]["zensdk_requests"][0]["path"],
+            "/properties/report",
+        )
+        self.assertEqual(len(package["bsfai_interpretation"]["pack_ids"]), 1)
+        self.assertTrue(
+            package["bsfai_interpretation"]["pack_ids"][0].startswith("ZD_SERIAL_A")
+        )
 
     async def test_export_size_limit_is_enforced(self):
         result = self.recorder().finish(complete=False, reason="test")

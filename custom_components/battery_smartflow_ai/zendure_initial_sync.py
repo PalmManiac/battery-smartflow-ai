@@ -20,6 +20,7 @@ from .zendure_cloud_mqtt import (
     ZendureCloudMqttTransport,
 )
 from .zendure_privacy import ZendureDiagnosticSanitizer
+from .zendure_zensdk import ZenSdkReadAttempt
 
 
 SCHEMA = "battery_smartflow_ai.zendure_initial_sync"
@@ -46,11 +47,21 @@ class InitialSyncCaptureResult:
     connection_events: tuple[Mapping[str, Any], ...]
     messages: tuple[CloudMqttMessage, ...]
     expected_devices: tuple[str, ...]
+    zensdk_attempts: tuple[ZenSdkReadAttempt, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         """Build one detached package and sanitize it with one alias namespace."""
 
-        raw_messages = [_raw_message(item) for item in self.messages]
+        mqtt_messages = [
+            _raw_message(item)
+            for item in self.messages
+            if item.transport == "cloud_mqtt"
+        ]
+        zensdk_responses = [
+            _raw_message(item)
+            for item in self.messages
+            if item.transport == "zensdk"
+        ]
         package = {
             "meta": {
                 "schema": SCHEMA,
@@ -64,7 +75,18 @@ class InitialSyncCaptureResult:
             "raw_communication": {
                 "device_list": [dict(item) for item in self.discovery],
                 "connection_events": [dict(item) for item in self.connection_events],
-                "mqtt_messages": raw_messages,
+                "mqtt_messages": mqtt_messages,
+                "zensdk_requests": [
+                    {
+                        "device_id": item.device_candidate_id,
+                        "path": "/properties/report",
+                        "address_source": item.address_source,
+                        "result": item.result,
+                        "http_status": item.http_status,
+                    }
+                    for item in self.zensdk_attempts
+                ],
+                "zensdk_responses": zensdk_responses,
             },
             "bsfai_interpretation": _build_summary(
                 self.discovery,
@@ -92,6 +114,8 @@ class ZendureInitialSyncRecorder:
         hard_timeout: float = DEFAULT_HARD_TIMEOUT,
         clock: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] = time.monotonic,
+        initial_messages: tuple[CloudMqttMessage, ...] = (),
+        zensdk_attempts: tuple[ZenSdkReadAttempt, ...] = (),
     ) -> None:
         if quiet_period <= 0 or hard_timeout <= quiet_period:
             raise ValueError("hard_timeout must be greater than quiet_period")
@@ -107,6 +131,7 @@ class ZendureInitialSyncRecorder:
         self._seen_properties: set[str] = set()
         self._seen_devices: set[str] = set()
         self._messages: list[CloudMqttMessage] = []
+        self._zensdk_attempts = zensdk_attempts
         self._connection_events: list[dict[str, Any]] = []
         self._last_connection_signature: tuple[Any, ...] | None = None
         self._expected_devices = tuple(
@@ -116,6 +141,8 @@ class ZendureInitialSyncRecorder:
                 if item.candidate.identity.device_id is not None
             )
         )
+        for message in initial_messages:
+            self.observe_message(message)
 
     def observe_connection(
         self,
@@ -179,6 +206,7 @@ class ZendureInitialSyncRecorder:
             connection_events=tuple(self._connection_events),
             messages=tuple(self._messages),
             expected_devices=self._expected_devices,
+            zensdk_attempts=self._zensdk_attempts,
         )
 
 
@@ -191,6 +219,8 @@ async def async_capture_initial_sync(
     poll_interval: float = 0.1,
     clock: Callable[[], datetime] | None = None,
     monotonic: Callable[[], float] = time.monotonic,
+    initial_messages: tuple[CloudMqttMessage, ...] = (),
+    zensdk_attempts: tuple[ZenSdkReadAttempt, ...] = (),
 ) -> InitialSyncCaptureResult:
     """Capture discovery and MQTT startup until structural traffic is quiet."""
 
@@ -200,6 +230,8 @@ async def async_capture_initial_sync(
         hard_timeout=hard_timeout,
         clock=clock,
         monotonic=monotonic,
+        initial_messages=initial_messages,
+        zensdk_attempts=zensdk_attempts,
     )
     cursor = 0
     def observe_transport() -> None:
@@ -286,7 +318,7 @@ def _raw_message(message: CloudMqttMessage) -> dict[str, Any]:
         payload = message.parsed_payload
     return {
         "timestamp": _iso(message.received_at),
-        "transport": "cloud_mqtt",
+        "transport": message.transport,
         "device_id": message.device_candidate_id,
         "pack_id": message.pack_id,
         "topic": message.topic,
