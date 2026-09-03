@@ -164,6 +164,22 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             await transport.async_start(timeout=0.01)
         self.assertEqual(transport.state, ConnectionState.STOPPED)
         self.assertTrue(session.disconnected)
+        self.assertEqual(transport.connection_variant, "mqtt5_clean")
+
+    async def test_connection_phase_is_retained_after_timeout_cleanup(self):
+        class PhasedHangingSession(HangingSession):
+            connection_phase = "tcp_connected_waiting_for_mqtt_connack"
+
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=lambda _credentials: PhasedHangingSession(None),
+        )
+        with self.assertRaisesRegex(Exception, "connection_timeout"):
+            await transport.async_start(timeout=0.01)
+        self.assertEqual(
+            transport.connection_phase,
+            "tcp_connected_waiting_for_mqtt_connack",
+        )
 
     def test_schema_free_port_1883_is_plain_mqtt(self):
         self.assertEqual(
@@ -181,14 +197,15 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             ("broker.example", 1883, False),
         )
 
-    def test_paho_uses_zendure_cloud_mqtt_31_protocol(self):
+    def test_paho_uses_io_broker_compatible_mqtt_5_protocol(self):
         source = (
             Path(__file__).resolve().parents[1]
             / "custom_components"
             / "battery_smartflow_ai"
             / "zendure_cloud_mqtt.py"
         ).read_text(encoding="utf-8")
-        self.assertIn("protocol=mqtt.MQTTv31", source)
+        self.assertIn("protocol=mqtt.MQTTv5", source)
+        self.assertIn("connect_async", source)
 
 
 if __name__ == "__main__":

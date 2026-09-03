@@ -108,7 +108,7 @@ class ZendureInitialSyncRecorder:
         self._seen_devices: set[str] = set()
         self._messages: list[CloudMqttMessage] = []
         self._connection_events: list[dict[str, Any]] = []
-        self._last_state: ConnectionState | None = None
+        self._last_connection_signature: tuple[ConnectionState, str, str] | None = None
         self._expected_devices = tuple(
             sorted(
                 item.candidate.candidate_id
@@ -117,12 +117,24 @@ class ZendureInitialSyncRecorder:
             )
         )
 
-    def observe_connection(self, state: ConnectionState) -> None:
-        if state == self._last_state:
+    def observe_connection(
+        self,
+        state: ConnectionState,
+        *,
+        variant: str = "unknown",
+        phase: str = "unknown",
+    ) -> None:
+        signature = (state, variant, phase)
+        if signature == self._last_connection_signature:
             return
-        self._last_state = state
+        self._last_connection_signature = signature
         self._connection_events.append(
-            {"timestamp": _iso(self._clock()), "state": state.value}
+            {
+                "timestamp": _iso(self._clock()),
+                "state": state.value,
+                "variant": variant,
+                "phase": phase,
+            }
         )
 
     def observe_message(self, message: CloudMqttMessage) -> None:
@@ -189,18 +201,25 @@ async def async_capture_initial_sync(
         monotonic=monotonic,
     )
     cursor = 0
-    recorder.observe_connection(transport.state)
+    def observe_transport() -> None:
+        recorder.observe_connection(
+            transport.state,
+            variant=str(getattr(transport, "connection_variant", "unknown")),
+            phase=str(getattr(transport, "connection_phase", "unknown")),
+        )
+
+    observe_transport()
     try:
         await transport.async_start(timeout=min(15.0, hard_timeout))
     except Exception as error:
-        recorder.observe_connection(transport.state)
+        observe_transport()
         return recorder.finish(
             complete=False,
             reason=_safe_failure_reason(error),
         )
 
     while True:
-        recorder.observe_connection(transport.state)
+        observe_transport()
         messages = transport.messages
         for message in messages[cursor:]:
             recorder.observe_message(message)
