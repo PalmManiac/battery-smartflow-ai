@@ -11,7 +11,8 @@
       "debug_recording_already_stopped": "Die Debug-Aufzeichnung wurde bereits beendet."
     },
     "error": {
-      "grid_split_missing": "Bei \"Zwei Sensoren\" müssen Netzbezug und Netzeinspeisung beide ausgewählt werden."
+      "grid_split_missing": "Bei \"Zwei Sensoren\" müssen Netzbezug und Netzeinspeisung beide ausgewählt werden.",
+      "invalid_token": "Das Format des App-Tokens ist ungültig.", "invalid_or_expired_token": "Der App-Token ist ungültig oder abgelaufen.", "cannot_connect": "Die Zendure-Cloud konnte nicht erreicht werden.", "timeout": "Die Zendure-Cloud hat nicht rechtzeitig geantwortet.", "invalid_response": "Die Zendure-Cloud hat eine unerwartete Antwort geliefert.", "no_devices": "Für dieses Konto wurden keine Zendure-Geräte gefunden.", "no_mqtt_credentials": "Zendure hat keine Cloud-MQTT-Zugangsdaten geliefert.", "duplicate_device_id": "Zendure hat doppelte Gerätekennungen geliefert.", "incomplete_device": "Zendure hat einen unvollständigen Geräteeintrag geliefert.", "device_not_found": "Das ausgewählte Gerät ist nicht mehr verfügbar."
     },
     "step": {
       "reconfigure": {
@@ -172,9 +173,12 @@
         "menu_options": {
           "general": "Allgemein",
           "expert": "Expertenmodus",
+          "native_zendure": "Nativer Zendure-Test",
           "debug": "Debug-Modus"
         }
       },
+      "native_zendure": {"title": "Nativer Zendure-Test (nur lesend)", "description": "Gib den in der Zendure-App für Home Assistant erzeugten App-Token ein. Er bleibt in der privaten Home-Assistant-Konfiguration und wird niemals in Logs, Sensoren oder Diagnosen ausgegeben. Diese Entwicklungsversion liest ausschließlich Daten. Z-HA bleibt der einzige aktive Steuerpfad.", "data": {"native_zendure_app_token": "Zendure App-Token", "disable_native_zendure_test": "Nativen Zendure-Test abschalten und entfernen"}, "data_description": {"native_zendure_app_token": "Kopiere den vollständigen Home-Assistant-App-Token aus der Zendure-App. Leer lassen, um den privat gespeicherten Token erneut zu verwenden.", "disable_native_zendure_test": "Beendet die rein lesende Verbindung und entfernt den gespeicherten App-Token. Z-HA wird nicht verändert."}},
+      "native_zendure_device": {"title": "Testsystem auswählen", "description": "Zendure hat folgende Geräte gemeldet:\n\n{device_summary}\n\nWähle das System für diesen ersten Test. Alle gefundenen Systeme bleiben in der rein lesenden Übersicht sichtbar; keines wird nativ gesteuert.", "data": {"native_zendure_selected_device": "Testsystem"}, "data_description": {"native_zendure_selected_device": "Für den V5-Entwicklungstest wird zunächst genau ein System ausgewählt. Dadurch wird keine native Steuerung aktiviert."}},
       "general": {
         "title": "Battery SmartFlow AI einstellen – Allgemein",
         "description": "Allgemeine Anlageneinstellungen. Gerätespezifische Regelwerte bleiben Bestandteil des ausgewählten Geräteprofils.",
@@ -344,6 +348,7 @@
       }
     },
     "sensor": {
+      "native_zendure_status": {"name": "Status nativer Zendure-Test", "state": {"disabled": "Nicht eingerichtet", "discovering": "Geräte werden gesucht", "connecting": "Verbindung wird hergestellt", "capturing": "Erstdaten werden erfasst", "observing": "Rein lesende Beobachtung aktiv", "error": "Fehler"}}, "native_zendure_control": {"name": "Native Zendure-Steuerung", "state": {"disabled_zha_active": "Deaktiviert – Z-HA bleibt aktiv"}}, "native_zendure_device_count": {"name": "Gefundene native Zendure-Geräte"}, "native_zendure_message_count": {"name": "Empfangene native Zendure-Nachrichten"}, "native_zendure_last_message": {"name": "Letzte native Zendure-Nachricht"}, "native_zendure_last_capture": {"name": "Paket des nativen Zendure-Erstabgleichs"}, "native_zendure_error": {"name": "Fehler nativer Zendure-Test"},
       "device_profile": {
         "name": "Aktives Geräteprofil"
       },

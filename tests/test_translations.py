@@ -189,6 +189,8 @@ class TranslationCoverageTests(unittest.TestCase):
             "expert",
             "expert_cell_voltage",
             "expert_cell_voltage_config",
+            "native_zendure",
+            "native_zendure_device",
         }
         files = [
             COMPONENT / "strings.json",
@@ -201,7 +203,7 @@ class TranslationCoverageTests(unittest.TestCase):
                 self.assertEqual(set(steps), expected_steps)
                 self.assertEqual(
                     set(steps["init"]["menu_options"]),
-                    {"general", "expert", "debug"},
+                    {"general", "expert", "native_zendure", "debug"},
                 )
                 self.assertEqual(
                     set(steps["debug_start"]["data"]),

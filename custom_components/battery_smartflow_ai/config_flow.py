@@ -57,10 +57,13 @@ from .const import (
     DEFAULT_CELL_VOLTAGE_CUTOFF,
     DEFAULT_CELL_VOLTAGE_RESUME,
     DEFAULT_LEARNED_PLANNING_ENABLED,
+    CONF_NATIVE_ZENDURE_APP_TOKEN,
+    CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
 )
 
 from .device_profiles import DEVICE_PROFILE_MODELS
 from .price_currency import price_input_profile, resolve_price_currency
+from .zendure_cloud import ZendureCloudClient, ZendureCloudError
 
 EMPTY_ENTITY_VALUES = {
     "",
@@ -642,6 +645,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self) -> None:
         self._working_options: dict[str, Any] = {}
+        self._native_bootstrap = None
+        self._native_token: str | None = None
 
     def _get_battery_packs(self) -> int:
         try:
@@ -727,7 +732,143 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         self._working_options = {}
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general", "expert", "debug"],
+            menu_options=["general", "expert", "native_zendure", "debug"],
+        )
+
+    async def async_step_native_zendure(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Validate the App Token and discover devices without storing MQTT data."""
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if bool(user_input.get("disable_native_zendure_test", False)):
+                options = dict(self.config_entry.options)
+                options.pop(CONF_NATIVE_ZENDURE_APP_TOKEN, None)
+                options.pop(CONF_NATIVE_ZENDURE_SELECTED_DEVICE, None)
+                return self.async_create_entry(title="", data=options)
+            token = str(
+                user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
+                or self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
+                or ""
+            ).strip()
+            try:
+                from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+                session = async_get_clientsession(self.hass)
+
+                async def post_json(url: str, **kwargs: Any):
+                    async with session.post(url, **kwargs) as response:
+                        payload = await response.json(content_type=None)
+
+                    class Response:
+                        async def json(self):
+                            return payload
+
+                    return Response()
+
+                self._native_bootstrap = await ZendureCloudClient(
+                    post_json
+                ).async_discover(token)
+                self._native_token = token
+                return await self.async_step_native_zendure_device()
+            except ZendureCloudError as error:
+                errors["base"] = error.reason
+            except Exception:
+                errors["base"] = "cannot_connect"
+
+        return self.async_show_form(
+            step_id="native_zendure",
+            data_schema=self._native_token_schema(),
+            errors=errors,
+        )
+
+    def _native_token_schema(self) -> vol.Schema:
+        configured = bool(
+            self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
+        )
+        token_key = (
+            vol.Optional(CONF_NATIVE_ZENDURE_APP_TOKEN)
+            if configured
+            else vol.Required(CONF_NATIVE_ZENDURE_APP_TOKEN)
+        )
+        schema: dict[Any, Any] = {
+            token_key: selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+            )
+        }
+        if configured:
+            schema[vol.Optional("disable_native_zendure_test", default=False)] = (
+                selector.BooleanSelector()
+            )
+        return vol.Schema(schema)
+
+    async def async_step_native_zendure_device(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Select one test system while retaining all devices for observation."""
+
+        if self._native_bootstrap is None or self._native_token is None:
+            return await self.async_step_native_zendure()
+
+        devices = self._native_bootstrap.devices
+        if user_input is not None:
+            selected = str(user_input[CONF_NATIVE_ZENDURE_SELECTED_DEVICE])
+            valid = {item.candidate.candidate_id for item in devices}
+            if selected not in valid:
+                return self.async_show_form(
+                    step_id="native_zendure_device",
+                    data_schema=self._native_device_schema(devices),
+                    errors={"base": "device_not_found"},
+                    description_placeholders={
+                        "device_summary": self._native_device_summary(devices)
+                    },
+                )
+            options = dict(self.config_entry.options)
+            options[CONF_NATIVE_ZENDURE_APP_TOKEN] = self._native_token
+            options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
+            return self.async_create_entry(title="", data=options)
+
+        return self.async_show_form(
+            step_id="native_zendure_device",
+            data_schema=self._native_device_schema(devices),
+            description_placeholders={
+                "device_summary": self._native_device_summary(devices)
+            },
+        )
+
+    @staticmethod
+    def _native_device_schema(devices) -> vol.Schema:
+        return vol.Schema(
+            {
+                vol.Required(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
+                    selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {
+                                    "value": item.candidate.candidate_id,
+                                    "label": (
+                                        f"{item.candidate.display_name} – "
+                                        f"{item.candidate.identity.product_model or 'Unknown model'} "
+                                        f"({item.pack_count} pack(s))"
+                                    ),
+                                }
+                                for item in devices
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+            }
+        )
+
+    @staticmethod
+    def _native_device_summary(devices) -> str:
+        return "\n".join(
+            f"• {item.candidate.display_name}: "
+            f"{item.candidate.identity.product_model or 'Unknown model'}, "
+            f"{item.pack_count} pack(s), "
+            f"{'online' if item.online is True else 'offline' if item.online is False else 'status unknown'}"
+            for item in devices
         )
 
     def _debug_coordinator(self):

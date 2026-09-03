@@ -2,7 +2,12 @@ from __future__ import annotations
 
 import logging
 
-from .const import DOMAIN, PLATFORMS
+from .const import (
+    CONF_NATIVE_ZENDURE_APP_TOKEN,
+    CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
+    DOMAIN,
+    PLATFORMS,
+)
 
 try:
     import homeassistant.helpers.config_validation as cv
@@ -29,6 +34,16 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_START_DEBUG_RECORDING = "start_debug_recording"
 SERVICE_STOP_DEBUG_RECORDING = "stop_debug_recording"
+
+
+class _DisabledNativeRuntime:
+    """No-op used only by standalone compatibility tests without HA."""
+
+    def start(self) -> None:
+        return None
+
+    async def async_stop(self) -> None:
+        return None
 
 
 def _coordinator_for_call(hass: HomeAssistant, call: ServiceCall) -> ZendureSmartFlowCoordinator:
@@ -91,10 +106,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     coordinator = ZendureSmartFlowCoordinator(hass, entry)
+    if cv is None:
+        coordinator.native_zendure = _DisabledNativeRuntime()
+    else:
+        from .native_zendure_runtime import NativeZendureRuntime
+
+        coordinator.native_zendure = NativeZendureRuntime(
+            hass,
+            app_token=entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
+            selected_device=entry.options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
+            notify=coordinator.async_update_listeners,
+        )
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    coordinator.native_zendure.start()
+    if hasattr(entry, "async_on_unload") and hasattr(entry, "add_update_listener"):
+        entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
 
 
@@ -103,8 +132,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         if coordinator:
-            await coordinator.async_shutdown()
+            await coordinator.native_zendure.async_stop()
+            shutdown = getattr(coordinator, "async_shutdown", None)
+            if shutdown is not None:
+                await shutdown()
     return unload_ok
+
+
+async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload after options changes, including native discovery setup."""
+
+    await hass.config_entries.async_reload(entry.entry_id)
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old config entries to new version."""

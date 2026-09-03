@@ -11,7 +11,8 @@
       "debug_integration_not_loaded": "Battery SmartFlow AI n’est pas chargé actuellement."
     },
     "error": {
-      "grid_split_missing": "Avec deux capteurs, l’importation et l’exportation réseau doivent être sélectionnées."
+      "grid_split_missing": "Avec deux capteurs, l’importation et l’exportation réseau doivent être sélectionnées.",
+      "invalid_token": "Le format du jeton d’application est invalide.", "invalid_or_expired_token": "Le jeton d’application est invalide ou expiré.", "cannot_connect": "Impossible de se connecter à Zendure Cloud.", "timeout": "Zendure Cloud n’a pas répondu à temps.", "invalid_response": "Zendure Cloud a renvoyé une réponse inattendue.", "no_devices": "Aucun appareil Zendure n’a été trouvé.", "no_mqtt_credentials": "Zendure n’a fourni aucun accès Cloud MQTT.", "duplicate_device_id": "Zendure a renvoyé des identités en double.", "incomplete_device": "Zendure a renvoyé un appareil incomplet.", "device_not_found": "L’appareil sélectionné n’est plus disponible."
     },
     "step": {
       "reconfigure": {
@@ -172,9 +173,12 @@
         "menu_options": {
           "general": "Général",
           "expert": "Mode expert",
+          "native_zendure": "Test Zendure natif",
           "debug": "Mode débogage"
         }
       },
+      "native_zendure": {"title": "Test Zendure natif en lecture seule", "description": "Saisissez le jeton d’application Home Assistant créé dans l’application Zendure. Cette version de développement lit uniquement les données. Z-HA reste le seul chemin de contrôle actif.", "data": {"native_zendure_app_token": "Jeton d’application Zendure", "disable_native_zendure_test": "Désactiver et supprimer le test Zendure natif"}, "data_description": {"native_zendure_app_token": "Copiez le jeton Home Assistant complet. Laissez vide pour réutiliser le jeton enregistré.", "disable_native_zendure_test": "Arrête la connexion en lecture seule et supprime le jeton. Z-HA n’est pas modifié."}},
+      "native_zendure_device": {"title": "Sélectionner le système de test", "description": "Zendure a signalé ces appareils :\n\n{device_summary}\n\nSélectionnez le système pour ce premier test. Aucun appareil n’est contrôlé nativement.", "data": {"native_zendure_selected_device": "Système de test"}, "data_description": {"native_zendure_selected_device": "La sélection n’active pas le contrôle natif."}},
       "general": {
         "title": "Paramètres de Battery SmartFlow AI – Général",
         "description": "Paramètres généraux de l’installation. Les valeurs de régulation propres à l’appareil restent intégrées au profil sélectionné.",
@@ -344,6 +348,7 @@
       }
     },
     "sensor": {
+      "native_zendure_status": {"name": "État du test Zendure natif", "state": {"disabled": "Non configuré", "discovering": "Recherche des appareils", "connecting": "Connexion", "capturing": "Collecte initiale", "observing": "Observation en lecture seule", "error": "Erreur"}}, "native_zendure_control": {"name": "Contrôle Zendure natif", "state": {"disabled_zha_active": "Désactivé – Z-HA reste actif"}}, "native_zendure_device_count": {"name": "Appareils Zendure natifs trouvés"}, "native_zendure_message_count": {"name": "Messages Zendure natifs reçus"}, "native_zendure_last_message": {"name": "Dernier message Zendure natif"}, "native_zendure_last_capture": {"name": "Paquet de synchronisation Zendure"}, "native_zendure_error": {"name": "Erreur Zendure native"},
       "device_profile": {
         "name": "Profil d’appareil actif"
       },

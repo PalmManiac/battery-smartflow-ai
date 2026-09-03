@@ -11,7 +11,8 @@
       "debug_recording_already_stopped": "De debugopname is al gestopt."
     },
     "error": {
-      "grid_split_missing": "Bij gebruik van twee sensoren moeten zowel netafname als netteruglevering zijn geselecteerd."
+      "grid_split_missing": "Bij gebruik van twee sensoren moeten zowel netafname als netteruglevering zijn geselecteerd.",
+      "invalid_token": "De indeling van het app-token is ongeldig.", "invalid_or_expired_token": "Het app-token is ongeldig of verlopen.", "cannot_connect": "Kan geen verbinding maken met Zendure Cloud.", "timeout": "Zendure Cloud antwoordde niet op tijd.", "invalid_response": "Zendure Cloud gaf een onverwacht antwoord.", "no_devices": "Er zijn geen Zendure-apparaten gevonden.", "no_mqtt_credentials": "Zendure gaf geen Cloud MQTT-toegang.", "duplicate_device_id": "Zendure gaf dubbele apparaatidentiteiten.", "incomplete_device": "Zendure gaf een onvolledig apparaat terug.", "device_not_found": "Het geselecteerde apparaat is niet meer beschikbaar."
     },
     "step": {
       "reconfigure": {
@@ -172,9 +173,12 @@
         "menu_options": {
           "general": "Algemeen",
           "expert": "Expertmodus",
+          "native_zendure": "Native Zendure-test",
           "debug": "Debugmodus"
         }
       },
+      "native_zendure": {"title": "Native Zendure-test (alleen-lezen)", "description": "Voer het Home Assistant-app-token uit de Zendure-app in. Deze ontwikkelversie leest uitsluitend gegevens. Z-HA blijft het enige actieve besturingspad.", "data": {"native_zendure_app_token": "Zendure app-token", "disable_native_zendure_test": "Native Zendure-test uitschakelen en verwijderen"}, "data_description": {"native_zendure_app_token": "Kopieer het volledige Home Assistant-app-token. Laat leeg om het opgeslagen token opnieuw te gebruiken.", "disable_native_zendure_test": "Stopt de alleen-lezen verbinding en verwijdert het token. Z-HA blijft ongewijzigd."}},
+      "native_zendure_device": {"title": "Testsysteem selecteren", "description": "Zendure meldde deze apparaten:\n\n{device_summary}\n\nSelecteer het systeem voor deze eerste test. Geen enkel apparaat wordt native bestuurd.", "data": {"native_zendure_selected_device": "Testsysteem"}, "data_description": {"native_zendure_selected_device": "De selectie activeert geen native besturing."}},
       "general": {
         "title": "Battery SmartFlow AI instellen – Algemeen",
         "description": "Algemene installatie-instellingen. Apparaatspecifieke regelwaarden blijven onderdeel van het geselecteerde apparaatprofiel.",
@@ -344,6 +348,7 @@
       }
     },
     "sensor": {
+      "native_zendure_status": {"name": "Status native Zendure-test", "state": {"disabled": "Niet ingesteld", "discovering": "Apparaten zoeken", "connecting": "Verbinden", "capturing": "Eerste gegevens verzamelen", "observing": "Alleen-lezen observatie actief", "error": "Fout"}}, "native_zendure_control": {"name": "Native Zendure-besturing", "state": {"disabled_zha_active": "Uitgeschakeld – Z-HA blijft actief"}}, "native_zendure_device_count": {"name": "Gevonden native Zendure-apparaten"}, "native_zendure_message_count": {"name": "Ontvangen native Zendure-berichten"}, "native_zendure_last_message": {"name": "Laatste native Zendure-bericht"}, "native_zendure_last_capture": {"name": "Native Zendure-synchronisatiepakket"}, "native_zendure_error": {"name": "Native Zendure-fout"},
       "device_profile": {
         "name": "Actief apparaatprofiel"
       },
