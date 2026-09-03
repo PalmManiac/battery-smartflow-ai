@@ -108,7 +108,7 @@ class ZendureInitialSyncRecorder:
         self._seen_devices: set[str] = set()
         self._messages: list[CloudMqttMessage] = []
         self._connection_events: list[dict[str, Any]] = []
-        self._last_connection_signature: tuple[ConnectionState, str, str] | None = None
+        self._last_connection_signature: tuple[Any, ...] | None = None
         self._expected_devices = tuple(
             sorted(
                 item.candidate.candidate_id
@@ -123,19 +123,20 @@ class ZendureInitialSyncRecorder:
         *,
         variant: str = "unknown",
         phase: str = "unknown",
+        diagnostics: Mapping[str, str | bool] | None = None,
     ) -> None:
-        signature = (state, variant, phase)
+        safe_diagnostics = dict(diagnostics or {})
+        signature = (state, variant, phase, tuple(sorted(safe_diagnostics.items())))
         if signature == self._last_connection_signature:
             return
         self._last_connection_signature = signature
-        self._connection_events.append(
-            {
-                "timestamp": _iso(self._clock()),
-                "state": state.value,
-                "variant": variant,
-                "phase": phase,
-            }
-        )
+        self._connection_events.append({
+            "timestamp": _iso(self._clock()),
+            "state": state.value,
+            "variant": variant,
+            "phase": phase,
+            **safe_diagnostics,
+        })
 
     def observe_message(self, message: CloudMqttMessage) -> None:
         """Record every message; only novel structure extends the quiet phase."""
@@ -206,6 +207,7 @@ async def async_capture_initial_sync(
             transport.state,
             variant=str(getattr(transport, "connection_variant", "unknown")),
             phase=str(getattr(transport, "connection_phase", "unknown")),
+            diagnostics=getattr(transport, "connection_diagnostics", None),
         )
 
     observe_transport()
