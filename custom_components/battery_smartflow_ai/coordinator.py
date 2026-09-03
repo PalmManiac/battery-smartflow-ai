@@ -99,6 +99,7 @@ from .const import (
     # statuses
     STATUS_OK,
     STATUS_SENSOR_INVALID,
+    AI_STATUS_STANDBY,
     RECO_STANDBY,
     RECO_CHARGE,
     RECO_DISCHARGE,
