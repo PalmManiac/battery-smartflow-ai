@@ -21,6 +21,7 @@ from .zendure_initial_sync import (
 )
 from .zendure_normalizer import ZendureCloudNormalizer
 from .zendure_privacy import ZendureDiagnosticSanitizer
+from .zendure_zensdk import async_read_zensdk_reports
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ STATUS_ERROR = "error"
 @dataclass(slots=True)
 class _JsonPayloadResponse:
     payload: Any
+    status: int = 200
 
     async def json(self) -> Any:
         return self.payload
@@ -68,6 +70,7 @@ class NativeZendureRuntime:
         self._normalizer: ZendureCloudNormalizer | None = None
         self._processed_messages = 0
         self._last_processed_message: Any | None = None
+        self._last_received_at: Any | None = None
 
     @property
     def configured(self) -> bool:
@@ -105,7 +108,8 @@ class NativeZendureRuntime:
             "native_zendure_device_count": len(self._inventory.devices),
             "native_zendure_message_count": self._processed_messages,
             "native_zendure_last_message": (
-                self._transport.last_message_at if self._transport else None
+                self._last_received_at
+                or (self._transport.last_message_at if self._transport else None)
             ),
             "native_zendure_last_capture": (
                 Path(self._capture_path).name if self._capture_path else None
@@ -173,10 +177,19 @@ class NativeZendureRuntime:
                     system_id=candidate_id,
                 )
             self._normalizer = ZendureCloudNormalizer(bootstrap)
+            zensdk = await async_read_zensdk_reports(
+                bootstrap,
+                self._get_json,
+            )
             self._transport = ZendureCloudMqttTransport(bootstrap)
             self._set_status(STATUS_CONNECTING)
             self._set_status(STATUS_CAPTURING)
-            capture = await async_capture_initial_sync(bootstrap, self._transport)
+            capture = await async_capture_initial_sync(
+                bootstrap,
+                self._transport,
+                initial_messages=zensdk.messages,
+                zensdk_attempts=zensdk.attempts,
+            )
             self._capture_complete = capture.complete
             self._capture_reason = capture.completion_reason
             exported = await self._hass.async_add_executor_job(
@@ -187,7 +200,7 @@ class NativeZendureRuntime:
                 )
             )
             self._capture_path = str(exported.path)
-            self._consume_messages()
+            self._consume_captured_messages(capture.messages)
             if capture.completion_reason not in {
                 "initial_sync_quiet",
                 "hard_timeout",
@@ -217,6 +230,16 @@ class NativeZendureRuntime:
             payload = await response.json(content_type=None)
         return _JsonPayloadResponse(payload)
 
+    async def _get_json(self, url: str, **kwargs: Any) -> _JsonPayloadResponse:
+        session = async_get_clientsession(self._hass)
+        async with session.get(url, **kwargs) as response:
+            payload = (
+                await response.json(content_type=None)
+                if response.status == 200
+                else None
+            )
+            return _JsonPayloadResponse(payload, response.status)
+
     def _consume_messages(self) -> None:
         if self._transport is None or self._normalizer is None:
             return
@@ -228,7 +251,24 @@ class NativeZendureRuntime:
                     start = index + 1
                     break
         new_messages = messages[start:]
-        for message in new_messages:
+        self._apply_messages(new_messages)
+        if new_messages:
+            self._last_processed_message = new_messages[-1]
+
+    def _consume_captured_messages(self, messages: tuple[Any, ...]) -> None:
+        """Apply ZenSDK seed data and MQTT messages captured during startup."""
+
+        self._apply_messages(messages)
+        cloud_messages = [
+            message for message in messages if message.transport == "cloud_mqtt"
+        ]
+        if cloud_messages:
+            self._last_processed_message = cloud_messages[-1]
+
+    def _apply_messages(self, messages: tuple[Any, ...]) -> None:
+        if self._normalizer is None:
+            return
+        for message in messages:
             result = self._normalizer.apply(message)
             if result is None:
                 continue
@@ -244,9 +284,11 @@ class NativeZendureRuntime:
                 for pack in state.packs
             )
             self._inventory.reconcile_packs(state.system_id, packs)
-        if new_messages:
-            self._last_processed_message = new_messages[-1]
-            self._processed_messages += len(new_messages)
+        if messages:
+            self._last_received_at = max(
+                message.received_at for message in messages
+            )
+            self._processed_messages += len(messages)
 
     def _set_status(self, value: str) -> None:
         self._status = value

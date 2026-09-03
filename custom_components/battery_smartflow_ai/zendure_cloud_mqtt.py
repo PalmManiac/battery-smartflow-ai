@@ -63,6 +63,7 @@ class CloudMqttMessage:
     pack_id: str | None
     known_topic: bool
     session_number: int
+    transport: str = "cloud_mqtt"
 
 
 @dataclass(slots=True)

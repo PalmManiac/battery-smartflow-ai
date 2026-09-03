@@ -270,6 +270,10 @@ class ZendureCloudNormalizer:
         self._last_message: dict[str, datetime | None] = {
             candidate_id: None for candidate_id in self._models
         }
+        self._observed_transport: dict[str, ZendureTransport] = {
+            candidate_id: ZendureTransport.CLOUD_MQTT
+            for candidate_id in self._models
+        }
         self._unknown_main = {
             candidate_id: set() for candidate_id in self._models
         }
@@ -308,6 +312,11 @@ class ZendureCloudNormalizer:
             return None
         observed_at = message.received_at
         self._last_message[system_id] = observed_at
+        self._observed_transport[system_id] = (
+            ZendureTransport.ZENSDK
+            if message.transport == "zensdk"
+            else ZendureTransport.CLOUD_MQTT
+        )
         payload = message.parsed_payload
         if isinstance(payload, Mapping):
             properties = payload.get("properties")
@@ -355,7 +364,7 @@ class ZendureCloudNormalizer:
         )
         state = NeutralDeviceState(
             system_id=system_id,
-            observed_transport=ZendureTransport.CLOUD_MQTT,
+            observed_transport=self._observed_transport[system_id],
             model=self._models[system_id],
             firmware=device_value("firmware"),
             online=MeasuredValue(
