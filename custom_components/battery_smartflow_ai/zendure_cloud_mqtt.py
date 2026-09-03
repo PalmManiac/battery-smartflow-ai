@@ -157,7 +157,7 @@ class ZendureCloudMqttTransport:
     def connection_variant(self) -> str:
         """Return a safe identifier for the currently tested Cloud dialect."""
 
-        return "mqtt5_clean"
+        return "mqtt31_persistent"
 
     @property
     def connection_phase(self) -> str:
@@ -409,7 +409,8 @@ class PahoReadOnlyMqttSession:
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=credentials.client_id,
-            protocol=mqtt.MQTTv5,
+            clean_session=False,
+            protocol=mqtt.MQTTv31,
         )
         self._client.username_pw_set(credentials.username, credentials.password)
         if self._tls:
