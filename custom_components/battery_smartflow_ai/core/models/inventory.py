@@ -440,6 +440,25 @@ class DeviceInventory:
             control_state=DeviceControlState.OFFLINE,
         )
 
+    def mark_available(self, system_id: str) -> None:
+        """Restore observation after fresh data without re-enabling control."""
+
+        device = self._devices[system_id]
+        if device.online:
+            return
+        state = (
+            DeviceControlState.HEMS_BLOCKED
+            if device.hems_active
+            else DeviceControlState.OBSERVATION
+            if device.supported
+            else DeviceControlState.UNSUPPORTED
+        )
+        self._devices[system_id] = replace(
+            device,
+            online=True,
+            control_state=state,
+        )
+
     def as_dict(self) -> dict[str, Any]:
         return {
             "schema_version": 1,

@@ -78,7 +78,9 @@ class InitialSyncCaptureResult:
                 "mqtt_messages": mqtt_messages,
                 "zensdk_requests": [
                     {
-                        "device_id": item.device_candidate_id,
+                        "device_id": _diagnostic_device_id(
+                            item.device_candidate_id
+                        ),
                         "path": "/properties/report",
                         "address_source": item.address_source,
                         "result": item.result,
@@ -319,7 +321,7 @@ def _raw_message(message: CloudMqttMessage) -> dict[str, Any]:
     return {
         "timestamp": _iso(message.received_at),
         "transport": message.transport,
-        "device_id": message.device_candidate_id,
+        "device_id": _diagnostic_device_id(message.device_candidate_id),
         "pack_id": message.pack_id,
         "topic": message.topic,
         "payload_format": message.payload_format,
@@ -371,8 +373,13 @@ def _build_summary(
             entry["last_seen"] = _iso(message.received_at)
     return {
         "device_count": len(expected_devices),
-        "devices_with_messages": sorted(seen_devices),
-        "devices_without_messages": sorted(set(expected_devices) - seen_devices),
+        "devices_with_messages": sorted(
+            _diagnostic_device_id(item) for item in seen_devices
+        ),
+        "devices_without_messages": sorted(
+            _diagnostic_device_id(item)
+            for item in set(expected_devices) - seen_devices
+        ),
         "pack_ids": sorted(packs),
         "models": sorted(
             {
@@ -406,6 +413,15 @@ def _payload_pack_ids(value: Any) -> set[str]:
                     result.add(pack_id)
                     break
     return result
+
+
+def _diagnostic_device_id(value: str | None) -> str | None:
+    """Use the source device ID so one device receives one export alias."""
+
+    if value is None:
+        return None
+    prefix = "cloud_mqtt:"
+    return value[len(prefix):] if value.startswith(prefix) else value
 
 
 def _property_items(value: Any, prefix: str = "") -> list[tuple[str, Any]]:

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from base64 import b64encode
 from datetime import datetime, timezone
+import sys
+from types import SimpleNamespace
+from types import ModuleType
 import unittest
 
 from support import bootstrap as bootstrap_test_environment
@@ -11,10 +14,18 @@ from support import bootstrap as bootstrap_test_environment
 
 bootstrap_test_environment()
 
+helpers_module = ModuleType("homeassistant.helpers")
+aiohttp_module = ModuleType("homeassistant.helpers.aiohttp_client")
+aiohttp_module.async_get_clientsession = lambda _hass: None
+sys.modules.setdefault("homeassistant.helpers", helpers_module)
+sys.modules.setdefault("homeassistant.helpers.aiohttp_client", aiohttp_module)
+
 from custom_components.battery_smartflow_ai.zendure_cloud import (  # noqa: E402
     ZendureCloudClient,
 )
 from custom_components.battery_smartflow_ai.zendure_zensdk import (  # noqa: E402
+    ZenSdkReadAttempt,
+    ZenSdkReadResult,
     _candidate_addresses,
     async_read_zensdk_reports,
 )
@@ -22,7 +33,11 @@ from custom_components.battery_smartflow_ai.zendure_normalizer import (  # noqa:
     ZendureCloudNormalizer,
 )
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
+    DeviceControlState,
     ZendureTransport,
+)
+from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
+    NativeZendureRuntime,
 )
 
 
@@ -144,6 +159,61 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
                 "serial?query=1",
             ),
             (),
+        )
+
+    async def test_runtime_marks_offline_after_three_failures_and_recovers_read_only(self):
+        data = await make_bootstrap()
+        candidate_id = data.devices[0].candidate.candidate_id
+        runtime = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device=None,
+            notify=lambda: None,
+        )
+        data.register_candidates(runtime._inventory)
+        runtime._inventory.add_observed_system(
+            candidate_id,
+            system_id=candidate_id,
+        )
+        runtime._normalizer = ZendureCloudNormalizer(data)
+        failure = ZenSdkReadResult(
+            (),
+            (
+                ZenSdkReadAttempt(
+                    candidate_id,
+                    "device_list_ip",
+                    "timeout",
+                ),
+            ),
+        )
+
+        runtime._record_zensdk_cycle(failure)
+        runtime._record_zensdk_cycle(failure)
+        self.assertTrue(runtime._inventory.devices[candidate_id].online)
+        runtime._record_zensdk_cycle(failure)
+        self.assertFalse(runtime._inventory.devices[candidate_id].online)
+        self.assertEqual(
+            runtime._inventory.devices[candidate_id].control_state,
+            DeviceControlState.OFFLINE,
+        )
+
+        async def get(_url, **_kwargs):
+            return Response({"properties": {"electricLevel": 81}})
+
+        success = await async_read_zensdk_reports(data, get)
+        runtime._record_zensdk_cycle(success)
+        runtime._apply_messages(success.messages)
+
+        self.assertTrue(runtime._inventory.devices[candidate_id].online)
+        self.assertEqual(
+            runtime._inventory.devices[candidate_id].control_state,
+            DeviceControlState.OBSERVATION,
+        )
+        self.assertEqual(runtime._zensdk_failures[candidate_id], 0)
+        self.assertEqual(runtime._processed_messages, 1)
+        self.assertEqual(
+            runtime._states[candidate_id].observed_transport,
+            ZendureTransport.ZENSDK,
         )
 
 

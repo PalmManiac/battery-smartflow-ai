@@ -396,6 +396,14 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(
             package["bsfai_interpretation"]["pack_ids"][0].startswith("ZD_SERIAL_A")
         )
+        self.assertEqual(
+            package["raw_communication"]["device_list"][0]["deviceKey"],
+            package["raw_communication"]["zensdk_responses"][0]["device_id"],
+        )
+        self.assertEqual(
+            package["bsfai_interpretation"]["devices_with_messages"],
+            [package["raw_communication"]["device_list"][0]["deviceKey"]],
+        )
 
     async def test_export_size_limit_is_enforced(self):
         result = self.recorder().finish(complete=False, reason="test")

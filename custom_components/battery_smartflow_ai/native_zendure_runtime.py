@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from functools import partial
 import logging
 from pathlib import Path
@@ -21,7 +22,7 @@ from .zendure_initial_sync import (
 )
 from .zendure_normalizer import ZendureCloudNormalizer
 from .zendure_privacy import ZendureDiagnosticSanitizer
-from .zendure_zensdk import async_read_zensdk_reports
+from .zendure_zensdk import ZenSdkReadResult, async_read_zensdk_reports
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,6 +33,8 @@ STATUS_CONNECTING = "connecting"
 STATUS_CAPTURING = "capturing"
 STATUS_OBSERVING = "observing"
 STATUS_ERROR = "error"
+ZENSDK_POLL_INTERVAL = 5.0
+ZENSDK_OFFLINE_AFTER_FAILURES = 3
 
 
 @dataclass(slots=True)
@@ -71,6 +74,10 @@ class NativeZendureRuntime:
         self._processed_messages = 0
         self._last_processed_message: Any | None = None
         self._last_received_at: Any | None = None
+        self._bootstrap: Any | None = None
+        self._zensdk_failures: dict[str, int] = {}
+        self._zensdk_last_result: dict[str, str] = {}
+        self._zensdk_last_success: dict[str, datetime] = {}
 
     @property
     def configured(self) -> bool:
@@ -120,7 +127,10 @@ class NativeZendureRuntime:
     def overview_attributes(self) -> dict[str, Any]:
         systems = []
         overview = build_native_device_overview(self._inventory, self._states)
+        now = datetime.now(timezone.utc)
         for system_id, item in zip(sorted(self._inventory.devices), overview):
+            state = self._states.get(system_id)
+            last_data = item.last_message_at
             systems.append(
                 {
                     "id": item.public_id,
@@ -131,6 +141,15 @@ class NativeZendureRuntime:
                     "online": item.online,
                     "status": item.status_text,
                     "transport": item.selected_transport.value,
+                    "observed_transport": (
+                        state.observed_transport.value if state is not None else None
+                    ),
+                    "last_data_at": last_data,
+                    "data_age_seconds": (
+                        max(0.0, round((now - last_data).total_seconds(), 1))
+                        if last_data is not None
+                        else None
+                    ),
                     "packs": [
                         {
                             "id": pack.public_id,
@@ -161,6 +180,8 @@ class NativeZendureRuntime:
                 "capture_complete": self._capture_complete,
                 "capture_reason": self._capture_reason,
                 "error": self._error,
+                "zensdk_poll_interval_seconds": ZENSDK_POLL_INTERVAL,
+                "zensdk_devices": self._zensdk_diagnostics(),
                 "overview": self.overview_attributes(),
             }
         )
@@ -170,6 +191,7 @@ class NativeZendureRuntime:
             self._set_status(STATUS_DISCOVERING)
             client = ZendureCloudClient(self._post_json)
             bootstrap = await client.async_discover(self._app_token or "")
+            self._bootstrap = bootstrap
             bootstrap.register_candidates(self._inventory)
             for candidate_id in tuple(self._inventory.candidates):
                 self._inventory.add_observed_system(
@@ -181,6 +203,7 @@ class NativeZendureRuntime:
                 bootstrap,
                 self._get_json,
             )
+            self._record_zensdk_cycle(zensdk)
             self._transport = ZendureCloudMqttTransport(bootstrap)
             self._set_status(STATUS_CONNECTING)
             self._set_status(STATUS_CAPTURING)
@@ -209,8 +232,16 @@ class NativeZendureRuntime:
                 self._set_status(STATUS_ERROR)
                 return
             self._set_status(STATUS_OBSERVING)
+            next_zensdk_poll = (
+                asyncio.get_running_loop().time() + ZENSDK_POLL_INTERVAL
+            )
             while True:
                 self._consume_messages()
+                loop = asyncio.get_running_loop()
+                if loop.time() >= next_zensdk_poll:
+                    await self._async_poll_zensdk()
+                    next_zensdk_poll = loop.time() + ZENSDK_POLL_INTERVAL
+                self._refresh_snapshots()
                 self._notify()
                 await asyncio.sleep(1.0)
         except asyncio.CancelledError:
@@ -265,6 +296,71 @@ class NativeZendureRuntime:
         if cloud_messages:
             self._last_processed_message = cloud_messages[-1]
 
+    async def _async_poll_zensdk(self) -> None:
+        if self._bootstrap is None:
+            return
+        result = await async_read_zensdk_reports(
+            self._bootstrap,
+            self._get_json,
+        )
+        self._record_zensdk_cycle(result)
+        self._apply_messages(result.messages)
+
+    def _record_zensdk_cycle(self, result: ZenSdkReadResult) -> None:
+        successful = {
+            message.device_candidate_id
+            for message in result.messages
+            if message.device_candidate_id is not None
+        }
+        attempted = {item.device_candidate_id for item in result.attempts}
+        last_results = {
+            candidate_id: next(
+                item.result
+                for item in reversed(result.attempts)
+                if item.device_candidate_id == candidate_id
+            )
+            for candidate_id in attempted
+        }
+        observed_at = datetime.now(timezone.utc)
+        for candidate_id in attempted:
+            self._zensdk_last_result[candidate_id] = last_results[candidate_id]
+            if candidate_id in successful:
+                self._zensdk_failures[candidate_id] = 0
+                self._zensdk_last_success[candidate_id] = observed_at
+                if self._normalizer is not None:
+                    self._normalizer.set_online(candidate_id, True)
+                if candidate_id in self._inventory.devices:
+                    self._inventory.mark_available(candidate_id)
+                continue
+            failures = self._zensdk_failures.get(candidate_id, 0) + 1
+            self._zensdk_failures[candidate_id] = failures
+            if failures >= ZENSDK_OFFLINE_AFTER_FAILURES:
+                if self._normalizer is not None:
+                    self._normalizer.set_online(candidate_id, False)
+                if candidate_id in self._inventory.devices:
+                    self._inventory.mark_unavailable(candidate_id)
+
+    def _refresh_snapshots(self) -> None:
+        if self._normalizer is None:
+            return
+        for system_id in tuple(self._inventory.devices):
+            result = self._normalizer.snapshot(
+                system_id,
+                now=datetime.now(timezone.utc),
+            )
+            self._apply_state(result.state)
+
+    def _zensdk_diagnostics(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "device_id": candidate_id,
+                "last_result": self._zensdk_last_result.get(candidate_id),
+                "consecutive_failures": self._zensdk_failures.get(candidate_id, 0),
+                "last_success": self._zensdk_last_success.get(candidate_id),
+            }
+            for candidate_id in sorted(self._zensdk_last_result)
+        ]
+
     def _apply_messages(self, messages: tuple[Any, ...]) -> None:
         if self._normalizer is None:
             return
@@ -272,23 +368,25 @@ class NativeZendureRuntime:
             result = self._normalizer.apply(message)
             if result is None:
                 continue
-            state = result.state
-            self._states[state.system_id] = state
-            packs = tuple(
-                BatteryPackIdentity(
-                    pack_id=pack.pack_id,
-                    parent_system_id=state.system_id,
-                    pack_type=_value(pack.pack_type),
-                    firmware=_value(pack.firmware),
-                )
-                for pack in state.packs
-            )
-            self._inventory.reconcile_packs(state.system_id, packs)
+            self._apply_state(result.state)
         if messages:
             self._last_received_at = max(
                 message.received_at for message in messages
             )
             self._processed_messages += len(messages)
+
+    def _apply_state(self, state: Any) -> None:
+        self._states[state.system_id] = state
+        packs = tuple(
+            BatteryPackIdentity(
+                pack_id=pack.pack_id,
+                parent_system_id=state.system_id,
+                pack_type=_value(pack.pack_type),
+                firmware=_value(pack.firmware),
+            )
+            for pack in state.packs
+        )
+        self._inventory.reconcile_packs(state.system_id, packs)
 
     def _set_status(self, value: str) -> None:
         self._status = value
