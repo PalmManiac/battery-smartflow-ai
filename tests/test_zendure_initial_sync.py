@@ -330,7 +330,7 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         class FailedTransport:
             state = ConnectionState.DISCONNECTED
             messages = ()
-            connection_variant = "mqtt5_clean"
+            connection_variant = "mqtt31_persistent"
             connection_phase = "dns_or_tcp_connect"
 
             async def async_start(self, *, timeout):
@@ -351,7 +351,7 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             result.connection_events[-1]["variant"],
-            "mqtt5_clean",
+            "mqtt31_persistent",
         )
 
     async def test_orchestrator_completes_after_real_quiet_period(self):

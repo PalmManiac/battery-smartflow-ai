@@ -164,7 +164,7 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             await transport.async_start(timeout=0.01)
         self.assertEqual(transport.state, ConnectionState.STOPPED)
         self.assertTrue(session.disconnected)
-        self.assertEqual(transport.connection_variant, "mqtt5_clean")
+        self.assertEqual(transport.connection_variant, "mqtt31_persistent")
 
     async def test_connection_phase_is_retained_after_timeout_cleanup(self):
         class PhasedHangingSession(HangingSession):
@@ -197,14 +197,15 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             ("broker.example", 1883, False),
         )
 
-    def test_paho_uses_io_broker_compatible_mqtt_5_protocol(self):
+    def test_paho_uses_zendure_ha_mqtt_31_persistent_session(self):
         source = (
             Path(__file__).resolve().parents[1]
             / "custom_components"
             / "battery_smartflow_ai"
             / "zendure_cloud_mqtt.py"
         ).read_text(encoding="utf-8")
-        self.assertIn("protocol=mqtt.MQTTv5", source)
+        self.assertIn("protocol=mqtt.MQTTv31", source)
+        self.assertIn("clean_session=False", source)
         self.assertIn("connect_async", source)
 
 
