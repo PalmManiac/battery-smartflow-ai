@@ -503,11 +503,11 @@ class PahoReadOnlyMqttSession:
         reason_code: Any,
         _properties: Any,
     ) -> None:
+        successful = _reason_code_success(reason_code)
         self._connection_phase = (
-            "mqtt_connack_accepted" if int(reason_code) == 0 else "mqtt_connack_rejected"
+            "mqtt_connack_accepted" if successful else "mqtt_connack_rejected"
         )
         if self._on_connect is not None:
-            successful = int(reason_code) == 0
             self._on_connect(successful, None if successful else str(reason_code))
 
     def _paho_socket_open(self, _client: Any, _userdata: Any, mqtt_socket: Any) -> None:
@@ -536,7 +536,9 @@ class PahoReadOnlyMqttSession:
         _properties: Any,
     ) -> None:
         if self._on_disconnect is not None:
-            self._on_disconnect(None if int(reason_code) == 0 else str(reason_code))
+            self._on_disconnect(
+                None if _reason_code_success(reason_code) else str(reason_code)
+            )
 
     def _paho_message(self, _client: Any, _userdata: Any, message: Any) -> None:
         if self._on_message is not None:
@@ -552,6 +554,19 @@ def _safe_socket_family(mqtt_socket: Any) -> str:
     if family == socket.AF_INET6:
         return "ipv6"
     return "other"
+
+
+def _reason_code_success(reason_code: Any) -> bool:
+    """Handle Paho 2.x ReasonCode objects and legacy integer codes."""
+
+    is_failure = getattr(reason_code, "is_failure", None)
+    if isinstance(is_failure, bool):
+        return not is_failure
+    value = getattr(reason_code, "value", reason_code)
+    try:
+        return int(value) == 0
+    except (TypeError, ValueError):
+        return str(reason_code).strip().casefold() == "success"
 
 
 def _safe_peer_scope(mqtt_socket: Any) -> str:

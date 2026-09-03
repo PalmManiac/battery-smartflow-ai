@@ -16,6 +16,7 @@ from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     ConnectionState,
     ZendureCloudMqttTransport,
     _parse_broker_url,
+    _reason_code_success,
     _safe_peer_scope,
     _safe_socket_family,
 )
@@ -235,6 +236,23 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(_safe_peer_scope(FakeSocket("2606:4700:4700::1111")), "public")
         self.assertEqual(_safe_peer_scope(FakeSocket("::1")), "loopback")
+
+    def test_paho_reason_code_objects_do_not_require_integer_conversion(self):
+        class ReasonCode:
+            def __init__(self, *, is_failure, value):
+                self.is_failure = is_failure
+                self.value = value
+
+            def __int__(self):
+                raise TypeError("ReasonCode is not directly integer-convertible")
+
+            def __str__(self):
+                return "Success" if not self.is_failure else "Not authorized"
+
+        self.assertTrue(_reason_code_success(ReasonCode(is_failure=False, value=0)))
+        self.assertFalse(_reason_code_success(ReasonCode(is_failure=True, value=135)))
+        self.assertTrue(_reason_code_success(0))
+        self.assertFalse(_reason_code_success(5))
 
 
 if __name__ == "__main__":
