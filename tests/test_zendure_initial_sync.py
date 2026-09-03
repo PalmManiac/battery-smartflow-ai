@@ -330,6 +330,8 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         class FailedTransport:
             state = ConnectionState.DISCONNECTED
             messages = ()
+            connection_variant = "mqtt5_clean"
+            connection_phase = "dns_or_tcp_connect"
 
             async def async_start(self, *, timeout):
                 raise RuntimeError("mqtt-user-secret")
@@ -343,6 +345,14 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.complete)
         self.assertEqual(result.completion_reason, "mqtt_connect_failed")
         self.assertNotIn("mqtt-user-secret", json.dumps(result.as_dict()))
+        self.assertEqual(
+            result.connection_events[-1]["phase"],
+            "dns_or_tcp_connect",
+        )
+        self.assertEqual(
+            result.connection_events[-1]["variant"],
+            "mqtt5_clean",
+        )
 
     async def test_orchestrator_completes_after_real_quiet_period(self):
         messages = (

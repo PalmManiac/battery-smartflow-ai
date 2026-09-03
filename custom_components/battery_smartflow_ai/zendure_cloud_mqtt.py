@@ -90,6 +90,9 @@ class ReadOnlyMqttSession(Protocol):
 
     def disconnect(self) -> None: ...
 
+    @property
+    def connection_phase(self) -> str: ...
+
 
 SessionFactory = Callable[[CloudMqttCredentials], ReadOnlyMqttSession]
 
@@ -119,6 +122,7 @@ class ZendureCloudMqttTransport:
         self._reconnect_task: asyncio.Task[None] | None = None
         self._session_number = 0
         self._last_message_at: datetime | None = None
+        self._last_connection_phase = "not_started"
         self._devices = {
             item.candidate.candidate_id: CloudMqttDeviceState(
                 online=item.online
@@ -148,6 +152,22 @@ class ZendureCloudMqttTransport:
     @property
     def device_states(self) -> Mapping[str, CloudMqttDeviceState]:
         return dict(self._devices)
+
+    @property
+    def connection_variant(self) -> str:
+        """Return a safe identifier for the currently tested Cloud dialect."""
+
+        return "mqtt5_clean"
+
+    @property
+    def connection_phase(self) -> str:
+        """Return the furthest privacy-safe connection phase observed."""
+
+        if self._session is not None:
+            return str(
+                getattr(self._session, "connection_phase", self._last_connection_phase)
+            )
+        return self._last_connection_phase
 
     @property
     def topics(self) -> tuple[str, ...]:
@@ -195,6 +215,9 @@ class ZendureCloudMqttTransport:
                 pass
         session, self._session = self._session, None
         if session is not None:
+            self._last_connection_phase = str(
+                getattr(session, "connection_phase", self._last_connection_phase)
+            )
             try:
                 await asyncio.to_thread(session.disconnect)
             except Exception:
@@ -382,10 +405,11 @@ class PahoReadOnlyMqttSession:
             raise CloudMqttError("mqtt_dependency_missing") from error
 
         self._host, self._port, self._tls = _parse_broker_url(credentials.url)
+        self._connection_phase = "created"
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=credentials.client_id,
-            protocol=mqtt.MQTTv31,
+            protocol=mqtt.MQTTv5,
         )
         self._client.username_pw_set(credentials.username, credentials.password)
         if self._tls:
@@ -393,6 +417,10 @@ class PahoReadOnlyMqttSession:
         self._on_connect: ConnectCallback | None = None
         self._on_disconnect: DisconnectCallback | None = None
         self._on_message: MessageCallback | None = None
+
+    @property
+    def connection_phase(self) -> str:
+        return self._connection_phase
 
     def set_callbacks(
         self,
@@ -406,9 +434,11 @@ class PahoReadOnlyMqttSession:
         self._client.on_connect = self._paho_connect
         self._client.on_disconnect = self._paho_disconnect
         self._client.on_message = self._paho_message
+        self._client.on_socket_open = self._paho_socket_open
 
     def connect(self) -> None:
-        self._client.connect(self._host, self._port, keepalive=60)
+        self._connection_phase = "dns_or_tcp_connect"
+        self._client.connect_async(self._host, self._port, keepalive=60)
         self._client.loop_start()
 
     def subscribe(self, topics: tuple[str, ...]) -> None:
@@ -431,9 +461,15 @@ class PahoReadOnlyMqttSession:
         reason_code: Any,
         _properties: Any,
     ) -> None:
+        self._connection_phase = (
+            "mqtt_connack_accepted" if int(reason_code) == 0 else "mqtt_connack_rejected"
+        )
         if self._on_connect is not None:
             successful = int(reason_code) == 0
             self._on_connect(successful, None if successful else str(reason_code))
+
+    def _paho_socket_open(self, _client: Any, _userdata: Any, _socket: Any) -> None:
+        self._connection_phase = "tcp_connected_waiting_for_mqtt_connack"
 
     def _paho_disconnect(
         self,
