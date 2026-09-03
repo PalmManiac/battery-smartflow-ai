@@ -13,9 +13,11 @@ import unittest
 
 from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudClient
 from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
+    CloudMqttError,
     ConnectionState,
     ZendureCloudMqttTransport,
     _bsfai_client_id,
+    _get_all_request,
     _parse_broker_url,
     _reason_code_success,
     _safe_peer_scope,
@@ -42,6 +44,7 @@ class FakeSession:
     def __init__(self, _credentials, *, connect_ok=True):
         self.connect_ok = connect_ok
         self.subscriptions = ()
+        self.state_requests = []
         self.disconnected = False
 
     def set_callbacks(self, on_connect, on_disconnect, on_message):
@@ -49,6 +52,8 @@ class FakeSession:
 
     def connect(self): self.on_connect(self.connect_ok, None if self.connect_ok else "not authorized")
     def subscribe(self, topics): self.subscriptions = topics
+    def request_all(self, product_id, device_id, message_id, timestamp):
+        self.state_requests.append((product_id, device_id, message_id, timestamp))
     def disconnect(self): self.disconnected = True
     def emit(self, topic, payload): self.on_message(topic, payload)
     def drop(self): self.on_disconnect("network lost")
@@ -61,6 +66,11 @@ class HangingSession(FakeSession):
     def disconnect(self):
         self.disconnected = True
         raise RuntimeError("not connected")
+
+
+class FailedStateRequestSession(FakeSession):
+    def request_all(self, product_id, device_id, message_id, timestamp):
+        raise CloudMqttError("state_request_failed")
 
 
 class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
@@ -78,7 +88,11 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         return session
 
     async def test_connects_and_subscribes_all_devices(self):
-        transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory)
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=self.factory,
+            clock=lambda: self.now,
+        )
         await transport.async_start()
         self.assertEqual(transport.state, ConnectionState.CONNECTED)
         self.assertEqual(
@@ -89,6 +103,21 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
                 "iot/product-a/main-1/#",
                 "iot/product-b/main-2/#",
             ),
+        )
+        self.assertEqual(
+            [(product, device) for product, device, _message, _timestamp in self.sessions[0].state_requests],
+            [("product-a", "main-1"), ("product-b", "main-2")],
+        )
+        self.assertEqual(
+            [message for _product, _device, message, _timestamp in self.sessions[0].state_requests],
+            [1, 2],
+        )
+        self.assertTrue(
+            all(
+                timestamp == int(self.now.timestamp())
+                for _product, _device, _message, timestamp
+                in self.sessions[0].state_requests
+            )
         )
         await transport.async_stop()
         self.assertTrue(self.sessions[0].disconnected)
@@ -133,6 +162,8 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(hasattr(transport, "command"))
         public = {name for name, _ in inspect.getmembers(type(transport), inspect.isfunction) if not name.startswith("_")}
         self.assertEqual(public, {"async_start", "async_stop"})
+        self.assertEqual(len(self.sessions[0].state_requests), 2)
+        self.assertEqual(len(self.sessions[1].state_requests), 2)
 
     async def test_credentials_do_not_appear_in_logs_or_representations(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory)
@@ -158,6 +189,19 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         transport = ZendureCloudMqttTransport(data, session_factory=self.factory)
         with self.assertRaisesRegex(Exception, "no_routable_devices"):
             await transport.async_start()
+
+    async def test_state_request_failure_is_classified(self):
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=lambda credentials: FailedStateRequestSession(
+                credentials
+            ),
+        )
+
+        with self.assertRaisesRegex(CloudMqttError, "state_request_failed"):
+            await transport.async_start()
+
+        self.assertEqual(transport.state, ConnectionState.STOPPED)
 
     async def test_cleanup_failure_does_not_mask_connection_timeout(self):
         session = HangingSession(None)
@@ -268,6 +312,24 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             first,
             _bsfai_client_id("another-zendure-cloud-client"),
         )
+
+    def test_get_all_request_has_no_arbitrary_write_surface(self):
+        topic, payload = _get_all_request(
+            "product-a", "main-1", 7, 1788444000
+        )
+
+        self.assertEqual(topic, "iot/product-a/main-1/properties/read")
+        self.assertEqual(
+            json.loads(payload),
+            {
+                "properties": ["getAll"],
+                "messageId": 7,
+                "deviceId": "main-1",
+                "timestamp": 1788444000,
+            },
+        )
+        self.assertNotIn("properties/write", topic)
+        self.assertNotIn("function/invoke", topic)
 
 
 if __name__ == "__main__":

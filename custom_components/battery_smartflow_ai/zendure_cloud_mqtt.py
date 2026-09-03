@@ -1,8 +1,10 @@
-"""Strictly read-only Zendure Cloud MQTT transport.
+"""State-reading Zendure Cloud MQTT transport.
 
-The public transport surface deliberately contains no publish or command API.
-Raw inbound messages are retained for the V5 initial-sync capture while
-credentials remain inside the transport boundary.
+The public transport surface deliberately contains no arbitrary publish or
+command API.  Its sole outbound operation is an internally constructed
+``properties/read`` request for ``getAll``.  Raw inbound messages are retained
+for the V5 initial-sync capture while credentials remain inside the transport
+boundary.
 """
 
 from __future__ import annotations
@@ -78,7 +80,7 @@ DisconnectCallback = Callable[[str | None], None]
 
 
 class ReadOnlyMqttSession(Protocol):
-    """Minimal subscriber-only backend contract (intentionally no publish)."""
+    """Minimal state-reader contract without an arbitrary publish surface."""
 
     def set_callbacks(
         self,
@@ -90,6 +92,14 @@ class ReadOnlyMqttSession(Protocol):
     def connect(self) -> None: ...
 
     def subscribe(self, topics: tuple[str, ...]) -> None: ...
+
+    def request_all(
+        self,
+        product_id: str,
+        device_id: str,
+        message_id: int,
+        timestamp: int,
+    ) -> None: ...
 
     def disconnect(self) -> None: ...
 
@@ -124,9 +134,11 @@ class ZendureCloudMqttTransport:
         self._session: ReadOnlyMqttSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._connected = asyncio.Event()
+        self._connect_failure: str | None = None
         self._stopping = False
         self._reconnect_task: asyncio.Task[None] | None = None
         self._session_number = 0
+        self._request_message_id = 0
         self._last_message_at: datetime | None = None
         self._last_connection_phase = "not_started"
         self._last_connection_diagnostics: dict[str, str | bool] = {
@@ -216,6 +228,7 @@ class ZendureCloudMqttTransport:
         self._loop = asyncio.get_running_loop()
         self._stopping = False
         self._connected.clear()
+        self._connect_failure = None
         self._state = ConnectionState.CONNECTING
         await self._open_session()
         try:
@@ -223,6 +236,10 @@ class ZendureCloudMqttTransport:
         except TimeoutError:
             await self.async_stop()
             raise CloudMqttError("connection_timeout") from None
+        if self._connect_failure is not None:
+            reason = self._connect_failure
+            await self.async_stop()
+            raise CloudMqttError(reason)
 
     async def async_stop(self) -> None:
         """Stop reconnects and disconnect the read-only subscriber."""
@@ -280,11 +297,29 @@ class ZendureCloudMqttTransport:
             return
         if self._session is None:
             return
-        self._session.subscribe(self.topics)
+        try:
+            self._session.subscribe(self.topics)
+            for device_id, _candidate_id, product_id in self._routes:
+                if product_id is None:
+                    continue
+                self._request_message_id += 1
+                self._session.request_all(
+                    product_id,
+                    device_id,
+                    self._request_message_id,
+                    int(self._clock().timestamp()),
+                )
+        except CloudMqttError as error:
+            _LOGGER.warning(
+                "Zendure Cloud MQTT state request failed: %s", error.reason
+            )
+            self._connect_failure = error.reason
+            self._connected.set()
+            return
         self._state = ConnectionState.CONNECTED
         self._connected.set()
         _LOGGER.info(
-            "Zendure Cloud MQTT connected; subscribed to %d read-only topics",
+            "Zendure Cloud MQTT connected; subscribed to %d state topics",
             len(self.topics),
         )
 
@@ -314,6 +349,7 @@ class ZendureCloudMqttTransport:
                 return
             await asyncio.sleep(delay + random.uniform(0, min(0.25, delay / 4)))
             self._connected.clear()
+            self._connect_failure = None
             old, self._session = self._session, None
             if old is not None:
                 try:
@@ -323,6 +359,8 @@ class ZendureCloudMqttTransport:
             try:
                 await self._open_session()
                 await asyncio.wait_for(self._connected.wait(), timeout=15.0)
+                if self._connect_failure is not None:
+                    raise CloudMqttError(self._connect_failure)
                 return
             except Exception as error:  # backend errors are sanitized before logging
                 safe = ZendureDiagnosticSanitizer().sanitize_exception(error)
@@ -423,7 +461,7 @@ def _online_value(value: Any) -> bool | None:
 
 
 class PahoReadOnlyMqttSession:
-    """Production paho subscriber wrapper with no exposed publish method."""
+    """Paho state reader with no arbitrary publish or command method."""
 
     def __init__(self, credentials: CloudMqttCredentials) -> None:
         try:
@@ -489,6 +527,26 @@ class PahoReadOnlyMqttSession:
             result, _mid = self._client.subscribe(topic, qos=0)
             if result != 0:
                 raise CloudMqttError("subscribe_failed")
+
+    def request_all(
+        self,
+        product_id: str,
+        device_id: str,
+        message_id: int,
+        timestamp: int,
+    ) -> None:
+        topic, payload = _get_all_request(
+            product_id, device_id, message_id, timestamp
+        )
+        result = self._client.publish(topic, payload)
+        result_code = getattr(result, "rc", None)
+        if result_code is None:
+            try:
+                result_code = result[0]
+            except (IndexError, TypeError):
+                result_code = None
+        if result_code != 0:
+            raise CloudMqttError("state_request_failed")
 
     def disconnect(self) -> None:
         try:
@@ -580,6 +638,28 @@ def _bsfai_client_id(cloud_client_id: str) -> str:
 
     digest = hashlib.sha256(cloud_client_id.encode("utf-8")).hexdigest()[:16]
     return f"bsfai-{digest}"
+
+
+def _get_all_request(
+    product_id: str,
+    device_id: str,
+    message_id: int,
+    timestamp: int,
+) -> tuple[str, str]:
+    """Build the sole allow-listed outbound state request."""
+
+    return (
+        f"iot/{product_id}/{device_id}/properties/read",
+        json.dumps(
+            {
+                "properties": ["getAll"],
+                "messageId": message_id,
+                "deviceId": device_id,
+                "timestamp": timestamp,
+            },
+            separators=(",", ":"),
+        ),
+    )
 
 
 def _safe_peer_scope(mqtt_socket: Any) -> str:

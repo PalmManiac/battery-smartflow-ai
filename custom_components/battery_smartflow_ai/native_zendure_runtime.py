@@ -259,6 +259,7 @@ def _safe_reason(error: Exception) -> str:
         "invalid_response", "no_devices", "no_mqtt_credentials",
         "connection_timeout", "invalid_broker_url", "mqtt_dependency_missing",
         "no_routable_devices", "subscribe_failed", "capture_write_failed",
+        "state_request_failed",
     }
     return str(reason) if reason in allowed else "native_test_failed"
 
