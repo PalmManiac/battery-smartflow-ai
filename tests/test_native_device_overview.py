@@ -115,6 +115,22 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertFalse(by_name["Battery SmartFlow AI"].actively_controlled)
         self.assertFalse(by_name["Other"].actively_controlled)
 
+    def test_fresh_data_preserves_online_state_but_offline_recovery_is_passive(self):
+        active = MainDevice.from_v4_config_entry("entry")
+        inventory = DeviceInventory(devices=(active,))
+
+        inventory.mark_available(active.system_id)
+        self.assertEqual(
+            inventory.devices[active.system_id].control_state,
+            DeviceControlState.ACTIVE,
+        )
+
+        inventory.mark_unavailable(active.system_id)
+        inventory.mark_available(active.system_id)
+        recovered = inventory.devices[active.system_id]
+        self.assertTrue(recovered.online)
+        self.assertEqual(recovered.control_state, DeviceControlState.OBSERVATION)
+
 
 if __name__ == "__main__":
     unittest.main()
