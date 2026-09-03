@@ -157,8 +157,10 @@ class ZendureCloudMqttTransport:
         for device_id, _candidate_id, product_id in self._routes:
             if product_id:
                 topics.add(f"/{product_id}/{device_id}/#")
+                topics.add(f"iot/{product_id}/{device_id}/#")
             else:
                 topics.add(f"/+/{device_id}/#")
+                topics.add(f"iot/+/{device_id}/#")
         return tuple(sorted(topics))
 
     async def async_start(self, *, timeout: float = 15.0) -> None:
@@ -371,19 +373,11 @@ class PahoReadOnlyMqttSession:
         except ImportError as error:
             raise CloudMqttError("mqtt_dependency_missing") from error
 
-        parsed = urlsplit(
-            credentials.url
-            if "://" in credentials.url
-            else f"mqtts://{credentials.url}"
-        )
-        if not parsed.hostname or parsed.scheme not in {"mqtt", "mqtts", "ssl", "tcp"}:
-            raise CloudMqttError("invalid_broker_url")
-        self._host = parsed.hostname
-        self._tls = parsed.scheme in {"mqtts", "ssl"}
-        self._port = parsed.port or (8883 if self._tls else 1883)
+        self._host, self._port, self._tls = _parse_broker_url(credentials.url)
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=credentials.client_id,
+            protocol=mqtt.MQTTv31,
         )
         self._client.username_pw_set(credentials.username, credentials.password)
         if self._tls:
@@ -445,3 +439,22 @@ class PahoReadOnlyMqttSession:
     def _paho_message(self, _client: Any, _userdata: Any, message: Any) -> None:
         if self._on_message is not None:
             self._on_message(str(message.topic), bytes(message.payload))
+
+
+def _parse_broker_url(value: str) -> tuple[str, int, bool]:
+    """Parse Zendure's schema-free port-1883 broker as plain MQTT.
+
+    TLS is enabled only when Zendure explicitly returns an MQTT TLS scheme.
+    This mirrors the official Zendure-HA Cloud connection behavior while
+    retaining support for an explicit secure endpoint.
+    """
+
+    parsed = urlsplit(value if "://" in value else f"mqtt://{value}")
+    if not parsed.hostname or parsed.scheme not in {"mqtt", "mqtts", "ssl", "tcp"}:
+        raise CloudMqttError("invalid_broker_url")
+    tls = parsed.scheme in {"mqtts", "ssl"}
+    try:
+        port = parsed.port or (8883 if tls else 1883)
+    except ValueError:
+        raise CloudMqttError("invalid_broker_url") from None
+    return parsed.hostname, port, tls

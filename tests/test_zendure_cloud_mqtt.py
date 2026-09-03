@@ -7,12 +7,14 @@ from base64 import b64encode
 from datetime import datetime, timezone
 import inspect
 import json
+from pathlib import Path
 import unittest
 
 from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudClient
 from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     ConnectionState,
     ZendureCloudMqttTransport,
+    _parse_broker_url,
 )
 
 
@@ -65,7 +67,15 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory)
         await transport.async_start()
         self.assertEqual(transport.state, ConnectionState.CONNECTED)
-        self.assertEqual(self.sessions[0].subscriptions, ("/product-a/main-1/#", "/product-b/main-2/#"))
+        self.assertEqual(
+            self.sessions[0].subscriptions,
+            (
+                "/product-a/main-1/#",
+                "/product-b/main-2/#",
+                "iot/product-a/main-1/#",
+                "iot/product-b/main-2/#",
+            ),
+        )
         await transport.async_stop()
         self.assertTrue(self.sessions[0].disconnected)
 
@@ -134,6 +144,31 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         transport = ZendureCloudMqttTransport(data, session_factory=self.factory)
         with self.assertRaisesRegex(Exception, "no_routable_devices"):
             await transport.async_start()
+
+    def test_schema_free_port_1883_is_plain_mqtt(self):
+        self.assertEqual(
+            _parse_broker_url("broker.example:1883"),
+            ("broker.example", 1883, False),
+        )
+
+    def test_tls_requires_an_explicit_secure_scheme(self):
+        self.assertEqual(
+            _parse_broker_url("mqtts://broker.example:8883"),
+            ("broker.example", 8883, True),
+        )
+        self.assertEqual(
+            _parse_broker_url("mqtt://broker.example:1883"),
+            ("broker.example", 1883, False),
+        )
+
+    def test_paho_uses_zendure_cloud_mqtt_31_protocol(self):
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "custom_components"
+            / "battery_smartflow_ai"
+            / "zendure_cloud_mqtt.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("protocol=mqtt.MQTTv31", source)
 
 
 if __name__ == "__main__":
