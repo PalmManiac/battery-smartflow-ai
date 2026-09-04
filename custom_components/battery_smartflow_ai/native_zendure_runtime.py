@@ -115,6 +115,7 @@ class NativeZendureRuntime:
         self._write_lock = asyncio.Lock()
         self._write_sequence = 0
         self._command_verification = NativeCommandVerificationManager()
+        self._last_command_result: dict[str, Any] | None = None
 
     @property
     def configured(self) -> bool:
@@ -263,6 +264,7 @@ class NativeZendureRuntime:
                     self._transport.command_diagnostics
                     if self._transport is not None else {"commands": []}
                 ),
+                "last_command_result": self._last_command_result,
                 "overview": self.overview_attributes(),
             }
         )
@@ -365,7 +367,9 @@ class NativeZendureRuntime:
         """Route one neutral PowerController command through the native stack."""
 
         if not self._control_enabled:
-            return _command_result(CommandExecutionStatus.SKIPPED, "native_control_disabled")
+            return self._remember_command_result(_command_result(
+                CommandExecutionStatus.SKIPPED, "native_control_disabled"
+            ))
         async with self._write_lock:
             if (
                 self._status != STATUS_OBSERVING
@@ -373,17 +377,23 @@ class NativeZendureRuntime:
                 or self._transport.state is not ConnectionState.CONNECTED
                 or self._selected_device is None
             ):
-                return _command_result(CommandExecutionStatus.SKIPPED, "native_transport_not_ready")
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED, "native_transport_not_ready"
+                ))
             state = self._states.get(self._selected_device)
             source_device = self._inventory.devices.get(self._selected_device)
             if state is None or source_device is None or not _fresh_native_state(state):
-                return _command_result(CommandExecutionStatus.SKIPPED, "native_state_not_fresh")
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED, "native_state_not_fresh"
+                ))
             cloud_identities = tuple(
                 identity for identity in source_device.native_identities
                 if identity.transport is ZendureTransport.CLOUD_MQTT
             )
             if len(cloud_identities) != 1:
-                return _command_result(CommandExecutionStatus.SKIPPED, "native_identity_not_unique")
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED, "native_identity_not_unique"
+                ))
             active_device = replace(
                 source_device,
                 control_state=DeviceControlState.ACTIVE,
@@ -393,7 +403,9 @@ class NativeZendureRuntime:
             )
             final_command = _skip_matching_writes(command, state)
             if not _has_writes(final_command):
-                return _command_result(CommandExecutionStatus.SKIPPED, "native_setpoints_unchanged")
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED, "native_setpoints_unchanged"
+                ))
             request = NativeCommandRequest(
                 self._selected_device, ZendureTransport.CLOUD_MQTT, final_command
             )
@@ -408,19 +420,36 @@ class NativeZendureRuntime:
                 request, context, self._transport.async_execute_authorized
             )
             if not gate.accepted or transport is None:
-                return _command_result(
+                return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
                     ",".join(gate.reasons) or "native_gate_blocked",
-                )
+                ))
             if transport.status is not CloudCommandStatus.SENT:
-                return _command_result(CommandExecutionStatus.FAILED, transport.reason)
-            return CommandExecutionResult(
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.FAILED, transport.reason
+                ))
+            return self._remember_command_result(CommandExecutionResult(
                 status=CommandExecutionStatus.APPLIED,
                 reason=transport.reason,
                 mode_written=final_command.should_write_mode,
                 input_written=final_command.should_write_input,
                 output_written=final_command.should_write_output,
-            )
+            ))
+
+    def _remember_command_result(
+        self, result: CommandExecutionResult
+    ) -> CommandExecutionResult:
+        """Keep one privacy-safe dispatch outcome for field diagnostics."""
+
+        self._last_command_result = {
+            "status": str(result.status),
+            "reason": str(result.reason),
+            "mode_written": bool(result.mode_written),
+            "input_written": bool(result.input_written),
+            "output_written": bool(result.output_written),
+            "recorded_at": datetime.now(timezone.utc),
+        }
+        return result
 
     async def _async_run(self) -> None:
         try:
@@ -716,20 +745,49 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
         and discharge_power.valid
         and float(discharge_power.value) <= 0
     )
-    return replace(
-        command,
-        metadata=dict(command.metadata),
-        should_write_mode=command.should_write_mode and not mode_matches,
-        should_write_input=(command.should_write_input and not (
+    force_input_write = bool(
+        command.ac_mode == "input"
+        and float(command.input_limit_w) > 0
+        and input_is_inactive
+    )
+    force_output_write = bool(
+        command.ac_mode == "output"
+        and float(command.output_limit_w) > 0
+        and output_is_inactive
+    )
+    should_write_input = force_input_write or (
+        command.should_write_input and not (
             not input_is_inactive
             and input_value.valid
             and float(input_value.value) == float(command.input_limit_w)
-        )),
-        should_write_output=(command.should_write_output and not (
+        )
+    )
+    should_write_output = force_output_write or (
+        command.should_write_output and not (
             not output_is_inactive
             and output_value.valid
             and float(output_value.value) == float(command.output_limit_w)
+        )
+    )
+    should_write_mode = command.should_write_mode and not mode_matches
+    return replace(
+        command,
+        metadata=dict(command.metadata),
+        should_write_mode=should_write_mode,
+        should_write_input=should_write_input,
+        should_write_output=should_write_output,
+        skipped=not any((
+            should_write_mode,
+            should_write_input,
+            should_write_output,
+            command.should_write_min_soc,
+            command.should_write_max_soc,
         )),
+        skip_reason=(
+            "none"
+            if any((should_write_mode, should_write_input, should_write_output))
+            else command.skip_reason
+        ),
     )
 
 

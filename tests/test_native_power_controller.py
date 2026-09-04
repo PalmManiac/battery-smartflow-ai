@@ -56,6 +56,9 @@ def state(*, input_w=0, output_w=0, charge_w=0, discharge_w=0, hems=False):
         hems_active=measured(hems),
         charge_power_w=measured(charge_w),
         discharge_power_w=measured(discharge_w),
+        last_message_at=NOW,
+        packs=(),
+        observed_transport=ZendureTransport.ZENSDK,
         mode=measured(DeviceOperatingMode.DISCHARGE),
         setpoints=ReportedDeviceSetpoints(
             measured(input_w), measured(output_w), measured(2400),
@@ -146,12 +149,26 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
     async def test_matching_stored_limit_restarts_inactive_direction(self):
         target = runtime(current_state=state(output_w=250, discharge_w=0))
         result = await target.async_execute_device_command(DeviceCommand(
-            "output", output_limit_w=250, should_write_mode=True,
-            should_write_input=False, should_write_output=True,
+            "output", output_limit_w=250, should_write_mode=False,
+            should_write_input=False, should_write_output=False,
+            skipped=True, skip_reason="unchanged_within_tolerance",
         ))
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
         command = target._transport.commands[-1].command
         self.assertTrue(command.should_write_output)
+        self.assertFalse(command.skipped)
+
+    async def test_last_dispatch_reason_is_visible_without_identity(self):
+        target = runtime(current_state=state(output_w=250, discharge_w=250))
+        await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=250, should_write_mode=False,
+            should_write_input=False, should_write_output=False,
+            skipped=True, skip_reason="unchanged_within_tolerance",
+        ))
+        diagnostic = target.diagnostic_data()["last_command_result"]
+        self.assertEqual(diagnostic["status"], "skipped")
+        self.assertEqual(diagnostic["reason"], "native_setpoints_unchanged")
+        self.assertNotIn(DEVICE, repr(diagnostic))
 
     async def test_profile_limit_is_clamped_only_by_central_gate(self):
         target = runtime()
