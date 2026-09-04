@@ -89,17 +89,29 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
         )
         self.assertNotEqual(runtime_report["inputLimit"], hardware_limit)
 
-    def test_no_model_or_transport_is_approved_for_native_control(self):
-        for entry in ZENDURE_DEVICE_MATRIX.values():
-            with self.subTest(profile=entry.profile_key):
+    def test_only_sf2400ac_zensdk_output_limit_is_approved(self):
+        approved = ZENDURE_DEVICE_MATRIX["SF2400AC"]
+        self.assertTrue(approved.native_control_approved)
+        self.assertIs(
+            approved.transport(ZendureTransport.ZENSDK).write,
+            VerificationLevel.VERIFIED,
+        )
+        self.assertIs(
+            approved.writable_main_properties["outputLimit"],
+            VerificationLevel.VERIFIED,
+        )
+        self.assertIs(
+            approved.transport(ZendureTransport.CLOUD_MQTT).write,
+            VerificationLevel.REFERENCE_ONLY,
+        )
+        for key, entry in ZENDURE_DEVICE_MATRIX.items():
+            if key == "SF2400AC":
+                continue
+            with self.subTest(profile=key):
                 self.assertFalse(entry.native_control_approved)
                 self.assertNotIn(
                     VerificationLevel.VERIFIED,
                     entry.writable_main_properties.values(),
-                )
-                self.assertIs(
-                    entry.transport(ZendureTransport.CLOUD_MQTT).write,
-                    VerificationLevel.REFERENCE_ONLY,
                 )
 
     def test_transports_remain_separate_evidence_domains(self):

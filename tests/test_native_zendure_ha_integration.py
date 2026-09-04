@@ -1,4 +1,4 @@
-"""Contracts for the first installable native Zendure read-only test."""
+"""Contracts for the installable native Zendure development test."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0.dev13")
+        self.assertEqual(manifest["version"], "5.0.0.dev14")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -34,7 +34,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertNotIn("add_suggested_values_to_schema", text)
         self.assertIn("disable_native_zendure_test", text)
 
-    def test_runtime_is_background_only_and_has_no_native_write_surface(self) -> None:
+    def test_runtime_keeps_normal_control_read_only_and_write_test_explicit(self) -> None:
         setup = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
         runtime = (COMPONENT / "native_zendure_runtime.py").read_text(
             encoding="utf-8"
@@ -43,8 +43,9 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn("coordinator.native_zendure.start()", setup)
         self.assertNotIn("await coordinator.native_zendure.start()", setup)
         self.assertNotIn("publish(", runtime)
-        self.assertNotIn("properties/write", runtime)
-        self.assertNotIn("DeviceCommand", runtime)
+        self.assertIn("SERVICE_VERIFY_NATIVE_WRITE", setup)
+        self.assertIn("async_run_first_write_test", runtime)
+        self.assertIn("NativeDeviceCommandGate", runtime)
         self.assertNotIn("def publish", mqtt)
         self.assertIn("self._consume_captured_messages(capture.messages)", runtime)
         self.assertIn("await self._async_poll_zensdk()", runtime)

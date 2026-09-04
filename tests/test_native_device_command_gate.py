@@ -181,8 +181,8 @@ class NativeDeviceCommandGateTests(unittest.IsolatedAsyncioTestCase):
             NativeCommandRequest(DEVICE_ID, TRANSPORT, command()), context()
         )
         self.assertFalse(result.accepted)
-        self.assertIn("device_profile_not_approved", result.reasons)
-        self.assertIn("transport_write_not_verified", result.reasons)
+        self.assertIn("command_capability_unsupported:acMode", result.reasons)
+        self.assertIn("command_capability_unsupported:inputLimit", result.reasons)
 
     async def test_control_selection_and_active_state_are_independent_blockers(self):
         result = ready_gate().evaluate(

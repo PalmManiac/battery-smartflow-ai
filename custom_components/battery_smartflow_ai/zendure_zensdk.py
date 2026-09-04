@@ -18,6 +18,7 @@ from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
 
 
 ZENSDK_REPORT_PATH = "/properties/report"
+ZENSDK_WRITE_PATH = "/properties/write"
 DEFAULT_ZENSDK_TIMEOUT = 4.0
 
 
@@ -44,6 +45,69 @@ class ZenSdkReadAttempt:
 class ZenSdkReadResult:
     messages: tuple[CloudMqttMessage, ...]
     attempts: tuple[ZenSdkReadAttempt, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ZenSdkWriteResult:
+    """HTTP acceptance only; this is deliberately not device confirmation."""
+
+    accepted: bool
+    http_status: int | None
+    result: str
+
+
+async def async_write_zensdk_property(
+    bootstrap: ZendureCloudBootstrap,
+    device_candidate_id: str,
+    property_name: str,
+    value: int,
+    request_id: int,
+    post_json: GetJson,
+    *,
+    timeout: float = DEFAULT_ZENSDK_TIMEOUT,
+) -> ZenSdkWriteResult:
+    """Write one allow-listed property to one exact local main device."""
+
+    if property_name != "outputLimit":
+        return ZenSdkWriteResult(False, None, "property_not_allowed")
+    device = next(
+        (item for item in bootstrap.devices
+         if item.candidate.candidate_id == device_candidate_id), None
+    )
+    if device is None:
+        return ZenSdkWriteResult(False, None, "device_not_found")
+    identity = device.candidate.identity
+    if identity.product_model != "SolarFlow 2400 AC" or not identity.serial_number:
+        return ZenSdkWriteResult(False, None, "model_not_allowed")
+    raw = next(
+        (item for item in bootstrap.raw_device_list
+         if str(item.get("deviceKey")) == str(identity.device_id)), {}
+    )
+    addresses = _candidate_addresses(raw, identity.product_model, identity.serial_number)
+    if not addresses:
+        return ZenSdkWriteResult(False, None, "no_local_address")
+    # A read may try another address, but a write is sent exactly once.  A
+    # timeout is ambiguous and must never cause an automatic duplicate POST.
+    _source, host = addresses[0]
+    try:
+        response = await asyncio.wait_for(
+            post_json(
+                f"http://{host}{ZENSDK_WRITE_PATH}",
+                json={
+                    "sn": identity.serial_number,
+                    "properties": {property_name: int(value)},
+                    "id": int(request_id),
+                },
+            ),
+            timeout=timeout,
+        )
+        status = int(response.status)
+        return ZenSdkWriteResult(
+            200 <= status < 300, status,
+            "transport_ok" if 200 <= status < 300 else "http_error",
+        )
+    except Exception:
+        return ZenSdkWriteResult(False, None, "transport_error")
 
 
 async def async_read_zensdk_reports(

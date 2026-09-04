@@ -34,6 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 
 SERVICE_START_DEBUG_RECORDING = "start_debug_recording"
 SERVICE_STOP_DEBUG_RECORDING = "stop_debug_recording"
+SERVICE_VERIFY_NATIVE_WRITE = "verify_native_write"
 
 
 class _DisabledNativeRuntime:
@@ -44,6 +45,9 @@ class _DisabledNativeRuntime:
 
     async def async_stop(self) -> None:
         return None
+
+    async def async_run_first_write_test(self):
+        raise ValueError("native_device_not_ready")
 
 
 def _coordinator_for_call(hass: HomeAssistant, call: ServiceCall) -> ZendureSmartFlowCoordinator:
@@ -98,6 +102,22 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             SERVICE_STOP_DEBUG_RECORDING,
             async_stop_debug_recording,
             schema=vol.Schema({vol.Optional("entry_id"): str}),
+        )
+    if not hass.services.has_service(DOMAIN, SERVICE_VERIFY_NATIVE_WRITE):
+        async def async_verify_native_write(call: ServiceCall) -> None:
+            coordinator = _coordinator_for_call(hass, call)
+            await coordinator.native_zendure.async_run_first_write_test()
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_VERIFY_NATIVE_WRITE,
+            async_verify_native_write,
+            schema=vol.Schema(
+                {
+                    vol.Optional("entry_id"): str,
+                    vol.Required("confirm"): vol.In({True}),
+                }
+            ),
         )
     return True
 
