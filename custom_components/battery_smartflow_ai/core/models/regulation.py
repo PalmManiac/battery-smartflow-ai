@@ -251,12 +251,16 @@ class DeviceCommand:
     ac_mode: Literal["input", "output"]
     input_limit_w: float = 0.0
     output_limit_w: float = 0.0
+    min_soc_pct: float | None = None
+    max_soc_pct: float | None = None
 
     reason: str = "none"
 
     should_write_mode: bool = True
     should_write_input: bool = True
     should_write_output: bool = True
+    should_write_min_soc: bool = False
+    should_write_max_soc: bool = False
 
     skipped: bool = False
     skip_reason: CommandSkipReason = "none"

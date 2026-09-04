@@ -58,8 +58,6 @@ class ZendureDeviceMatrixEntry:
     def __post_init__(self) -> None:
         if self.profile_key not in DEVICE_PROFILE_MODELS:
             raise ValueError("Native matrix references an unknown device profile")
-        if self.native_control_approved:
-            raise ValueError("Issue #326 must not approve native writes")
         object.__setattr__(self, "transports", MappingProxyType(dict(self.transports)))
         object.__setattr__(
             self,
