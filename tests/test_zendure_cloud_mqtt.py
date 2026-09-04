@@ -148,6 +148,23 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(message.device_candidate_id, "cloud_mqtt:main-1")
         self.assertEqual(message.pack_id, "pack-77")
 
+    async def test_properties_energy_is_known_and_routed_per_device(self):
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=self.factory,
+            clock=lambda: self.now,
+        )
+        await transport.async_start()
+        self.sessions[0].emit(
+            "/product-a/main-1/properties/energy",
+            json.dumps({"properties": {"gridPower": 120}}).encode(),
+        )
+        await asyncio.sleep(0)
+        message = transport.messages[0]
+        self.assertTrue(message.known_topic)
+        self.assertEqual(message.device_candidate_id, "cloud_mqtt:main-1")
+        self.assertTrue(message.topic.endswith("/properties/energy"))
+
     async def test_disconnect_reconnects_without_commands(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory, reconnect_delays=(0.0,))
         await transport.async_start()

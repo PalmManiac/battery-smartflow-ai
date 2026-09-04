@@ -271,11 +271,28 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_hems_energy_topic_is_observed_as_blocker_input_only(self):
         normalizer = ZendureCloudNormalizer(self.bootstrap)
+        system_id = self.bootstrap.devices[0].candidate.candidate_id
+        normalizer.set_hems_monitoring(system_id, True, observed_at=self.at)
         result = normalizer.apply(
             report(self.at, {}, topic="properties/energy")
         )
         self.assertTrue(result.state.hems_active.value)
         self.assertTrue(result.state.hems_active.valid)
+
+    async def test_zensdk_report_without_hems_does_not_imply_inactive(self):
+        normalizer = ZendureCloudNormalizer(self.bootstrap)
+        result = normalizer.apply(
+            report(
+                self.at,
+                {"properties": {"smartMode": 0, "IOTState": 2, "bindstate": 0}},
+                topic="zensdk/properties/report",
+            )
+        )
+        self.assertIsNone(result.state.hems_active.value)
+        self.assertEqual(
+            result.state.hems_active.validity,
+            ValueValidity.NEVER_RECEIVED,
+        )
 
     async def test_unknown_device_message_is_not_guessed(self):
         normalizer = ZendureCloudNormalizer(self.bootstrap)

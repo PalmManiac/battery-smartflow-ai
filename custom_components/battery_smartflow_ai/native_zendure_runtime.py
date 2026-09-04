@@ -15,7 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .core.models import BatteryPackIdentity, DeviceInventory, ValueValidity
 from .native_device_overview import build_native_device_overview
 from .zendure_cloud import ZendureCloudClient
-from .zendure_cloud_mqtt import ZendureCloudMqttTransport
+from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
 from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
 from .zendure_hems import ZendureHemsCommandGate
 from .zendure_initial_sync import (
@@ -193,6 +193,7 @@ class NativeZendureRuntime:
                     {
                         "device_id": system_id,
                         **self._hems_gate.diagnostics(system_id),
+                        **self._hems_activity_diagnostics(system_id),
                     }
                     for system_id in sorted(self._inventory.devices)
                 ],
@@ -357,12 +358,37 @@ class NativeZendureRuntime:
     def _refresh_snapshots(self) -> None:
         if self._normalizer is None:
             return
+        now = datetime.now(timezone.utc)
         for system_id in tuple(self._inventory.devices):
+            self._normalizer.set_hems_monitoring(
+                system_id,
+                self._transport is not None
+                and self._transport.state is ConnectionState.CONNECTED,
+                observed_at=now,
+            )
             result = self._normalizer.snapshot(
                 system_id,
-                now=datetime.now(timezone.utc),
+                now=now,
             )
             self._apply_state(result.state)
+
+    def _hems_activity_diagnostics(self, system_id: str) -> dict[str, Any]:
+        if self._normalizer is None:
+            return {}
+        value = self._normalizer.hems_diagnostics(
+            system_id,
+            now=datetime.now(timezone.utc),
+        )
+        return {
+            "activity_source": value.source,
+            "activity_monitoring": value.monitoring,
+            "activity_monitoring_started": value.monitoring_started_at,
+            "last_activity": value.last_activity_at,
+            "activity_quiet_seconds": value.quiet_seconds,
+            "activity_confirmation_window_seconds": (
+                value.confirmation_window_seconds
+            ),
+        }
 
     def _zensdk_diagnostics(self) -> list[dict[str, Any]]:
         return [

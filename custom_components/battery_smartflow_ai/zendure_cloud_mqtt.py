@@ -375,7 +375,11 @@ class ZendureCloudMqttTransport:
         received_at = self._clock()
         parsed, payload_format = _parse_payload(payload)
         candidate_id, pack_id = self._route_message(topic, parsed)
-        known_topic = topic.endswith("/properties/report") or topic.endswith("/state")
+        known_topic = (
+            topic.endswith("/properties/report")
+            or topic.endswith("/properties/energy")
+            or topic.endswith("/state")
+        )
         message = CloudMqttMessage(
             received_at=received_at,
             topic=topic,
