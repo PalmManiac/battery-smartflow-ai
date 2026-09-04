@@ -27,6 +27,7 @@ from .native_device_command_gate import (
     NativeCommandRequest,
     NativeDeviceCommandGate,
 )
+from .native_command_verification import NativeCommandVerificationManager
 from .native_device_overview import build_native_device_overview
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
@@ -108,6 +109,7 @@ class NativeZendureRuntime:
         self._first_write_result: NativeWriteVerification | None = None
         self._write_lock = asyncio.Lock()
         self._write_sequence = 0
+        self._command_verification = NativeCommandVerificationManager()
 
     @property
     def configured(self) -> bool:
@@ -236,6 +238,7 @@ class NativeZendureRuntime:
                     self._first_write_result.diagnostics()
                     if self._first_write_result is not None else None
                 ),
+                "command_verification": self._command_verification.diagnostics(),
                 "overview": self.overview_attributes(),
             }
         )
@@ -327,6 +330,7 @@ class NativeZendureRuntime:
                 context=context, property_name="outputLimit",
                 original_value=original, requested_value=target,
                 send_property=send, read_property=read,
+                verification_manager=self._command_verification,
             )
             self._notify()
             return self._first_write_result
