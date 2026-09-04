@@ -5,6 +5,7 @@ import logging
 from .const import (
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
+    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
     DOMAIN,
     PLATFORMS,
 )
@@ -48,6 +49,10 @@ class _DisabledNativeRuntime:
 
     async def async_run_first_write_test(self):
         raise ValueError("native_device_not_ready")
+
+    @property
+    def control_enabled(self) -> bool:
+        return False
 
 
 def _coordinator_for_call(hass: HomeAssistant, call: ServiceCall) -> ZendureSmartFlowCoordinator:
@@ -135,6 +140,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass,
             app_token=entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
             selected_device=entry.options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
+            control_enabled=bool(
+                entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
+            ),
             notify=coordinator.async_update_listeners,
         )
     hass.data[DOMAIN][entry.entry_id] = coordinator

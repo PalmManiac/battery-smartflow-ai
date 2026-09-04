@@ -38,13 +38,14 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "5.0.0.dev14"
+INTEGRATION_VERSION = "5.0.0.dev15"
 
 # V5 native Zendure discovery is observation-only in the first development
 # build. The App Token is account discovery material and must never be copied
 # to entity states, logs or diagnostics.
 CONF_NATIVE_ZENDURE_APP_TOKEN = "native_zendure_app_token"
 CONF_NATIVE_ZENDURE_SELECTED_DEVICE = "native_zendure_selected_device"
+CONF_NATIVE_ZENDURE_CONTROL_ENABLED = "native_zendure_control_enabled"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,

@@ -36,6 +36,7 @@ from .zendure_cloud_mqtt_commands import (
 
 _LOGGER = logging.getLogger(__name__)
 _MAX_RETAINED_MESSAGES = 10_000
+_COMMAND_READBACK_TIMEOUT_SECONDS = 15.0
 
 
 class CloudMqttError(Exception):
@@ -165,6 +166,7 @@ class ZendureCloudMqttTransport:
         self._verification = NativeCommandVerificationManager()
         self._command_adapter: ZendureCloudCommandAdapter | None = None
         self._command_lock = asyncio.Lock()
+        self._command_timeout_tasks: set[asyncio.Task[None]] = set()
         self._devices = {
             item.candidate.candidate_id: CloudMqttDeviceState(
                 online=item.online
@@ -218,7 +220,10 @@ class ZendureCloudMqttTransport:
                     self._verification,
                     clock=self._clock,
                 )
-            return await asyncio.to_thread(self._command_adapter.execute, authorized)
+            result = await asyncio.to_thread(self._command_adapter.execute, authorized)
+            for command_id in result.verification_ids:
+                self._schedule_command_timeout(command_id)
+            return result
 
     @property
     def connection_variant(self) -> str:
@@ -287,6 +292,12 @@ class ZendureCloudMqttTransport:
         """Stop reconnects and disconnect the read-only subscriber."""
 
         self._stopping = True
+        timeout_tasks = tuple(self._command_timeout_tasks)
+        self._command_timeout_tasks.clear()
+        for timeout_task in timeout_tasks:
+            timeout_task.cancel()
+        if timeout_tasks:
+            await asyncio.gather(*timeout_tasks, return_exceptions=True)
         task = self._reconnect_task
         self._reconnect_task = None
         if task is not None:
@@ -309,6 +320,27 @@ class ZendureCloudMqttTransport:
                 _LOGGER.warning("Zendure Cloud MQTT cleanup failed")
         self._connected.clear()
         self._state = ConnectionState.STOPPED
+
+    def _schedule_command_timeout(self, command_id: str) -> None:
+        task = asyncio.create_task(self._expire_command_readback(command_id))
+        self._command_timeout_tasks.add(task)
+        task.add_done_callback(self._command_timeout_tasks.discard)
+
+    async def _expire_command_readback(self, command_id: str) -> None:
+        try:
+            await asyncio.sleep(_COMMAND_READBACK_TIMEOUT_SECONDS)
+            command = self._verification.get(command_id)
+            active = self._verification.active_for(
+                command.device_id, command.target_key
+            )
+            if (
+                active is not None
+                and active.command_id == command_id
+                and command.readback_at is None
+            ):
+                self._verification.readback_timeout(command_id)
+        except asyncio.CancelledError:
+            raise
 
     async def _open_session(self) -> None:
         self._session_number += 1
