@@ -209,6 +209,18 @@ def _entry(
     *aliases: str,
     product_ids: tuple[str, ...] = (),
 ) -> ZendureDeviceMatrixEntry:
+    first_write_model = profile_key == "SF2400AC"
+    transports = dict(_transport_matrix())
+    writes = dict(_REFERENCE_WRITES)
+    if first_write_model:
+        transports[ZendureTransport.ZENSDK] = TransportCapability(
+            ZendureTransport.ZENSDK,
+            VerificationLevel.VERIFIED,
+            VerificationLevel.VERIFIED,
+            VerificationLevel.REFERENCE_ONLY,
+            ("Only explicit reversible outputLimit verification is approved",),
+        )
+        writes["outputLimit"] = VerificationLevel.VERIFIED
     return ZendureDeviceMatrixEntry(
         profile_key=profile_key,
         canonical_model=canonical_model,
@@ -216,10 +228,10 @@ def _entry(
             _normalize_model(value) for value in (canonical_model, *aliases)
         ),
         confirmed_product_ids=frozenset(product_ids),
-        transports=_transport_matrix(),
+        transports=transports,
         readable_main_properties=_COMMON_MAIN_READS,
         readable_pack_properties=_COMMON_PACK_READS,
-        writable_main_properties=_REFERENCE_WRITES,
+        writable_main_properties=writes,
         neutral_device_targets=_COMMON_DEVICE_TARGETS,
         neutral_pack_targets=_COMMON_PACK_TARGETS,
         hems_status=VerificationLevel.REFERENCE_ONLY,
@@ -231,6 +243,7 @@ def _entry(
                 "Zendure-HA nextCalibration is derived, not a device due date",
             ),
         ),
+        native_control_approved=first_write_model,
     )
 
 

@@ -1,4 +1,4 @@
-"""Optional read-only Zendure runtime used by the V5.0.0-dev1 field test."""
+"""Native Zendure observation plus one explicit development write test."""
 
 from __future__ import annotations
 
@@ -12,7 +12,21 @@ from typing import Any, Callable
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .core.models import BatteryPackIdentity, DeviceInventory, ValueValidity
+from .core.models import (
+    BatteryPackIdentity,
+    DeviceCommand,
+    DeviceControlState,
+    DeviceInventory,
+    MainDevice,
+    NativeDeviceIdentity,
+    ValueValidity,
+    ZendureTransport,
+)
+from .native_device_command_gate import (
+    NativeCommandContext,
+    NativeCommandRequest,
+    NativeDeviceCommandGate,
+)
 from .native_device_overview import build_native_device_overview
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
@@ -22,9 +36,19 @@ from .zendure_initial_sync import (
     async_capture_initial_sync,
     export_initial_sync_capture,
 )
+from .zendure_first_write import (
+    NativeWriteVerification,
+    PropertyReadback,
+    TransportWriteResult,
+    async_verify_reversible_write,
+)
 from .zendure_normalizer import ZendureCloudNormalizer
 from .zendure_privacy import ZendureDiagnosticSanitizer
-from .zendure_zensdk import ZenSdkReadResult, async_read_zensdk_reports
+from .zendure_zensdk import (
+    ZenSdkReadResult,
+    async_read_zensdk_reports,
+    async_write_zensdk_property,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -49,7 +73,7 @@ class _JsonPayloadResponse:
 
 
 class NativeZendureRuntime:
-    """Run discovery, initial sync and normalization without a write surface."""
+    """Observe devices; normal automation retains the Home Assistant backend."""
 
     def __init__(
         self,
@@ -81,6 +105,9 @@ class NativeZendureRuntime:
         self._zensdk_last_result: dict[str, str] = {}
         self._zensdk_last_success: dict[str, datetime] = {}
         self._hems_gate = ZendureHemsCommandGate()
+        self._first_write_result: NativeWriteVerification | None = None
+        self._write_lock = asyncio.Lock()
+        self._write_sequence = 0
 
     @property
     def configured(self) -> bool:
@@ -125,6 +152,10 @@ class NativeZendureRuntime:
                 Path(self._capture_path).name if self._capture_path else None
             ),
             "native_zendure_error": self._error,
+            "native_zendure_first_write": (
+                self._first_write_result.status.value
+                if self._first_write_result is not None else "not_run"
+            ),
         }
 
     def overview_attributes(self) -> dict[str, Any]:
@@ -167,20 +198,24 @@ class NativeZendureRuntime:
                 }
             )
         return {
-            "read_only": True,
-            "native_control": "disabled",
+            "read_only": False,
+            "native_control": "developer_test_only",
             "active_control_path": "Z-HA / Home Assistant entities",
             "capture_complete": self._capture_complete,
             "capture_reason": self._capture_reason,
             "systems": systems,
+            "first_write_test": (
+                self._first_write_result.diagnostics()
+                if self._first_write_result is not None else None
+            ),
         }
 
     def diagnostic_data(self) -> dict[str, Any]:
         return ZendureDiagnosticSanitizer().sanitize(
             {
                 "status": self._status,
-                "read_only": True,
-                "native_control": "disabled",
+                "read_only": False,
+                "native_control": "developer_test_only",
                 "active_control_path": "Z-HA / Home Assistant entities",
                 "selected_device": self._selected_device,
                 "message_count": self._processed_messages,
@@ -197,9 +232,104 @@ class NativeZendureRuntime:
                     }
                     for system_id in sorted(self._inventory.devices)
                 ],
+                "first_write_test": (
+                    self._first_write_result.diagnostics()
+                    if self._first_write_result is not None else None
+                ),
                 "overview": self.overview_attributes(),
             }
         )
+
+    async def async_run_first_write_test(self) -> NativeWriteVerification:
+        """Run the explicit SF2400AC ZenSDK +1 W write and restore test."""
+
+        async with self._write_lock:
+            if self._bootstrap is None or self._selected_device is None:
+                raise ValueError("native_device_not_ready")
+            state = self._states.get(self._selected_device)
+            source_device = self._inventory.devices.get(self._selected_device)
+            if state is None or source_device is None:
+                raise ValueError("native_device_not_ready")
+            current = state.setpoints.output_limit_w
+            now = datetime.now(timezone.utc)
+            if (
+                not current.valid or current.observed_at is None
+                or (now - current.observed_at).total_seconds() > 15
+            ):
+                raise ValueError("output_limit_not_fresh")
+            source_identity = source_device.native_identities[0]
+            local_identity = NativeDeviceIdentity(
+                transport=ZendureTransport.ZENSDK,
+                device_id=source_identity.device_id,
+                serial_number=source_identity.serial_number,
+                product_id=source_identity.product_id,
+                product_model=source_identity.product_model,
+            )
+            test_device = MainDevice(
+                system_id=self._selected_device,
+                display_name=source_device.display_name,
+                model=source_device.model,
+                profile_key=source_device.profile_key,
+                control_state=DeviceControlState.ACTIVE,
+                selected_transport=ZendureTransport.ZENSDK,
+                available_transports=frozenset({ZendureTransport.ZENSDK}),
+                native_identities=(local_identity,),
+                online=True,
+                hems_status=source_device.hems_status,
+                hems_active=source_device.hems_active,
+            )
+            inventory = DeviceInventory(devices=(test_device,))
+            original = float(current.value)
+            profile = resolve_zendure_device(local_identity)
+            maximum = profile.profile.capabilities.max_output_w if profile else original
+            target = original + 1.0 if original < maximum else original - 1.0
+            command = DeviceCommand(
+                "output", output_limit_w=target, reason="native_first_write_test",
+                should_write_mode=False, should_write_input=False,
+                should_write_output=True,
+            )
+            request = NativeCommandRequest(
+                self._selected_device, ZendureTransport.ZENSDK, command
+            )
+            context = NativeCommandContext(
+                inventory=inventory, states={self._selected_device: state},
+                selected_device_id=self._selected_device,
+                native_control_enabled=True,
+                available_transports=frozenset({ZendureTransport.ZENSDK}),
+            )
+
+            async def send(prop: str, value: float, _correlation: str):
+                self._write_sequence += 1
+                outcome = await async_write_zensdk_property(
+                    self._bootstrap, self._selected_device, prop, int(value),
+                    self._write_sequence, self._post_json,
+                )
+                return TransportWriteResult(outcome.accepted, outcome.http_status)
+
+            async def read():
+                result = await async_read_zensdk_reports(
+                    self._bootstrap, self._get_json
+                )
+                self._record_zensdk_cycle(result)
+                self._apply_messages(result.messages)
+                for message in result.messages:
+                    if message.device_candidate_id != self._selected_device:
+                        continue
+                    payload = message.parsed_payload or {}
+                    properties = payload.get("properties", payload)
+                    value = properties.get("outputLimit")
+                    if isinstance(value, (int, float)):
+                        return PropertyReadback(float(value), message.received_at)
+                return None
+
+            self._first_write_result = await async_verify_reversible_write(
+                gate=NativeDeviceCommandGate(self._hems_gate), request=request,
+                context=context, property_name="outputLimit",
+                original_value=original, requested_value=target,
+                send_property=send, read_property=read,
+            )
+            self._notify()
+            return self._first_write_result
 
     async def _async_run(self) -> None:
         try:

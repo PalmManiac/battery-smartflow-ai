@@ -28,3 +28,19 @@ stop_debug_recording:
       selector:
         config_entry:
           integration: battery_smartflow_ai
+
+verify_native_write:
+  name: Verify first native Zendure write
+  description: Developer-only SF2400AC ZenSDK test. Changes outputLimit by 1 W, verifies a fresh readback, and restores the original value. Disable competing writers first.
+  fields:
+    entry_id:
+      required: false
+      description: Required only when more than one Battery SmartFlow AI config entry is loaded.
+      selector:
+        config_entry:
+          integration: battery_smartflow_ai
+    confirm:
+      required: true
+      description: Confirms that Zendure HEMS, Z-HA control, and external writers are disabled for this test.
+      selector:
+        boolean:

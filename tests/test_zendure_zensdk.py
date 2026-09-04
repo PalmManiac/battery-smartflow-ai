@@ -28,6 +28,7 @@ from custom_components.battery_smartflow_ai.zendure_zensdk import (  # noqa: E40
     ZenSdkReadResult,
     _candidate_addresses,
     async_read_zensdk_reports,
+    async_write_zensdk_property,
 )
 from custom_components.battery_smartflow_ai.zendure_normalizer import (  # noqa: E402
     ZendureCloudNormalizer,
@@ -84,6 +85,55 @@ async def make_bootstrap(*, ip="192.168.1.44"):
 
 
 class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_first_write_posts_one_allowlisted_property_to_exact_device(self):
+        data = await make_bootstrap()
+        calls = []
+
+        async def post(url, **kwargs):
+            calls.append((url, kwargs))
+            return Response({"success": True}, 200)
+
+        result = await async_write_zensdk_property(
+            data, "cloud_mqtt:device-real-1", "outputLimit", 301, 7, post
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(calls[0][0], "http://192.168.1.44/properties/write")
+        self.assertEqual(
+            calls[0][1]["json"],
+            {"sn": "serial-real-1", "properties": {"outputLimit": 301}, "id": 7},
+        )
+
+    async def test_first_write_rejects_every_other_property_without_network(self):
+        data = await make_bootstrap()
+        called = False
+
+        async def post(*_args, **_kwargs):
+            nonlocal called
+            called = True
+            return Response({})
+
+        result = await async_write_zensdk_property(
+            data, "cloud_mqtt:device-real-1", "inputLimit", 1, 1, post
+        )
+        self.assertFalse(result.accepted)
+        self.assertEqual(result.result, "property_not_allowed")
+        self.assertFalse(called)
+
+    async def test_first_write_never_retries_an_ambiguous_timeout(self):
+        data = await make_bootstrap()
+        calls = []
+
+        async def post(url, **_kwargs):
+            calls.append(url)
+            raise TimeoutError
+
+        result = await async_write_zensdk_property(
+            data, "cloud_mqtt:device-real-1", "outputLimit", 1, 1, post
+        )
+        self.assertFalse(result.accepted)
+        self.assertEqual(calls, ["http://192.168.1.44/properties/write"])
+
     async def test_reads_private_ip_and_returns_transport_tagged_report(self):
         data = await make_bootstrap()
         requested = []
