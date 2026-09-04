@@ -715,8 +715,17 @@ def _value(measured: Any) -> str | None:
 
 
 def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> bool:
+    """Require fresh device safety data; HEMS freshness has its own gate.
+
+    The HEMS activity fallback deliberately keeps the timestamp of the last
+    observed activity.  Once its quiet confirmation window has elapsed that
+    timestamp may therefore be older than this generic state window while the
+    dedicated HEMS command gate still has an explicit, safe decision.  Requiring
+    it here as well would permanently suppress otherwise safe commands.
+    """
+
     now = datetime.now(timezone.utc)
-    required = (state.online, state.protection_active, state.hems_active)
+    required = (state.online, state.protection_active)
     return all(
         item.valid
         and item.observed_at is not None
