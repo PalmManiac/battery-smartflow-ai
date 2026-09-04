@@ -11,6 +11,7 @@ from typing import Mapping
 from .core.models import (
     DeviceControlState,
     DeviceInventory,
+    HemsStatus,
     MeasuredValue,
     NeutralDeviceState,
     ZendureTransport,
@@ -47,6 +48,9 @@ class MainSystemOverview:
     available_transports: tuple[ZendureTransport, ...]
     online: bool
     hems_active: bool
+    hems_status: HemsStatus
+    hems_observed_at: datetime | None
+    control_block_reason: str | None
     last_message_at: datetime | None
     packs: tuple[PackOverview, ...]
 
@@ -109,13 +113,20 @@ def build_native_device_overview(
                 actively_controlled=(
                     device.control_state is DeviceControlState.ACTIVE
                 ),
-                status_text=_status_text(device.control_state),
+                status_text=_status_text(device.control_state, device.hems_status),
                 selected_transport=device.selected_transport,
                 available_transports=tuple(
                     sorted(device.available_transports, key=lambda item: item.value)
                 ),
                 online=device.online,
                 hems_active=device.hems_active,
+                hems_status=device.hems_status,
+                hems_observed_at=device.hems_observed_at,
+                control_block_reason=(
+                    f"zendure_hems_{device.hems_status.value}"
+                    if device.control_state is DeviceControlState.HEMS_BLOCKED
+                    else None
+                ),
                 last_message_at=state.last_message_at if state else None,
                 packs=tuple(packs),
             )
@@ -128,13 +139,19 @@ def _public_id(kind: str, value: str) -> str:
     return f"ZD_{kind}_{digest}"
 
 
-def _status_text(state: DeviceControlState) -> str:
+def _status_text(state: DeviceControlState, hems_status: HemsStatus) -> str:
+    if state is DeviceControlState.HEMS_BLOCKED:
+        return {
+            HemsStatus.ACTIVE: "Observation mode - Zendure HEMS active",
+            HemsStatus.STALE: "Observation mode - Zendure HEMS status stale",
+            HemsStatus.INVALID: "Observation mode - Zendure HEMS status invalid",
+            HemsStatus.UNKNOWN: "Observation mode - Zendure HEMS status unknown",
+        }.get(hems_status, "Observation mode - Zendure HEMS blocks control")
     return {
         DeviceControlState.OBSERVATION: "Observation mode",
         DeviceControlState.ELIGIBLE: "Eligible for control",
         DeviceControlState.ENABLED: "Control enabled",
         DeviceControlState.ACTIVE: "Actively controlled",
-        DeviceControlState.HEMS_BLOCKED: "Observation mode - Zendure HEMS active",
         DeviceControlState.UNSUPPORTED: (
             "Observation mode - device profile not supported"
         ),

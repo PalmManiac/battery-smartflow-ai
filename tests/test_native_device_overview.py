@@ -9,7 +9,7 @@ from support import bootstrap
 bootstrap()
 
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
-    BatteryPackIdentity, DeviceControlState, DeviceInventory, MainDevice,
+    BatteryPackIdentity, DeviceControlState, DeviceInventory, HemsStatus, MainDevice,
     MeasuredValue, NativeDeviceIdentity, ZendureTransport,
 )
 from custom_components.battery_smartflow_ai.native_device_overview import (  # noqa: E402
@@ -114,6 +114,21 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         by_name = {item.display_name: item for item in overview}
         self.assertFalse(by_name["Battery SmartFlow AI"].actively_controlled)
         self.assertFalse(by_name["Other"].actively_controlled)
+
+    def test_hems_quality_and_block_reason_are_visible_per_device(self):
+        main = MainDevice("main", "Main")
+        inventory = DeviceInventory(devices=(main,))
+        observed_at = datetime(2026, 9, 4, tzinfo=timezone.utc)
+        inventory.set_hems_status(
+            main.system_id,
+            HemsStatus.STALE,
+            observed_at=observed_at,
+        )
+        item = build_native_device_overview(inventory, {})[0]
+        self.assertEqual(item.hems_status, HemsStatus.STALE)
+        self.assertEqual(item.hems_observed_at, observed_at)
+        self.assertEqual(item.control_block_reason, "zendure_hems_stale")
+        self.assertIn("status stale", item.status_text)
 
     def test_fresh_data_preserves_online_state_but_offline_recovery_is_passive(self):
         active = MainDevice.from_v4_config_entry("entry")

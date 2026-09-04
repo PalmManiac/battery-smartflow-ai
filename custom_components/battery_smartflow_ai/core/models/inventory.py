@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any, Iterable, Mapping
+
+from .hems import HemsStatus
 
 
 class ZendureTransport(StrEnum):
@@ -147,6 +150,8 @@ class MainDevice:
     native_identities: tuple[NativeDeviceIdentity, ...] = ()
     online: bool = True
     hems_active: bool = False
+    hems_status: HemsStatus = HemsStatus.UNSUPPORTED
+    hems_observed_at: datetime | None = None
     supported: bool = True
 
     def __post_init__(self) -> None:
@@ -157,6 +162,9 @@ class MainDevice:
         identity_keys = [identity.key for identity in self.native_identities]
         if len(identity_keys) != len(set(identity_keys)):
             raise ValueError("Native identities must be unique per main system")
+        # Preserve the pre-DEV13 construction contract while storing richer state.
+        if self.hems_active and self.hems_status is HemsStatus.UNSUPPORTED:
+            object.__setattr__(self, "hems_status", HemsStatus.ACTIVE)
 
     @classmethod
     def from_v4_config_entry(
@@ -206,6 +214,10 @@ class MainDevice:
             "native_identities": [item.as_dict() for item in self.native_identities],
             "online": self.online,
             "hems_active": self.hems_active,
+            "hems_status": self.hems_status.value,
+            "hems_observed_at": (
+                self.hems_observed_at.isoformat() if self.hems_observed_at else None
+            ),
             "supported": self.supported,
         }
 
@@ -228,6 +240,19 @@ class MainDevice:
             ),
             online=bool(value.get("online", True)),
             hems_active=bool(value.get("hems_active", False)),
+            hems_status=HemsStatus(
+                str(
+                    value.get(
+                        "hems_status",
+                        "active" if value.get("hems_active", False) else "unsupported",
+                    )
+                )
+            ),
+            hems_observed_at=(
+                datetime.fromisoformat(str(value["hems_observed_at"]))
+                if value.get("hems_observed_at")
+                else None
+            ),
             supported=bool(value.get("supported", True)),
         )
 
@@ -402,7 +427,7 @@ class DeviceInventory:
                 raise ValueError("Unsupported device cannot be enabled")
             if not device.online:
                 raise ValueError("Offline device cannot be enabled")
-            if device.hems_active:
+            if device.control_state is DeviceControlState.HEMS_BLOCKED:
                 raise ValueError("HEMS-blocked device cannot be enabled")
         if state is DeviceControlState.ACTIVE and any(
             other_id != system_id
@@ -417,16 +442,39 @@ class DeviceInventory:
     def set_hems_active(self, system_id: str, active: bool) -> MainDevice:
         """Treat Zendure HEMS solely as a control blocker."""
 
+        return self.set_hems_status(
+            system_id,
+            HemsStatus.ACTIVE if active else HemsStatus.INACTIVE,
+        )
+
+    def set_hems_status(
+        self,
+        system_id: str,
+        status: HemsStatus,
+        *,
+        observed_at: datetime | None = None,
+    ) -> MainDevice:
+        """Apply the evaluated per-device HEMS state without auto-reactivation."""
+
         device = self._devices[system_id]
-        if active:
+        blocks = status not in {HemsStatus.INACTIVE, HemsStatus.UNSUPPORTED}
+        if blocks:
             state = DeviceControlState.HEMS_BLOCKED
+        elif device.control_state is not DeviceControlState.HEMS_BLOCKED:
+            state = device.control_state
         elif not device.supported:
             state = DeviceControlState.UNSUPPORTED
         elif not device.online:
             state = DeviceControlState.OFFLINE
         else:
             state = DeviceControlState.OBSERVATION
-        updated = replace(device, hems_active=active, control_state=state)
+        updated = replace(
+            device,
+            hems_active=status is HemsStatus.ACTIVE,
+            hems_status=status,
+            hems_observed_at=observed_at,
+            control_state=state,
+        )
         self._devices[system_id] = updated
         return updated
 
@@ -448,7 +496,10 @@ class DeviceInventory:
             return
         state = (
             DeviceControlState.HEMS_BLOCKED
-            if device.hems_active
+            if device.hems_status not in {
+                HemsStatus.INACTIVE,
+                HemsStatus.UNSUPPORTED,
+            }
             else DeviceControlState.OBSERVATION
             if device.supported
             else DeviceControlState.UNSUPPORTED
