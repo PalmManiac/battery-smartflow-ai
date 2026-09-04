@@ -57,8 +57,8 @@ class FakeSession:
     def subscribe(self, topics): self.subscriptions = topics
     def request_all(self, product_id, device_id, message_id, timestamp):
         self.state_requests.append((product_id, device_id, message_id, timestamp))
-    def write_property(self, product_id, device_id, write):
-        self.property_writes.append((product_id, device_id, write))
+    def write_properties(self, product_id, device_id, writes):
+        self.property_writes.append((product_id, device_id, writes))
         return True
     def disconnect(self): self.disconnected = True
     def emit(self, topic, payload): self.on_message(topic, payload)
@@ -356,11 +356,23 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
 
     def test_typed_property_write_has_confirmed_topic_and_envelope(self):
         topic, payload = _property_write_request(
-            "product-a", "main-1", CloudPropertyWrite("outputLimit", 0, 8, 1788444001)
+            "product-a",
+            "main-1",
+            (
+                CloudPropertyWrite("smartMode", 1, 8, 1788444001),
+                CloudPropertyWrite("acMode", 2, 9, 1788444001),
+                CloudPropertyWrite("outputLimit", 500, 10, 1788444001),
+                CloudPropertyWrite("inputLimit", 0, 11, 1788444001),
+            ),
         )
         self.assertEqual(topic, "iot/product-a/main-1/properties/write")
         self.assertEqual(json.loads(payload), {
-            "properties": {"outputLimit": 0}, "messageId": 8,
+            "properties": {
+                "smartMode": 1,
+                "acMode": 2,
+                "outputLimit": 500,
+                "inputLimit": 0,
+            }, "messageId": 8,
             "deviceId": "main-1", "timestamp": 1788444001,
         })
 

@@ -49,11 +49,13 @@ def measured(value):
     return MeasuredValue.available(value, observed_at=NOW)
 
 
-def state(*, input_w=0, output_w=0, hems=False):
+def state(*, input_w=0, output_w=0, charge_w=0, discharge_w=0, hems=False):
     return SimpleNamespace(
         online=measured(True),
         protection_active=measured(False),
         hems_active=measured(hems),
+        charge_power_w=measured(charge_w),
+        discharge_power_w=measured(discharge_w),
         mode=measured(DeviceOperatingMode.DISCHARGE),
         setpoints=ReportedDeviceSetpoints(
             measured(input_w), measured(output_w), measured(2400),
@@ -132,7 +134,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(stop_target._transport.commands[-1].command.output_limit_w, 0)
 
     async def test_no_change_never_writes(self):
-        target = runtime(current_state=state(output_w=250))
+        target = runtime(current_state=state(output_w=250, discharge_w=250))
         result = await target.async_execute_device_command(DeviceCommand(
             "output", output_limit_w=250, should_write_mode=True,
             should_write_input=False, should_write_output=True,
@@ -140,6 +142,16 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
         self.assertEqual(result.reason, "native_setpoints_unchanged")
         self.assertEqual(target._transport.commands, [])
+
+    async def test_matching_stored_limit_restarts_inactive_direction(self):
+        target = runtime(current_state=state(output_w=250, discharge_w=0))
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=250, should_write_mode=True,
+            should_write_input=False, should_write_output=True,
+        ))
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        command = target._transport.commands[-1].command
+        self.assertTrue(command.should_write_output)
 
     async def test_profile_limit_is_clamped_only_by_central_gate(self):
         target = runtime()
