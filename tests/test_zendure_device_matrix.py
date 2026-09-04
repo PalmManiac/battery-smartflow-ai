@@ -122,12 +122,13 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
         self.assertIn("soc_pct", entry.neutral_pack_targets)
         self.assertFalse(entry.native_control_approved)
 
-    def test_matrix_cannot_be_constructed_with_control_approval(self):
-        with self.assertRaisesRegex(ValueError, "must not approve native writes"):
-            replace(
-                ZENDURE_DEVICE_MATRIX["SF800Pro"],
-                native_control_approved=True,
-            )
+    def test_gate_can_model_future_approval_without_approving_production(self):
+        approved = replace(
+            ZENDURE_DEVICE_MATRIX["SF800Pro"],
+            native_control_approved=True,
+        )
+        self.assertTrue(approved.native_control_approved)
+        self.assertFalse(ZENDURE_DEVICE_MATRIX["SF800Pro"].native_control_approved)
 
 
 if __name__ == "__main__":
