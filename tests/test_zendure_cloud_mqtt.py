@@ -19,10 +19,12 @@ from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     _bsfai_client_id,
     _get_all_request,
     _parse_broker_url,
+    _property_write_request,
     _reason_code_success,
     _safe_peer_scope,
     _safe_socket_family,
 )
+from custom_components.battery_smartflow_ai.zendure_cloud_mqtt_commands import CloudPropertyWrite
 
 
 class Response:
@@ -45,6 +47,7 @@ class FakeSession:
         self.connect_ok = connect_ok
         self.subscriptions = ()
         self.state_requests = []
+        self.property_writes = []
         self.disconnected = False
 
     def set_callbacks(self, on_connect, on_disconnect, on_message):
@@ -54,6 +57,9 @@ class FakeSession:
     def subscribe(self, topics): self.subscriptions = topics
     def request_all(self, product_id, device_id, message_id, timestamp):
         self.state_requests.append((product_id, device_id, message_id, timestamp))
+    def write_property(self, product_id, device_id, write):
+        self.property_writes.append((product_id, device_id, write))
+        return True
     def disconnect(self): self.disconnected = True
     def emit(self, topic, payload): self.on_message(topic, payload)
     def drop(self): self.on_disconnect("network lost")
@@ -178,7 +184,7 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(hasattr(transport, "publish"))
         self.assertFalse(hasattr(transport, "command"))
         public = {name for name, _ in inspect.getmembers(type(transport), inspect.isfunction) if not name.startswith("_")}
-        self.assertEqual(public, {"async_start", "async_stop"})
+        self.assertEqual(public, {"async_execute_authorized", "async_start", "async_stop"})
         self.assertEqual(len(self.sessions[0].state_requests), 2)
         self.assertEqual(len(self.sessions[1].state_requests), 2)
 
@@ -347,6 +353,16 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("properties/write", topic)
         self.assertNotIn("function/invoke", topic)
+
+    def test_typed_property_write_has_confirmed_topic_and_envelope(self):
+        topic, payload = _property_write_request(
+            "product-a", "main-1", CloudPropertyWrite("outputLimit", 0, 8, 1788444001)
+        )
+        self.assertEqual(topic, "iot/product-a/main-1/properties/write")
+        self.assertEqual(json.loads(payload), {
+            "properties": {"outputLimit": 0}, "messageId": 8,
+            "deviceId": "main-1", "timestamp": 1788444001,
+        })
 
 
 if __name__ == "__main__":

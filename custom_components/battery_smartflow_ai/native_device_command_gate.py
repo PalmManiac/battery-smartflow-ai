@@ -378,7 +378,7 @@ def _validate_command(
         if command.should_write_max_soc:
             properties.append("socSet")
         for prop in properties:
-            if matrix.writable_main_properties.get(prop) is not VerificationLevel.VERIFIED:
+            if matrix.property_write_level(transport, prop) is not VerificationLevel.VERIFIED:
                 reasons.append(f"command_capability_unsupported:{prop}")
         if matrix.transport(transport).write is not VerificationLevel.VERIFIED:
             reasons.append("command_transport_unsupported")

@@ -1,10 +1,8 @@
-"""State-reading Zendure Cloud MQTT transport.
+"""State-reading Zendure Cloud MQTT transport with typed property writes.
 
-The public transport surface deliberately contains no arbitrary publish or
-command API.  Its sole outbound operation is an internally constructed
-``properties/read`` request for ``getAll``.  Raw inbound messages are retained
-for the V5 initial-sync capture while credentials remain inside the transport
-boundary.
+The public transport surface deliberately contains no arbitrary publish API.
+State requests and gate-authorized commands use separately typed methods while
+credentials remain inside the transport boundary.
 """
 
 from __future__ import annotations
@@ -26,6 +24,14 @@ from urllib.parse import urlsplit
 
 from .zendure_cloud import CloudMqttCredentials, ZendureCloudBootstrap
 from .zendure_privacy import ZendureDiagnosticSanitizer
+from .native_command_verification import NativeCommandVerificationManager
+from .native_device_command_gate import AuthorizedNativeCommand
+from .zendure_cloud_mqtt_commands import (
+    CloudCommandResult,
+    CloudCommandStatus,
+    CloudPropertyWrite,
+    ZendureCloudCommandAdapter,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,8 +86,8 @@ ConnectCallback = Callable[[bool, str | None], None]
 DisconnectCallback = Callable[[str | None], None]
 
 
-class ReadOnlyMqttSession(Protocol):
-    """Minimal state-reader contract without an arbitrary publish surface."""
+class CloudMqttSession(Protocol):
+    """Minimal typed session contract without an arbitrary publish surface."""
 
     def set_callbacks(
         self,
@@ -102,6 +108,13 @@ class ReadOnlyMqttSession(Protocol):
         timestamp: int,
     ) -> None: ...
 
+    def write_property(
+        self,
+        product_id: str,
+        device_id: str,
+        write: CloudPropertyWrite,
+    ) -> bool: ...
+
     def disconnect(self) -> None: ...
 
     @property
@@ -111,7 +124,7 @@ class ReadOnlyMqttSession(Protocol):
     def connection_diagnostics(self) -> Mapping[str, str | bool]: ...
 
 
-SessionFactory = Callable[[CloudMqttCredentials], ReadOnlyMqttSession]
+SessionFactory = Callable[[CloudMqttCredentials], CloudMqttSession]
 
 
 class ZendureCloudMqttTransport:
@@ -132,7 +145,7 @@ class ZendureCloudMqttTransport:
         self._reconnect_delays = reconnect_delays
         self._messages: deque[CloudMqttMessage] = deque(maxlen=max_messages)
         self._state = ConnectionState.DISCONNECTED
-        self._session: ReadOnlyMqttSession | None = None
+        self._session: CloudMqttSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._connected = asyncio.Event()
         self._connect_failure: str | None = None
@@ -149,6 +162,9 @@ class ZendureCloudMqttTransport:
             "socket_family": "unknown",
             "connect_packet_sent": False,
         }
+        self._verification = NativeCommandVerificationManager()
+        self._command_adapter: ZendureCloudCommandAdapter | None = None
+        self._command_lock = asyncio.Lock()
         self._devices = {
             item.candidate.candidate_id: CloudMqttDeviceState(
                 online=item.online
@@ -178,6 +194,31 @@ class ZendureCloudMqttTransport:
     @property
     def device_states(self) -> Mapping[str, CloudMqttDeviceState]:
         return dict(self._devices)
+
+    @property
+    def command_diagnostics(self) -> Mapping[str, Any]:
+        """Return bounded verification facts without MQTT payloads or identities."""
+
+        return self._verification.diagnostics()
+
+    async def async_execute_authorized(
+        self, authorized: AuthorizedNativeCommand
+    ) -> CloudCommandResult:
+        """Execute a gate-issued command; this is not an arbitrary publish API."""
+
+        async with self._command_lock:
+            if self._state is not ConnectionState.CONNECTED or self._session is None:
+                return CloudCommandResult(
+                    CloudCommandStatus.REJECTED, "transport_not_connected"
+                )
+            if self._command_adapter is None:
+                self._command_adapter = ZendureCloudCommandAdapter(
+                    self._bootstrap,
+                    self._session,
+                    self._verification,
+                    clock=self._clock,
+                )
+            return await asyncio.to_thread(self._command_adapter.execute, authorized)
 
     @property
     def connection_variant(self) -> str:
@@ -274,6 +315,7 @@ class ZendureCloudMqttTransport:
         session = self._session_factory(self._bootstrap.mqtt)
         session.set_callbacks(self._on_connect, self._on_disconnect, self._on_message)
         self._session = session
+        self._command_adapter = None
         # The production backend starts Paho's non-blocking network loop here.
         # A custom backend may still perform blocking setup, so retain the
         # thread boundary to protect Home Assistant's event loop.
@@ -401,6 +443,13 @@ class ZendureCloudMqttTransport:
             online = _online_value(parsed)
             if online is not None:
                 state.online = online
+            properties = parsed.get("properties") if isinstance(parsed, Mapping) else None
+            if isinstance(properties, Mapping) and self._command_adapter is not None:
+                self._command_adapter.observe_properties(
+                    device_id=candidate_id,
+                    properties=properties,
+                    observed_at=received_at,
+                )
 
     def _route_message(self, topic: str, parsed: Any) -> tuple[str | None, str | None]:
         segments = {part for part in topic.split("/") if part}
@@ -420,6 +469,29 @@ def _parse_payload(payload: bytes) -> tuple[Any, str]:
         return json.loads(text), "json"
     except (json.JSONDecodeError, ValueError):
         return text, "text"
+
+
+def _property_write_request(
+    product_id: str,
+    device_id: str,
+    write: CloudPropertyWrite,
+) -> tuple[str, str]:
+    """Build the one allow-listed Zendure Cloud property-write envelope."""
+
+    if not product_id or not device_id or not write.property_name:
+        raise CloudMqttError("invalid_write_address")
+    return (
+        f"iot/{product_id}/{device_id}/properties/write",
+        json.dumps(
+            {
+                "properties": {write.property_name: write.value},
+                "messageId": write.message_id,
+                "deviceId": device_id,
+                "timestamp": write.timestamp,
+            },
+            separators=(",", ":"),
+        ),
+    )
 
 
 def _identity_values(value: Any) -> set[str]:
@@ -466,7 +538,7 @@ def _online_value(value: Any) -> bool | None:
 
 
 class PahoReadOnlyMqttSession:
-    """Paho state reader with no arbitrary publish or command method."""
+    """Paho session exposing only typed state and property operations."""
 
     def __init__(self, credentials: CloudMqttCredentials) -> None:
         try:
@@ -552,6 +624,22 @@ class PahoReadOnlyMqttSession:
                 result_code = None
         if result_code != 0:
             raise CloudMqttError("state_request_failed")
+
+    def write_property(
+        self,
+        product_id: str,
+        device_id: str,
+        write: CloudPropertyWrite,
+    ) -> bool:
+        topic, payload = _property_write_request(product_id, device_id, write)
+        result = self._client.publish(topic, payload, qos=0, retain=False)
+        result_code = getattr(result, "rc", None)
+        if result_code is None:
+            try:
+                result_code = result[0]
+            except (IndexError, TypeError):
+                return False
+        return result_code == 0
 
     def disconnect(self) -> None:
         try:
