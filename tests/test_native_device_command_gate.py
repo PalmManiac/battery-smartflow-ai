@@ -64,6 +64,16 @@ def approved_matrix():
             "minSoc": VerificationLevel.REFERENCE_ONLY,
             "socSet": VerificationLevel.REFERENCE_ONLY,
         },
+        writable_main_properties_by_transport={
+            **source.writable_main_properties_by_transport,
+            TRANSPORT: {
+                "acMode": VerificationLevel.VERIFIED,
+                "inputLimit": VerificationLevel.VERIFIED,
+                "outputLimit": VerificationLevel.VERIFIED,
+                "minSoc": VerificationLevel.REFERENCE_ONLY,
+                "socSet": VerificationLevel.REFERENCE_ONLY,
+            },
+        },
     )
 
 
@@ -173,7 +183,7 @@ class NativeDeviceCommandGateTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(reason, result.reasons)
             self.assertEqual(called, [])
 
-    async def test_production_matrix_is_fail_closed(self):
+    async def test_production_matrix_keeps_unverified_zensdk_properties_closed(self):
         hems = ZendureHemsCommandGate()
         hems.update(DEVICE_ID, valid(False), capability=VerificationLevel.VERIFIED)
         gate = NativeDeviceCommandGate(hems)

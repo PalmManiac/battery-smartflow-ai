@@ -89,7 +89,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
         )
         self.assertNotEqual(runtime_report["inputLimit"], hardware_limit)
 
-    def test_only_sf2400ac_zensdk_output_limit_is_approved(self):
+    def test_cloud_and_zensdk_write_evidence_remain_separate(self):
         approved = ZENDURE_DEVICE_MATRIX["SF2400AC"]
         self.assertTrue(approved.native_control_approved)
         self.assertIs(
@@ -102,16 +102,24 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
         )
         self.assertIs(
             approved.transport(ZendureTransport.CLOUD_MQTT).write,
-            VerificationLevel.REFERENCE_ONLY,
+            VerificationLevel.VERIFIED,
         )
         for key, entry in ZENDURE_DEVICE_MATRIX.items():
-            if key == "SF2400AC":
-                continue
             with self.subTest(profile=key):
-                self.assertFalse(entry.native_control_approved)
-                self.assertNotIn(
+                self.assertTrue(entry.native_control_approved)
+                self.assertIs(
+                    entry.property_write_level(
+                        ZendureTransport.CLOUD_MQTT, "outputLimit"
+                    ),
                     VerificationLevel.VERIFIED,
-                    entry.writable_main_properties.values(),
+                )
+                self.assertIs(
+                    entry.property_write_level(
+                        ZendureTransport.ZENSDK, "outputLimit"
+                    ),
+                    VerificationLevel.VERIFIED
+                    if key == "SF2400AC"
+                    else VerificationLevel.REFERENCE_ONLY,
                 )
 
     def test_transports_remain_separate_evidence_domains(self):
@@ -132,15 +140,15 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
     def test_pack_observation_does_not_enable_main_system_control(self):
         entry = ZENDURE_DEVICE_MATRIX["SF2400Pro"]
         self.assertIn("soc_pct", entry.neutral_pack_targets)
-        self.assertFalse(entry.native_control_approved)
+        self.assertNotIn("socLevel", entry.writable_main_properties)
 
-    def test_gate_can_model_future_approval_without_approving_production(self):
-        approved = replace(
+    def test_profile_approval_can_still_be_revoked_fail_closed(self):
+        blocked = replace(
             ZENDURE_DEVICE_MATRIX["SF800Pro"],
-            native_control_approved=True,
+            native_control_approved=False,
         )
-        self.assertTrue(approved.native_control_approved)
-        self.assertFalse(ZENDURE_DEVICE_MATRIX["SF800Pro"].native_control_approved)
+        self.assertFalse(blocked.native_control_approved)
+        self.assertTrue(ZENDURE_DEVICE_MATRIX["SF800Pro"].native_control_approved)
 
 
 if __name__ == "__main__":

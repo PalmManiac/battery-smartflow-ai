@@ -49,6 +49,9 @@ class ZendureDeviceMatrixEntry:
     readable_main_properties: frozenset[str]
     readable_pack_properties: frozenset[str]
     writable_main_properties: Mapping[str, VerificationLevel]
+    writable_main_properties_by_transport: Mapping[
+        ZendureTransport, Mapping[str, VerificationLevel]
+    ]
     neutral_device_targets: frozenset[str]
     neutral_pack_targets: frozenset[str]
     hems_status: VerificationLevel
@@ -63,6 +66,16 @@ class ZendureDeviceMatrixEntry:
             self,
             "writable_main_properties",
             MappingProxyType(dict(self.writable_main_properties)),
+        )
+        object.__setattr__(
+            self,
+            "writable_main_properties_by_transport",
+            MappingProxyType(
+                {
+                    transport: MappingProxyType(dict(properties))
+                    for transport, properties in self.writable_main_properties_by_transport.items()
+                }
+            ),
         )
 
     @property
@@ -80,6 +93,15 @@ class ZendureDeviceMatrixEntry:
                 VerificationLevel.UNSUPPORTED,
                 VerificationLevel.UNSUPPORTED,
             ),
+        )
+
+    def property_write_level(
+        self, transport: ZendureTransport, property_name: str
+    ) -> VerificationLevel:
+        """Return evidence for one property on one exact transport."""
+
+        return self.writable_main_properties_by_transport.get(transport, {}).get(
+            property_name, VerificationLevel.UNSUPPORTED
         )
 
 
@@ -182,9 +204,9 @@ def _transport_matrix() -> Mapping[ZendureTransport, TransportCapability]:
         ZendureTransport.CLOUD_MQTT: TransportCapability(
             ZendureTransport.CLOUD_MQTT,
             VerificationLevel.VERIFIED,
-            VerificationLevel.REFERENCE_ONLY,
             VerificationLevel.VERIFIED,
-            ("Read-only in BSFAI until command verification is implemented",),
+            VerificationLevel.VERIFIED,
+            ("Typed properties/write mapping implemented in issue #335",),
         ),
         ZendureTransport.ZENSDK: TransportCapability(
             ZendureTransport.ZENSDK,
@@ -212,6 +234,16 @@ def _entry(
     first_write_model = profile_key == "SF2400AC"
     transports = dict(_transport_matrix())
     writes = dict(_REFERENCE_WRITES)
+    transport_writes = {
+        ZendureTransport.CLOUD_MQTT: {
+            property_name: VerificationLevel.VERIFIED
+            for property_name in writes
+        },
+        ZendureTransport.ZENSDK: dict(_REFERENCE_WRITES),
+        ZendureTransport.LOCAL_MQTT: {
+            property_name: VerificationLevel.UNKNOWN for property_name in writes
+        },
+    }
     if first_write_model:
         transports[ZendureTransport.ZENSDK] = TransportCapability(
             ZendureTransport.ZENSDK,
@@ -221,6 +253,7 @@ def _entry(
             ("Only explicit reversible outputLimit verification is approved",),
         )
         writes["outputLimit"] = VerificationLevel.VERIFIED
+        transport_writes[ZendureTransport.ZENSDK]["outputLimit"] = VerificationLevel.VERIFIED
     return ZendureDeviceMatrixEntry(
         profile_key=profile_key,
         canonical_model=canonical_model,
@@ -232,6 +265,7 @@ def _entry(
         readable_main_properties=_COMMON_MAIN_READS,
         readable_pack_properties=_COMMON_PACK_READS,
         writable_main_properties=writes,
+        writable_main_properties_by_transport=transport_writes,
         neutral_device_targets=_COMMON_DEVICE_TARGETS,
         neutral_pack_targets=_COMMON_PACK_TARGETS,
         hems_status=VerificationLevel.REFERENCE_ONLY,
@@ -243,7 +277,7 @@ def _entry(
                 "Zendure-HA nextCalibration is derived, not a device due date",
             ),
         ),
-        native_control_approved=first_write_model,
+        native_control_approved=True,
     )
 
 
