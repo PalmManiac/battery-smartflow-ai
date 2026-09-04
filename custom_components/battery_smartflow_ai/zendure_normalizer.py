@@ -20,6 +20,7 @@ from .core.models import (
 from .zendure_cloud import ZendureCloudBootstrap
 from .zendure_cloud_mqtt import CloudMqttMessage
 from .zendure_device_matrix import resolve_zendure_device
+from .zendure_hems_activity import HemsActivityDiagnostic, HemsActivityTracker
 
 
 DEFAULT_STALE_AFTER_SECONDS = 30.0
@@ -270,6 +271,9 @@ class ZendureCloudNormalizer:
         self._last_message: dict[str, datetime | None] = {
             candidate_id: None for candidate_id in self._models
         }
+        self._hems_activity = {
+            candidate_id: HemsActivityTracker() for candidate_id in self._models
+        }
         self._observed_transport: dict[str, ZendureTransport] = {
             candidate_id: ZendureTransport.CLOUD_MQTT
             for candidate_id in self._models
@@ -330,10 +334,34 @@ class ZendureCloudNormalizer:
                 )
             self._apply_packs(system_id, payload.get("packData"), observed_at)
         if message.topic.endswith("/properties/energy"):
-            self._device_values[system_id]["hems_active"] = _Observed(
-                True, ValueValidity.VALID, observed_at
-            )
+            self._hems_activity[system_id].observe_energy(observed_at=observed_at)
         return self.snapshot(system_id, now=now or observed_at)
+
+    def set_hems_monitoring(
+        self,
+        system_id: str,
+        available: bool,
+        *,
+        observed_at: datetime,
+    ) -> None:
+        """Tell the tracker whether Cloud MQTT is currently subscribed."""
+
+        if system_id not in self._models:
+            raise KeyError(system_id)
+        self._hems_activity[system_id].set_monitoring(
+            available,
+            observed_at=observed_at,
+        )
+
+    def hems_diagnostics(
+        self,
+        system_id: str,
+        *,
+        now: datetime,
+    ) -> HemsActivityDiagnostic:
+        if system_id not in self._models:
+            raise KeyError(system_id)
+        return self._hems_activity[system_id].diagnostics(now=now)
 
     def set_online(self, system_id: str, online: bool) -> None:
         if system_id not in self._models:
@@ -355,6 +383,14 @@ class ZendureCloudNormalizer:
 
         def device_value(target: str) -> MeasuredValue[Any]:
             return self._value(values, target, supported, online, current)
+
+        direct_hems = device_value("hems_active")
+        hems_active = (
+            direct_hems
+            if direct_hems.validity
+            not in {ValueValidity.NEVER_RECEIVED, ValueValidity.MISSING}
+            else self._hems_activity[system_id].measurement(now=current)
+        )
 
         packs = tuple(
             self._pack_snapshot(system_id, pack_id, accumulator, current, online)
@@ -395,7 +431,7 @@ class ZendureCloudNormalizer:
                 min_soc_pct=device_value("min_soc_pct"),
                 max_soc_pct=device_value("max_soc_pct"),
             ),
-            hems_active=device_value("hems_active"),
+            hems_active=hems_active,
             fault_code=device_value("fault_code"),
             protection_active=device_value("protection_active"),
             temperature_c=device_value("temperature_c"),
