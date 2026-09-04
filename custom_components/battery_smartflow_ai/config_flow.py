@@ -59,6 +59,7 @@ from .const import (
     DEFAULT_LEARNED_PLANNING_ENABLED,
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
+    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
 )
 
 from .device_profiles import DEVICE_PROFILE_MODELS
@@ -746,6 +747,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 options = dict(self.config_entry.options)
                 options.pop(CONF_NATIVE_ZENDURE_APP_TOKEN, None)
                 options.pop(CONF_NATIVE_ZENDURE_SELECTED_DEVICE, None)
+                options.pop(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, None)
                 return self.async_create_entry(title="", data=options)
             token = str(
                 user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
@@ -818,7 +820,12 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             if selected not in valid:
                 return self.async_show_form(
                     step_id="native_zendure_device",
-                    data_schema=self._native_device_schema(devices),
+                    data_schema=self._native_device_schema(
+                        devices,
+                        bool(self.config_entry.options.get(
+                            CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                        )),
+                    ),
                     errors={"base": "device_not_found"},
                     description_placeholders={
                         "device_summary": self._native_device_summary(devices)
@@ -827,18 +834,28 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             options = dict(self.config_entry.options)
             options[CONF_NATIVE_ZENDURE_APP_TOKEN] = self._native_token
             options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
+            options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
+                user_input.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
+            )
             return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
             step_id="native_zendure_device",
-            data_schema=self._native_device_schema(devices),
+            data_schema=self._native_device_schema(
+                devices,
+                bool(self.config_entry.options.get(
+                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                )),
+            ),
             description_placeholders={
                 "device_summary": self._native_device_summary(devices)
             },
         )
 
     @staticmethod
-    def _native_device_schema(devices) -> vol.Schema:
+    def _native_device_schema(
+        devices, native_control_enabled: bool = False
+    ) -> vol.Schema:
         return vol.Schema(
             {
                 vol.Required(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
@@ -857,7 +874,11 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
-                    )
+                    ),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                    default=native_control_enabled,
+                ): selector.BooleanSelector(),
             }
         )
 

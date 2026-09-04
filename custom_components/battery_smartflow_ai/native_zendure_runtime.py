@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 import logging
@@ -14,6 +14,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .core.models import (
     BatteryPackIdentity,
+    CommandExecutionResult,
+    CommandExecutionStatus,
     DeviceCommand,
     DeviceControlState,
     DeviceInventory,
@@ -31,6 +33,7 @@ from .native_command_verification import NativeCommandVerificationManager
 from .native_device_overview import build_native_device_overview
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
+from .zendure_cloud_mqtt_commands import CloudCommandStatus
 from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
 from .zendure_hems import ZendureHemsCommandGate
 from .zendure_initial_sync import (
@@ -83,10 +86,12 @@ class NativeZendureRuntime:
         app_token: str | None,
         selected_device: str | None,
         notify: Callable[[], None],
+        control_enabled: bool = False,
     ) -> None:
         self._hass = hass
         self._app_token = app_token
         self._selected_device = selected_device
+        self._control_enabled = bool(control_enabled)
         self._notify = notify
         self._task: asyncio.Task[None] | None = None
         self._transport: ZendureCloudMqttTransport | None = None
@@ -116,6 +121,12 @@ class NativeZendureRuntime:
         return bool(self._app_token)
 
     @property
+    def control_enabled(self) -> bool:
+        """Native ownership is explicit and never inferred from setup."""
+
+        return self._control_enabled
+
+    @property
     def capture_path(self) -> str | None:
         return self._capture_path
 
@@ -143,7 +154,10 @@ class NativeZendureRuntime:
     def sensor_data(self) -> dict[str, Any]:
         return {
             "native_zendure_status": self._status,
-            "native_zendure_control": "disabled_zha_active",
+            "native_zendure_control": (
+                "native_cloud_active" if self._control_enabled
+                else "disabled_zha_active"
+            ),
             "native_zendure_device_count": len(self._inventory.devices),
             "native_zendure_message_count": self._processed_messages,
             "native_zendure_last_message": (
@@ -201,8 +215,11 @@ class NativeZendureRuntime:
             )
         return {
             "read_only": False,
-            "native_control": "developer_test_only",
-            "active_control_path": "Z-HA / Home Assistant entities",
+            "native_control": "enabled" if self._control_enabled else "disabled",
+            "active_control_path": (
+                "Native Zendure Cloud MQTT" if self._control_enabled
+                else "Z-HA / Home Assistant entities"
+            ),
             "capture_complete": self._capture_complete,
             "capture_reason": self._capture_reason,
             "systems": systems,
@@ -217,8 +234,11 @@ class NativeZendureRuntime:
             {
                 "status": self._status,
                 "read_only": False,
-                "native_control": "developer_test_only",
-                "active_control_path": "Z-HA / Home Assistant entities",
+                "native_control": "enabled" if self._control_enabled else "disabled",
+                "active_control_path": (
+                    "Native Zendure Cloud MQTT" if self._control_enabled
+                    else "Z-HA / Home Assistant entities"
+                ),
                 "selected_device": self._selected_device,
                 "message_count": self._processed_messages,
                 "capture_complete": self._capture_complete,
@@ -239,6 +259,10 @@ class NativeZendureRuntime:
                     if self._first_write_result is not None else None
                 ),
                 "command_verification": self._command_verification.diagnostics(),
+                "cloud_command_verification": (
+                    self._transport.command_diagnostics
+                    if self._transport is not None else {"commands": []}
+                ),
                 "overview": self.overview_attributes(),
             }
         )
@@ -334,6 +358,69 @@ class NativeZendureRuntime:
             )
             self._notify()
             return self._first_write_result
+
+    async def async_execute_device_command(
+        self, command: DeviceCommand
+    ) -> CommandExecutionResult:
+        """Route one neutral PowerController command through the native stack."""
+
+        if not self._control_enabled:
+            return _command_result(CommandExecutionStatus.SKIPPED, "native_control_disabled")
+        async with self._write_lock:
+            if (
+                self._status != STATUS_OBSERVING
+                or self._transport is None
+                or self._transport.state is not ConnectionState.CONNECTED
+                or self._selected_device is None
+            ):
+                return _command_result(CommandExecutionStatus.SKIPPED, "native_transport_not_ready")
+            state = self._states.get(self._selected_device)
+            source_device = self._inventory.devices.get(self._selected_device)
+            if state is None or source_device is None or not _fresh_native_state(state):
+                return _command_result(CommandExecutionStatus.SKIPPED, "native_state_not_fresh")
+            cloud_identities = tuple(
+                identity for identity in source_device.native_identities
+                if identity.transport is ZendureTransport.CLOUD_MQTT
+            )
+            if len(cloud_identities) != 1:
+                return _command_result(CommandExecutionStatus.SKIPPED, "native_identity_not_unique")
+            active_device = replace(
+                source_device,
+                control_state=DeviceControlState.ACTIVE,
+                selected_transport=ZendureTransport.CLOUD_MQTT,
+                available_transports=frozenset({ZendureTransport.CLOUD_MQTT}),
+                native_identities=cloud_identities,
+            )
+            final_command = _skip_matching_writes(command, state)
+            if not _has_writes(final_command):
+                return _command_result(CommandExecutionStatus.SKIPPED, "native_setpoints_unchanged")
+            request = NativeCommandRequest(
+                self._selected_device, ZendureTransport.CLOUD_MQTT, final_command
+            )
+            context = NativeCommandContext(
+                inventory=DeviceInventory(devices=(active_device,)),
+                states={self._selected_device: state},
+                selected_device_id=self._selected_device,
+                native_control_enabled=True,
+                available_transports=frozenset({ZendureTransport.CLOUD_MQTT}),
+            )
+            gate, transport = await NativeDeviceCommandGate(self._hems_gate).execute(
+                request, context, self._transport.async_execute_authorized
+            )
+            if not gate.accepted or transport is None:
+                return _command_result(
+                    CommandExecutionStatus.SKIPPED,
+                    ",".join(gate.reasons) or "native_gate_blocked",
+                )
+            if transport.status is not CloudCommandStatus.SENT:
+                return _command_result(CommandExecutionStatus.FAILED, transport.reason)
+            return CommandExecutionResult(
+                status=CommandExecutionStatus.APPLIED,
+                reason=transport.reason,
+                mode_written=final_command.should_write_mode,
+                input_written=final_command.should_write_input,
+                output_written=final_command.should_write_output,
+            )
 
     async def _async_run(self) -> None:
         try:
@@ -596,3 +683,51 @@ def _safe_reason(error: Exception) -> str:
 
 def _value(measured: Any) -> str | None:
     return str(measured.value) if measured.validity is ValueValidity.VALID else None
+
+
+def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> bool:
+    now = datetime.now(timezone.utc)
+    required = (state.online, state.protection_active, state.hems_active)
+    return all(
+        item.valid
+        and item.observed_at is not None
+        and 0 <= (now - item.observed_at).total_seconds() <= maximum_age_seconds
+        for item in required
+    )
+
+
+def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
+    mode = state.mode
+    mode_matches = mode.valid and (
+        (command.ac_mode == "input" and str(mode.value) in {"charge", "input"})
+        or (command.ac_mode == "output" and str(mode.value) in {"discharge", "output"})
+    )
+    input_value = state.setpoints.input_limit_w
+    output_value = state.setpoints.output_limit_w
+    return replace(
+        command,
+        metadata=dict(command.metadata),
+        should_write_mode=command.should_write_mode and not mode_matches,
+        should_write_input=(command.should_write_input and not (
+            input_value.valid
+            and float(input_value.value) == float(command.input_limit_w)
+        )),
+        should_write_output=(command.should_write_output and not (
+            output_value.valid
+            and float(output_value.value) == float(command.output_limit_w)
+        )),
+    )
+
+
+def _has_writes(command: DeviceCommand) -> bool:
+    return any((
+        command.should_write_mode, command.should_write_input,
+        command.should_write_output, command.should_write_min_soc,
+        command.should_write_max_soc,
+    ))
+
+
+def _command_result(
+    status: CommandExecutionStatus, reason: str
+) -> CommandExecutionResult:
+    return CommandExecutionResult(status=status, reason=reason)

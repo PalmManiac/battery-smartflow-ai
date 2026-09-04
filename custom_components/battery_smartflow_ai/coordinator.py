@@ -2094,11 +2094,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Execute one neutral command through the configured backend."""
 
         try:
-            result = await self._device_backend.execute(
-                command,
-                force_power=force_power,
-                power_before_mode=power_before_mode,
-            )
+            native_runtime = getattr(self, "native_zendure", None)
+            if native_runtime is not None and native_runtime.control_enabled:
+                result = await native_runtime.async_execute_device_command(command)
+            else:
+                result = await self._device_backend.execute(
+                    command,
+                    force_power=force_power,
+                    power_before_mode=power_before_mode,
+                )
         except DeviceBackendExecutionError as err:
             self._store_command_execution_result(err.result)
             raise
