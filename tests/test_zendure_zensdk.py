@@ -207,7 +207,11 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(runtime._inventory.devices[candidate_id].online)
         self.assertEqual(
             runtime._inventory.devices[candidate_id].control_state,
-            DeviceControlState.OBSERVATION,
+            DeviceControlState.HEMS_BLOCKED,
+        )
+        self.assertEqual(
+            runtime._inventory.devices[candidate_id].hems_status.value,
+            "unknown",
         )
         self.assertEqual(runtime._zensdk_failures[candidate_id], 0)
         self.assertEqual(runtime._processed_messages, 1)

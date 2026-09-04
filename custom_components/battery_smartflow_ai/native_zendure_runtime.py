@@ -16,6 +16,8 @@ from .core.models import BatteryPackIdentity, DeviceInventory, ValueValidity
 from .native_device_overview import build_native_device_overview
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ZendureCloudMqttTransport
+from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
+from .zendure_hems import ZendureHemsCommandGate
 from .zendure_initial_sync import (
     async_capture_initial_sync,
     export_initial_sync_capture,
@@ -78,6 +80,7 @@ class NativeZendureRuntime:
         self._zensdk_failures: dict[str, int] = {}
         self._zensdk_last_result: dict[str, str] = {}
         self._zensdk_last_success: dict[str, datetime] = {}
+        self._hems_gate = ZendureHemsCommandGate()
 
     @property
     def configured(self) -> bool:
@@ -145,6 +148,10 @@ class NativeZendureRuntime:
                         state.observed_transport.value if state is not None else None
                     ),
                     "last_data_at": last_data,
+                    "hems_status": item.hems_status.value,
+                    "hems_last_updated": item.hems_observed_at,
+                    "hems_blocks_control": item.control_block_reason is not None,
+                    "control_block_reason": item.control_block_reason,
                     "data_age_seconds": (
                         max(0.0, round((now - last_data).total_seconds(), 1))
                         if last_data is not None
@@ -182,6 +189,13 @@ class NativeZendureRuntime:
                 "error": self._error,
                 "zensdk_poll_interval_seconds": ZENSDK_POLL_INTERVAL,
                 "zensdk_devices": self._zensdk_diagnostics(),
+                "hems_devices": [
+                    {
+                        "device_id": system_id,
+                        **self._hems_gate.diagnostics(system_id),
+                    }
+                    for system_id in sorted(self._inventory.devices)
+                ],
                 "overview": self.overview_attributes(),
             }
         )
@@ -377,6 +391,22 @@ class NativeZendureRuntime:
 
     def _apply_state(self, state: Any) -> None:
         self._states[state.system_id] = state
+        device = self._inventory.devices[state.system_id]
+        identity = device.native_identities[0] if device.native_identities else None
+        profile = resolve_zendure_device(identity) if identity is not None else None
+        capability = (
+            profile.hems_status if profile is not None else VerificationLevel.UNKNOWN
+        )
+        decision = self._hems_gate.update(
+            state.system_id,
+            state.hems_active,
+            capability=capability,
+        )
+        self._inventory.set_hems_status(
+            state.system_id,
+            decision.status,
+            observed_at=decision.observed_at,
+        )
         packs = tuple(
             BatteryPackIdentity(
                 pack_id=pack.pack_id,

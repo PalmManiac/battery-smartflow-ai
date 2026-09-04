@@ -17,6 +17,7 @@ from .inventory import (
     NativeDeviceIdentity,
     ZendureTransport,
 )
+from .hems import HemsStatus
 from .limits import (
     ControlBlocker,
     DirectionLimitRequest,
@@ -97,6 +98,7 @@ __all__ = [
     "DecisionContext",
     "GridHistoryState",
     "GridState",
+    "HemsStatus",
     "DiscoveryCandidate",
     "EffectivePowerLimit",
     "EffectiveSocLimits",
