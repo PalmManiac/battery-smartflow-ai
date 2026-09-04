@@ -18,6 +18,11 @@ from custom_components.battery_smartflow_ai.zendure_first_write import (  # noqa
 )
 from custom_components.battery_smartflow_ai.core.models import DeviceCommand, ZendureTransport  # noqa: E402
 from custom_components.battery_smartflow_ai.native_device_command_gate import NativeCommandRequest  # noqa: E402
+from custom_components.battery_smartflow_ai.native_command_verification import (  # noqa: E402
+    CommandVerificationStatus,
+    EffectStatus,
+    NativeCommandVerificationManager,
+)
 
 
 def request(value: float) -> NativeCommandRequest:
@@ -47,6 +52,7 @@ class Gate:
 class FirstWriteTests(unittest.IsolatedAsyncioTestCase):
     async def test_write_and_restore_both_require_fresh_readback(self):
         writes = []
+        manager = NativeCommandVerificationManager()
 
         async def send(prop, value, correlation):
             writes.append((prop, value, correlation))
@@ -60,11 +66,21 @@ class FirstWriteTests(unittest.IsolatedAsyncioTestCase):
             gate=Gate(), request=request(101.0), context=None,
             property_name="outputLimit", original_value=100.0,
             requested_value=101.0, send_property=send, read_property=read,
-            timeout=0.1, poll_interval=0,
+            timeout=0.1, poll_interval=0, verification_manager=manager,
         )
         self.assertEqual(result.status, NativeWriteStatus.RESTORED)
         self.assertEqual([item[1] for item in writes], [101.0, 100.0])
         self.assertEqual(writes[1][2], "safe-correlation-restore")
+        commands = manager.diagnostics()["commands"]
+        self.assertEqual(len(commands), 2)
+        self.assertTrue(all(
+            item["status"] == CommandVerificationStatus.READBACK_CONFIRMED.value
+            for item in commands
+        ))
+        self.assertTrue(all(
+            item["effect_status"] == EffectStatus.NOT_APPLICABLE.value
+            for item in commands
+        ))
 
     async def test_transport_ok_without_readback_is_timeout_and_not_retried(self):
         writes = []
