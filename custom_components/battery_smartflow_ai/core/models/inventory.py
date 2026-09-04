@@ -264,7 +264,7 @@ class DiscoveryCandidate:
     identity: NativeDeviceIdentity
     display_name: str
     supported: bool
-    pack_count: int = 0
+    pack_count: int | None = None
 
     @property
     def candidate_id(self) -> str:

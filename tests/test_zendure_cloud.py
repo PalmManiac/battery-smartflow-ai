@@ -130,6 +130,7 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
         result = await ZendureCloudClient(post).async_discover(token())
         self.assertFalse(result.devices[0].candidate.supported)
         self.assertEqual(result.devices[0].candidate.display_name, "Future")
+        self.assertIsNone(result.devices[0].candidate.pack_count)
 
     async def test_errors_are_classified_without_response_details(self):
         cases = [

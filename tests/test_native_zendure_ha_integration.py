@@ -13,11 +13,11 @@ COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
 
 
 class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
-    def test_dev1_version_and_mqtt_dependency_are_packaged(self) -> None:
+    def test_dev16_version_and_mqtt_dependency_are_packaged(self) -> None:
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0.dev15")
+        self.assertEqual(manifest["version"], "5.0.0.dev16")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -32,6 +32,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         text = ast.unparse(method)
         self.assertIn("TextSelectorType.PASSWORD", text)
         self.assertNotIn("add_suggested_values_to_schema", text)
+        self.assertIn("STORED_APP_TOKEN_MASK", text)
         self.assertIn("disable_native_zendure_test", text)
 
     def test_runtime_keeps_native_control_explicit_and_transport_typed(self) -> None:

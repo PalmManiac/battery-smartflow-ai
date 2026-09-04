@@ -78,7 +78,7 @@ class ZendureCloudDevice:
 
     candidate: DiscoveryCandidate
     online: bool | None
-    pack_count: int
+    pack_count: int | None
     extra_field_names: tuple[str, ...] = ()
 
 
@@ -257,8 +257,14 @@ def _parse_device(value: Any) -> ZendureCloudDevice:
     if isinstance(pack_data, list):
         pack_count = len(pack_data)
     else:
-        raw_count = value.get("packNum", 0)
-        pack_count = raw_count if isinstance(raw_count, int) and raw_count >= 0 else 0
+        raw_count = value.get("packNum")
+        pack_count = (
+            raw_count
+            if isinstance(raw_count, int)
+            and not isinstance(raw_count, bool)
+            and raw_count >= 0
+            else None
+        )
     online_raw = value.get("online", value.get("isOnline"))
     online = online_raw if isinstance(online_raw, bool) else None
     identity = NativeDeviceIdentity(
