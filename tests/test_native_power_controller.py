@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sys
 from types import ModuleType
 from types import SimpleNamespace
@@ -157,6 +157,45 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         command = target._transport.commands[-1].command
         self.assertTrue(command.should_write_output)
         self.assertFalse(command.skipped)
+
+    async def test_confirmed_inactive_hems_remains_usable_after_quiet_window(self):
+        current = state(output_w=250, discharge_w=0)
+        current.hems_active = MeasuredValue.available(
+            False, observed_at=NOW - timedelta(minutes=5)
+        )
+        target = runtime(current_state=current)
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=250, should_write_mode=False,
+            should_write_input=False, should_write_output=False,
+            skipped=True, skip_reason="unchanged_within_tolerance",
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._transport.commands), 1)
+
+    async def test_stale_online_or_protection_state_still_blocks_commands(self):
+        for field in ("online", "protection_active"):
+            with self.subTest(field=field):
+                current = state(output_w=250, discharge_w=0)
+                setattr(
+                    current,
+                    field,
+                    MeasuredValue.available(
+                        field == "online",
+                        observed_at=NOW - timedelta(minutes=5),
+                    ),
+                )
+                target = runtime(current_state=current)
+
+                result = await target.async_execute_device_command(DeviceCommand(
+                    "output", output_limit_w=250, should_write_mode=False,
+                    should_write_input=False, should_write_output=True,
+                ))
+
+                self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+                self.assertEqual(result.reason, "native_state_not_fresh")
+                self.assertEqual(target._transport.commands, [])
 
     async def test_last_dispatch_reason_is_visible_without_identity(self):
         target = runtime(current_state=state(output_w=250, discharge_w=250))
