@@ -109,11 +109,11 @@ class CloudMqttSession(Protocol):
         timestamp: int,
     ) -> None: ...
 
-    def write_property(
+    def write_properties(
         self,
         product_id: str,
         device_id: str,
-        write: CloudPropertyWrite,
+        writes: tuple[CloudPropertyWrite, ...],
     ) -> bool: ...
 
     def disconnect(self) -> None: ...
@@ -506,20 +506,27 @@ def _parse_payload(payload: bytes) -> tuple[Any, str]:
 def _property_write_request(
     product_id: str,
     device_id: str,
-    write: CloudPropertyWrite,
+    writes: tuple[CloudPropertyWrite, ...],
 ) -> tuple[str, str]:
-    """Build the one allow-listed Zendure Cloud property-write envelope."""
+    """Build one atomic allow-listed Zendure Cloud property-write envelope."""
 
-    if not product_id or not device_id or not write.property_name:
+    if (
+        not product_id
+        or not device_id
+        or not writes
+        or any(not write.property_name for write in writes)
+    ):
         raise CloudMqttError("invalid_write_address")
     return (
         f"iot/{product_id}/{device_id}/properties/write",
         json.dumps(
             {
-                "properties": {write.property_name: write.value},
-                "messageId": write.message_id,
+                "properties": {
+                    write.property_name: write.value for write in writes
+                },
+                "messageId": writes[0].message_id,
                 "deviceId": device_id,
-                "timestamp": write.timestamp,
+                "timestamp": writes[0].timestamp,
             },
             separators=(",", ":"),
         ),
@@ -657,13 +664,13 @@ class PahoReadOnlyMqttSession:
         if result_code != 0:
             raise CloudMqttError("state_request_failed")
 
-    def write_property(
+    def write_properties(
         self,
         product_id: str,
         device_id: str,
-        write: CloudPropertyWrite,
+        writes: tuple[CloudPropertyWrite, ...],
     ) -> bool:
-        topic, payload = _property_write_request(product_id, device_id, write)
+        topic, payload = _property_write_request(product_id, device_id, writes)
         result = self._client.publish(topic, payload, qos=0, retain=False)
         result_code = getattr(result, "rc", None)
         if result_code is None:

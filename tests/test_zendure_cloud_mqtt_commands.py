@@ -44,8 +44,8 @@ class Publisher:
     def __init__(self, result=True):
         self.result = result
         self.calls = []
-    def write_property(self, product_id, device_id, write):
-        self.calls.append((product_id, device_id, write))
+    def write_properties(self, product_id, device_id, writes):
+        self.calls.append((product_id, device_id, writes))
         return self.result
 
 
@@ -68,7 +68,7 @@ class CloudCommandMappingTests(unittest.TestCase):
         self.assertEqual((product, device), ("product-a", "main-1"))
         self.assertEqual(
             [(item.property_name, item.value, item.message_id) for item in writes],
-            [("acMode", 1, 4), ("inputLimit", 123, 5), ("outputLimit", 0, 6), ("minSoc", 105, 7), ("socSet", 930, 8)],
+            [("smartMode", 1, 4), ("acMode", 1, 5), ("outputLimit", 0, 6), ("inputLimit", 123, 7), ("minSoc", 105, 8), ("socSet", 930, 9)],
         )
 
     def test_output_mode_and_valid_zero_are_preserved(self):
@@ -77,7 +77,20 @@ class CloudCommandMappingTests(unittest.TestCase):
             should_write_input=False, should_write_output=True,
         )
         *_, writes = map_cloud_command(envelope(command), self.data, first_message_id=1, timestamp=1)
-        self.assertEqual([(item.property_name, item.value) for item in writes], [("acMode", 2), ("outputLimit", 0)])
+        self.assertEqual([(item.property_name, item.value) for item in writes], [("smartMode", 0), ("acMode", 2), ("outputLimit", 0), ("inputLimit", 0)])
+
+    def test_active_output_is_complete_directional_command(self):
+        command = DeviceCommand(
+            "output", output_limit_w=351, should_write_mode=False,
+            should_write_input=False, should_write_output=True,
+        )
+        *_, writes = map_cloud_command(
+            envelope(command), self.data, first_message_id=1, timestamp=1
+        )
+        self.assertEqual(
+            [(item.property_name, item.value) for item in writes],
+            [("smartMode", 1), ("acMode", 2), ("outputLimit", 351), ("inputLimit", 0)],
+        )
 
     def test_wrong_transport_device_pack_or_model_never_maps(self):
         command = DeviceCommand("output", should_write_mode=False, should_write_input=False, should_write_output=True)
@@ -105,11 +118,12 @@ class CloudCommandMappingTests(unittest.TestCase):
         command = DeviceCommand("output", output_limit_w=77, should_write_mode=False, should_write_input=False, should_write_output=True)
         result = adapter.execute(envelope(command))
         self.assertEqual(result.status, CloudCommandStatus.SENT)
-        self.assertEqual(result.writes_sent, 1)
-        tracked = verification.get(result.verification_ids[0])
+        self.assertEqual(result.writes_sent, 4)
+        tracked = verification.get(result.verification_ids[2])
         self.assertEqual(tracked.status, CommandVerificationStatus.TRANSPORT_OK)
         self.assertEqual(adapter.observe_properties(device_id="cloud_mqtt:main-1", properties={"outputLimit": 77}, observed_at=now + timedelta(seconds=1)), 1)
         self.assertEqual(tracked.status, CommandVerificationStatus.READBACK_CONFIRMED)
+        self.assertEqual(len(publisher.calls), 1)
 
     def test_newer_same_target_supersedes_old_and_publish_failure_stops(self):
         publisher = Publisher(result=True)

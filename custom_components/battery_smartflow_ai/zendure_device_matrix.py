@@ -120,6 +120,7 @@ _COMMON_MAIN_READS = frozenset(
         "inverseMaxPower",
         "minSoc",
         "socSet",
+        "smartMode",
         "hemsState",
         "faultLevel",
         "heatState",
@@ -145,6 +146,7 @@ _COMMON_PACK_READS = frozenset(
     }
 )
 _REFERENCE_WRITES = {
+    "smartMode": VerificationLevel.REFERENCE_ONLY,
     "acMode": VerificationLevel.REFERENCE_ONLY,
     "inputLimit": VerificationLevel.REFERENCE_ONLY,
     "outputLimit": VerificationLevel.REFERENCE_ONLY,

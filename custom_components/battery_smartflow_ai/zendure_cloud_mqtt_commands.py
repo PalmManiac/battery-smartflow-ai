@@ -42,7 +42,12 @@ class CloudCommandResult:
 
 
 class CloudPropertyPublisher(Protocol):
-    def write_property(self, product_id: str, device_id: str, write: CloudPropertyWrite) -> bool: ...
+    def write_properties(
+        self,
+        product_id: str,
+        device_id: str,
+        writes: tuple[CloudPropertyWrite, ...],
+    ) -> bool: ...
 
 
 _MODE_VALUES = {"input": 1, "output": 2}
@@ -75,14 +80,33 @@ def map_cloud_command(
 
     command = authorized.command
     requested: list[tuple[str, int]] = []
-    if command.should_write_mode:
+    directional_write = any((
+        command.should_write_mode,
+        command.should_write_input,
+        command.should_write_output,
+    ))
+    if directional_write:
         if command.ac_mode not in _MODE_VALUES:
             raise ValueError("unsupported_mode")
-        requested.append(("acMode", _MODE_VALUES[command.ac_mode]))
-    if command.should_write_input:
-        requested.append(("inputLimit", _whole_watts(command.input_limit_w)))
-    if command.should_write_output:
-        requested.append(("outputLimit", _whole_watts(command.output_limit_w)))
+        input_limit = (
+            _whole_watts(command.input_limit_w)
+            if command.ac_mode == "input"
+            else 0
+        )
+        output_limit = (
+            _whole_watts(command.output_limit_w)
+            if command.ac_mode == "output"
+            else 0
+        )
+        active_limit = input_limit if command.ac_mode == "input" else output_limit
+        # Zendure directional control is one complete command. A bare limit
+        # write can update the stored setpoint without starting Smart Mode.
+        requested.extend((
+            ("smartMode", 1 if active_limit > 0 else 0),
+            ("acMode", _MODE_VALUES[command.ac_mode]),
+            ("outputLimit", output_limit),
+            ("inputLimit", input_limit),
+        ))
     if command.should_write_min_soc:
         requested.append(("minSoc", _soc_tenths(command.min_soc_pct)))
     if command.should_write_max_soc:
@@ -123,7 +147,7 @@ class ZendureCloudCommandAdapter:
             return CloudCommandResult(CloudCommandStatus.REJECTED, str(error))
         self._message_id += len(writes)
         verification_ids: list[str] = []
-        sent = 0
+        prepared: list[tuple[CloudPropertyWrite, str]] = []
         for write in writes:
             verification = self._verification.prepare(
                 device_id=authorized.device_id, command_type=write.property_name,
@@ -135,18 +159,25 @@ class ZendureCloudCommandAdapter:
             verification_ids.append(verification.command_id)
             self._verification.gate(verification.command_id, accepted=True, at=now)
             self._verification.sent(verification.command_id, at=now)
-            try:
-                ok = self._publisher.write_property(product_id, device_id, write)
-            except Exception:
-                ok = False
+            prepared.append((write, verification.command_id))
+        try:
+            ok = self._publisher.write_properties(product_id, device_id, writes)
+        except Exception:
+            ok = False
+        for _write, command_id in prepared:
             self._verification.transport_result(
-                verification.command_id, ok=ok,
+                command_id, ok=ok,
                 status="mqtt_publish_accepted" if ok else "mqtt_publish_failed",
                 at=self._clock(),
             )
-            if not ok:
-                return CloudCommandResult(CloudCommandStatus.TRANSPORT_ERROR, "publish_failed", tuple(verification_ids), sent)
-            sent += 1
+        if not ok:
+            return CloudCommandResult(
+                CloudCommandStatus.TRANSPORT_ERROR,
+                "publish_failed",
+                tuple(verification_ids),
+                0,
+            )
+        sent = len(writes)
         return CloudCommandResult(CloudCommandStatus.SENT, "awaiting_readback", tuple(verification_ids), sent)
 
     def observe_properties(self, *, device_id: str, properties: Mapping[str, object], observed_at: datetime) -> int:

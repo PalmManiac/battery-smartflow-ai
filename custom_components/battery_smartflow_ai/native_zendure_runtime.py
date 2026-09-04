@@ -704,16 +704,30 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
     )
     input_value = state.setpoints.input_limit_w
     output_value = state.setpoints.output_limit_w
+    charge_power = state.charge_power_w
+    discharge_power = state.discharge_power_w
+    input_is_inactive = bool(
+        float(command.input_limit_w) > 0
+        and charge_power.valid
+        and float(charge_power.value) <= 0
+    )
+    output_is_inactive = bool(
+        float(command.output_limit_w) > 0
+        and discharge_power.valid
+        and float(discharge_power.value) <= 0
+    )
     return replace(
         command,
         metadata=dict(command.metadata),
         should_write_mode=command.should_write_mode and not mode_matches,
         should_write_input=(command.should_write_input and not (
-            input_value.valid
+            not input_is_inactive
+            and input_value.valid
             and float(input_value.value) == float(command.input_limit_w)
         )),
         should_write_output=(command.should_write_output and not (
-            output_value.valid
+            not output_is_inactive
+            and output_value.valid
             and float(output_value.value) == float(command.output_limit_w)
         )),
     )
