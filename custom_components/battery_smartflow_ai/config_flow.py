@@ -63,6 +63,12 @@ from .const import (
 )
 
 from .device_profiles import DEVICE_PROFILE_MODELS
+from .native_config_ui import (
+    STORED_APP_TOKEN_MASK,
+    native_device_label,
+    native_device_summary_line,
+    resolve_app_token_input,
+)
 from .price_currency import price_input_profile, resolve_price_currency
 from .zendure_cloud import ZendureCloudClient, ZendureCloudError
 
@@ -749,11 +755,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 options.pop(CONF_NATIVE_ZENDURE_SELECTED_DEVICE, None)
                 options.pop(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, None)
                 return self.async_create_entry(title="", data=options)
-            token = str(
-                user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
-                or self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
-                or ""
-            ).strip()
+            token = resolve_app_token_input(
+                user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
+                self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
+            )
             try:
                 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -790,7 +795,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
         )
         token_key = (
-            vol.Optional(CONF_NATIVE_ZENDURE_APP_TOKEN)
+            vol.Optional(
+                CONF_NATIVE_ZENDURE_APP_TOKEN,
+                default=STORED_APP_TOKEN_MASK,
+            )
             if configured
             else vol.Required(CONF_NATIVE_ZENDURE_APP_TOKEN)
         )
@@ -864,10 +872,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             options=[
                                 {
                                     "value": item.candidate.candidate_id,
-                                    "label": (
-                                        f"{item.candidate.display_name} – "
-                                        f"{item.candidate.identity.product_model or 'Unknown model'} "
-                                        f"({item.pack_count} pack(s))"
+                                    "label": native_device_label(
+                                        item.candidate.display_name,
+                                        item.candidate.identity.product_model,
+                                        item.pack_count,
                                     ),
                                 }
                                 for item in devices
@@ -885,10 +893,12 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
     @staticmethod
     def _native_device_summary(devices) -> str:
         return "\n".join(
-            f"• {item.candidate.display_name}: "
-            f"{item.candidate.identity.product_model or 'Unknown model'}, "
-            f"{item.pack_count} pack(s), "
-            f"{'online' if item.online is True else 'offline' if item.online is False else 'status unknown'}"
+            native_device_summary_line(
+                item.candidate.display_name,
+                item.candidate.identity.product_model,
+                item.pack_count,
+                item.online,
+            )
             for item in devices
         )
 
