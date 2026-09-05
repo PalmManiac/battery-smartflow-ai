@@ -149,6 +149,7 @@ async def async_read_zensdk_reports(
                 get_json,
                 timeout,
                 now,
+                identity.serial_number,
             )
         )
     if not tasks:
@@ -166,14 +167,18 @@ async def _read_device(
     get_json: GetJson,
     timeout: float,
     clock: Callable[[], datetime],
+    expected_serial: str | None,
 ) -> tuple[tuple[CloudMqttMessage, ...], tuple[ZenSdkReadAttempt, ...]]:
     attempts: list[ZenSdkReadAttempt] = []
+    if not expected_serial:
+        return (), (ZenSdkReadAttempt(candidate_id, "none", "identity_missing"),)
     if not addresses:
         return (), (ZenSdkReadAttempt(candidate_id, "none", "no_local_address"),)
     for source, host in addresses:
         try:
             response = await asyncio.wait_for(
-                get_json(f"http://{host}{ZENSDK_REPORT_PATH}"), timeout=timeout
+                get_json(f"http://{host}{ZENSDK_REPORT_PATH}", allow_redirects=False),
+                timeout=timeout,
             )
             status = int(response.status)
             if status != 200:
@@ -182,10 +187,27 @@ async def _read_device(
                 )
                 continue
             payload = await asyncio.wait_for(response.json(), timeout=timeout)
-            if not isinstance(payload, Mapping):
+            if (
+                not isinstance(payload, Mapping)
+                or not isinstance(payload.get("properties"), Mapping)
+                or ("packData" in payload and (
+                    not isinstance(payload["packData"], list)
+                    or any(not isinstance(pack, Mapping) for pack in payload["packData"])
+                ))
+            ):
                 attempts.append(
                     ZenSdkReadAttempt(candidate_id, source, "invalid_response", status)
                 )
+                continue
+            # An IP may have been reassigned to another main system. Only the
+            # main report serial establishes identity; pack serials cannot do so.
+            report_serial = payload.get("sn")
+            if not isinstance(report_serial, str) or report_serial != expected_serial:
+                attempts.append(ZenSdkReadAttempt(
+                    candidate_id, source,
+                    "identity_missing" if not report_serial else "identity_mismatch",
+                    status,
+                ))
                 continue
             encoded = json.dumps(payload, separators=(",", ":")).encode("utf-8")
             attempts.append(ZenSdkReadAttempt(candidate_id, source, "success", status))
