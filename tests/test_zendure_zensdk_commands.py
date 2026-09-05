@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from base64 import b64encode
 from datetime import datetime, timedelta, timezone
+import math
 import unittest
 
 from support import bootstrap as bootstrap_test_environment
@@ -191,7 +192,7 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reason, "property_not_approved:minSoc")
         self.assertEqual(calls, [])
 
-    async def test_wrong_transport_and_non_integral_power_are_rejected(self):
+    async def test_wrong_transport_is_rejected_and_fractional_power_is_rounded(self):
         data = await make_bootstrap()
         with self.assertRaisesRegex(ValueError, "wrong_transport"):
             map_zensdk_command(
@@ -199,10 +200,18 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
                 data,
                 first_request_id=1,
             )
-        with self.assertRaisesRegex(ValueError, "invalid_power_value"):
-            map_zensdk_command(
-                authorized(output_command(300.5)), data, first_request_id=1
-            )
+        mapped = map_zensdk_command(
+            authorized(output_command(300.5)), data, first_request_id=1
+        )
+        self.assertEqual(mapped.properties["outputLimit"], 300)
+        for invalid_value in (-1, math.nan, math.inf):
+            with self.subTest(invalid_value=invalid_value):
+                with self.assertRaisesRegex(ValueError, "invalid_power_value"):
+                    map_zensdk_command(
+                        authorized(output_command(invalid_value)),
+                        data,
+                        first_request_id=1,
+                    )
 
     async def test_http_failure_is_transport_error_and_never_retried(self):
         data = await make_bootstrap()

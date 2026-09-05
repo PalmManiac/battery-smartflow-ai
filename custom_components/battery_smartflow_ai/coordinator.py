@@ -3824,6 +3824,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             now = self._clock.utc_now()
 
+            native_runtime = getattr(self, "native_zendure", None)
+            native_baseline = (
+                native_runtime.consume_control_baseline()
+                if native_runtime is not None
+                and hasattr(native_runtime, "consume_control_baseline")
+                else None
+            )
+            if native_baseline is not None:
+                baseline_mode, baseline_input_w, baseline_output_w = native_baseline
+                self._persist["last_set_mode"] = baseline_mode
+                self._persist["last_set_input_w"] = baseline_input_w
+                self._persist["last_set_output_w"] = baseline_output_w
+                self._persist["prev_charge_w"] = baseline_input_w
+                self._persist["prev_discharge_w"] = baseline_output_w
+                self._persist["native_handover_baseline_mode"] = baseline_mode
+                self._persist["native_handover_baseline_input_w"] = baseline_input_w
+                self._persist["native_handover_baseline_output_w"] = baseline_output_w
+
             soc = _to_float(self._state(self.entities.soc), None)
             pv = _to_float(self._state(self.entities.pv), None)
             native_pv = _to_float(self._state(self.entities.native_pv), None)
