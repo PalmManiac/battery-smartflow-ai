@@ -53,8 +53,11 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         ).read_text(encoding="utf-8"))
         self.assertNotIn("def publish", mqtt)
         self.assertIn("self._consume_captured_messages(capture.messages)", runtime)
-        self.assertIn("await self._async_poll_zensdk()", runtime)
+        self.assertIn(
+            "await self._async_poll_zensdk(now_monotonic=loop.time())", runtime
+        )
         self.assertIn("ZENSDK_POLL_INTERVAL = 5.0", runtime)
+        self.assertIn("ZENSDK_MAX_RETRY_INTERVAL = 60.0", runtime)
 
     def test_secret_is_not_exposed_by_sensor_or_diagnostic_surfaces(self) -> None:
         runtime = (COMPONENT / "native_zendure_runtime.py").read_text(

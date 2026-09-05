@@ -293,6 +293,24 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(states["cloud_mqtt:device-real-2"].soc_pct.value, 40)
         self.assertNotEqual(states["cloud_mqtt:device-real-1"].packs, states["cloud_mqtt:device-real-2"].packs)
 
+        requested = []
+
+        async def selected_get(url, **kwargs):
+            requested.append(url)
+            return await get(url, **kwargs)
+
+        selected = await async_read_zensdk_reports(
+            data,
+            selected_get,
+            candidate_ids=frozenset({"cloud_mqtt:device-real-2"}),
+        )
+        self.assertEqual(len(requested), 1)
+        self.assertIn("192.168.1.45", requested[0])
+        self.assertEqual(
+            {message.device_candidate_id for message in selected.messages},
+            {"cloud_mqtt:device-real-2"},
+        )
+
     async def test_http_redirect_is_not_accepted_as_a_report(self):
         data = await make_bootstrap()
 
@@ -419,6 +437,31 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         target._record_zensdk_cycle(success)
         self.assertTrue(target._zensdk_health(device, now)["available"])
         self.assertEqual(target._zensdk_failures[device], 0)
+
+    def test_poll_backoff_is_bounded_and_independent_per_device(self):
+        target = NativeZendureRuntime(SimpleNamespace(), app_token="configured",
+                                     selected_device=None, notify=lambda: None)
+        target._zensdk_last_result = {"healthy": "success", "failing": "timeout"}
+        target._zensdk_failures = {"healthy": 0, "failing": 1}
+
+        target._initialize_zensdk_schedule(100.0)
+        self.assertEqual(target._zensdk_poll_delay["healthy"], 5.0)
+        self.assertEqual(target._zensdk_poll_delay["failing"], 10.0)
+        self.assertEqual(target._due_zensdk_devices(104.999), ())
+        self.assertEqual(target._due_zensdk_devices(105.0), ("healthy",))
+        self.assertEqual(
+            target._due_zensdk_devices(110.0), ("failing", "healthy")
+        )
+
+        target._zensdk_failures["failing"] = 2
+        target._schedule_zensdk_poll("failing", 110.0)
+        self.assertEqual(target._zensdk_poll_delay["failing"], 20.0)
+        target._zensdk_failures["failing"] = 100
+        target._schedule_zensdk_poll("failing", 130.0)
+        self.assertEqual(target._zensdk_poll_delay["failing"], 60.0)
+        target._zensdk_failures["failing"] = 0
+        target._schedule_zensdk_poll("failing", 190.0)
+        self.assertEqual(target._zensdk_poll_delay["failing"], 5.0)
 
 
 if __name__ == "__main__":

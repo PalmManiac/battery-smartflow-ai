@@ -59,3 +59,13 @@ These are separate observations requiring follow-up. MQTT publish acceptance is
 not device confirmation. The `enable: false` field and missing readback alone do
 not prove Cloud control is unsupported. Identity correlation in verification
 must also be checked before treating missing readback as a transport diagnosis.
+
+## Poll and retry schedule
+
+Scheduling is per device. A successful reader is polled every five seconds.
+Consecutive failed cycles use 10, 20, 40 and then at most 60 seconds. A healthy
+device keeps its own five-second schedule while another device is backed off.
+Every retry still evaluates the Cloud-discovered local address followed by the
+serial-derived hostname, with report identity validation at both addresses. A
+valid recovered report resets the failure counter and restores the five-second
+schedule. There is no automatic transport fallback or replay of old commands.
