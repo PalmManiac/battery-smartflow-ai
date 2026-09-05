@@ -53,6 +53,10 @@ from .zendure_zensdk import (
     async_read_zensdk_reports,
     async_write_zensdk_property,
 )
+from .zendure_zensdk_commands import (
+    ZenSdkCommandStatus,
+    ZendureZenSdkCommandAdapter,
+)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -89,11 +93,24 @@ class NativeZendureRuntime:
         selected_device: str | None,
         notify: Callable[[], None],
         control_enabled: bool = False,
+        control_transport: str = ZendureTransport.CLOUD_MQTT.value,
     ) -> None:
         self._hass = hass
         self._app_token = app_token
         self._selected_device = selected_device
         self._control_enabled = bool(control_enabled)
+        try:
+            selected_transport = ZendureTransport(str(control_transport))
+        except ValueError:
+            selected_transport = ZendureTransport.CLOUD_MQTT
+        self._control_transport = (
+            selected_transport
+            if selected_transport in {
+                ZendureTransport.CLOUD_MQTT,
+                ZendureTransport.ZENSDK,
+            }
+            else ZendureTransport.CLOUD_MQTT
+        )
         self._notify = notify
         self._task: asyncio.Task[None] | None = None
         self._transport: ZendureCloudMqttTransport | None = None
@@ -119,6 +136,7 @@ class NativeZendureRuntime:
         self._write_lock = asyncio.Lock()
         self._write_sequence = 0
         self._command_verification = NativeCommandVerificationManager()
+        self._zensdk_command_adapter: ZendureZenSdkCommandAdapter | None = None
         self._last_command_result: dict[str, Any] | None = None
 
     @property
@@ -160,7 +178,12 @@ class NativeZendureRuntime:
         return {
             "native_zendure_status": self._status,
             "native_zendure_control": (
-                "native_cloud_active" if self._control_enabled
+                (
+                    "native_zensdk_active"
+                    if self._control_transport is ZendureTransport.ZENSDK
+                    else "native_cloud_active"
+                )
+                if self._control_enabled
                 else "disabled_zha_active"
             ),
             "native_zendure_device_count": len(self._inventory.devices),
@@ -195,7 +218,12 @@ class NativeZendureRuntime:
                     "selected": system_id == self._selected_device,
                     "online": item.online,
                     "status": item.status_text,
-                    "transport": item.selected_transport.value,
+                    "transport": (
+                        self._control_transport.value
+                        if self._control_enabled
+                        and system_id == self._selected_device
+                        else item.selected_transport.value
+                    ),
                     "observed_transport": (
                         state.observed_transport.value if state is not None else None
                     ),
@@ -222,7 +250,8 @@ class NativeZendureRuntime:
             "read_only": False,
             "native_control": "enabled" if self._control_enabled else "disabled",
             "active_control_path": (
-                "Native Zendure Cloud MQTT" if self._control_enabled
+                _control_path_name(self._control_transport)
+                if self._control_enabled
                 else "Z-HA / Home Assistant entities"
             ),
             "capture_complete": self._capture_complete,
@@ -241,9 +270,11 @@ class NativeZendureRuntime:
                 "read_only": False,
                 "native_control": "enabled" if self._control_enabled else "disabled",
                 "active_control_path": (
-                    "Native Zendure Cloud MQTT" if self._control_enabled
+                    _control_path_name(self._control_transport)
+                    if self._control_enabled
                     else "Z-HA / Home Assistant entities"
                 ),
+                "selected_control_transport": self._control_transport.value,
                 "selected_device": self._selected_device,
                 "message_count": self._processed_messages,
                 "capture_complete": self._capture_complete,
@@ -377,12 +408,19 @@ class NativeZendureRuntime:
         async with self._write_lock:
             if (
                 self._status != STATUS_OBSERVING
-                or self._transport is None
-                or self._transport.state is not ConnectionState.CONNECTED
                 or self._selected_device is None
             ):
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_transport_not_ready"
+                ))
+            if not self._control_transport_ready():
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED,
+                    (
+                        "native_zensdk_not_ready"
+                        if self._control_transport is ZendureTransport.ZENSDK
+                        else "native_transport_not_ready"
+                    ),
                 ))
             state = self._states.get(self._selected_device)
             source_device = self._inventory.devices.get(self._selected_device)
@@ -390,20 +428,28 @@ class NativeZendureRuntime:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_state_not_fresh"
                 ))
-            cloud_identities = tuple(
+            source_identities = tuple(
                 identity for identity in source_device.native_identities
                 if identity.transport is ZendureTransport.CLOUD_MQTT
             )
-            if len(cloud_identities) != 1:
+            if len(source_identities) != 1:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_identity_not_unique"
                 ))
+            source_identity = source_identities[0]
+            control_identity = NativeDeviceIdentity(
+                transport=self._control_transport,
+                device_id=source_identity.device_id,
+                serial_number=source_identity.serial_number,
+                product_id=source_identity.product_id,
+                product_model=source_identity.product_model,
+            )
             active_device = replace(
                 source_device,
                 control_state=DeviceControlState.ACTIVE,
-                selected_transport=ZendureTransport.CLOUD_MQTT,
-                available_transports=frozenset({ZendureTransport.CLOUD_MQTT}),
-                native_identities=cloud_identities,
+                selected_transport=self._control_transport,
+                available_transports=frozenset({self._control_transport}),
+                native_identities=(control_identity,),
             )
             final_command = _skip_matching_writes(command, state)
             if not _has_writes(final_command):
@@ -411,24 +457,35 @@ class NativeZendureRuntime:
                     CommandExecutionStatus.SKIPPED, "native_setpoints_unchanged"
                 ))
             request = NativeCommandRequest(
-                self._selected_device, ZendureTransport.CLOUD_MQTT, final_command
+                self._selected_device, self._control_transport, final_command
             )
             context = NativeCommandContext(
                 inventory=DeviceInventory(devices=(active_device,)),
                 states={self._selected_device: state},
                 selected_device_id=self._selected_device,
                 native_control_enabled=True,
-                available_transports=frozenset({ZendureTransport.CLOUD_MQTT}),
+                available_transports=frozenset({self._control_transport}),
+            )
+            sender = (
+                self._zensdk_command_adapter.execute
+                if self._control_transport is ZendureTransport.ZENSDK
+                and self._zensdk_command_adapter is not None
+                else self._transport.async_execute_authorized
             )
             gate, transport = await NativeDeviceCommandGate(self._hems_gate).execute(
-                request, context, self._transport.async_execute_authorized
+                request, context, sender
             )
             if not gate.accepted or transport is None:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
                     ",".join(gate.reasons) or "native_gate_blocked",
                 ))
-            if transport.status is not CloudCommandStatus.SENT:
+            expected_status = (
+                ZenSdkCommandStatus.SENT
+                if self._control_transport is ZendureTransport.ZENSDK
+                else CloudCommandStatus.SENT
+            )
+            if transport.status is not expected_status:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.FAILED, transport.reason
                 ))
@@ -468,6 +525,11 @@ class NativeZendureRuntime:
                     system_id=candidate_id,
                 )
             self._normalizer = ZendureCloudNormalizer(bootstrap)
+            self._zensdk_command_adapter = ZendureZenSdkCommandAdapter(
+                bootstrap,
+                self._post_json,
+                self._command_verification,
+            )
             zensdk = await async_read_zensdk_reports(
                 bootstrap,
                 self._get_json,
@@ -524,7 +586,7 @@ class NativeZendureRuntime:
         session = async_get_clientsession(self._hass)
         async with session.post(url, **kwargs) as response:
             payload = await response.json(content_type=None)
-        return _JsonPayloadResponse(payload)
+        return _JsonPayloadResponse(payload, response.status)
 
     async def _get_json(self, url: str, **kwargs: Any) -> _JsonPayloadResponse:
         session = async_get_clientsession(self._hass)
@@ -721,6 +783,19 @@ class NativeZendureRuntime:
         if self._normalizer is None:
             return
         for message in messages:
+            if (
+                message.transport == "zensdk"
+                and self._zensdk_command_adapter is not None
+                and message.device_candidate_id is not None
+                and isinstance(message.parsed_payload, dict)
+            ):
+                properties = message.parsed_payload.get("properties")
+                if isinstance(properties, dict):
+                    self._zensdk_command_adapter.observe_properties(
+                        device_id=message.device_candidate_id,
+                        properties=properties,
+                        observed_at=message.received_at,
+                    )
             result = self._normalizer.apply(message)
             if result is None:
                 continue
@@ -730,6 +805,21 @@ class NativeZendureRuntime:
                 message.received_at for message in messages
             )
             self._processed_messages += len(messages)
+
+    def _control_transport_ready(self) -> bool:
+        if self._control_transport is ZendureTransport.ZENSDK:
+            return bool(
+                self._bootstrap is not None
+                and self._zensdk_command_adapter is not None
+                and self._selected_device is not None
+                and self._zensdk_health(
+                    self._selected_device, datetime.now(timezone.utc)
+                )["available"]
+            )
+        return bool(
+            self._transport is not None
+            and self._transport.state is ConnectionState.CONNECTED
+        )
 
     def _apply_state(self, state: Any) -> None:
         self._states[state.system_id] = state
@@ -774,6 +864,14 @@ def _safe_reason(error: Exception) -> str:
         "state_request_failed",
     }
     return str(reason) if reason in allowed else "native_test_failed"
+
+
+def _control_path_name(transport: ZendureTransport) -> str:
+    return (
+        "Native Zendure ZenSDK"
+        if transport is ZendureTransport.ZENSDK
+        else "Native Zendure Cloud MQTT"
+    )
 
 
 def _value(measured: Any) -> str | None:

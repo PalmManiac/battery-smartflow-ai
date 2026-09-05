@@ -46,6 +46,8 @@ INTEGRATION_VERSION = "5.0.0.dev19"
 CONF_NATIVE_ZENDURE_APP_TOKEN = "native_zendure_app_token"
 CONF_NATIVE_ZENDURE_SELECTED_DEVICE = "native_zendure_selected_device"
 CONF_NATIVE_ZENDURE_CONTROL_ENABLED = "native_zendure_control_enabled"
+CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT = "native_zendure_control_transport"
+DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT = "cloud_mqtt"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
