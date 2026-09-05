@@ -447,6 +447,18 @@ class NativeZendureRuntime:
                 native_identities=(control_identity,),
             )
             final_command = _skip_matching_writes(command, state)
+            offgrid_power = getattr(state, "offgrid_power_w", None)
+            final_command = replace(
+                final_command,
+                metadata={
+                    **final_command.metadata,
+                    "native_offgrid_power_w": (
+                        float(offgrid_power.value)
+                        if offgrid_power is not None and offgrid_power.valid
+                        else None
+                    ),
+                },
+            )
             if not _has_writes(final_command):
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_setpoints_unchanged"

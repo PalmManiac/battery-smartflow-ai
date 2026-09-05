@@ -70,6 +70,37 @@ async def async_write_zensdk_property(
 
     if property_name != "outputLimit":
         return ZenSdkWriteResult(False, None, "property_not_allowed")
+    return await async_write_zensdk_properties(
+        bootstrap,
+        device_candidate_id,
+        {property_name: value},
+        request_id,
+        post_json,
+        timeout=timeout,
+    )
+
+
+async def async_write_zensdk_properties(
+    bootstrap: ZendureCloudBootstrap,
+    device_candidate_id: str,
+    properties: Mapping[str, int],
+    request_id: int,
+    post_json: GetJson,
+    *,
+    timeout: float = DEFAULT_ZENSDK_TIMEOUT,
+) -> ZenSdkWriteResult:
+    """Write one complete allow-listed command group in exactly one POST."""
+
+    property_names = frozenset(properties)
+    direction_names = frozenset(
+        {"smartMode", "acMode", "inputLimit", "outputLimit"}
+    )
+    if property_names not in (frozenset({"outputLimit"}), direction_names):
+        return ZenSdkWriteResult(False, None, "property_not_allowed")
+    if any(isinstance(value, bool) or not isinstance(value, int) for value in properties.values()):
+        return ZenSdkWriteResult(False, None, "invalid_property_value")
+    if property_names == direction_names and not _valid_direction_group(properties):
+        return ZenSdkWriteResult(False, None, "invalid_direction_group")
     device = next(
         (item for item in bootstrap.devices
          if item.candidate.candidate_id == device_candidate_id), None
@@ -95,7 +126,7 @@ async def async_write_zensdk_property(
                 f"http://{host}{ZENSDK_WRITE_PATH}",
                 json={
                     "sn": identity.serial_number,
-                    "properties": {property_name: int(value)},
+                    "properties": dict(properties),
                     "id": int(request_id),
                 },
             ),
@@ -108,6 +139,20 @@ async def async_write_zensdk_property(
         )
     except Exception:
         return ZenSdkWriteResult(False, None, "transport_error")
+
+
+def _valid_direction_group(properties: Mapping[str, int]) -> bool:
+    smart_mode = properties["smartMode"]
+    ac_mode = properties["acMode"]
+    input_w = properties["inputLimit"]
+    output_w = properties["outputLimit"]
+    if smart_mode not in (0, 1) or ac_mode not in (1, 2):
+        return False
+    if input_w < 0 or output_w < 0:
+        return False
+    if (ac_mode == 1 and output_w != 0) or (ac_mode == 2 and input_w != 0):
+        return False
+    return smart_mode != 0 or (input_w == 0 and output_w == 0)
 
 
 async def async_read_zensdk_reports(

@@ -111,6 +111,7 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
                 "gridInputPower": 279,
                 "outputHomePower": 0,
                 "solarInputPower": 620,
+                "gridOffPower": 37,
                 "acMode": 1,
                 "inputLimit": 279,
                 "outputLimit": 0,
@@ -168,6 +169,7 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.observed_transport, ZendureTransport.CLOUD_MQTT)
         self.assertEqual(state.soc_pct.value, 55.0)
         self.assertEqual(state.charge_power_w.value, 276.0)
+        self.assertEqual(state.offgrid_power_w.value, 37.0)
         self.assertEqual(state.discharge_power_w.value, 0.0)
         self.assertEqual(state.ac_input_power_w.value, 279.0)
         self.assertEqual(state.ac_output_power_w.value, 0.0)

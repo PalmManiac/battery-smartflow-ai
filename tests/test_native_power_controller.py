@@ -68,6 +68,7 @@ def state(*, input_w=0, output_w=0, charge_w=0, discharge_w=0, hems=False):
             measured(input_w), measured(output_w), measured(2400),
             measured(2400), measured(10), measured(100),
         ),
+        offgrid_power_w=measured(0),
     )
 
 
@@ -91,7 +92,12 @@ class FakeZenSdkAdapter:
     async def execute(self, authorized):
         self.commands.append(authorized)
         return ZenSdkCommandResult(
-            ZenSdkCommandStatus.SENT, "awaiting_readback", ("zen-id",), 1, 200
+            status=ZenSdkCommandStatus.SENT,
+            reason="awaiting_readback",
+            verification_ids=("zen-id",),
+            writes_sent=4,
+            requests_sent=1,
+            http_status=200,
         )
 
 
@@ -144,7 +150,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             "native_zensdk_active",
         )
 
-    async def test_unverified_zensdk_sequence_is_blocked_without_any_write(self):
+    async def test_verified_zensdk_directional_sequence_reaches_adapter(self):
         target = runtime()
 
         result = await target.async_execute_device_command(DeviceCommand(
@@ -153,9 +159,11 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             should_write_output=True,
         ))
 
-        self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
-        self.assertIn("command_capability_unsupported:acMode", result.reason)
-        self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
+        command = target._zensdk_command_adapter.commands[0].command
+        self.assertEqual(command.ac_mode, "input")
+        self.assertEqual(command.metadata["native_offgrid_power_w"], 0.0)
         self.assertEqual(target._transport.commands, [])
 
     async def test_unavailable_zensdk_never_falls_back_to_cloud(self):

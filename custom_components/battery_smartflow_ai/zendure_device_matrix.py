@@ -113,6 +113,7 @@ _COMMON_MAIN_READS = frozenset(
         "gridInputPower",
         "outputHomePower",
         "solarInputPower",
+        "gridOffPower",
         "acMode",
         "inputLimit",
         "outputLimit",
@@ -161,6 +162,7 @@ _COMMON_DEVICE_TARGETS = frozenset(
         "ac_input_power_w",
         "ac_output_power_w",
         "pv_power_w",
+        "offgrid_power_w",
         "mode",
         "input_limit_w",
         "output_limit_w",
@@ -252,10 +254,13 @@ def _entry(
             VerificationLevel.VERIFIED,
             VerificationLevel.VERIFIED,
             VerificationLevel.REFERENCE_ONLY,
-            ("Only explicit reversible outputLimit verification is approved",),
+            ("SF2400AC ZenSDK directional command group approved for field validation",),
         )
-        writes["outputLimit"] = VerificationLevel.VERIFIED
-        transport_writes[ZendureTransport.ZENSDK]["outputLimit"] = VerificationLevel.VERIFIED
+        for property_name in ("smartMode", "acMode", "inputLimit", "outputLimit"):
+            writes[property_name] = VerificationLevel.VERIFIED
+            transport_writes[ZendureTransport.ZENSDK][property_name] = (
+                VerificationLevel.VERIFIED
+            )
     return ZendureDeviceMatrixEntry(
         profile_key=profile_key,
         canonical_model=canonical_model,

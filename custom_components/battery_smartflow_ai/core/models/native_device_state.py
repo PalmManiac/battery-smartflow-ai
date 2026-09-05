@@ -77,3 +77,4 @@ class NeutralDeviceState:
     battery_voltage_v: MeasuredValue[float]
     last_message_at: datetime | None
     packs: tuple[NeutralPackState, ...]
+    offgrid_power_w: MeasuredValue[float]

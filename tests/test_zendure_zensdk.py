@@ -30,6 +30,7 @@ from custom_components.battery_smartflow_ai.zendure_zensdk import (  # noqa: E40
     _candidate_addresses,
     async_read_zensdk_reports,
     async_write_zensdk_property,
+    async_write_zensdk_properties,
 )
 from custom_components.battery_smartflow_ai.zendure_normalizer import (  # noqa: E402
     ZendureCloudNormalizer,
@@ -120,6 +121,25 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.accepted)
         self.assertEqual(result.result, "property_not_allowed")
         self.assertFalse(called)
+
+    async def test_direction_group_rejects_inconsistent_payload_without_network(self):
+        data = await make_bootstrap()
+        calls = []
+
+        async def post(*args, **kwargs):
+            calls.append((args, kwargs))
+            return Response({})
+
+        result = await async_write_zensdk_properties(
+            data,
+            "cloud_mqtt:device-real-1",
+            {"smartMode": 1, "acMode": 1, "inputLimit": 200, "outputLimit": 1},
+            1,
+            post,
+        )
+        self.assertFalse(result.accepted)
+        self.assertEqual(result.result, "invalid_direction_group")
+        self.assertEqual(calls, [])
 
     async def test_first_write_never_retries_an_ambiguous_timeout(self):
         data = await make_bootstrap()

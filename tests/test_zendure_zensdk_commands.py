@@ -84,11 +84,12 @@ def output_command(value=301):
         should_write_mode=False,
         should_write_input=False,
         should_write_output=True,
+        metadata={"native_offgrid_power_w": 0},
     )
 
 
 class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
-    async def test_maps_only_verified_output_write_and_posts_exactly_once(self):
+    async def test_output_is_one_complete_directional_post(self):
         data = await make_bootstrap()
         calls = []
         manager = NativeCommandVerificationManager()
@@ -103,19 +104,25 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         result = await adapter.execute(authorized(output_command()))
 
         self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
-        self.assertEqual(result.writes_sent, 1)
+        self.assertEqual(result.writes_sent, 4)
+        self.assertEqual(result.requests_sent, 1)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], "http://192.168.1.44/properties/write")
         self.assertEqual(calls[0][1]["json"], {
             "sn": "serial-real-1",
-            "properties": {"outputLimit": 301},
+            "properties": {
+                "smartMode": 1,
+                "acMode": 2,
+                "outputLimit": 301,
+                "inputLimit": 0,
+            },
             "id": 1,
         })
         tracked = manager.active_for(DEVICE, "outputLimit")
         self.assertIsNotNone(tracked)
         self.assertEqual(tracked.status, CommandVerificationStatus.TRANSPORT_OK)
 
-    async def test_unverified_property_is_rejected_without_network(self):
+    async def test_input_is_one_complete_directional_post(self):
         data = await make_bootstrap()
         calls = []
 
@@ -129,14 +136,59 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
             should_write_mode=False,
             should_write_input=True,
             should_write_output=False,
+            metadata={"native_offgrid_power_w": 0},
         )
         adapter = ZendureZenSdkCommandAdapter(
             data, post, NativeCommandVerificationManager()
         )
         result = await adapter.execute(authorized(command))
 
+        self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1]["json"]["properties"], {
+            "smartMode": 1,
+            "acMode": 1,
+            "outputLimit": 0,
+            "inputLimit": 200,
+        })
+
+    async def test_zero_command_respects_offgrid_load_and_unknown_state(self):
+        data = await make_bootstrap()
+        for offgrid, expected in ((0, 0), (12, 1), (None, 1)):
+            with self.subTest(offgrid=offgrid):
+                command = output_command(0)
+                command.metadata["native_offgrid_power_w"] = offgrid
+                mapped = map_zensdk_command(
+                    authorized(command), data, first_request_id=7
+                )
+                self.assertEqual(mapped.properties, {
+                    "smartMode": expected,
+                    "acMode": 2,
+                    "outputLimit": 0,
+                    "inputLimit": 0,
+                })
+
+    async def test_soc_property_remains_rejected_without_network(self):
+        data = await make_bootstrap()
+        calls = []
+
+        async def post(*args, **kwargs):
+            calls.append((args, kwargs))
+            return Response({})
+
+        command = DeviceCommand(
+            "output",
+            min_soc_pct=10,
+            should_write_mode=False,
+            should_write_input=False,
+            should_write_output=False,
+            should_write_min_soc=True,
+        )
+        result = await ZendureZenSdkCommandAdapter(
+            data, post, NativeCommandVerificationManager()
+        ).execute(authorized(command))
         self.assertEqual(result.status, ZenSdkCommandStatus.REJECTED)
-        self.assertEqual(result.reason, "property_not_approved:inputLimit")
+        self.assertEqual(result.reason, "property_not_approved:minSoc")
         self.assertEqual(calls, [])
 
     async def test_wrong_transport_and_non_integral_power_are_rejected(self):
@@ -167,9 +219,14 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.status, ZenSdkCommandStatus.TRANSPORT_ERROR)
         self.assertEqual(result.http_status, 503)
+        self.assertEqual(result.requests_sent, 1)
         self.assertEqual(len(calls), 1)
-        tracked = manager.get(result.verification_ids[0])
-        self.assertEqual(tracked.status, CommandVerificationStatus.TRANSPORT_ERROR)
+        self.assertEqual(len(result.verification_ids), 4)
+        for command_id in result.verification_ids:
+            tracked = manager.get(command_id)
+            self.assertEqual(
+                tracked.status, CommandVerificationStatus.TRANSPORT_ERROR
+            )
 
     async def test_only_fresh_matching_report_confirms_readback(self):
         data = await make_bootstrap()

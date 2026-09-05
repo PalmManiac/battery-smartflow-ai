@@ -122,6 +122,10 @@ MAIN_PROPERTY_MAPPINGS = {
             "solarInputPower", "pv_power_w", MappingScope.MAIN,
             (int, float), "W", "W", minimum=0,
         ),
+        _mapping(
+            "gridOffPower", "offgrid_power_w", MappingScope.MAIN,
+            (int, float), "W", "W", minimum=0,
+        ),
         _mapping("acMode", "mode", MappingScope.MAIN, (int,), converter=_mode),
         _mapping(
             "inputLimit", "input_limit_w", MappingScope.MAIN,
@@ -438,6 +442,7 @@ class ZendureCloudNormalizer:
             battery_voltage_v=device_value("battery_voltage_v"),
             last_message_at=self._last_message[system_id],
             packs=packs,
+            offgrid_power_w=device_value("offgrid_power_w"),
         )
         return NormalizationResult(
             state,
