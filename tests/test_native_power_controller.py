@@ -95,11 +95,10 @@ class FakeZenSdkAdapter:
         )
 
 
-def runtime(*, enabled=True, current_state=None, control_transport="cloud_mqtt"):
+def runtime(*, enabled=True, current_state=None):
     result = NativeZendureRuntime(
         SimpleNamespace(), app_token="configured", selected_device=DEVICE,
         notify=lambda: None, control_enabled=enabled,
-        control_transport=control_transport,
     )
     identity = NativeDeviceIdentity(
         ZendureTransport.CLOUD_MQTT, device_id="main-1",
@@ -118,17 +117,16 @@ def runtime(*, enabled=True, current_state=None, control_transport="cloud_mqtt")
     )
     result._status = STATUS_OBSERVING
     result._transport = FakeTransport()
-    if control_transport == "zensdk":
-        result._bootstrap = SimpleNamespace()
-        result._zensdk_command_adapter = FakeZenSdkAdapter()
-        result._zensdk_last_success[DEVICE] = NOW
-        result._zensdk_failures[DEVICE] = 0
+    result._bootstrap = SimpleNamespace()
+    result._zensdk_command_adapter = FakeZenSdkAdapter()
+    result._zensdk_last_success[DEVICE] = NOW
+    result._zensdk_failures[DEVICE] = 0
     return result
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
     async def test_output_uses_only_explicitly_selected_zensdk_transport(self):
-        target = runtime(control_transport="zensdk")
+        target = runtime()
 
         result = await target.async_execute_device_command(DeviceCommand(
             "output", output_limit_w=250, should_write_mode=False,
@@ -147,7 +145,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_unverified_zensdk_sequence_is_blocked_without_any_write(self):
-        target = runtime(control_transport="zensdk")
+        target = runtime()
 
         result = await target.async_execute_device_command(DeviceCommand(
             "input", input_limit_w=300, output_limit_w=0,
@@ -161,7 +159,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(target._transport.commands, [])
 
     async def test_unavailable_zensdk_never_falls_back_to_cloud(self):
-        target = runtime(control_transport="zensdk")
+        target = runtime()
         target._zensdk_last_success[DEVICE] = NOW - timedelta(minutes=5)
 
         result = await target.async_execute_device_command(DeviceCommand(
@@ -174,7 +172,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(target._zensdk_command_adapter.commands, [])
         self.assertEqual(target._transport.commands, [])
 
-    async def test_output_command_reaches_exact_cloud_device(self):
+    async def test_output_command_reaches_exact_local_device(self):
         target = runtime()
         result = await target.async_execute_device_command(DeviceCommand(
             "output", output_limit_w=250, should_write_mode=False,
@@ -182,28 +180,22 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         ))
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
         self.assertTrue(result.output_written)
-        self.assertEqual(len(target._transport.commands), 1)
-        self.assertEqual(target._transport.commands[0].device_id, DEVICE)
-        self.assertEqual(target._transport.commands[0].transport, ZendureTransport.CLOUD_MQTT)
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
+        self.assertEqual(target._zensdk_command_adapter.commands[0].device_id, DEVICE)
+        self.assertEqual(target._zensdk_command_adapter.commands[0].transport, ZendureTransport.ZENSDK)
+        self.assertEqual(target._transport.commands, [])
 
-    async def test_input_and_idle_zero_keep_neutral_semantics(self):
-        target = runtime(current_state=state(input_w=0, output_w=100))
-        charge = await target.async_execute_device_command(DeviceCommand(
-            "input", input_limit_w=300, output_limit_w=0,
-            should_write_mode=True, should_write_input=True,
-            should_write_output=True,
-        ))
-        self.assertEqual(charge.status, CommandExecutionStatus.APPLIED)
-        command = target._transport.commands[-1].command
-        self.assertEqual(command.input_limit_w, 300)
-        self.assertEqual(command.output_limit_w, 0)
+    async def test_idle_zero_keeps_neutral_semantics(self):
         stop_target = runtime(current_state=state(output_w=100))
         stopped = await stop_target.async_execute_device_command(DeviceCommand(
             "output", output_limit_w=0, should_write_mode=False,
             should_write_input=False, should_write_output=True,
         ))
         self.assertEqual(stopped.status, CommandExecutionStatus.APPLIED)
-        self.assertEqual(stop_target._transport.commands[-1].command.output_limit_w, 0)
+        self.assertEqual(
+            stop_target._zensdk_command_adapter.commands[-1].command.output_limit_w,
+            0,
+        )
 
     async def test_no_change_never_writes(self):
         target = runtime(current_state=state(output_w=250, discharge_w=250))
@@ -213,7 +205,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         ))
         self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
         self.assertEqual(result.reason, "native_setpoints_unchanged")
-        self.assertEqual(target._transport.commands, [])
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
 
     async def test_matching_stored_limit_restarts_inactive_direction(self):
         target = runtime(current_state=state(output_w=250, discharge_w=0))
@@ -223,7 +215,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             skipped=True, skip_reason="unchanged_within_tolerance",
         ))
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
-        command = target._transport.commands[-1].command
+        command = target._zensdk_command_adapter.commands[-1].command
         self.assertTrue(command.should_write_output)
         self.assertFalse(command.skipped)
 
@@ -241,7 +233,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         ))
 
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
-        self.assertEqual(len(target._transport.commands), 1)
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
 
     async def test_stale_online_or_protection_state_still_blocks_commands(self):
         for field in ("online", "protection_active"):
@@ -264,7 +256,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
 
                 self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
                 self.assertEqual(result.reason, "native_state_not_fresh")
-                self.assertEqual(target._transport.commands, [])
+                self.assertEqual(target._zensdk_command_adapter.commands, [])
 
     async def test_last_dispatch_reason_is_visible_without_identity(self):
         target = runtime(current_state=state(output_w=250, discharge_w=250))
@@ -286,7 +278,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         ))
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
         self.assertEqual(
-            target._transport.commands[-1].command.output_limit_w,
+            target._zensdk_command_adapter.commands[-1].command.output_limit_w,
             2400,
         )
 
@@ -294,7 +286,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         disabled = runtime(enabled=False)
         result = await disabled.async_execute_device_command(DeviceCommand("output"))
         self.assertEqual(result.reason, "native_control_disabled")
-        self.assertEqual(disabled._transport.commands, [])
+        self.assertEqual(disabled._zensdk_command_adapter.commands, [])
 
         blocked = runtime(current_state=state(hems=True))
         result = await blocked.async_execute_device_command(DeviceCommand(
@@ -302,12 +294,12 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             should_write_input=False, should_write_output=True,
         ))
         self.assertIn("zendure_hems_active", result.reason)
-        self.assertEqual(blocked._transport.commands, [])
+        self.assertEqual(blocked._zensdk_command_adapter.commands, [])
 
         disconnected = runtime()
-        disconnected._transport.state = ConnectionState.DISCONNECTED
+        disconnected._zensdk_last_success[DEVICE] = NOW - timedelta(minutes=5)
         result = await disconnected.async_execute_device_command(DeviceCommand("output"))
-        self.assertEqual(result.reason, "native_transport_not_ready")
+        self.assertEqual(result.reason, "native_zensdk_not_ready")
 
         restarting = runtime()
         restarting._status = "connecting"

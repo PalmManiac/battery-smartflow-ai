@@ -1262,8 +1262,9 @@ SENSORS += (
         device_class=SensorDeviceClass.ENUM,
         options=[
             "disabled_zha_active",
-            "native_cloud_active",
             "native_zensdk_active",
+            "native_local_mqtt_active",
+            "native_local_unsupported",
         ],
         icon="mdi:shield-lock-outline",
         entity_category=EntityCategory.DIAGNOSTIC,

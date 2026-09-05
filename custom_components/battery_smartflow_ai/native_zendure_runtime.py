@@ -33,8 +33,11 @@ from .native_command_verification import NativeCommandVerificationManager
 from .native_device_overview import build_native_device_overview
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
-from .zendure_cloud_mqtt_commands import CloudCommandStatus
-from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
+from .zendure_device_matrix import (
+    VerificationLevel,
+    preferred_local_transport,
+    resolve_zendure_device,
+)
 from .zendure_hems import ZendureHemsCommandGate
 from .zendure_initial_sync import (
     async_capture_initial_sync,
@@ -93,24 +96,11 @@ class NativeZendureRuntime:
         selected_device: str | None,
         notify: Callable[[], None],
         control_enabled: bool = False,
-        control_transport: str = ZendureTransport.CLOUD_MQTT.value,
     ) -> None:
         self._hass = hass
         self._app_token = app_token
         self._selected_device = selected_device
         self._control_enabled = bool(control_enabled)
-        try:
-            selected_transport = ZendureTransport(str(control_transport))
-        except ValueError:
-            selected_transport = ZendureTransport.CLOUD_MQTT
-        self._control_transport = (
-            selected_transport
-            if selected_transport in {
-                ZendureTransport.CLOUD_MQTT,
-                ZendureTransport.ZENSDK,
-            }
-            else ZendureTransport.CLOUD_MQTT
-        )
         self._notify = notify
         self._task: asyncio.Task[None] | None = None
         self._transport: ZendureCloudMqttTransport | None = None
@@ -178,11 +168,7 @@ class NativeZendureRuntime:
         return {
             "native_zendure_status": self._status,
             "native_zendure_control": (
-                (
-                    "native_zensdk_active"
-                    if self._control_transport is ZendureTransport.ZENSDK
-                    else "native_cloud_active"
-                )
+                self._control_sensor_state()
                 if self._control_enabled
                 else "disabled_zha_active"
             ),
@@ -219,9 +205,10 @@ class NativeZendureRuntime:
                     "online": item.online,
                     "status": item.status_text,
                     "transport": (
-                        self._control_transport.value
+                        self._selected_local_transport().value
                         if self._control_enabled
                         and system_id == self._selected_device
+                        and self._selected_local_transport() is not None
                         else item.selected_transport.value
                     ),
                     "observed_transport": (
@@ -250,7 +237,7 @@ class NativeZendureRuntime:
             "read_only": False,
             "native_control": "enabled" if self._control_enabled else "disabled",
             "active_control_path": (
-                _control_path_name(self._control_transport)
+                _control_path_name(self._selected_local_transport())
                 if self._control_enabled
                 else "Z-HA / Home Assistant entities"
             ),
@@ -270,11 +257,15 @@ class NativeZendureRuntime:
                 "read_only": False,
                 "native_control": "enabled" if self._control_enabled else "disabled",
                 "active_control_path": (
-                    _control_path_name(self._control_transport)
+                    _control_path_name(self._selected_local_transport())
                     if self._control_enabled
                     else "Z-HA / Home Assistant entities"
                 ),
-                "selected_control_transport": self._control_transport.value,
+                "selected_control_transport": (
+                    self._selected_local_transport().value
+                    if self._selected_local_transport() is not None
+                    else None
+                ),
                 "selected_device": self._selected_device,
                 "message_count": self._processed_messages,
                 "capture_complete": self._capture_complete,
@@ -413,20 +404,24 @@ class NativeZendureRuntime:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_transport_not_ready"
                 ))
-            if not self._control_transport_ready():
-                return self._remember_command_result(_command_result(
-                    CommandExecutionStatus.SKIPPED,
-                    (
-                        "native_zensdk_not_ready"
-                        if self._control_transport is ZendureTransport.ZENSDK
-                        else "native_transport_not_ready"
-                    ),
-                ))
             state = self._states.get(self._selected_device)
             source_device = self._inventory.devices.get(self._selected_device)
             if state is None or source_device is None or not _fresh_native_state(state):
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_state_not_fresh"
+                ))
+            control_transport = preferred_local_transport(
+                source_device.native_identities[0]
+            ) if source_device.native_identities else None
+            if control_transport is None:
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED,
+                    "native_local_transport_unsupported",
+                ))
+            if not self._control_transport_ready(control_transport):
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED,
+                    f"native_{control_transport.value}_not_ready",
                 ))
             source_identities = tuple(
                 identity for identity in source_device.native_identities
@@ -438,7 +433,7 @@ class NativeZendureRuntime:
                 ))
             source_identity = source_identities[0]
             control_identity = NativeDeviceIdentity(
-                transport=self._control_transport,
+                transport=control_transport,
                 device_id=source_identity.device_id,
                 serial_number=source_identity.serial_number,
                 product_id=source_identity.product_id,
@@ -447,8 +442,8 @@ class NativeZendureRuntime:
             active_device = replace(
                 source_device,
                 control_state=DeviceControlState.ACTIVE,
-                selected_transport=self._control_transport,
-                available_transports=frozenset({self._control_transport}),
+                selected_transport=control_transport,
+                available_transports=frozenset({control_transport}),
                 native_identities=(control_identity,),
             )
             final_command = _skip_matching_writes(command, state)
@@ -457,35 +452,32 @@ class NativeZendureRuntime:
                     CommandExecutionStatus.SKIPPED, "native_setpoints_unchanged"
                 ))
             request = NativeCommandRequest(
-                self._selected_device, self._control_transport, final_command
+                self._selected_device, control_transport, final_command
             )
             context = NativeCommandContext(
                 inventory=DeviceInventory(devices=(active_device,)),
                 states={self._selected_device: state},
                 selected_device_id=self._selected_device,
                 native_control_enabled=True,
-                available_transports=frozenset({self._control_transport}),
+                available_transports=frozenset({control_transport}),
             )
-            sender = (
-                self._zensdk_command_adapter.execute
-                if self._control_transport is ZendureTransport.ZENSDK
-                and self._zensdk_command_adapter is not None
-                else self._transport.async_execute_authorized
-            )
+            if (
+                control_transport is not ZendureTransport.ZENSDK
+                or self._zensdk_command_adapter is None
+            ):
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED,
+                    "native_local_transport_not_implemented",
+                ))
             gate, transport = await NativeDeviceCommandGate(self._hems_gate).execute(
-                request, context, sender
+                request, context, self._zensdk_command_adapter.execute
             )
             if not gate.accepted or transport is None:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
                     ",".join(gate.reasons) or "native_gate_blocked",
                 ))
-            expected_status = (
-                ZenSdkCommandStatus.SENT
-                if self._control_transport is ZendureTransport.ZENSDK
-                else CloudCommandStatus.SENT
-            )
-            if transport.status is not expected_status:
+            if transport.status is not ZenSdkCommandStatus.SENT:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.FAILED, transport.reason
                 ))
@@ -806,8 +798,8 @@ class NativeZendureRuntime:
             )
             self._processed_messages += len(messages)
 
-    def _control_transport_ready(self) -> bool:
-        if self._control_transport is ZendureTransport.ZENSDK:
+    def _control_transport_ready(self, transport: ZendureTransport) -> bool:
+        if transport is ZendureTransport.ZENSDK:
             return bool(
                 self._bootstrap is not None
                 and self._zensdk_command_adapter is not None
@@ -816,10 +808,23 @@ class NativeZendureRuntime:
                     self._selected_device, datetime.now(timezone.utc)
                 )["available"]
             )
-        return bool(
-            self._transport is not None
-            and self._transport.state is ConnectionState.CONNECTED
-        )
+        return False
+
+    def _selected_local_transport(self) -> ZendureTransport | None:
+        if self._selected_device is None:
+            return None
+        device = self._inventory.devices.get(self._selected_device)
+        if device is None or not device.native_identities:
+            return None
+        return preferred_local_transport(device.native_identities[0])
+
+    def _control_sensor_state(self) -> str:
+        transport = self._selected_local_transport()
+        if transport is ZendureTransport.ZENSDK:
+            return "native_zensdk_active"
+        if transport is ZendureTransport.LOCAL_MQTT:
+            return "native_local_mqtt_active"
+        return "native_local_unsupported"
 
     def _apply_state(self, state: Any) -> None:
         self._states[state.system_id] = state
@@ -866,12 +871,12 @@ def _safe_reason(error: Exception) -> str:
     return str(reason) if reason in allowed else "native_test_failed"
 
 
-def _control_path_name(transport: ZendureTransport) -> str:
-    return (
-        "Native Zendure ZenSDK"
-        if transport is ZendureTransport.ZENSDK
-        else "Native Zendure Cloud MQTT"
-    )
+def _control_path_name(transport: ZendureTransport | None) -> str:
+    if transport is ZendureTransport.ZENSDK:
+        return "Native Zendure ZenSDK"
+    if transport is ZendureTransport.LOCAL_MQTT:
+        return "Native Zendure Local MQTT"
+    return "Native Zendure local transport unavailable"
 
 
 def _value(measured: Any) -> str | None:

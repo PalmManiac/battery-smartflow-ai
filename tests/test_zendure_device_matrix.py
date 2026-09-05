@@ -20,6 +20,7 @@ from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E4
 from custom_components.battery_smartflow_ai.zendure_device_matrix import (  # noqa: E402
     VerificationLevel,
     ZENDURE_DEVICE_MATRIX,
+    preferred_local_transport,
     resolve_zendure_device,
 )
 
@@ -39,6 +40,21 @@ def identity(
 
 
 class ZendureDeviceMatrixTests(unittest.TestCase):
+    def test_known_current_generation_models_prefer_zensdk_automatically(self):
+        for entry in ZENDURE_DEVICE_MATRIX.values():
+            with self.subTest(profile=entry.profile_key):
+                self.assertIs(
+                    preferred_local_transport(
+                        identity(model=entry.canonical_model)
+                    ),
+                    ZendureTransport.ZENSDK,
+                )
+
+    def test_unknown_model_has_no_guessed_local_transport(self):
+        self.assertIsNone(
+            preferred_local_transport(identity(model="SolarFlow future model"))
+        )
+
     def test_all_initial_profiles_have_exact_model_mapping(self):
         models = {
             "SF2400AC": "SolarFlow 2400 AC",

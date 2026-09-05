@@ -46,8 +46,9 @@ INTEGRATION_VERSION = "5.0.0.dev19"
 CONF_NATIVE_ZENDURE_APP_TOKEN = "native_zendure_app_token"
 CONF_NATIVE_ZENDURE_SELECTED_DEVICE = "native_zendure_selected_device"
 CONF_NATIVE_ZENDURE_CONTROL_ENABLED = "native_zendure_control_enabled"
+# Removed V5 development option. Retained only to purge an already stored
+# pre-release value when the native configuration is saved again.
 CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT = "native_zendure_control_transport"
-DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT = "cloud_mqtt"
 
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
