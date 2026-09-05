@@ -65,6 +65,7 @@ STATUS_OBSERVING = "observing"
 STATUS_ERROR = "error"
 ZENSDK_POLL_INTERVAL = 5.0
 ZENSDK_OFFLINE_AFTER_FAILURES = 3
+ZENSDK_MAX_DATA_AGE = 30.0
 
 
 @dataclass(slots=True)
@@ -572,11 +573,13 @@ class NativeZendureRuntime:
         self._apply_messages(result.messages)
 
     def _record_zensdk_cycle(self, result: ZenSdkReadResult) -> None:
-        successful = {
-            message.device_candidate_id
-            for message in result.messages
-            if message.device_candidate_id is not None
-        }
+        successful: dict[str, datetime] = {}
+        for message in result.messages:
+            device_id = message.device_candidate_id
+            if device_id is not None and message.transport == "zensdk":
+                successful[device_id] = max(
+                    successful.get(device_id, message.received_at), message.received_at
+                )
         attempted = {item.device_candidate_id for item in result.attempts}
         last_results = {
             candidate_id: next(
@@ -586,12 +589,11 @@ class NativeZendureRuntime:
             )
             for candidate_id in attempted
         }
-        observed_at = datetime.now(timezone.utc)
         for candidate_id in attempted:
             self._zensdk_last_result[candidate_id] = last_results[candidate_id]
             if candidate_id in successful:
                 self._zensdk_failures[candidate_id] = 0
-                self._zensdk_last_success[candidate_id] = observed_at
+                self._zensdk_last_success[candidate_id] = successful[candidate_id]
                 if self._normalizer is not None:
                     self._normalizer.set_online(candidate_id, True)
                 if candidate_id in self._inventory.devices:
@@ -640,16 +642,41 @@ class NativeZendureRuntime:
             ),
         }
 
-    def _zensdk_diagnostics(self) -> list[dict[str, Any]]:
+    def _zensdk_diagnostics(self, *, now: datetime | None = None) -> list[dict[str, Any]]:
+        """Report local transport health independently of merged device state."""
+        current = now or datetime.now(timezone.utc)
         return [
             {
                 "device_id": candidate_id,
                 "last_result": self._zensdk_last_result.get(candidate_id),
                 "consecutive_failures": self._zensdk_failures.get(candidate_id, 0),
                 "last_success": self._zensdk_last_success.get(candidate_id),
+                **self._zensdk_health(candidate_id, current),
             }
             for candidate_id in sorted(self._zensdk_last_result)
         ]
+
+    def _zensdk_health(self, candidate_id: str, now: datetime) -> dict[str, Any]:
+        last = self._zensdk_last_success.get(candidate_id)
+        age = (now - last).total_seconds() if last is not None else None
+        failures = self._zensdk_failures.get(candidate_id, 0)
+        if failures >= ZENSDK_OFFLINE_AFTER_FAILURES:
+            status = "offline"
+        elif age is None:
+            status = "unknown"
+        elif age < 0 or age > ZENSDK_MAX_DATA_AGE:
+            status = "stale"
+        elif failures:
+            status = "degraded"
+        else:
+            status = "available"
+        return {
+            "transport": "zensdk",
+            "availability": status,
+            "available": status == "available",
+            "data_age_seconds": round(age, 3) if age is not None else None,
+            "maximum_data_age_seconds": ZENSDK_MAX_DATA_AGE,
+        }
 
     def _apply_messages(self, messages: tuple[Any, ...]) -> None:
         if self._normalizer is None:
