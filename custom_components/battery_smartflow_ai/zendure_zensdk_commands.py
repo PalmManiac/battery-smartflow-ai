@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
+import math
 from typing import Callable, Mapping
 
 from .core.models import ZendureTransport
@@ -237,9 +238,9 @@ class ZendureZenSdkCommandAdapter:
 
 def _whole_watts(value: float) -> int:
     number = float(value)
-    if not number.is_integer() or number < 0:
+    if not math.isfinite(number) or number < 0:
         raise ValueError("invalid_power_value")
-    return int(number)
+    return int(round(number))
 
 
 def _soc_tenths(value: float | None) -> int:

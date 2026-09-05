@@ -131,6 +131,23 @@ def runtime(*, enabled=True, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fresh_running_setpoint_is_consumed_once_as_handover_baseline(self):
+        target = runtime(current_state=state(output_w=950, discharge_w=947))
+
+        self.assertEqual(
+            target.consume_control_baseline(),
+            ("output", 0, 950),
+        )
+        self.assertIsNone(target.consume_control_baseline())
+
+    async def test_disabled_control_never_exposes_handover_baseline(self):
+        target = runtime(
+            enabled=False,
+            current_state=state(output_w=950, discharge_w=947),
+        )
+
+        self.assertIsNone(target.consume_control_baseline())
+
     async def test_output_uses_only_explicitly_selected_zensdk_transport(self):
         target = runtime()
 

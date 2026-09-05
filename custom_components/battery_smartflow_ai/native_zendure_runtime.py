@@ -128,6 +128,7 @@ class NativeZendureRuntime:
         self._command_verification = NativeCommandVerificationManager()
         self._zensdk_command_adapter: ZendureZenSdkCommandAdapter | None = None
         self._last_command_result: dict[str, Any] | None = None
+        self._control_baseline_consumed = False
 
     @property
     def configured(self) -> bool:
@@ -146,6 +147,39 @@ class NativeZendureRuntime:
     @property
     def status(self) -> str:
         return self._status
+
+    def consume_control_baseline(self) -> tuple[str, int, int] | None:
+        """Return one fresh device baseline when native control takes ownership."""
+
+        if self._control_baseline_consumed or not self._control_enabled:
+            return None
+        if self._selected_device is None:
+            return None
+        state = self._states.get(self._selected_device)
+        if state is None or not _fresh_native_state(state):
+            return None
+
+        mode = state.mode
+        input_limit = state.setpoints.input_limit_w
+        output_limit = state.setpoints.output_limit_w
+        if not all(
+            _fresh_measured_value(item)
+            for item in (mode, input_limit, output_limit)
+        ):
+            return None
+
+        input_w = int(round(max(0.0, float(input_limit.value))))
+        output_w = int(round(max(0.0, float(output_limit.value))))
+        if str(mode.value) in {"charge", "input"}:
+            self._control_baseline_consumed = True
+            return ("input", input_w, 0)
+        if str(mode.value) in {"discharge", "output"}:
+            self._control_baseline_consumed = True
+            return ("output", 0, output_w)
+        if str(mode.value) == "idle":
+            self._control_baseline_consumed = True
+            return ("idle", 0, 0)
+        return None
 
     def start(self) -> None:
         if not self.configured or self._task is not None:
@@ -913,6 +947,19 @@ def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> boo
         and 0 <= (now - item.observed_at).total_seconds() <= maximum_age_seconds
         for item in required
     )
+
+
+def _fresh_measured_value(
+    measured: Any,
+    *,
+    maximum_age_seconds: float = 30.0,
+) -> bool:
+    """Return whether one native value is valid and recently observed."""
+
+    if not measured.valid or measured.observed_at is None:
+        return False
+    age = (datetime.now(timezone.utc) - measured.observed_at).total_seconds()
+    return 0 <= age <= maximum_age_seconds
 
 
 def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
