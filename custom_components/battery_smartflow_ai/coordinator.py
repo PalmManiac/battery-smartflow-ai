@@ -173,6 +173,7 @@ from .regulation_power_controller import (
     build_regulation_power_config,
 )
 from .device_command import DeviceCommandBuilder, clamp_number_power_request
+from .command_execution_state import applied_command_state_updates
 from .adapters.home_assistant.device_backend import (
     HomeAssistantEntityBackend,
 )
@@ -2097,6 +2098,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             native_runtime = getattr(self, "native_zendure", None)
             if native_runtime is not None and native_runtime.control_enabled:
                 result = await native_runtime.async_execute_device_command(command)
+                self._persist.update(
+                    applied_command_state_updates(command, result)
+                )
             else:
                 result = await self._device_backend.execute(
                     command,
