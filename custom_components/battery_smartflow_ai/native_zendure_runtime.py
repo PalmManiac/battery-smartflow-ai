@@ -66,6 +66,7 @@ STATUS_ERROR = "error"
 ZENSDK_POLL_INTERVAL = 5.0
 ZENSDK_OFFLINE_AFTER_FAILURES = 3
 ZENSDK_MAX_DATA_AGE = 30.0
+ZENSDK_MAX_RETRY_INTERVAL = 60.0
 
 
 @dataclass(slots=True)
@@ -111,6 +112,8 @@ class NativeZendureRuntime:
         self._zensdk_failures: dict[str, int] = {}
         self._zensdk_last_result: dict[str, str] = {}
         self._zensdk_last_success: dict[str, datetime] = {}
+        self._zensdk_next_poll: dict[str, float] = {}
+        self._zensdk_poll_delay: dict[str, float] = {}
         self._hems_gate = ZendureHemsCommandGate()
         self._first_write_result: NativeWriteVerification | None = None
         self._write_lock = asyncio.Lock()
@@ -498,15 +501,11 @@ class NativeZendureRuntime:
                 self._set_status(STATUS_ERROR)
                 return
             self._set_status(STATUS_OBSERVING)
-            next_zensdk_poll = (
-                asyncio.get_running_loop().time() + ZENSDK_POLL_INTERVAL
-            )
+            self._initialize_zensdk_schedule(asyncio.get_running_loop().time())
             while True:
                 self._consume_messages()
                 loop = asyncio.get_running_loop()
-                if loop.time() >= next_zensdk_poll:
-                    await self._async_poll_zensdk()
-                    next_zensdk_poll = loop.time() + ZENSDK_POLL_INTERVAL
+                await self._async_poll_zensdk(now_monotonic=loop.time())
                 self._refresh_snapshots()
                 self._notify()
                 await asyncio.sleep(1.0)
@@ -562,15 +561,53 @@ class NativeZendureRuntime:
         if cloud_messages:
             self._last_processed_message = cloud_messages[-1]
 
-    async def _async_poll_zensdk(self) -> None:
+    async def _async_poll_zensdk(self, *, now_monotonic: float | None = None) -> None:
         if self._bootstrap is None:
+            return
+        current = (
+            asyncio.get_running_loop().time()
+            if now_monotonic is None else now_monotonic
+        )
+        due = self._due_zensdk_devices(current)
+        if not due:
             return
         result = await async_read_zensdk_reports(
             self._bootstrap,
             self._get_json,
+            candidate_ids=frozenset(due),
         )
         self._record_zensdk_cycle(result)
         self._apply_messages(result.messages)
+        for candidate_id in due:
+            self._schedule_zensdk_poll(candidate_id, current)
+
+    def _initialize_zensdk_schedule(self, now_monotonic: float) -> None:
+        """Schedule every supported local device independently."""
+
+        for candidate_id in self._zensdk_last_result:
+            self._schedule_zensdk_poll(candidate_id, now_monotonic)
+
+    def _schedule_zensdk_poll(
+        self, candidate_id: str, now_monotonic: float
+    ) -> None:
+        failures = self._zensdk_failures.get(candidate_id, 0)
+        delay = (
+            ZENSDK_POLL_INTERVAL
+            if failures == 0
+            else min(
+                ZENSDK_MAX_RETRY_INTERVAL,
+                ZENSDK_POLL_INTERVAL * (2 ** min(failures, 4)),
+            )
+        )
+        self._zensdk_poll_delay[candidate_id] = delay
+        self._zensdk_next_poll[candidate_id] = now_monotonic + delay
+
+    def _due_zensdk_devices(self, now_monotonic: float) -> tuple[str, ...]:
+        return tuple(
+            candidate_id
+            for candidate_id, due_at in sorted(self._zensdk_next_poll.items())
+            if now_monotonic >= due_at
+        )
 
     def _record_zensdk_cycle(self, result: ZenSdkReadResult) -> None:
         successful: dict[str, datetime] = {}
@@ -651,6 +688,8 @@ class NativeZendureRuntime:
                 "last_result": self._zensdk_last_result.get(candidate_id),
                 "consecutive_failures": self._zensdk_failures.get(candidate_id, 0),
                 "last_success": self._zensdk_last_success.get(candidate_id),
+                "poll_delay_seconds": self._zensdk_poll_delay.get(candidate_id),
+                "retry_interval_cap_seconds": ZENSDK_MAX_RETRY_INTERVAL,
                 **self._zensdk_health(candidate_id, current),
             }
             for candidate_id in sorted(self._zensdk_last_result)

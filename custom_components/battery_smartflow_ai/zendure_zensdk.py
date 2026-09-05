@@ -116,6 +116,7 @@ async def async_read_zensdk_reports(
     *,
     timeout: float = DEFAULT_ZENSDK_TIMEOUT,
     clock: Callable[[], datetime] | None = None,
+    candidate_ids: frozenset[str] | None = None,
 ) -> ZenSdkReadResult:
     """Read one local report per supported device without exposing a write API."""
 
@@ -129,6 +130,9 @@ async def async_read_zensdk_reports(
     }
     tasks = []
     for device in bootstrap.devices:
+        candidate_id = device.candidate.candidate_id
+        if candidate_ids is not None and candidate_id not in candidate_ids:
+            continue
         identity = device.candidate.identity
         matrix = resolve_zendure_device(identity)
         if (
@@ -144,7 +148,7 @@ async def async_read_zensdk_reports(
         )
         tasks.append(
             _read_device(
-                device.candidate.candidate_id,
+                candidate_id,
                 addresses,
                 get_json,
                 timeout,
