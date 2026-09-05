@@ -347,3 +347,21 @@ def resolve_zendure_device(
     if by_model is not None and by_product is not None and by_model is not by_product:
         return None
     return by_product or by_model
+
+
+def preferred_local_transport(
+    identity: NativeDeviceIdentity,
+) -> ZendureTransport | None:
+    """Return the model family's local path without user transport choice."""
+
+    entry = resolve_zendure_device(identity)
+    if entry is None:
+        return None
+    for transport in (ZendureTransport.ZENSDK, ZendureTransport.LOCAL_MQTT):
+        capability = entry.transport(transport)
+        if capability.read in {
+            VerificationLevel.VERIFIED,
+            VerificationLevel.REFERENCE_ONLY,
+        }:
+            return transport
+    return None

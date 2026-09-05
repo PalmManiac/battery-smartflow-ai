@@ -195,9 +195,9 @@
       },
       "native_zendure_device": {
         "title": "Select the Zendure system",
-        "description": "Zendure reported these devices:\n\n{device_summary}\n\nSelect exactly one system and its native control transport. Native control is activated only by the separate switch below. When enabled, Battery SmartFlow AI stops writing through the configured Z-HA entities.",
-        "data": {"native_zendure_selected_device": "Zendure system", "native_zendure_control_enabled": "Enable native Zendure control", "native_zendure_control_transport": "Native control transport"},
-        "data_description": {"native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently.", "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the selected native transport. Disable this switch to retain the established Z-HA control path.", "native_zendure_control_transport": "Choose Cloud MQTT or local ZenSDK explicitly. BSFAI never switches transport automatically."}
+        "description": "Zendure reported these devices:\n\n{device_summary}\n\nSelect exactly one system. Battery SmartFlow AI automatically uses the supported local transport for its model. Native control is activated only by the separate switch below. When enabled, BSFAI stops writing through the configured Z-HA entities.",
+        "data": {"native_zendure_selected_device": "Zendure system", "native_zendure_control_enabled": "Enable native Zendure control"},
+        "data_description": {"native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently. BSFAI selects ZenSDK or Local MQTT from the verified model family.", "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the model's local transport. Disable this switch to retain the established Z-HA control path."}
       },
       "general": {
         "title": "Battery SmartFlow AI settings – General",
@@ -373,7 +373,7 @@
     },
     "sensor": {
       "native_zendure_status": {"name": "Native Zendure test status", "state": {"disabled": "Not configured", "discovering": "Discovering devices", "connecting": "Connecting", "capturing": "Capturing initial data", "observing": "Observation active", "error": "Error"}},
-      "native_zendure_control": {"name": "Native Zendure control", "state": {"disabled_zha_active": "Disabled – Z-HA remains active", "native_cloud_active": "Enabled – native Cloud MQTT active", "native_zensdk_active": "Enabled – local ZenSDK active"}},
+      "native_zendure_control": {"name": "Native Zendure control", "state": {"disabled_zha_active": "Disabled – Z-HA remains active", "native_zensdk_active": "Enabled – local ZenSDK active", "native_local_mqtt_active": "Enabled – Local MQTT active", "native_local_unsupported": "Blocked – no verified local transport"}},
       "native_zendure_device_count": {"name": "Native Zendure devices found"},
       "native_zendure_message_count": {"name": "Native Zendure messages received"},
       "native_zendure_last_message": {"name": "Last native Zendure message"},

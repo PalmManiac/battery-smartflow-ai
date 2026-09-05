@@ -61,7 +61,6 @@ from .const import (
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
     CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-    DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT,
 )
 
 from .device_profiles import DEVICE_PROFILE_MODELS
@@ -836,10 +835,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         bool(self.config_entry.options.get(
                             CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
                         )),
-                        str(self.config_entry.options.get(
-                            CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-                            DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-                        )),
                     ),
                     errors={"base": "device_not_found"},
                     description_placeholders={
@@ -852,12 +847,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
                 user_input.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
             )
-            options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = str(
-                user_input.get(
-                    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-                    DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-                )
-            )
+            options.pop(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT, None)
             return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
@@ -866,10 +856,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 devices,
                 bool(self.config_entry.options.get(
                     CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
-                )),
-                str(self.config_entry.options.get(
-                    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-                    DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT,
                 )),
             ),
             description_placeholders={
@@ -881,7 +867,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
     def _native_device_schema(
         devices,
         native_control_enabled: bool = False,
-        control_transport: str = DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT,
     ) -> vol.Schema:
         return vol.Schema(
             {
@@ -906,18 +891,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
                     default=native_control_enabled,
                 ): selector.BooleanSelector(),
-                vol.Optional(
-                    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-                    default=control_transport,
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            {"value": "cloud_mqtt", "label": "Cloud MQTT"},
-                            {"value": "zensdk", "label": "ZenSDK"},
-                        ],
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
             }
         )
 
