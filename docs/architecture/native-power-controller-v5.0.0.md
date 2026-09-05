@@ -1,25 +1,27 @@
 # V5.0.0: Productive native PowerController path
 
 Issue #336 connects the unchanged neutral regulation output to the native
-Zendure Cloud MQTT stack:
+Zendure native stack. Issue #336 introduced Cloud MQTT; issue #342 adds the
+same gated path for ZenSDK:
 
 ```text
 DecisionEngine -> StrategyIntent -> ModeArbiter -> RegulationPowerController
-  -> DeviceCommand -> NativeDeviceCommandGate -> Cloud MQTT mapping
-  -> publish acceptance -> fresh readback -> optional physical effect
+  -> DeviceCommand -> NativeDeviceCommandGate -> selected transport adapter
+  -> transport acceptance -> fresh readback -> optional physical effect
 ```
 
 The PowerController still knows no Zendure property, MQTT topic, credential, or
 transport rule. The Coordinator selects the output backend only from the
-explicit `native_zendure_control_enabled` option. With the option disabled,
+explicit `native_zendure_control_enabled` option and native transport choice.
+With the option disabled,
 the established Home Assistant/Z-HA backend remains unchanged. With it
 enabled, that backend is not called, preventing competing writes.
 
 ## Fail-closed activation
 
 Native output additionally requires exactly one selected main system, an
-observing runtime after initial synchronization, a connected Cloud MQTT
-session, fresh online/protection/HEMS observations, a unique Cloud identity,
+observing runtime after initial synchronization, a ready explicitly selected
+transport, fresh online/protection/HEMS observations, a unique device identity,
 an approved model/profile and transport, inactive HEMS, and a gate-approved
 command. Packs are never command targets. There is no device or transport
 fallback.
@@ -39,7 +41,21 @@ is sent through the same central gate used by the development write test.
 
 INPUT, OUTPUT and a zero-watt stop retain their neutral DeviceCommand meaning.
 Zendure-specific mode values, SoC scaling, property ordering and payloads stay
-inside the Cloud adapter implemented by issue #335.
+inside the selected transport adapter.
+
+## Explicit ZenSDK ownership
+
+Existing entries without a saved transport remain on Cloud MQTT for upgrade
+compatibility. Choosing ZenSDK is explicit and never inferred from reachability.
+When selected, a command can run only while the per-device ZenSDK health is
+fresh and available. The Cloud publisher and Home Assistant/Z-HA backend are
+not called. Loss of local reachability blocks the command without fallback.
+
+The first productive ZenSDK allow-list remains limited to the field-verified
+SF2400AC `outputLimit`. Commands requiring reference-only properties such as
+`acMode` or `inputLimit` fail at the central gate before reaching the adapter.
+This permits isolated regulation tests without silently treating an incomplete
+start or direction-change sequence as successful.
 
 ## Feedback and diagnostics
 

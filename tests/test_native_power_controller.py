@@ -39,6 +39,10 @@ from custom_components.battery_smartflow_ai.zendure_cloud_mqtt_commands import (
     CloudCommandStatus,
 )
 from custom_components.battery_smartflow_ai.zendure_device_matrix import VerificationLevel  # noqa: E402
+from custom_components.battery_smartflow_ai.zendure_zensdk_commands import (  # noqa: E402
+    ZenSdkCommandResult,
+    ZenSdkCommandStatus,
+)
 
 
 DEVICE = "cloud_mqtt:main-1"
@@ -70,6 +74,7 @@ def state(*, input_w=0, output_w=0, charge_w=0, discharge_w=0, hems=False):
 class FakeTransport:
     state = ConnectionState.CONNECTED
     command_diagnostics = {"commands": []}
+    last_message_at = None
 
     def __init__(self):
         self.commands = []
@@ -79,10 +84,22 @@ class FakeTransport:
         return CloudCommandResult(CloudCommandStatus.SENT, "awaiting_readback", ("id",), 1)
 
 
-def runtime(*, enabled=True, current_state=None):
+class FakeZenSdkAdapter:
+    def __init__(self):
+        self.commands = []
+
+    async def execute(self, authorized):
+        self.commands.append(authorized)
+        return ZenSdkCommandResult(
+            ZenSdkCommandStatus.SENT, "awaiting_readback", ("zen-id",), 1, 200
+        )
+
+
+def runtime(*, enabled=True, current_state=None, control_transport="cloud_mqtt"):
     result = NativeZendureRuntime(
         SimpleNamespace(), app_token="configured", selected_device=DEVICE,
         notify=lambda: None, control_enabled=enabled,
+        control_transport=control_transport,
     )
     identity = NativeDeviceIdentity(
         ZendureTransport.CLOUD_MQTT, device_id="main-1",
@@ -101,10 +118,62 @@ def runtime(*, enabled=True, current_state=None):
     )
     result._status = STATUS_OBSERVING
     result._transport = FakeTransport()
+    if control_transport == "zensdk":
+        result._bootstrap = SimpleNamespace()
+        result._zensdk_command_adapter = FakeZenSdkAdapter()
+        result._zensdk_last_success[DEVICE] = NOW
+        result._zensdk_failures[DEVICE] = 0
     return result
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_output_uses_only_explicitly_selected_zensdk_transport(self):
+        target = runtime(control_transport="zensdk")
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=250, should_write_mode=False,
+            should_write_input=False, should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
+        command = target._zensdk_command_adapter.commands[0]
+        self.assertEqual(command.device_id, DEVICE)
+        self.assertEqual(command.transport, ZendureTransport.ZENSDK)
+        self.assertEqual(target._transport.commands, [])
+        self.assertEqual(
+            target.sensor_data()["native_zendure_control"],
+            "native_zensdk_active",
+        )
+
+    async def test_unverified_zensdk_sequence_is_blocked_without_any_write(self):
+        target = runtime(control_transport="zensdk")
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "input", input_limit_w=300, output_limit_w=0,
+            should_write_mode=True, should_write_input=True,
+            should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+        self.assertIn("command_capability_unsupported:acMode", result.reason)
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(target._transport.commands, [])
+
+    async def test_unavailable_zensdk_never_falls_back_to_cloud(self):
+        target = runtime(control_transport="zensdk")
+        target._zensdk_last_success[DEVICE] = NOW - timedelta(minutes=5)
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=250, should_write_mode=False,
+            should_write_input=False, should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+        self.assertEqual(result.reason, "native_zensdk_not_ready")
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(target._transport.commands, [])
+
     async def test_output_command_reaches_exact_cloud_device(self):
         target = runtime()
         result = await target.async_execute_device_command(DeviceCommand(

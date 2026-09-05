@@ -6,6 +6,8 @@ from .const import (
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
+    DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT,
     DOMAIN,
     PLATFORMS,
 )
@@ -142,6 +144,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             selected_device=entry.options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
             control_enabled=bool(
                 entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
+            ),
+            control_transport=entry.options.get(
+                CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
+                DEFAULT_NATIVE_ZENDURE_CONTROL_TRANSPORT,
             ),
             notify=coordinator.async_update_listeners,
         )

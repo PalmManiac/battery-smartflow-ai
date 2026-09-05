@@ -32,5 +32,8 @@ Only a later ZenSDK report for the same logical device, same property, and a
 timestamp newer than the send timestamp can confirm it. Superseded-command and
 bounded-history behavior stays in the shared verification manager.
 
-This adapter is not connected to the productive PowerController in issue #341.
-That ownership switch remains the separate integration step in issue #342.
+Issue #342 connects this adapter to the productive neutral command path only
+when ZenSDK is explicitly selected. Normal scheduled ZenSDK reports feed the
+same verification manager, so command confirmation adds no second polling loop.
+An unavailable or stale ZenSDK path blocks writes without Cloud, Local MQTT, or
+Z-HA fallback.
