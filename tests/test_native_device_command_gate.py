@@ -183,16 +183,30 @@ class NativeDeviceCommandGateTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(reason, result.reasons)
             self.assertEqual(called, [])
 
-    async def test_production_matrix_keeps_unverified_zensdk_properties_closed(self):
+    async def test_production_matrix_allows_verified_zensdk_direction_group(self):
         hems = ZendureHemsCommandGate()
         hems.update(DEVICE_ID, valid(False), capability=VerificationLevel.VERIFIED)
         gate = NativeDeviceCommandGate(hems)
         result = gate.evaluate(
             NativeCommandRequest(DEVICE_ID, TRANSPORT, command()), context()
         )
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.reasons, ())
+
+    async def test_production_matrix_keeps_unverified_zensdk_soc_closed(self):
+        hems = ZendureHemsCommandGate()
+        hems.update(DEVICE_ID, valid(False), capability=VerificationLevel.VERIFIED)
+        request = command()
+        request.should_write_mode = False
+        request.should_write_input = False
+        request.should_write_output = False
+        request.should_write_min_soc = True
+        request.min_soc_pct = 10
+        result = NativeDeviceCommandGate(hems).evaluate(
+            NativeCommandRequest(DEVICE_ID, TRANSPORT, request), context()
+        )
         self.assertFalse(result.accepted)
-        self.assertIn("command_capability_unsupported:acMode", result.reasons)
-        self.assertIn("command_capability_unsupported:inputLimit", result.reasons)
+        self.assertIn("command_capability_unsupported:minSoc", result.reasons)
 
     async def test_control_selection_and_active_state_are_independent_blockers(self):
         result = ready_gate().evaluate(

@@ -15,7 +15,7 @@ from .native_command_verification import (
 from .native_device_command_gate import AuthorizedNativeCommand
 from .zendure_cloud import ZendureCloudBootstrap
 from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
-from .zendure_zensdk import GetJson, async_write_zensdk_property
+from .zendure_zensdk import GetJson, async_write_zensdk_properties
 
 
 class ZenSdkCommandStatus(StrEnum):
@@ -27,13 +27,11 @@ class ZenSdkCommandStatus(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class ZenSdkPropertyWrite:
-    """One allow-listed low-level write plus its readback contract."""
+class ZenSdkCommandWrite:
+    """One atomic directional command plus its readback contracts."""
 
-    property_name: str
-    value: int
+    properties: Mapping[str, int]
     request_id: int
-    readback_tolerance: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +42,7 @@ class ZenSdkCommandResult:
     reason: str
     verification_ids: tuple[str, ...] = ()
     writes_sent: int = 0
+    requests_sent: int = 0
     http_status: int | None = None
 
 
@@ -52,8 +51,8 @@ def map_zensdk_command(
     bootstrap: ZendureCloudBootstrap,
     *,
     first_request_id: int,
-) -> tuple[ZenSdkPropertyWrite, ...]:
-    """Map only gate-authorized and transport-verified properties."""
+) -> ZenSdkCommandWrite:
+    """Map a neutral direction into the atomic group used by ZenSDK."""
 
     if not isinstance(authorized, AuthorizedNativeCommand):
         raise ValueError("gate_authorization_required")
@@ -79,35 +78,36 @@ def map_zensdk_command(
         raise ValueError("transport_not_approved")
 
     command = authorized.command
-    requested: list[tuple[str, int]] = []
-    if command.should_write_mode:
-        requested.append(("acMode", 1 if command.ac_mode == "input" else 2))
-    if command.should_write_input:
-        requested.append(("inputLimit", _whole_watts(command.input_limit_w)))
-    if command.should_write_output:
-        requested.append(("outputLimit", _whole_watts(command.output_limit_w)))
+    requested: dict[str, int] = {}
+    directional_write = any((
+        command.should_write_mode,
+        command.should_write_input,
+        command.should_write_output,
+    ))
+    if directional_write:
+        input_w = _whole_watts(command.input_limit_w)
+        output_w = _whole_watts(command.output_limit_w)
+        active_w = input_w if command.ac_mode == "input" else output_w
+        requested.update({
+            "smartMode": _smart_mode(active_w, command.metadata),
+            "acMode": 1 if command.ac_mode == "input" else 2,
+            "outputLimit": 0 if command.ac_mode == "input" else output_w,
+            "inputLimit": input_w if command.ac_mode == "input" else 0,
+        })
     if command.should_write_min_soc:
-        requested.append(("minSoc", _soc_tenths(command.min_soc_pct)))
+        requested["minSoc"] = _soc_tenths(command.min_soc_pct)
     if command.should_write_max_soc:
-        requested.append(("socSet", _soc_tenths(command.max_soc_pct)))
+        requested["socSet"] = _soc_tenths(command.max_soc_pct)
     if not requested:
         raise ValueError("empty_command")
 
-    writes = []
-    for offset, (property_name, value) in enumerate(requested):
+    for property_name in requested:
         if (
             matrix.property_write_level(ZendureTransport.ZENSDK, property_name)
             is not VerificationLevel.VERIFIED
         ):
             raise ValueError(f"property_not_approved:{property_name}")
-        writes.append(
-            ZenSdkPropertyWrite(
-                property_name=property_name,
-                value=value,
-                request_id=first_request_id + offset,
-            )
-        )
-    return tuple(writes)
+    return ZenSdkCommandWrite(dict(requested), first_request_id)
 
 
 class ZendureZenSdkCommandAdapter:
@@ -130,11 +130,11 @@ class ZendureZenSdkCommandAdapter:
     async def execute(
         self, authorized: AuthorizedNativeCommand
     ) -> ZenSdkCommandResult:
-        """POST each approved property once; never retry or fall back."""
+        """POST one complete approved group; never retry or fall back."""
 
         now = self._clock()
         try:
-            writes = map_zensdk_command(
+            write = map_zensdk_command(
                 authorized,
                 self._bootstrap,
                 first_request_id=self._request_id + 1,
@@ -142,19 +142,19 @@ class ZendureZenSdkCommandAdapter:
         except ValueError as error:
             return ZenSdkCommandResult(ZenSdkCommandStatus.REJECTED, str(error))
 
-        prepared: list[tuple[ZenSdkPropertyWrite, str]] = []
-        for write in writes:
+        prepared: list[tuple[str, int, str]] = []
+        for property_name, value in write.properties.items():
             verification = self._verification.prepare(
                 device_id=authorized.device_id,
-                command_type=write.property_name,
-                target_key=write.property_name,
+                command_type=property_name,
+                target_key=property_name,
                 transport=ZendureTransport.ZENSDK,
-                requested_value=write.value,
-                final_value=write.value,
+                requested_value=value,
+                final_value=value,
                 readback=ReadbackPolicy(
-                    write.property_name,
-                    write.value,
-                    write.readback_tolerance,
+                    property_name,
+                    value,
+                    0.0,
                 ),
                 prepared_at=now,
                 max_attempts=1,
@@ -162,24 +162,21 @@ class ZendureZenSdkCommandAdapter:
             self._verification.gate(
                 verification.command_id, accepted=True, at=now
             )
-            prepared.append((write, verification.command_id))
+            prepared.append((property_name, value, verification.command_id))
 
-        sent_count = 0
-        last_http_status: int | None = None
-        for write, command_id in prepared:
+        for _property_name, _value, command_id in prepared:
             self._verification.sent(command_id, at=self._clock())
-            # The id belongs to an attempted request, even when its response is
-            # an error or ambiguous timeout. Never reuse it for a later POST.
-            self._request_id = write.request_id
-            outcome = await async_write_zensdk_property(
-                self._bootstrap,
-                authorized.device_id,
-                write.property_name,
-                write.value,
-                write.request_id,
-                self._post_json,
-            )
-            last_http_status = outcome.http_status
+        # The id belongs to an attempted request, even after an ambiguous
+        # timeout. The complete group is deliberately never split or retried.
+        self._request_id = write.request_id
+        outcome = await async_write_zensdk_properties(
+            self._bootstrap,
+            authorized.device_id,
+            write.properties,
+            write.request_id,
+            self._post_json,
+        )
+        for _property_name, _value, command_id in prepared:
             self._verification.transport_result(
                 command_id,
                 ok=outcome.accepted,
@@ -190,24 +187,23 @@ class ZendureZenSdkCommandAdapter:
                 ),
                 at=self._clock(),
             )
-            if not outcome.accepted:
-                for _pending_write, pending_id in prepared[sent_count + 1:]:
-                    self._verification.cancel(pending_id)
-                return ZenSdkCommandResult(
-                    ZenSdkCommandStatus.TRANSPORT_ERROR,
-                    outcome.result,
-                    tuple(item[1] for item in prepared),
-                    sent_count,
-                    outcome.http_status,
-                )
-            sent_count += 1
+        if not outcome.accepted:
+            return ZenSdkCommandResult(
+                status=ZenSdkCommandStatus.TRANSPORT_ERROR,
+                reason=outcome.result,
+                verification_ids=tuple(item[2] for item in prepared),
+                writes_sent=0,
+                requests_sent=1,
+                http_status=outcome.http_status,
+            )
 
         return ZenSdkCommandResult(
-            ZenSdkCommandStatus.SENT,
-            "awaiting_readback",
-            tuple(item[1] for item in prepared),
-            sent_count,
-            last_http_status,
+            status=ZenSdkCommandStatus.SENT,
+            reason="awaiting_readback",
+            verification_ids=tuple(item[2] for item in prepared),
+            writes_sent=len(prepared),
+            requests_sent=1,
+            http_status=outcome.http_status,
         )
 
     def observe_properties(
@@ -253,3 +249,19 @@ def _soc_tenths(value: float | None) -> int:
     if number < 0 or number > 100:
         raise ValueError("invalid_soc_value")
     return int(round(number * 10))
+
+
+def _smart_mode(active_w: int, metadata: Mapping[str, object]) -> int:
+    """Keep the off-grid socket alive when its load is active or unknown."""
+
+    if active_w > 0:
+        return 1
+    raw_offgrid = metadata.get("native_offgrid_power_w")
+    if raw_offgrid is None:
+        return 1
+    if isinstance(raw_offgrid, bool):
+        raise ValueError("invalid_offgrid_power")
+    try:
+        return 1 if float(raw_offgrid) > 0 else 0
+    except (TypeError, ValueError) as error:
+        raise ValueError("invalid_offgrid_power") from error
