@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from base64 import b64encode
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sys
 from types import SimpleNamespace
 from types import ModuleType
@@ -362,6 +362,63 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
             runtime._states[candidate_id].observed_transport,
             ZendureTransport.ZENSDK,
         )
+
+    async def test_local_health_ages_without_failures_and_cloud_cannot_refresh_it(self):
+        data = await make_bootstrap()
+        device = data.devices[0].candidate.candidate_id
+        now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+        target = NativeZendureRuntime(SimpleNamespace(), app_token="configured",
+                                     selected_device=None, notify=lambda: None)
+
+        async def get(*_args, **_kwargs):
+            return Response({"sn": "serial-real-1", "properties": {"electricLevel": 0}})
+
+        result = await async_read_zensdk_reports(data, get, clock=lambda: now)
+        target._record_zensdk_cycle(result)
+        healthy = target._zensdk_diagnostics(now=now)[0]
+        self.assertEqual(healthy["availability"], "available")
+        self.assertEqual(healthy["data_age_seconds"], 0)
+        self.assertTrue(target._zensdk_diagnostics(now=now + timedelta(seconds=30))[0]["available"])
+        stale = target._zensdk_diagnostics(now=now + timedelta(seconds=31))[0]
+        self.assertEqual(stale["availability"], "stale")
+        self.assertFalse(stale["available"])
+        self.assertEqual(target._zensdk_diagnostics(now=now - timedelta(seconds=1))[0]["availability"], "stale")
+
+        # A Cloud report cannot count as a successful local read, even if
+        # submitted to the cycle recorder for the same logical main device.
+        cloud = replace(result.messages[0], transport="cloud_mqtt", received_at=now + timedelta(seconds=40))
+        target._record_zensdk_cycle(ZenSdkReadResult((cloud,), result.attempts))
+        self.assertEqual(target._zensdk_last_success[device], now)
+        self.assertFalse(target._zensdk_diagnostics(now=now + timedelta(seconds=40))[0]["available"])
+
+    async def test_local_health_failure_and_recovery_are_per_device(self):
+        data = await make_bootstrap()
+        device = data.devices[0].candidate.candidate_id
+        now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+        target = NativeZendureRuntime(SimpleNamespace(), app_token="configured",
+                                     selected_device=None, notify=lambda: None)
+        failure = ZenSdkReadResult((), (ZenSdkReadAttempt(device, "device_list_ip", "timeout"),))
+        target._record_zensdk_cycle(failure)
+        self.assertEqual(target._zensdk_diagnostics(now=now)[0]["availability"], "unknown")
+
+        async def get(*_args, **_kwargs):
+            return Response({"sn": "serial-real-1", "properties": {}})
+
+        success = await async_read_zensdk_reports(data, get, clock=lambda: now)
+        target._record_zensdk_cycle(success)
+        target._zensdk_last_success["another-device"] = now
+        target._zensdk_last_result["another-device"] = "success"
+        target._record_zensdk_cycle(failure)
+        by_id = {item["device_id"]: item for item in target._zensdk_diagnostics(now=now)}
+        self.assertEqual(by_id[device]["availability"], "degraded")
+        self.assertFalse(by_id[device]["available"])
+        self.assertTrue(by_id["another-device"]["available"])
+        target._record_zensdk_cycle(failure)
+        target._record_zensdk_cycle(failure)
+        self.assertEqual(target._zensdk_health(device, now)["availability"], "offline")
+        target._record_zensdk_cycle(success)
+        self.assertTrue(target._zensdk_health(device, now)["available"])
+        self.assertEqual(target._zensdk_failures[device], 0)
 
 
 if __name__ == "__main__":

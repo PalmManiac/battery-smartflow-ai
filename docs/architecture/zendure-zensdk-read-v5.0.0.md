@@ -28,6 +28,17 @@ and privacy-filtered capture.
 
 ## Remaining work
 
+Local transport diagnostics now derive availability exclusively from ZenSDK
+reports and local failures, independently of merged device telemetry. They expose
+the report receive timestamp, its age, a 30-second freshness ceiling and the
+states `unknown`, `available`, `degraded`, `stale`, and `offline`. A failed read
+makes availability false immediately (`degraded` with still-recent data); three
+consecutive failures mean `offline`. Without new reports, even a previously
+successful reader becomes `stale`. Future timestamps fail closed. Recovery
+requires a new identity-validated local report. Cloud messages cannot refresh
+this timestamp. The existing combined device state and productive Cloud writer
+are unchanged; #341/#342 must consume this separate health state for local writes.
+
 - Complete transport-specific mapping, availability, timing and reconnect/backoff
   coverage for #340, including model evidence for the requested ZenSDK family.
 - Verify exact API model names/profile mappings for 800 Pro and Pro 2 separately.
