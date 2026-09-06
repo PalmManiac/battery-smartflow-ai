@@ -18,6 +18,7 @@ from .core.models import (
     CommandExecutionStatus,
     DeviceCommand,
     DeviceControlState,
+    DeviceOperatingMode,
     DeviceInventory,
     MainDevice,
     NativeDeviceIdentity,
@@ -33,7 +34,10 @@ from .native_device_command_gate import (
     NativeCommandRequest,
     NativeDeviceCommandGate,
 )
-from .native_device_overview import build_native_device_overview
+from .native_device_overview import (
+    build_native_device_overview,
+    with_control_state,
+)
 from .native_transport_metrics import NativeTransportMetrics
 from .native_transport_router import (
     NativeTransportRouter,
@@ -378,10 +382,40 @@ class NativeZendureRuntime:
         if selected_index is None:
             return overview
         return tuple(
-            replace(item, selected_transport=selected_transport)
+            with_control_state(
+                replace(item, selected_transport=selected_transport),
+                self._hardware_control_state(),
+            )
             if index == selected_index
             else item
             for index, item in enumerate(overview)
+        )
+
+    def _hardware_control_state(self) -> DeviceControlState:
+        """Describe readiness separately from the current strategy decision."""
+
+        if not self._control_enabled or self._selected_device is None:
+            return DeviceControlState.OBSERVATION
+        device = self._inventory.devices.get(self._selected_device)
+        state = self._states.get(self._selected_device)
+        if device is None:
+            return DeviceControlState.OBSERVATION
+        if device.control_state in {
+            DeviceControlState.HEMS_BLOCKED,
+            DeviceControlState.UNSUPPORTED,
+            DeviceControlState.OFFLINE,
+        }:
+            return device.control_state
+        if state is None or not _fresh_native_state(state) or not device.online:
+            return DeviceControlState.OFFLINE
+        if automatic_control_transport(device).transport is None:
+            return DeviceControlState.UNSUPPORTED
+        if not self._transport_router.snapshot.synchronized:
+            return DeviceControlState.ELIGIBLE
+        return (
+            DeviceControlState.ACTIVE
+            if _native_power_control_active(state)
+            else DeviceControlState.ENABLED
         )
 
     def diagnostic_data(self) -> dict[str, Any]:
@@ -1269,6 +1303,36 @@ def _fresh_measured_value(
         return False
     age = (datetime.now(timezone.utc) - measured.observed_at).total_seconds()
     return 0 <= age <= maximum_age_seconds
+
+
+def _native_power_control_active(state: Any) -> bool:
+    """Return whether a non-zero native charge or discharge target is active."""
+
+    mode = state.mode.value if state.mode.valid else DeviceOperatingMode.UNKNOWN
+    if mode is DeviceOperatingMode.CHARGE or str(mode) == "charge":
+        return any(
+            _positive_measurement(value)
+            for value in (
+                state.setpoints.input_limit_w,
+                state.charge_power_w,
+            )
+        )
+    if mode is DeviceOperatingMode.DISCHARGE or str(mode) == "discharge":
+        return any(
+            _positive_measurement(value)
+            for value in (
+                state.setpoints.output_limit_w,
+                state.discharge_power_w,
+            )
+        )
+    return False
+
+
+def _positive_measurement(value: Any) -> bool:
+    try:
+        return bool(value.valid and float(value.value) > 0)
+    except (TypeError, ValueError, OverflowError):
+        return False
 
 
 def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:

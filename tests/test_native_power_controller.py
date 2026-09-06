@@ -20,6 +20,7 @@ sys.modules.setdefault("homeassistant.helpers.aiohttp_client", aiohttp_module)
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     CommandExecutionStatus,
     DeviceCommand,
+    DeviceControlState,
     DeviceInventory,
     DeviceOperatingMode,
     MainDevice,
@@ -179,6 +180,29 @@ def legacy_runtime(*, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_hardware_status_separates_enabled_idle_from_active_control(self):
+        idle = runtime(current_state=state())
+        idle._refresh_write_authority()
+        idle_overview = idle.hardware_overview()[0]
+        self.assertEqual(idle_overview.control_state, DeviceControlState.ENABLED)
+        self.assertTrue(idle_overview.control_enabled)
+        self.assertFalse(idle_overview.actively_controlled)
+
+        active = runtime(
+            current_state=state(output_w=300, discharge_w=300)
+        )
+        active._refresh_write_authority()
+        active_overview = active.hardware_overview()[0]
+        self.assertEqual(active_overview.control_state, DeviceControlState.ACTIVE)
+        self.assertTrue(active_overview.actively_controlled)
+
+        disabled = runtime(enabled=False)
+        disabled._refresh_write_authority()
+        self.assertEqual(
+            disabled.hardware_overview()[0].control_state,
+            DeviceControlState.OBSERVATION,
+        )
+
     async def test_native_effectiveness_confirms_physical_effect_separately(self):
         target = runtime()
         verification = target._command_verification.prepare(
