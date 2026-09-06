@@ -186,6 +186,7 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(state.packs), 2)
         first, second = state.packs
         self.assertEqual(first.pack_id, "pack-a")
+        self.assertEqual(first.serial_number, "pack-a")
         self.assertEqual(first.parent_system_id, state.system_id)
         self.assertEqual(first.charge_power_w.value, 227.0)
         self.assertEqual(first.discharge_power_w.value, 0.0)

@@ -241,6 +241,7 @@ class _Observed:
 @dataclass(slots=True)
 class _PackAccumulator:
     values: dict[str, _Observed]
+    serial_number: str | None = None
     last_message_at: datetime | None = None
 
 
@@ -489,6 +490,13 @@ class ZendureCloudNormalizer:
             accumulator = self._pack_values[system_id].setdefault(
                 pack_id, _PackAccumulator({})
             )
+            serial_number = raw_pack.get("sn")
+            if isinstance(serial_number, (str, int)) and not isinstance(
+                serial_number, bool
+            ):
+                serial_text = str(serial_number).strip()
+                if serial_text:
+                    accumulator.serial_number = serial_text
             accumulator.last_message_at = observed_at
             self._apply_properties(
                 accumulator.values,
@@ -546,6 +554,7 @@ class ZendureCloudNormalizer:
         return NeutralPackState(
             pack_id=pack_id,
             parent_system_id=system_id,
+            serial_number=accumulator.serial_number,
             pack_type=value("pack_type"),
             firmware=value("firmware"),
             soc_pct=value("soc_pct"),

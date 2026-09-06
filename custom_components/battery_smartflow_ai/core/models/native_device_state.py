@@ -37,6 +37,7 @@ class NeutralPackState:
 
     pack_id: str
     parent_system_id: str
+    serial_number: str | None
     pack_type: MeasuredValue[str]
     firmware: MeasuredValue[str]
     soc_pct: MeasuredValue[float]

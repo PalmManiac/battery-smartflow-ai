@@ -23,6 +23,7 @@ from .core.models import (
 class PackOverview:
     public_id: str
     parent_public_id: str
+    serial_number: str | None
     pack_model: str | None
     firmware: MeasuredValue[str]
     measurements: Mapping[str, MeasuredValue]
@@ -39,6 +40,7 @@ class MainSystemOverview:
     public_id: str
     display_name: str
     model: str | None
+    serial_number: str | None
     firmware: MeasuredValue[str]
     measurements: Mapping[str, MeasuredValue]
     product_id: str | None
@@ -86,6 +88,7 @@ def build_native_device_overview(
                 PackOverview(
                     public_id=_public_id("PACK", pack_id),
                     parent_public_id=public_id,
+                    serial_number=pack_identity.serial_number,
                     pack_model=_pack_model(pack_identity.pack_type, device.model),
                     firmware=observed.firmware,
                     measurements=MappingProxyType(
@@ -112,6 +115,14 @@ def build_native_device_overview(
                 public_id=public_id,
                 display_name=device.display_name,
                 model=device.model,
+                serial_number=next(
+                    (
+                        native_identity.serial_number
+                        for native_identity in device.native_identities
+                        if native_identity.serial_number
+                    ),
+                    None,
+                ),
                 firmware=_measurement(state, "firmware"),
                 measurements=MappingProxyType(
                     {
