@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import sys
-from types import ModuleType
-from types import SimpleNamespace
 import unittest
+from datetime import datetime, timedelta, timezone
+from types import ModuleType, SimpleNamespace
 
 from support import bootstrap
 
@@ -30,24 +29,27 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     ZendureTransport,
 )
 from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
-    NativeZendureRuntime,
     STATUS_OBSERVING,
+    NativeZendureRuntime,
 )
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import ConnectionState  # noqa: E402
+from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
+    ConnectionState,  # noqa: E402
+)
 from custom_components.battery_smartflow_ai.zendure_cloud_mqtt_commands import (  # noqa: E402
     CloudCommandResult,
     CloudCommandStatus,
 )
-from custom_components.battery_smartflow_ai.zendure_device_matrix import VerificationLevel  # noqa: E402
-from custom_components.battery_smartflow_ai.zendure_zensdk_commands import (  # noqa: E402
-    ZenSdkCommandResult,
-    ZenSdkCommandStatus,
+from custom_components.battery_smartflow_ai.zendure_device_matrix import (
+    VerificationLevel,  # noqa: E402
 )
 from custom_components.battery_smartflow_ai.zendure_local_mqtt_commands import (  # noqa: E402
     LocalMqttCommandResult,
     LocalMqttCommandStatus,
 )
-
+from custom_components.battery_smartflow_ai.zendure_zensdk_commands import (  # noqa: E402
+    ZenSdkCommandResult,
+    ZenSdkCommandStatus,
+)
 
 DEVICE = "cloud_mqtt:main-1"
 NOW = datetime.now(timezone.utc)
@@ -203,6 +205,53 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.reason, "native_local_mqtt_not_ready")
         self.assertEqual(target._local_transport.commands, [])
         self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(target._transport.commands, [])
+
+    async def test_conflicting_model_families_never_select_a_writer(self):
+        target = runtime()
+        current = target._inventory.devices[DEVICE]
+        legacy = NativeDeviceIdentity(
+            ZendureTransport.CLOUD_MQTT,
+            device_id="legacy-alias",
+            product_model="Hyper 2000",
+        )
+        target._inventory = DeviceInventory(devices=(MainDevice(
+            current.system_id,
+            current.display_name,
+            model=current.model,
+            profile_key=current.profile_key,
+            selected_transport=current.selected_transport,
+            available_transports=current.available_transports,
+            native_identities=(*current.native_identities, legacy),
+        ),))
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=450, should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+        self.assertEqual(result.reason, "native_local_transport_ambiguous")
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(target._transport.commands, [])
+
+    async def test_disconnect_revokes_authority_without_cloud_or_zha_fallback(self):
+        target = runtime()
+        command = DeviceCommand(
+            "output", output_limit_w=450, should_write_output=True,
+        )
+        applied = await target.async_execute_device_command(command)
+        initial_generation = target._transport_router.snapshot.generation
+        target._zensdk_last_success[DEVICE] = NOW - timedelta(minutes=5)
+
+        blocked = await target.async_execute_device_command(command)
+
+        self.assertEqual(applied.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(blocked.reason, "native_zensdk_not_ready")
+        self.assertGreater(
+            target._transport_router.snapshot.generation,
+            initial_generation,
+        )
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
         self.assertEqual(target._transport.commands, [])
     async def test_fresh_running_setpoint_is_consumed_once_as_handover_baseline(self):
         target = runtime(current_state=state(output_w=950, discharge_w=947))

@@ -57,6 +57,19 @@ The adapter publishes to the exact discovered product/device
 property readback. A newer target supersedes an older pending verification;
 commands are not retried or replayed after reconnect.
 
+## Single-writer authority
+
+Transport selection inspects every known identity of the logical main device.
+All identities must resolve to the same verified local model family; unknown
+or conflicting results remain read-only. The selected writer receives a
+generation-bound authority only after current telemetry confirms that the
+transport is ready.
+
+Startup, disconnect and stale data revoke synchronization. Recovery requires
+a fresh validation and starts a new authority generation, so an old or pending
+command cannot be replayed after reconnect or moved to another transport.
+Cloud MQTT and the Z-HA entity backend are never automatic write fallbacks.
+
 ## Field boundary
 
 Automated tests prove filtering, identity, normalization provenance, payload
