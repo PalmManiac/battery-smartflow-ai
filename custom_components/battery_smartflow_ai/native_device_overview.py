@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 import hashlib
 from types import MappingProxyType
@@ -219,3 +219,26 @@ def _status_text(state: DeviceControlState, hems_status: HemsStatus) -> str:
         ),
         DeviceControlState.OFFLINE: "Observation mode - device offline",
     }[state]
+
+
+def with_control_state(
+    item: MainSystemOverview,
+    control_state: DeviceControlState,
+) -> MainSystemOverview:
+    """Return one overview item with a runtime-derived control state."""
+
+    return replace(
+        item,
+        control_state=control_state,
+        control_enabled=control_state in {
+            DeviceControlState.ENABLED,
+            DeviceControlState.ACTIVE,
+        },
+        actively_controlled=control_state is DeviceControlState.ACTIVE,
+        status_text=_status_text(control_state, item.hems_status),
+        control_block_reason=(
+            f"zendure_hems_{item.hems_status.value}"
+            if control_state is DeviceControlState.HEMS_BLOCKED
+            else None
+        ),
+    )
