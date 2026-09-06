@@ -395,6 +395,7 @@
       "native_hardware_cell_min_v": {"name": "Lowest cell voltage"},
       "native_hardware_cell_max_v": {"name": "Highest cell voltage"},
       "native_hardware_state_code": {"name": "State code"},
+      "native_hardware_pack_type": {"name": "Pack type"},
       "native_hardware_fault_code": {"name": "Fault code"},
       "native_hardware_protection_active": {"name": "Protection active"},
       "native_hardware_firmware": {"name": "Firmware"},

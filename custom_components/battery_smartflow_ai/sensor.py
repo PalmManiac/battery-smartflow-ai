@@ -340,6 +340,10 @@ NATIVE_PACK_SENSORS = (
         measurement_key="state_code", entity_category=EntityCategory.DIAGNOSTIC,
     ),
     NativeHardwareSensorDescription(
+        key="pack_type", translation_key="native_hardware_pack_type",
+        measurement_key="pack_type", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
         key="fault_code", translation_key="native_hardware_fault_code",
         measurement_key="fault_code", entity_category=EntityCategory.DIAGNOSTIC,
     ),
