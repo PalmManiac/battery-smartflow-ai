@@ -3,66 +3,69 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
 from .const import (
-    DOMAIN,
-    CONF_SOC_ENTITY,
-    CONF_PV_ENTITY,
-    CONF_NATIVE_PV_ENTITY,
-    CONF_PV_FORECAST_TODAY_ENTITY,
-    CONF_PV_FORECAST_TOMORROW_ENTITY,
-    CONF_BATTERY_AC_POWER_ENTITY,
+    CONF_AC_MODE_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
-    CONF_OFFGRID_POWER_ENTITY,
-    CONF_OFFGRID_MODE_ENTITY,
-    CONF_PRICE_EXPORT_ENTITY,
-    CONF_PRICE_NOW_ENTITY,
+    CONF_BATTERY_AC_POWER_ENTITY,
+    CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
+    CONF_DEVICE_PROFILE,
     CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
-    CONF_AC_MODE_ENTITY,
-    CONF_INPUT_LIMIT_ENTITY,
-    CONF_OUTPUT_LIMIT_ENTITY,
+    # V3.5.0
+    CONF_EXPERT_MODE_ENABLED,
+    CONF_FEED_IN_TARIFF,
+    CONF_GRID_EXPORT_ENTITY,
+    CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_MODE,
     CONF_GRID_POWER_ENTITY,
-    CONF_GRID_IMPORT_ENTITY,
-    CONF_GRID_EXPORT_ENTITY,
+    CONF_INPUT_LIMIT_ENTITY,
+    CONF_INSTALLED_PV_WP,
+    CONF_NATIVE_PV_ENTITY,
+    CONF_NATIVE_ZENDURE_APP_TOKEN,
+    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
+    CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
+    CONF_OFFGRID_MODE_ENTITY,
+    CONF_OFFGRID_POWER_ENTITY,
+    CONF_OUTPUT_LIMIT_ENTITY,
+    CONF_PACK_CAPACITY_KWH,
+    CONF_PRICE_EXPORT_ENTITY,
+    CONF_PRICE_NOW_ENTITY,
+    CONF_PV_ENTITY,
+    CONF_PV_FORECAST_TODAY_ENTITY,
+    CONF_PV_FORECAST_TOMORROW_ENTITY,
+    CONF_SOC_ENTITY,
+    CONF_SOC_LIMIT_ENTITY,
+    DEFAULT_BATTERY_PACKS,
+    DEFAULT_CELL_VOLTAGE_CUTOFF,
+    DEFAULT_CELL_VOLTAGE_PROTECTION_ENABLED,
+    DEFAULT_CELL_VOLTAGE_RESUME,
+    DEFAULT_CELL_VOLTAGE_WARNING,
+    DEFAULT_DEVICE_PROFILE,
+    DEFAULT_EXPERT_MODE_ENABLED,
+    DEFAULT_FEED_IN_TARIFF,
+    DEFAULT_INSTALLED_PV_WP,
+    DEFAULT_LEARNED_PLANNING_ENABLED,
+    DEFAULT_PACK_CAPACITY_KWH,
+    DOMAIN,
     GRID_MODE_NONE,
     GRID_MODE_SINGLE,
     GRID_MODE_SPLIT,
-    CONF_DEVICE_PROFILE,
-    DEFAULT_DEVICE_PROFILE,
-    CONF_SOC_LIMIT_ENTITY,
-    CONF_PACK_CAPACITY_KWH,
-    DEFAULT_PACK_CAPACITY_KWH,
-    CONF_INSTALLED_PV_WP,
-    DEFAULT_INSTALLED_PV_WP,
-    CONF_FEED_IN_TARIFF,
-    DEFAULT_FEED_IN_TARIFF,
-    # V3.5.0
-    CONF_EXPERT_MODE_ENABLED,
-    CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
     LOWEST_CELL_VOLTAGE_CONFIG_KEYS,
-    DEFAULT_EXPERT_MODE_ENABLED,
-    DEFAULT_CELL_VOLTAGE_PROTECTION_ENABLED,
     SETTING_BATTERY_PACKS,
-    DEFAULT_BATTERY_PACKS,
-    SETTING_CELL_VOLTAGE_WARNING,
     SETTING_CELL_VOLTAGE_CUTOFF,
     SETTING_CELL_VOLTAGE_RESUME,
+    SETTING_CELL_VOLTAGE_WARNING,
     SETTING_LEARNED_PLANNING_ENABLED,
-    DEFAULT_CELL_VOLTAGE_WARNING,
-    DEFAULT_CELL_VOLTAGE_CUTOFF,
-    DEFAULT_CELL_VOLTAGE_RESUME,
-    DEFAULT_LEARNED_PLANNING_ENABLED,
-    CONF_NATIVE_ZENDURE_APP_TOKEN,
-    CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
-    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
-    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
 )
-
+from .core.models import ZendureTransport
 from .device_profiles import DEVICE_PROFILE_MODELS
 from .native_config_ui import (
     STORED_APP_TOKEN_MASK,
@@ -72,6 +75,7 @@ from .native_config_ui import (
 )
 from .price_currency import price_input_profile, resolve_price_currency
 from .zendure_cloud import ZendureCloudClient, ZendureCloudError
+from .zendure_device_matrix import preferred_local_transport
 
 EMPTY_ENTITY_VALUES = {
     "",
@@ -756,6 +760,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 options.pop(CONF_NATIVE_ZENDURE_SELECTED_DEVICE, None)
                 options.pop(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, None)
                 options.pop(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT, None)
+                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, None)
+                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT, None)
+                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME, None)
+                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD, None)
                 return self.async_create_entry(title="", data=options)
             token = resolve_app_token_input(
                 user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
@@ -835,6 +843,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         bool(self.config_entry.options.get(
                             CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
                         )),
+                        self.config_entry.options,
                     ),
                     errors={"base": "device_not_found"},
                     description_placeholders={
@@ -848,6 +857,47 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 user_input.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
             )
             options.pop(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT, None)
+            selected_device = next(
+                item for item in devices
+                if item.candidate.candidate_id == selected
+            )
+            if (
+                preferred_local_transport(selected_device.candidate.identity)
+                is ZendureTransport.LOCAL_MQTT
+            ):
+                server = str(
+                    user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, "")
+                ).strip()
+                if not server:
+                    return self.async_show_form(
+                        step_id="native_zendure_device",
+                        data_schema=self._native_device_schema(
+                            devices,
+                            bool(user_input.get(
+                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                            )),
+                            self.config_entry.options,
+                        ),
+                        errors={"base": "local_mqtt_required"},
+                        description_placeholders={
+                            "device_summary": self._native_device_summary(devices)
+                        },
+                    )
+                options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER] = server
+                options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT] = int(
+                    user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT, 1883)
+                )
+                options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME] = str(
+                    user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME, "")
+                ).strip()
+                options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD] = (
+                    resolve_app_token_input(
+                        user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD),
+                        self.config_entry.options.get(
+                            CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD
+                        ),
+                    )
+                )
             return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
@@ -857,6 +907,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 bool(self.config_entry.options.get(
                     CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
                 )),
+                self.config_entry.options,
             ),
             description_placeholders={
                 "device_summary": self._native_device_summary(devices)
@@ -867,9 +918,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
     def _native_device_schema(
         devices,
         native_control_enabled: bool = False,
+        stored_options: dict[str, Any] | None = None,
     ) -> vol.Schema:
-        return vol.Schema(
-            {
+        options = stored_options or {}
+        schema = {
                 vol.Required(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
                     selector.SelectSelector(
                         selector.SelectSelectorConfig(
@@ -892,7 +944,38 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     default=native_control_enabled,
                 ): selector.BooleanSelector(),
             }
-        )
+        if any(
+            preferred_local_transport(item.candidate.identity)
+            is ZendureTransport.LOCAL_MQTT
+            for item in devices
+        ):
+            schema.update({
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
+                    default=options.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, ""),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
+                    default=options.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT, 1883),
+                ): selector.NumberSelector(selector.NumberSelectorConfig(
+                    min=1, max=65535, mode=selector.NumberSelectorMode.BOX,
+                )),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
+                    default=options.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME, ""),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
+                    default=(
+                        STORED_APP_TOKEN_MASK
+                        if options.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD)
+                        else ""
+                    ),
+                ): selector.TextSelector(selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.PASSWORD
+                )),
+            })
+        return vol.Schema(schema)
 
     @staticmethod
     def _native_device_summary(devices) -> str:

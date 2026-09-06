@@ -43,6 +43,10 @@ from custom_components.battery_smartflow_ai.zendure_zensdk_commands import (  # 
     ZenSdkCommandResult,
     ZenSdkCommandStatus,
 )
+from custom_components.battery_smartflow_ai.zendure_local_mqtt_commands import (  # noqa: E402
+    LocalMqttCommandResult,
+    LocalMqttCommandStatus,
+)
 
 
 DEVICE = "cloud_mqtt:main-1"
@@ -101,6 +105,26 @@ class FakeZenSdkAdapter:
         )
 
 
+class FakeLocalTransport:
+    state = ConnectionState.CONNECTED
+    command_diagnostics = {"commands": []}
+
+    def __init__(self):
+        self.commands = []
+        self.device_states = {
+            DEVICE: SimpleNamespace(last_message_at=NOW, online=True)
+        }
+
+    async def async_execute_authorized(self, authorized):
+        self.commands.append(authorized)
+        return LocalMqttCommandResult(
+            LocalMqttCommandStatus.SENT,
+            "awaiting_readback",
+            ("local-id",),
+            1,
+        )
+
+
 def runtime(*, enabled=True, current_state=None):
     result = NativeZendureRuntime(
         SimpleNamespace(), app_token="configured", selected_device=DEVICE,
@@ -130,7 +154,56 @@ def runtime(*, enabled=True, current_state=None):
     return result
 
 
+def legacy_runtime(*, current_state=None):
+    result = runtime(current_state=current_state)
+    identity = NativeDeviceIdentity(
+        ZendureTransport.CLOUD_MQTT,
+        device_id="main-1",
+        product_id="product-a",
+        product_model="Hyper 2000",
+    )
+    result._inventory = DeviceInventory(devices=(MainDevice(
+        DEVICE, "Legacy", model="Hyper 2000", profile_key="Hyper 2000",
+        selected_transport=ZendureTransport.CLOUD_MQTT,
+        available_transports=frozenset({ZendureTransport.CLOUD_MQTT}),
+        native_identities=(identity,),
+    ),))
+    result._local_transport = FakeLocalTransport()
+    return result
+
+
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_legacy_device_routes_exactly_once_to_local_mqtt(self):
+        target = legacy_runtime()
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=450, should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._local_transport.commands), 1)
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(target._transport.commands, [])
+        self.assertEqual(
+            target.sensor_data()["native_zendure_control"],
+            "native_local_mqtt_active",
+        )
+
+    async def test_stale_local_mqtt_never_falls_back(self):
+        target = legacy_runtime()
+        target._local_transport.device_states[DEVICE].last_message_at = (
+            NOW - timedelta(minutes=5)
+        )
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=450, should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+        self.assertEqual(result.reason, "native_local_mqtt_not_ready")
+        self.assertEqual(target._local_transport.commands, [])
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(target._transport.commands, [])
     async def test_fresh_running_setpoint_is_consumed_once_as_handover_baseline(self):
         target = runtime(current_state=state(output_w=950, discharge_w=947))
 

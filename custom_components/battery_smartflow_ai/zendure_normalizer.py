@@ -323,7 +323,11 @@ class ZendureCloudNormalizer:
         self._observed_transport[system_id] = (
             ZendureTransport.ZENSDK
             if message.transport == "zensdk"
-            else ZendureTransport.CLOUD_MQTT
+            else (
+                ZendureTransport.LOCAL_MQTT
+                if message.transport == "local_mqtt"
+                else ZendureTransport.CLOUD_MQTT
+            )
         )
         payload = message.parsed_payload
         if isinstance(payload, Mapping):

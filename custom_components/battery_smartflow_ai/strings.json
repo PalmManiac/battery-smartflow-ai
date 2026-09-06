@@ -22,7 +22,8 @@
       "no_mqtt_credentials": "Zendure did not return Cloud MQTT access data.",
       "duplicate_device_id": "Zendure returned duplicate device identities.",
       "incomplete_device": "Zendure returned an incomplete device record.",
-      "device_not_found": "The selected device is no longer available."
+      "device_not_found": "The selected device is no longer available.",
+      "local_mqtt_required": "This legacy device requires the Local MQTT broker settings."
     },
     "step": {
       "reconfigure": {
@@ -196,8 +197,8 @@
       "native_zendure_device": {
         "title": "Select the Zendure system",
         "description": "Zendure reported these devices:\n\n{device_summary}\n\nSelect exactly one system. Battery SmartFlow AI automatically uses the supported local transport for its model. Native control is activated only by the separate switch below. When enabled, BSFAI stops writing through the configured Z-HA entities.",
-        "data": {"native_zendure_selected_device": "Zendure system", "native_zendure_control_enabled": "Enable native Zendure control"},
-        "data_description": {"native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently. BSFAI selects ZenSDK or Local MQTT from the verified model family.", "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the model's local transport. Disable this switch to retain the established Z-HA control path."}
+        "data": {"native_zendure_selected_device": "Zendure system", "native_zendure_control_enabled": "Enable native Zendure control", "native_zendure_local_mqtt_server": "Local MQTT server", "native_zendure_local_mqtt_port": "Local MQTT port", "native_zendure_local_mqtt_username": "Local MQTT username", "native_zendure_local_mqtt_password": "Local MQTT password"},
+        "data_description": {"native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently. BSFAI selects ZenSDK or Local MQTT from the verified model family.", "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the model's local transport. Disable this switch to retain the established Z-HA control path.", "native_zendure_local_mqtt_server": "Shown only when the account contains a verified legacy family. The device must already be provisioned to publish to this broker.", "native_zendure_local_mqtt_port": "Usually 1883 for a local unencrypted broker.", "native_zendure_local_mqtt_username": "Broker account used by BSFAI; it is kept private.", "native_zendure_local_mqtt_password": "Keep the dot mask unchanged to reuse the stored password. It is never exposed by sensors or diagnostics."}
       },
       "general": {
         "title": "Battery SmartFlow AI settings – General",

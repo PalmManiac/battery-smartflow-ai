@@ -38,7 +38,7 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "5.0.0.dev23"
+INTEGRATION_VERSION = "5.0.0.dev24"
 
 # V5 native Zendure discovery is observation-only in the first development
 # build. The App Token is account discovery material and must never be copied
@@ -46,6 +46,10 @@ INTEGRATION_VERSION = "5.0.0.dev23"
 CONF_NATIVE_ZENDURE_APP_TOKEN = "native_zendure_app_token"
 CONF_NATIVE_ZENDURE_SELECTED_DEVICE = "native_zendure_selected_device"
 CONF_NATIVE_ZENDURE_CONTROL_ENABLED = "native_zendure_control_enabled"
+CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER = "native_zendure_local_mqtt_server"
+CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT = "native_zendure_local_mqtt_port"
+CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME = "native_zendure_local_mqtt_username"
+CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD = "native_zendure_local_mqtt_password"
 # Removed V5 development option. Retained only to purge an already stored
 # pre-release value when the native configuration is saved again.
 CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT = "native_zendure_control_transport"
