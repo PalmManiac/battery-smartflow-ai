@@ -23,7 +23,8 @@ def measured(value):
 
 def observed_pack(pack_id, parent):
     values = dict(
-        pack_id=pack_id, parent_system_id=parent, firmware=measured("1.2.3"),
+        pack_id=pack_id, parent_system_id=parent,
+        serial_number=pack_id, firmware=measured("1.2.3"),
         soc_pct=measured(55.0), charge_power_w=measured(100.0),
         discharge_power_w=measured(0.0), voltage_v=measured(49.5),
         current_a=measured(2.0), cell_min_v=measured(3.29),
@@ -105,7 +106,7 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertEqual(pack.pack_model, "AB3000X")
         self.assertEqual(pack.measurements["pack_type"].value, 5)
 
-    def test_sensitive_full_identifiers_never_enter_projection(self):
+    def test_only_serial_number_is_exposed_for_local_device_information(self):
         identity = NativeDeviceIdentity(
             ZendureTransport.CLOUD_MQTT,
             device_id="full-device-secret",
@@ -121,7 +122,7 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         )
         text = repr(build_native_device_overview(DeviceInventory(devices=(main,)), {}))
         self.assertNotIn("full-device-secret", text)
-        self.assertNotIn("full-serial-secret", text)
+        self.assertIn("full-serial-secret", text)
         self.assertNotIn("logical-system-secret", text)
         self.assertIn("BC8B7F", text)
 

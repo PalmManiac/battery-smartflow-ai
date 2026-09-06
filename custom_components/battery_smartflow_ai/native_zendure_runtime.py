@@ -1202,6 +1202,7 @@ class NativeZendureRuntime:
             BatteryPackIdentity(
                 pack_id=pack.pack_id,
                 parent_system_id=state.system_id,
+                serial_number=pack.serial_number,
                 pack_type=_value(pack.pack_type),
                 firmware=_value(pack.firmware),
             )

@@ -1589,6 +1589,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 name=item.display_name if item else "Zendure system",
                 manufacturer="Zendure",
                 model=(item.model or "Unknown Zendure system") if item else None,
+                serial_number=item.serial_number if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
                 via_device=(DOMAIN, entry.entry_id),
             )
@@ -1615,6 +1616,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 name=f"{parent_name} {_battery_pack_label(coordinator.hass.config.language)} {pack_number}",
                 manufacturer="Zendure",
                 model=(item.pack_model or "Unknown battery pack") if item else None,
+                serial_number=item.serial_number if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
                 via_device=(DOMAIN, f"native_zendure_{parent_public_id}"),
             )

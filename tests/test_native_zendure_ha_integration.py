@@ -95,11 +95,11 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertNotIn("native_hardware_soc_pct", config)
         self.assertNotIn("native_hardware_charge_power_w", config)
 
-    def test_native_hardware_entity_ids_use_only_privacy_safe_projection_ids(self) -> None:
+    def test_serial_is_device_metadata_but_not_part_of_entity_identity(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
         entity = sensor[sensor.index("class NativeZendureHardwareSensor"):]
         self.assertIn("public_id", entity)
-        self.assertNotIn("serial_number", entity)
+        self.assertIn("serial_number=item.serial_number", entity)
         self.assertNotIn("device_id", entity)
         self.assertNotIn("pack_id", entity)
 
