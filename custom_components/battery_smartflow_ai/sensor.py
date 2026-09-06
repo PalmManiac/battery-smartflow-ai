@@ -320,6 +320,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="cell_max_v", translation_key="native_hardware_cell_max_v",
@@ -327,6 +328,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="temperature_c", translation_key="native_hardware_temperature_c",
