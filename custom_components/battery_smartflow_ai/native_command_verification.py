@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 from hashlib import sha256
-import math
 from typing import Any
 from uuid import uuid4
 
@@ -295,6 +295,11 @@ class NativeCommandVerificationManager:
                 _public_device_id(key): value for key, value in self._failures.items()
             },
         }
+
+    def measurements(self) -> tuple[CommandVerification, ...]:
+        """Return the bounded in-memory history for aggregate diagnostics."""
+
+        return tuple(self._commands.values())
 
     def _mutable(self, command_id: str) -> CommandVerification:
         command = self._commands[command_id]

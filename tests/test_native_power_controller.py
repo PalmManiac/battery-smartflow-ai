@@ -28,6 +28,10 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     ReportedDeviceSetpoints,
     ZendureTransport,
 )
+from custom_components.battery_smartflow_ai.native_command_verification import (  # noqa: E402
+    CommandVerificationStatus,
+    ReadbackPolicy,
+)
 from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
     STATUS_OBSERVING,
     NativeZendureRuntime,
@@ -175,6 +179,56 @@ def legacy_runtime(*, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_native_effectiveness_confirms_physical_effect_separately(self):
+        target = runtime()
+        verification = target._command_verification.prepare(
+            device_id=DEVICE,
+            command_type="outputLimit",
+            target_key="outputLimit",
+            transport=ZendureTransport.ZENSDK,
+            requested_value=450,
+            final_value=450,
+            readback=ReadbackPolicy("outputLimit", 450),
+            prepared_at=NOW - timedelta(seconds=3),
+        )
+        target._command_verification.gate(
+            verification.command_id,
+            accepted=True,
+            at=NOW - timedelta(seconds=2.9),
+        )
+        target._command_verification.sent(
+            verification.command_id,
+            at=NOW - timedelta(seconds=2.8),
+        )
+        target._command_verification.transport_result(
+            verification.command_id,
+            ok=True,
+            at=NOW - timedelta(seconds=2.7),
+        )
+        target._command_verification.observe_readback(
+            verification.command_id,
+            device_id=DEVICE,
+            property_name="outputLimit",
+            value=450,
+            observed_at=NOW - timedelta(seconds=2),
+        )
+
+        confirmed = target.observe_command_effectiveness(
+            direction="output",
+            status="effective",
+            observed_at=NOW,
+        )
+
+        self.assertTrue(confirmed)
+        self.assertEqual(
+            verification.status,
+            CommandVerificationStatus.EFFECT_CONFIRMED,
+        )
+        self.assertEqual(
+            verification.diagnostics()["send_to_effect_seconds"],
+            2.8,
+        )
+
     async def test_legacy_device_routes_exactly_once_to_local_mqtt(self):
         target = legacy_runtime()
 

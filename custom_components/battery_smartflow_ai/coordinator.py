@@ -5830,6 +5830,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._store_command_effectiveness_result(
                 command_effectiveness_result
             )
+            native_runtime = getattr(self, "native_zendure", None)
+            if (
+                native_runtime is not None
+                and native_runtime.control_enabled
+                and hasattr(native_runtime, "observe_command_effectiveness")
+            ):
+                native_runtime.observe_command_effectiveness(
+                    direction=str(command_effectiveness_result.state.direction),
+                    status=str(command_effectiveness_result.status),
+                    observed_at=dt_util.as_utc(now),
+                )
 
             effectiveness_retry_direction = (
                 command_effectiveness_result.retry_direction

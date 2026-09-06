@@ -24,13 +24,17 @@ from .core.models import (
     ValueValidity,
     ZendureTransport,
 )
-from .native_command_verification import NativeCommandVerificationManager
+from .native_command_verification import (
+    EffectStatus,
+    NativeCommandVerificationManager,
+)
 from .native_device_command_gate import (
     NativeCommandContext,
     NativeCommandRequest,
     NativeDeviceCommandGate,
 )
 from .native_device_overview import build_native_device_overview
+from .native_transport_metrics import NativeTransportMetrics
 from .native_transport_router import (
     NativeTransportRouter,
     automatic_control_transport,
@@ -148,6 +152,7 @@ class NativeZendureRuntime:
         self._write_lock = asyncio.Lock()
         self._write_sequence = 0
         self._command_verification = NativeCommandVerificationManager()
+        self._transport_metrics = NativeTransportMetrics()
         self._zensdk_command_adapter: ZendureZenSdkCommandAdapter | None = None
         self._last_command_result: dict[str, Any] | None = None
         self._control_baseline_consumed = False
@@ -203,6 +208,45 @@ class NativeZendureRuntime:
             self._control_baseline_consumed = True
             return ("idle", 0, 0)
         return None
+
+    def observe_command_effectiveness(
+        self,
+        *,
+        direction: str,
+        status: str,
+        observed_at: datetime,
+    ) -> bool:
+        """Correlate neutral physical-effect feedback with a native command."""
+
+        if self._selected_device is None:
+            return False
+        target_key = {
+            "input": "inputLimit",
+            "output": "outputLimit",
+        }.get(str(direction))
+        if target_key is None:
+            return False
+        command = self._command_verification.active_for(
+            self._selected_device,
+            target_key,
+        )
+        if command is None or command.readback_at is None:
+            return False
+        if status == "effective":
+            effect_status = EffectStatus.CONFIRMED
+            reason = "measured_power_active"
+        elif status == "exhausted":
+            effect_status = EffectStatus.TIMEOUT
+            reason = "maximum_retries_reached"
+        else:
+            return False
+        self._command_verification.effect(
+            command.command_id,
+            status=effect_status,
+            at=observed_at,
+            reason=reason,
+        )
+        return True
 
     def start(self) -> None:
         if not self.configured or self._task is not None:
@@ -350,6 +394,9 @@ class NativeZendureRuntime:
                     if self._first_write_result is not None else None
                 ),
                 "command_verification": self._command_verification.diagnostics(),
+                "transport_metrics": self._transport_metrics.export(
+                    self._command_verification.measurements()
+                ),
                 "cloud_command_verification": (
                     self._transport.command_diagnostics
                     if self._transport is not None else {"commands": []}
@@ -852,6 +899,28 @@ class NativeZendureRuntime:
             return
         now = datetime.now(timezone.utc)
         for system_id in tuple(self._inventory.devices):
+            if self._transport is not None:
+                self._transport_metrics.observe_connection(
+                    device_id=system_id,
+                    transport=ZendureTransport.CLOUD_MQTT,
+                    connected=self._transport.state is ConnectionState.CONNECTED,
+                )
+            if self._local_transport is not None:
+                if system_id in self._local_transport.device_states:
+                    self._transport_metrics.observe_connection(
+                        device_id=system_id,
+                        transport=ZendureTransport.LOCAL_MQTT,
+                        connected=(
+                            self._local_transport.state
+                            is ConnectionState.CONNECTED
+                        ),
+                    )
+            if system_id in self._zensdk_last_result:
+                self._transport_metrics.observe_connection(
+                    device_id=system_id,
+                    transport=ZendureTransport.ZENSDK,
+                    connected=bool(self._zensdk_health(system_id, now)["available"]),
+                )
             self._normalizer.set_hems_monitoring(
                 system_id,
                 (
@@ -1002,6 +1071,17 @@ class NativeZendureRuntime:
         if self._normalizer is None:
             return
         for message in messages:
+            device_id = message.device_candidate_id
+            try:
+                message_transport = ZendureTransport(str(message.transport))
+            except ValueError:
+                message_transport = None
+            if device_id is not None and message_transport is not None:
+                self._transport_metrics.observe_telemetry(
+                    device_id=device_id,
+                    transport=message_transport,
+                    observed_at=message.received_at,
+                )
             if (
                 message.transport == "zensdk"
                 and self._zensdk_command_adapter is not None
@@ -1074,6 +1154,11 @@ class NativeZendureRuntime:
         device = self._inventory.devices[state.system_id]
         identity = device.native_identities[0] if device.native_identities else None
         profile = resolve_zendure_device(identity) if identity is not None else None
+        self._transport_metrics.register_device(
+            state.system_id,
+            model=state.model or device.model or device.profile_key,
+            firmware=_value(state.firmware),
+        )
         capability = (
             profile.hems_status if profile is not None else VerificationLevel.UNKNOWN
         )
