@@ -86,7 +86,7 @@ def build_native_device_overview(
                 PackOverview(
                     public_id=_public_id("PACK", pack_id),
                     parent_public_id=public_id,
-                    pack_model=pack_identity.pack_type,
+                    pack_model=_pack_model(pack_identity.pack_type),
                     firmware=observed.firmware,
                     measurements=MappingProxyType(
                         {
@@ -167,6 +167,15 @@ def _measurement(state: object | None, key: str) -> MeasuredValue:
     if state is None:
         return MeasuredValue.absent(ValueValidity.MISSING)
     return getattr(state, key, MeasuredValue.absent(ValueValidity.MISSING))
+
+
+def _pack_model(value: str | None) -> str | None:
+    """Do not present Zendure's numeric pack-type code as a model name."""
+
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    return normalized if normalized and not normalized.isdecimal() else None
 
 
 def _public_id(kind: str, value: str) -> str:

@@ -103,6 +103,13 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertNotIn("device_id", entity)
         self.assertNotIn("pack_id", entity)
 
+    def test_pack_device_name_uses_parent_name_and_stable_position(self) -> None:
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        self.assertIn("parent.display_name", sensor)
+        self.assertIn("enumerate(parent.packs, start=1)", sensor)
+        self.assertIn('"de": "Batterie-Pack"', sensor)
+        self.assertNotIn("public_id[-6:]", sensor)
+
 
 if __name__ == "__main__":
     unittest.main()

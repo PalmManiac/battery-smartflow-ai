@@ -70,6 +70,21 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertFalse(hasattr(item.packs[0], "cell_count"))
         self.assertEqual(item.packs[0].parent_public_id, item.public_id)
 
+    def test_numeric_pack_type_is_not_exposed_as_a_model_name(self):
+        main = MainDevice("main-secret", "SolarFlow 2400 AC")
+        inventory = DeviceInventory(
+            devices=(main,),
+            packs=(BatteryPackIdentity("pack-secret", main.system_id, pack_type="5"),),
+        )
+        state = SimpleNamespace(
+            packs=(observed_pack("pack-secret", main.system_id),),
+            last_message_at=None,
+        )
+        pack = build_native_device_overview(
+            inventory, {main.system_id: state}
+        )[0].packs[0]
+        self.assertIsNone(pack.pack_model)
+
     def test_sensitive_full_identifiers_never_enter_projection(self):
         identity = NativeDeviceIdentity(
             ZendureTransport.CLOUD_MQTT,
