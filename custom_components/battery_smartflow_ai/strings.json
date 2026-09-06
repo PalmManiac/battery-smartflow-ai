@@ -400,7 +400,7 @@
       "native_hardware_firmware": {"name": "Firmware"},
       "native_hardware_product_id": {"name": "Product ID"},
       "native_hardware_profile": {"name": "Device profile"},
-      "native_hardware_transport": {"name": "Communication path", "state": {"home_assistant": "Home Assistant / Z-HA", "cloud_mqtt": "Cloud MQTT", "local_mqtt": "Local MQTT", "zensdk": "ZenSDK"}},
+      "native_hardware_transport": {"name": "Communication path", "state": {"home_assistant": "Home Assistant / Z-HA", "cloud_mqtt": "Cloud", "local_mqtt": "Local", "zensdk": "ZenSDK"}},
       "native_hardware_control_state": {"name": "Control status", "state": {"observation": "Observation", "eligible": "Eligible", "enabled": "Enabled", "active": "Active", "hems_blocked": "Blocked by HEMS", "unsupported": "Unsupported", "offline": "Offline"}},
       "native_hardware_hems": {"name": "Zendure HEMS", "state": {"active": "Active", "inactive": "Inactive", "unknown": "Unknown", "stale": "Outdated", "invalid": "Invalid", "unsupported": "Unsupported"}},
       "native_hardware_last_message": {"name": "Last data received"},
