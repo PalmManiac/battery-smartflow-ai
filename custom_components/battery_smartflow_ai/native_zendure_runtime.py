@@ -31,11 +31,14 @@ from .native_device_command_gate import (
     NativeDeviceCommandGate,
 )
 from .native_device_overview import build_native_device_overview
+from .native_transport_router import (
+    NativeTransportRouter,
+    automatic_control_transport,
+)
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
 from .zendure_device_matrix import (
     VerificationLevel,
-    preferred_local_transport,
     resolve_zendure_device,
 )
 from .zendure_first_write import (
@@ -148,6 +151,7 @@ class NativeZendureRuntime:
         self._zensdk_command_adapter: ZendureZenSdkCommandAdapter | None = None
         self._last_command_result: dict[str, Any] | None = None
         self._control_baseline_consumed = False
+        self._transport_router = NativeTransportRouter()
 
     @property
     def configured(self) -> bool:
@@ -206,6 +210,10 @@ class NativeZendureRuntime:
         self._task = asyncio.create_task(self._async_run())
 
     async def async_stop(self) -> None:
+        self._transport_router.update_readiness(
+            ready=False,
+            reason="runtime_stopped",
+        )
         task, self._task = self._task, None
         if task is not None:
             task.cancel()
@@ -348,6 +356,7 @@ class NativeZendureRuntime:
                 ),
                 "local_mqtt": self._local_mqtt_diagnostics(),
                 "last_command_result": self._last_command_result,
+                "write_authority": self._transport_router.diagnostics(),
                 "overview": self.overview_attributes(),
             }
         )
@@ -467,15 +476,31 @@ class NativeZendureRuntime:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_state_not_fresh"
                 ))
-            control_transport = preferred_local_transport(
-                source_device.native_identities[0]
-            ) if source_device.native_identities else None
+            selection = automatic_control_transport(source_device)
+            control_transport = selection.transport
+            self._transport_router.select(
+                self._selected_device,
+                control_transport,
+            )
             if control_transport is None:
+                self._transport_router.update_readiness(
+                    ready=False,
+                    reason=selection.reason,
+                )
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
-                    "native_local_transport_unsupported",
+                    f"native_{selection.reason}",
                 ))
-            if not self._control_transport_ready(control_transport):
+            transport_ready = self._control_transport_ready(control_transport)
+            self._transport_router.update_readiness(
+                ready=transport_ready,
+                reason=(
+                    "ready"
+                    if transport_ready
+                    else f"{control_transport.value}_not_ready"
+                ),
+            )
+            if not transport_ready:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
                     f"native_{control_transport.value}_not_ready",
@@ -549,8 +574,19 @@ class NativeZendureRuntime:
                     CommandExecutionStatus.SKIPPED,
                     "native_local_transport_not_implemented",
                 ))
+            authority_generation = self._transport_router.snapshot.generation
+
+            async def execute_authorized(authorized):
+                return await self._transport_router.execute(
+                    device_id=authorized.device_id,
+                    transport=authorized.transport,
+                    generation=authority_generation,
+                    command=authorized,
+                    sender=executor,
+                )
+
             gate, transport = await NativeDeviceCommandGate(self._hems_gate).execute(
-                request, context, executor
+                request, context, execute_authorized
             )
             if not gate.accepted or transport is None:
                 return self._remember_command_result(_command_result(
@@ -664,6 +700,10 @@ class NativeZendureRuntime:
         except asyncio.CancelledError:
             raise
         except Exception as error:
+            self._transport_router.update_readiness(
+                ready=False,
+                reason="runtime_error",
+            )
             self._error = _safe_reason(error)
             self._set_status(STATUS_ERROR)
             _LOGGER.warning(
@@ -830,6 +870,47 @@ class NativeZendureRuntime:
                 now=now,
             )
             self._apply_state(result.state)
+        self._refresh_write_authority()
+
+    def _refresh_write_authority(self) -> None:
+        """Continuously revoke or synchronize the one configured writer."""
+
+        if not self._control_enabled or self._selected_device is None:
+            self._transport_router.select(None, None)
+            self._transport_router.update_readiness(
+                ready=False,
+                reason="native_control_disabled",
+            )
+            return
+        device = self._inventory.devices.get(self._selected_device)
+        state = self._states.get(self._selected_device)
+        if device is None:
+            self._transport_router.select(self._selected_device, None)
+            self._transport_router.update_readiness(
+                ready=False,
+                reason="selected_device_missing",
+            )
+            return
+        selection = automatic_control_transport(device)
+        self._transport_router.select(self._selected_device, selection.transport)
+        ready = bool(
+            selection.transport is not None
+            and state is not None
+            and _fresh_native_state(state)
+            and self._control_transport_ready(selection.transport)
+        )
+        self._transport_router.update_readiness(
+            ready=ready,
+            reason=(
+                "ready"
+                if ready
+                else (
+                    selection.reason
+                    if selection.transport is None
+                    else f"{selection.transport.value}_not_ready"
+                )
+            ),
+        )
 
     def _hems_activity_diagnostics(self, system_id: str) -> dict[str, Any]:
         if self._normalizer is None:
@@ -978,7 +1059,7 @@ class NativeZendureRuntime:
         device = self._inventory.devices.get(self._selected_device)
         if device is None or not device.native_identities:
             return None
-        return preferred_local_transport(device.native_identities[0])
+        return automatic_control_transport(device).transport
 
     def _control_sensor_state(self) -> str:
         transport = self._selected_local_transport()
