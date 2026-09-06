@@ -358,6 +358,32 @@ class NativeZendureRuntime:
             ),
         }
 
+    def hardware_overview(self):
+        """Return the privacy-safe native hierarchy used by HA entities."""
+
+        overview = build_native_device_overview(self._inventory, self._states)
+        selected_transport = self._selected_local_transport()
+        if selected_transport is None or self._selected_device is None:
+            return overview
+        selected_index = next(
+            (
+                index
+                for index, (system_id, _device) in enumerate(
+                    sorted(self._inventory.devices.items())
+                )
+                if system_id == self._selected_device
+            ),
+            None,
+        )
+        if selected_index is None:
+            return overview
+        return tuple(
+            replace(item, selected_transport=selected_transport)
+            if index == selected_index
+            else item
+            for index, item in enumerate(overview)
+        )
+
     def diagnostic_data(self) -> dict[str, Any]:
         return ZendureDiagnosticSanitizer().sanitize(
             {

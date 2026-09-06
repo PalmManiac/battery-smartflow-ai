@@ -11,7 +11,14 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
-from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.const import (
+    PERCENTAGE,
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_registry as er
@@ -174,6 +181,184 @@ CHARGE_SOURCE_ALLOCATION_REASON_ENUMS = [
 class ZendureSensorEntityDescription(SensorEntityDescription):
     runtime_key: str
     economics_device: bool = False
+
+
+@dataclass(frozen=True, kw_only=True)
+class NativeHardwareSensorDescription(SensorEntityDescription):
+    measurement_key: str | None = None
+    source: str = "measurement"
+
+
+NATIVE_MAIN_SENSORS = (
+    NativeHardwareSensorDescription(
+        key="online", translation_key="native_hardware_online", source="online",
+        device_class=SensorDeviceClass.ENUM, options=["online", "offline"],
+    ),
+    NativeHardwareSensorDescription(
+        key="soc_pct", translation_key="native_hardware_soc_pct",
+        measurement_key="soc_pct", native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="charge_power_w", translation_key="native_hardware_charge_power_w",
+        measurement_key="charge_power_w", native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="discharge_power_w", translation_key="native_hardware_discharge_power_w",
+        measurement_key="discharge_power_w", native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="ac_input_power_w", translation_key="native_hardware_ac_input_power_w",
+        measurement_key="ac_input_power_w", native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="ac_output_power_w", translation_key="native_hardware_ac_output_power_w",
+        measurement_key="ac_output_power_w", native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="pv_power_w", translation_key="native_hardware_pv_power_w",
+        measurement_key="pv_power_w", native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="mode", translation_key="native_hardware_mode",
+        measurement_key="mode", device_class=SensorDeviceClass.ENUM,
+        options=["idle", "charge", "discharge", "unknown"],
+    ),
+    NativeHardwareSensorDescription(
+        key="temperature_c", translation_key="native_hardware_temperature_c",
+        measurement_key="temperature_c",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="battery_voltage_v",
+        translation_key="native_hardware_battery_voltage_v",
+        measurement_key="battery_voltage_v",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="firmware", translation_key="native_hardware_firmware",
+        source="firmware", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="product_id", translation_key="native_hardware_product_id",
+        source="product_id", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="profile", translation_key="native_hardware_profile",
+        source="profile", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="transport", translation_key="native_hardware_transport",
+        source="transport", device_class=SensorDeviceClass.ENUM,
+        options=["home_assistant", "cloud_mqtt", "local_mqtt", "zensdk"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="control_state", translation_key="native_hardware_control_state",
+        source="control_state", device_class=SensorDeviceClass.ENUM,
+        options=["observation", "eligible", "enabled", "active", "hems_blocked",
+                 "unsupported", "offline"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="hems", translation_key="native_hardware_hems", source="hems",
+        device_class=SensorDeviceClass.ENUM,
+        options=["active", "inactive", "unknown", "stale", "invalid", "unsupported"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="last_message", translation_key="native_hardware_last_message",
+        source="last_message", device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+
+NATIVE_PACK_SENSORS = (
+    NativeHardwareSensorDescription(
+        key="soc_pct", translation_key="native_hardware_soc_pct",
+        measurement_key="soc_pct", native_unit_of_measurement=PERCENTAGE,
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="charge_power_w", translation_key="native_hardware_charge_power_w",
+        measurement_key="charge_power_w", native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="discharge_power_w", translation_key="native_hardware_discharge_power_w",
+        measurement_key="discharge_power_w", native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER, state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="voltage_v", translation_key="native_hardware_voltage_v",
+        measurement_key="voltage_v",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="current_a", translation_key="native_hardware_current_a",
+        measurement_key="current_a",
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="cell_min_v", translation_key="native_hardware_cell_min_v",
+        measurement_key="cell_min_v",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="cell_max_v", translation_key="native_hardware_cell_max_v",
+        measurement_key="cell_max_v",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="temperature_c", translation_key="native_hardware_temperature_c",
+        measurement_key="temperature_c",
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="state_code", translation_key="native_hardware_state_code",
+        measurement_key="state_code", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="fault_code", translation_key="native_hardware_fault_code",
+        measurement_key="fault_code", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="protection_active",
+        translation_key="native_hardware_protection_active",
+        measurement_key="protection_active",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="firmware", translation_key="native_hardware_firmware",
+        source="firmware", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="last_message", translation_key="native_hardware_last_message",
+        source="last_message", device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
 
 
 _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
@@ -1323,6 +1508,158 @@ async def async_setup_entry(
     coordinator = hass.data[DOMAIN][entry.entry_id]
     entities = [ZendureSmartFlowSensor(entry, coordinator, d) for d in SENSORS]
     add_entities(entities)
+
+    known_native_entities: set[tuple[str, str, str]] = set()
+
+    def add_discovered_native_entities() -> None:
+        discovered = []
+        for system in coordinator.native_zendure.hardware_overview():
+            for description in NATIVE_MAIN_SENSORS:
+                key = ("main", system.public_id, description.key)
+                if key not in known_native_entities:
+                    known_native_entities.add(key)
+                    discovered.append(NativeZendureHardwareSensor(
+                        entry,
+                        coordinator,
+                        kind="main",
+                        public_id=system.public_id,
+                        parent_public_id=None,
+                        description=description,
+                    ))
+            for pack in system.packs:
+                for description in NATIVE_PACK_SENSORS:
+                    key = ("pack", pack.public_id, description.key)
+                    if key not in known_native_entities:
+                        known_native_entities.add(key)
+                        discovered.append(NativeZendureHardwareSensor(
+                            entry,
+                            coordinator,
+                            kind="pack",
+                            public_id=pack.public_id,
+                            parent_public_id=system.public_id,
+                            description=description,
+                        ))
+        if discovered:
+            add_entities(discovered)
+
+    add_discovered_native_entities()
+    unsubscribe = coordinator.async_add_listener(add_discovered_native_entities)
+    if hasattr(entry, "async_on_unload"):
+        entry.async_on_unload(unsubscribe)
+
+
+class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
+    """One native value attached to its physical Zendure HA device."""
+
+    _attr_has_entity_name = True
+
+    def __init__(
+        self,
+        entry,
+        coordinator,
+        *,
+        kind: str,
+        public_id: str,
+        parent_public_id: str | None,
+        description: NativeHardwareSensorDescription,
+    ) -> None:
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._kind = kind
+        self._public_id = public_id
+        self._parent_public_id = parent_public_id
+        self._attr_unique_id = (
+            f"{DOMAIN}_{entry.entry_id}_native_{kind}_{public_id}_{description.key}"
+        )
+        item = self._item()
+        if kind == "main":
+            firmware = _measured_value(getattr(item, "firmware", None))
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"native_zendure_{public_id}")},
+                name=item.display_name if item else "Zendure system",
+                manufacturer="Zendure",
+                model=(item.model or "Unknown Zendure system") if item else None,
+                sw_version=str(firmware) if firmware is not None else None,
+                via_device=(DOMAIN, entry.entry_id),
+            )
+        else:
+            firmware = _measured_value(getattr(item, "firmware", None))
+            self._attr_device_info = DeviceInfo(
+                identifiers={(DOMAIN, f"native_zendure_pack_{public_id}")},
+                name=(
+                    f"{item.pack_model or 'Unknown battery pack'} {public_id[-6:]}"
+                    if item else "Zendure battery pack"
+                ),
+                manufacturer="Zendure",
+                model=(item.pack_model or "Unknown battery pack") if item else None,
+                sw_version=str(firmware) if firmware is not None else None,
+                via_device=(DOMAIN, f"native_zendure_{parent_public_id}"),
+            )
+
+    def _item(self):
+        for system in self.coordinator.native_zendure.hardware_overview():
+            if self._kind == "main" and system.public_id == self._public_id:
+                return system
+            if self._kind == "pack":
+                for pack in system.packs:
+                    if pack.public_id == self._public_id:
+                        return pack
+        return None
+
+    @property
+    def available(self) -> bool:
+        item = self._item()
+        if item is None or not self.coordinator.last_update_success:
+            return False
+        description = self.entity_description
+        if description.source == "measurement":
+            measured = item.measurements.get(description.measurement_key)
+            return bool(measured is not None and measured.valid)
+        if description.source == "firmware":
+            return bool(item.firmware.valid)
+        if description.source == "product_id":
+            return item.product_id is not None
+        if description.source == "profile":
+            return item.profile_key is not None
+        if description.source == "last_message":
+            return item.last_message_at is not None
+        return True
+
+    @property
+    def native_value(self):
+        item = self._item()
+        if item is None:
+            return None
+        source = self.entity_description.source
+        if source == "measurement":
+            measured = item.measurements.get(self.entity_description.measurement_key)
+            return _measured_value(measured)
+        if source == "firmware":
+            return _measured_value(item.firmware)
+        if source == "product_id":
+            return item.product_id
+        if source == "profile":
+            return item.profile_key
+        if source == "online":
+            return "online" if item.online else "offline"
+        if source == "transport":
+            return item.selected_transport.value
+        if source == "control_state":
+            return item.control_state.value
+        if source == "hems":
+            return item.hems_status.value
+        if source == "last_message":
+            return (
+                dt_util.as_utc(item.last_message_at)
+                if item.last_message_at is not None
+                else None
+            )
+        return None
+
+
+def _measured_value(value):
+    return value.value if value is not None and value.valid else None
 
 
 class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):

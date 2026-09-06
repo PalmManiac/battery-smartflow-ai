@@ -14,6 +14,7 @@ from .core.models import (
     HemsStatus,
     MeasuredValue,
     NeutralDeviceState,
+    ValueValidity,
     ZendureTransport,
 )
 
@@ -38,6 +39,8 @@ class MainSystemOverview:
     public_id: str
     display_name: str
     model: str | None
+    firmware: MeasuredValue[str]
+    measurements: Mapping[str, MeasuredValue]
     product_id: str | None
     profile_key: str | None
     control_state: DeviceControlState
@@ -53,6 +56,11 @@ class MainSystemOverview:
     control_block_reason: str | None
     last_message_at: datetime | None
     packs: tuple[PackOverview, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self, "measurements", MappingProxyType(dict(self.measurements))
+        )
 
 
 def build_native_device_overview(
@@ -103,6 +111,27 @@ def build_native_device_overview(
                 public_id=public_id,
                 display_name=device.display_name,
                 model=device.model,
+                firmware=_measurement(state, "firmware"),
+                measurements=MappingProxyType(
+                    {
+                        key: _measurement(state, key)
+                        for key in (
+                            "soc_pct",
+                            "charge_power_w",
+                            "discharge_power_w",
+                            "ac_input_power_w",
+                            "ac_output_power_w",
+                            "pv_power_w",
+                            "mode",
+                            "fault_code",
+                            "protection_active",
+                            "temperature_c",
+                            "battery_voltage_v",
+                        )
+                    }
+                    if state
+                    else {}
+                ),
                 product_id=identity.product_id if identity else None,
                 profile_key=device.profile_key,
                 control_state=device.control_state,
@@ -132,6 +161,12 @@ def build_native_device_overview(
             )
         )
     return tuple(result)
+
+
+def _measurement(state: object | None, key: str) -> MeasuredValue:
+    if state is None:
+        return MeasuredValue.absent(ValueValidity.MISSING)
+    return getattr(state, key, MeasuredValue.absent(ValueValidity.MISSING))
 
 
 def _public_id(kind: str, value: str) -> str:
