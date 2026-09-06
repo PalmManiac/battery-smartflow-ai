@@ -86,7 +86,7 @@ def build_native_device_overview(
                 PackOverview(
                     public_id=_public_id("PACK", pack_id),
                     parent_public_id=public_id,
-                    pack_model=pack_identity.pack_type,
+                    pack_model=_pack_model(pack_identity.pack_type, device.model),
                     firmware=observed.firmware,
                     measurements=MappingProxyType(
                         {
@@ -101,6 +101,7 @@ def build_native_device_overview(
                             "state_code": observed.state_code,
                             "fault_code": observed.fault_code,
                             "protection_active": observed.protection_active,
+                            "pack_type": observed.pack_type,
                         }
                     ),
                     last_message_at=observed.last_message_at,
@@ -167,6 +168,21 @@ def _measurement(state: object | None, key: str) -> MeasuredValue:
     if state is None:
         return MeasuredValue.absent(ValueValidity.MISSING)
     return getattr(state, key, MeasuredValue.absent(ValueValidity.MISSING))
+
+
+def _pack_model(value: str | None, parent_model: str | None) -> str | None:
+    """Resolve only verified pack models; never present a numeric code as one."""
+
+    if value is None:
+        return None
+    normalized = str(value).strip()
+    normalized_parent = "".join(
+        character for character in (parent_model or "").casefold()
+        if character.isalnum()
+    )
+    if normalized == "5" and normalized_parent == "solarflow2400ac":
+        return "AB3000X"
+    return normalized if normalized and not normalized.isdecimal() else None
 
 
 def _public_id(kind: str, value: str) -> str:

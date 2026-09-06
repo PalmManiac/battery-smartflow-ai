@@ -30,6 +30,7 @@ def observed_pack(pack_id, parent):
         cell_max_v=measured(3.31), temperature_c=measured(25.0),
         state_code=measured(1), fault_code=measured(0),
         protection_active=measured(False),
+        pack_type=measured(5),
         last_message_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
     )
     return SimpleNamespace(**values)
@@ -69,6 +70,40 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertFalse(hasattr(item.packs[0], "capacity"))
         self.assertFalse(hasattr(item.packs[0], "cell_count"))
         self.assertEqual(item.packs[0].parent_public_id, item.public_id)
+
+    def test_numeric_pack_type_is_not_exposed_as_an_unverified_model_name(self):
+        main = MainDevice("main-secret", "Unknown system")
+        inventory = DeviceInventory(
+            devices=(main,),
+            packs=(BatteryPackIdentity("pack-secret", main.system_id, pack_type="5"),),
+        )
+        state = SimpleNamespace(
+            packs=(observed_pack("pack-secret", main.system_id),),
+            last_message_at=None,
+        )
+        pack = build_native_device_overview(
+            inventory, {main.system_id: state}
+        )[0].packs[0]
+        self.assertIsNone(pack.pack_model)
+        self.assertEqual(pack.measurements["pack_type"].value, 5)
+
+    def test_sf2400ac_pack_type_five_is_resolved_as_ab3000x(self):
+        main = MainDevice(
+            "main-secret", "System", model="SolarFlow 2400 AC"
+        )
+        inventory = DeviceInventory(
+            devices=(main,),
+            packs=(BatteryPackIdentity("pack-secret", main.system_id, pack_type="5"),),
+        )
+        state = SimpleNamespace(
+            packs=(observed_pack("pack-secret", main.system_id),),
+            last_message_at=None,
+        )
+        pack = build_native_device_overview(
+            inventory, {main.system_id: state}
+        )[0].packs[0]
+        self.assertEqual(pack.pack_model, "AB3000X")
+        self.assertEqual(pack.measurements["pack_type"].value, 5)
 
     def test_sensitive_full_identifiers_never_enter_projection(self):
         identity = NativeDeviceIdentity(

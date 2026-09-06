@@ -244,6 +244,7 @@ NATIVE_MAIN_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="firmware", translation_key="native_hardware_firmware",
@@ -306,6 +307,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="current_a", translation_key="native_hardware_current_a",
@@ -313,6 +315,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="cell_min_v", translation_key="native_hardware_cell_min_v",
@@ -320,6 +323,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="cell_max_v", translation_key="native_hardware_cell_max_v",
@@ -327,6 +331,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="temperature_c", translation_key="native_hardware_temperature_c",
@@ -338,6 +343,10 @@ NATIVE_PACK_SENSORS = (
     NativeHardwareSensorDescription(
         key="state_code", translation_key="native_hardware_state_code",
         measurement_key="state_code", entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="pack_type", translation_key="native_hardware_pack_type",
+        measurement_key="pack_type", entity_category=EntityCategory.DIAGNOSTIC,
     ),
     NativeHardwareSensorDescription(
         key="fault_code", translation_key="native_hardware_fault_code",
@@ -1585,17 +1594,36 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             )
         else:
             firmware = _measured_value(getattr(item, "firmware", None))
+            parent = self._parent_system()
+            pack_number = (
+                next(
+                    (
+                        index
+                        for index, pack in enumerate(parent.packs, start=1)
+                        if pack.public_id == public_id
+                    ),
+                    1,
+                )
+                if parent is not None
+                else 1
+            )
+            parent_name = (
+                parent.display_name if parent is not None else "Zendure"
+            )
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"native_zendure_pack_{public_id}")},
-                name=(
-                    f"{item.pack_model or 'Unknown battery pack'} {public_id[-6:]}"
-                    if item else "Zendure battery pack"
-                ),
+                name=f"{parent_name} {_battery_pack_label(coordinator.hass.config.language)} {pack_number}",
                 manufacturer="Zendure",
                 model=(item.pack_model or "Unknown battery pack") if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
                 via_device=(DOMAIN, f"native_zendure_{parent_public_id}"),
             )
+
+    def _parent_system(self):
+        for system in self.coordinator.native_zendure.hardware_overview():
+            if system.public_id == self._parent_public_id:
+                return system
+        return None
 
     def _item(self):
         for system in self.coordinator.native_zendure.hardware_overview():
@@ -1660,6 +1688,14 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
 
 def _measured_value(value):
     return value.value if value is not None and value.valid else None
+
+
+def _battery_pack_label(language: str | None) -> str:
+    return {
+        "de": "Batterie-Pack",
+        "fr": "Bloc-batterie",
+        "nl": "Accupakket",
+    }.get(language, "Battery Pack")
 
 
 class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):

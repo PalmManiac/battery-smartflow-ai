@@ -103,6 +103,41 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertNotIn("device_id", entity)
         self.assertNotIn("pack_id", entity)
 
+    def test_pack_device_name_uses_parent_name_and_stable_position(self) -> None:
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        self.assertIn("parent.display_name", sensor)
+        self.assertIn("enumerate(parent.packs, start=1)", sensor)
+        self.assertIn('"de": "Batterie-Pack"', sensor)
+        self.assertNotIn("public_id[-6:]", sensor)
+
+    def test_native_voltage_and_current_sensors_show_two_decimal_places(self) -> None:
+        source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        descriptions = {
+            next(
+                keyword.value.value
+                for keyword in node.keywords
+                if keyword.arg == "key"
+            ): node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and getattr(node.func, "id", None) == "NativeHardwareSensorDescription"
+            and any(keyword.arg == "key" for keyword in node.keywords)
+        }
+        for key in (
+            "battery_voltage_v",
+            "voltage_v",
+            "current_a",
+            "cell_min_v",
+            "cell_max_v",
+        ):
+            precision = next(
+                keyword.value.value
+                for keyword in descriptions[key].keywords
+                if keyword.arg == "suggested_display_precision"
+            )
+            self.assertEqual(precision, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
