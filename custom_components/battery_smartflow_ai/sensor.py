@@ -244,6 +244,7 @@ NATIVE_MAIN_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="firmware", translation_key="native_hardware_firmware",
@@ -306,6 +307,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="current_a", translation_key="native_hardware_current_a",
@@ -313,6 +315,7 @@ NATIVE_PACK_SENSORS = (
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
         key="cell_min_v", translation_key="native_hardware_cell_min_v",

@@ -110,7 +110,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn('"de": "Batterie-Pack"', sensor)
         self.assertNotIn("public_id[-6:]", sensor)
 
-    def test_pack_cell_voltage_sensors_show_two_decimal_places(self) -> None:
+    def test_native_voltage_and_current_sensors_show_two_decimal_places(self) -> None:
         source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
         tree = ast.parse(source)
         descriptions = {
@@ -124,7 +124,13 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             and getattr(node.func, "id", None) == "NativeHardwareSensorDescription"
             and any(keyword.arg == "key" for keyword in node.keywords)
         }
-        for key in ("cell_min_v", "cell_max_v"):
+        for key in (
+            "battery_voltage_v",
+            "voltage_v",
+            "current_a",
+            "cell_min_v",
+            "cell_max_v",
+        ):
             precision = next(
                 keyword.value.value
                 for keyword in descriptions[key].keywords
