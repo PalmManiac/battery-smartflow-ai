@@ -13,11 +13,11 @@ COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
 
 
 class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
-    def test_dev24_version_and_mqtt_dependency_are_packaged(self) -> None:
+    def test_dev25_version_and_mqtt_dependency_are_packaged(self) -> None:
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0.dev24")
+        self.assertEqual(manifest["version"], "5.0.0.dev25")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -84,6 +84,24 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             source.index("await coordinator.async_config_entry_first_refresh()"),
             source.index("coordinator.native_zendure.start()"),
         )
+
+    def test_native_hardware_is_exposed_as_child_devices_not_config_inputs(self) -> None:
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        config = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+        self.assertIn("class NativeZendureHardwareSensor", sensor)
+        self.assertIn('via_device=(DOMAIN, f"native_zendure_{parent_public_id}")', sensor)
+        self.assertIn("coordinator.native_zendure.hardware_overview()", sensor)
+        self.assertIn("coordinator.async_add_listener", sensor)
+        self.assertNotIn("native_hardware_soc_pct", config)
+        self.assertNotIn("native_hardware_charge_power_w", config)
+
+    def test_native_hardware_entity_ids_use_only_privacy_safe_projection_ids(self) -> None:
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        entity = sensor[sensor.index("class NativeZendureHardwareSensor"):]
+        self.assertIn("public_id", entity)
+        self.assertNotIn("serial_number", entity)
+        self.assertNotIn("device_id", entity)
+        self.assertNotIn("pack_id", entity)
 
 
 if __name__ == "__main__":

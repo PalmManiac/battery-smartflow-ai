@@ -58,6 +58,9 @@ class _DisabledNativeRuntime:
     def control_enabled(self) -> bool:
         return False
 
+    def hardware_overview(self) -> tuple:
+        return ()
+
 
 def _coordinator_for_call(hass: HomeAssistant, call: ServiceCall) -> ZendureSmartFlowCoordinator:
     """Resolve one config entry, defaulting only when it is unambiguous."""

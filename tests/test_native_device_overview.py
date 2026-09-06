@@ -54,6 +54,12 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         )
         state = SimpleNamespace(
             packs=(observed_pack("pack-secret", main.system_id),),
+            firmware=measured("2.0.0"), soc_pct=measured(55.0),
+            charge_power_w=measured(100.0), discharge_power_w=measured(0.0),
+            ac_input_power_w=measured(0.0), ac_output_power_w=measured(100.0),
+            pv_power_w=measured(250.0), mode=measured("charge"),
+            fault_code=measured(0), protection_active=measured(False),
+            temperature_c=measured(25.0), battery_voltage_v=measured(49.5),
             last_message_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
         )
         item = build_native_device_overview(inventory, {main.system_id: state})[0]
