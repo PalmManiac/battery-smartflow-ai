@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import os
+import tempfile
+import time
 from base64 import b64encode
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import json
-import os
 from pathlib import Path
-import tempfile
-import time
 from typing import Any, Callable, Mapping
 
 from .zendure_cloud import ZendureCloudBootstrap
@@ -22,13 +22,14 @@ from .zendure_cloud_mqtt import (
 from .zendure_privacy import ZendureDiagnosticSanitizer
 from .zendure_zensdk import ZenSdkReadAttempt
 
-
 SCHEMA = "battery_smartflow_ai.zendure_initial_sync"
 SCHEMA_VERSION = 1
 INITIAL_SYNC_DIRECTORY = Path("bsfai") / "debug"
 DEFAULT_QUIET_PERIOD = 3.0
 DEFAULT_HARD_TIMEOUT = 30.0
 DEFAULT_MAX_EXPORT_BYTES = 32 * 1024 * 1024
+DEFAULT_MAX_RETAINED_CAPTURES = 3
+_INITIAL_SYNC_FILE_GLOB = "zendure_initial_sync_*.json"
 
 
 class InitialSyncExportError(RuntimeError):
@@ -103,6 +104,7 @@ class InitialSyncCaptureResult:
 class InitialSyncExportResult:
     path: Path
     size_bytes: int
+    removed_old_captures: int = 0
 
 
 class ZendureInitialSyncRecorder:
@@ -272,8 +274,12 @@ def export_initial_sync_capture(
     *,
     config_directory: str | Path,
     max_export_bytes: int = DEFAULT_MAX_EXPORT_BYTES,
+    max_retained_captures: int = DEFAULT_MAX_RETAINED_CAPTURES,
 ) -> InitialSyncExportResult:
     """Atomically export only the already sanitized JSON representation."""
+
+    if max_retained_captures < 1:
+        raise ValueError("max_retained_captures must be at least 1")
 
     try:
         payload = (
@@ -310,7 +316,33 @@ def export_initial_sync_capture(
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-    return InitialSyncExportResult(destination, len(payload))
+    removed = _prune_initial_sync_captures(
+        directory,
+        retain=max_retained_captures,
+    )
+    return InitialSyncExportResult(destination, len(payload), removed)
+
+
+def _prune_initial_sync_captures(directory: Path, *, retain: int) -> int:
+    """Keep only recent owned captures; never touch other debug artifacts."""
+
+    captures: list[tuple[int, str, Path]] = []
+    for path in directory.glob(_INITIAL_SYNC_FILE_GLOB):
+        try:
+            if path.is_file() and not path.is_symlink():
+                captures.append((path.stat().st_mtime_ns, path.name, path))
+        except OSError:
+            continue
+    captures.sort(reverse=True)
+    removed = 0
+    for _modified, _name, path in captures[retain:]:
+        try:
+            path.unlink()
+            removed += 1
+        except OSError:
+            # A cleanup problem must not invalidate a useful new capture.
+            continue
+    return removed
 
 
 def _raw_message(message: CloudMqttMessage) -> dict[str, Any]:

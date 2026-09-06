@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from base64 import b64encode
-from datetime import datetime, timedelta, timezone
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from base64 import b64encode
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from support import bootstrap
-
 
 bootstrap()
 
@@ -344,6 +343,49 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
             )
             self.assertFalse(data["meta"]["complete"])
             self.assertFalse(list(exported.path.parent.glob("*.tmp")))
+
+    async def test_repeated_startup_exports_keep_only_three_owned_captures(self):
+        result = self.recorder().finish(complete=False, reason="hard_timeout")
+        with tempfile.TemporaryDirectory() as directory:
+            debug_directory = Path(directory) / "bsfai" / "debug"
+            debug_directory.mkdir(parents=True)
+            unrelated_debug = debug_directory / "bsfai_debug_keep.json"
+            unrelated_json = debug_directory / "user_file.json"
+            matching_directory = debug_directory / "zendure_initial_sync_keep.json"
+            unrelated_debug.write_text("{}", encoding="utf-8")
+            unrelated_json.write_text("{}", encoding="utf-8")
+            matching_directory.mkdir()
+
+            exported = None
+            removed = 0
+            for _index in range(6):
+                exported = export_initial_sync_capture(
+                    result,
+                    config_directory=directory,
+                )
+                removed += exported.removed_old_captures
+
+            captures = list(debug_directory.glob("zendure_initial_sync_*.json"))
+            self.assertEqual(len([item for item in captures if item.is_file()]), 3)
+            self.assertEqual(removed, 3)
+            self.assertIsNotNone(exported)
+            self.assertTrue(exported.path.is_file())
+            self.assertTrue(unrelated_debug.is_file())
+            self.assertTrue(unrelated_json.is_file())
+            self.assertTrue(matching_directory.is_dir())
+
+    async def test_retention_limit_must_keep_at_least_current_capture(self):
+        result = self.recorder().finish(complete=False, reason="hard_timeout")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(
+                ValueError,
+                "max_retained_captures must be at least 1",
+            ):
+                export_initial_sync_capture(
+                    result,
+                    config_directory=directory,
+                    max_retained_captures=0,
+                )
 
     async def test_zensdk_report_and_attempt_are_exported_without_lan_identity(self):
         local_report = message(
