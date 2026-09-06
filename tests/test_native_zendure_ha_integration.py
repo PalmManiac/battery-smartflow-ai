@@ -13,11 +13,11 @@ COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
 
 
 class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
-    def test_dev23_version_and_mqtt_dependency_are_packaged(self) -> None:
+    def test_dev24_version_and_mqtt_dependency_are_packaged(self) -> None:
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0.dev23")
+        self.assertEqual(manifest["version"], "5.0.0.dev24")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:

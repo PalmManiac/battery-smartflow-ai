@@ -234,6 +234,8 @@ def _entry(
     canonical_model: str,
     *aliases: str,
     product_ids: tuple[str, ...] = (),
+    local_mqtt_verified: bool = False,
+    local_mqtt_input_verified: bool = True,
 ) -> ZendureDeviceMatrixEntry:
     first_write_model = profile_key == "SF2400AC"
     transports = dict(_transport_matrix())
@@ -259,6 +261,32 @@ def _entry(
         for property_name in ("smartMode", "acMode", "inputLimit", "outputLimit"):
             writes[property_name] = VerificationLevel.VERIFIED
             transport_writes[ZendureTransport.ZENSDK][property_name] = (
+                VerificationLevel.VERIFIED
+            )
+    if local_mqtt_verified:
+        transports[ZendureTransport.ZENSDK] = TransportCapability(
+            ZendureTransport.ZENSDK,
+            VerificationLevel.UNSUPPORTED,
+            VerificationLevel.UNSUPPORTED,
+            VerificationLevel.UNSUPPORTED,
+            ("Zendure-HA classifies this model family as ZendureLegacy",),
+        )
+        transports[ZendureTransport.LOCAL_MQTT] = TransportCapability(
+            ZendureTransport.LOCAL_MQTT,
+            VerificationLevel.VERIFIED,
+            VerificationLevel.VERIFIED,
+            VerificationLevel.REFERENCE_ONLY,
+            (
+                "Zendure-HA legacy Local MQTT report and deviceAutomation "
+                "mapping verified by reference",
+            ),
+        )
+        local_properties = ["acMode", "outputLimit"]
+        if local_mqtt_input_verified:
+            local_properties.append("inputLimit")
+        for property_name in local_properties:
+            writes[property_name] = VerificationLevel.VERIFIED
+            transport_writes[ZendureTransport.LOCAL_MQTT][property_name] = (
                 VerificationLevel.VERIFIED
             )
     return ZendureDeviceMatrixEntry(
@@ -317,6 +345,21 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 "solarFlow800Pro",
                 "SF800Pro",
                 product_ids=("R3mn8U",),
+            ),
+            _entry(
+                "Hyper 2000",
+                "Hyper 2000",
+                "Hyper2000",
+                local_mqtt_verified=True,
+            ),
+            _entry(
+                "HUB 2000",
+                "SolarFlow Hub 2000",
+                "SolarFlow Hub2000",
+                "Hub 2000",
+                "Hub2000",
+                local_mqtt_verified=True,
+                local_mqtt_input_verified=False,
             ),
         )
     }

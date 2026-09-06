@@ -6,6 +6,10 @@ from .const import (
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
+    CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
     DOMAIN,
     PLATFORMS,
 )
@@ -142,6 +146,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             selected_device=entry.options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
             control_enabled=bool(
                 entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
+            ),
+            local_mqtt_server=entry.options.get(
+                CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER
+            ),
+            local_mqtt_port=entry.options.get(
+                CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT, 1883
+            ),
+            local_mqtt_username=entry.options.get(
+                CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME, ""
+            ),
+            local_mqtt_password=entry.options.get(
+                CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD, ""
             ),
             notify=coordinator.async_update_listeners,
         )

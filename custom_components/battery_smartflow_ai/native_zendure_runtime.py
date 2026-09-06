@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
-import logging
 from pathlib import Path
 from typing import Any, Callable
 
@@ -24,12 +24,12 @@ from .core.models import (
     ValueValidity,
     ZendureTransport,
 )
+from .native_command_verification import NativeCommandVerificationManager
 from .native_device_command_gate import (
     NativeCommandContext,
     NativeCommandRequest,
     NativeDeviceCommandGate,
 )
-from .native_command_verification import NativeCommandVerificationManager
 from .native_device_overview import build_native_device_overview
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
@@ -38,17 +38,22 @@ from .zendure_device_matrix import (
     preferred_local_transport,
     resolve_zendure_device,
 )
-from .zendure_hems import ZendureHemsCommandGate
-from .zendure_initial_sync import (
-    async_capture_initial_sync,
-    export_initial_sync_capture,
-)
 from .zendure_first_write import (
     NativeWriteVerification,
     PropertyReadback,
     TransportWriteResult,
     async_verify_reversible_write,
 )
+from .zendure_hems import ZendureHemsCommandGate
+from .zendure_initial_sync import (
+    async_capture_initial_sync,
+    export_initial_sync_capture,
+)
+from .zendure_local_mqtt import (
+    LocalMqttCredentials,
+    ZendureLocalMqttTransport,
+)
+from .zendure_local_mqtt_commands import LocalMqttCommandStatus
 from .zendure_normalizer import ZendureCloudNormalizer
 from .zendure_privacy import ZendureDiagnosticSanitizer
 from .zendure_zensdk import (
@@ -57,10 +62,9 @@ from .zendure_zensdk import (
     async_write_zensdk_property,
 )
 from .zendure_zensdk_commands import (
-    ZenSdkCommandStatus,
     ZendureZenSdkCommandAdapter,
+    ZenSdkCommandStatus,
 )
-
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +100,10 @@ class NativeZendureRuntime:
         selected_device: str | None,
         notify: Callable[[], None],
         control_enabled: bool = False,
+        local_mqtt_server: str | None = None,
+        local_mqtt_port: int = 1883,
+        local_mqtt_username: str = "",
+        local_mqtt_password: str = "",
     ) -> None:
         self._hass = hass
         self._app_token = app_token
@@ -104,6 +112,17 @@ class NativeZendureRuntime:
         self._notify = notify
         self._task: asyncio.Task[None] | None = None
         self._transport: ZendureCloudMqttTransport | None = None
+        self._local_transport: ZendureLocalMqttTransport | None = None
+        self._local_mqtt_credentials = (
+            LocalMqttCredentials(
+                str(local_mqtt_server),
+                int(local_mqtt_port),
+                str(local_mqtt_username or ""),
+                str(local_mqtt_password or ""),
+            )
+            if local_mqtt_server
+            else None
+        )
         self._status = STATUS_DISABLED if not app_token else STATUS_DISCOVERING
         self._error: str | None = None
         self._capture_path: str | None = None
@@ -197,6 +216,9 @@ class NativeZendureRuntime:
         if self._transport is not None:
             await self._transport.async_stop()
             self._transport = None
+        if self._local_transport is not None:
+            await self._local_transport.async_stop()
+            self._local_transport = None
 
     def sensor_data(self) -> dict[str, Any]:
         return {
@@ -324,6 +346,7 @@ class NativeZendureRuntime:
                     self._transport.command_diagnostics
                     if self._transport is not None else {"commands": []}
                 ),
+                "local_mqtt": self._local_mqtt_diagnostics(),
                 "last_command_result": self._last_command_result,
                 "overview": self.overview_attributes(),
             }
@@ -507,23 +530,34 @@ class NativeZendureRuntime:
                 native_control_enabled=True,
                 available_transports=frozenset({control_transport}),
             )
+            executor = None
+            expected_status = None
             if (
-                control_transport is not ZendureTransport.ZENSDK
-                or self._zensdk_command_adapter is None
+                control_transport is ZendureTransport.ZENSDK
+                and self._zensdk_command_adapter is not None
             ):
+                executor = self._zensdk_command_adapter.execute
+                expected_status = ZenSdkCommandStatus.SENT
+            elif (
+                control_transport is ZendureTransport.LOCAL_MQTT
+                and self._local_transport is not None
+            ):
+                executor = self._local_transport.async_execute_authorized
+                expected_status = LocalMqttCommandStatus.SENT
+            if executor is None:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
                     "native_local_transport_not_implemented",
                 ))
             gate, transport = await NativeDeviceCommandGate(self._hems_gate).execute(
-                request, context, self._zensdk_command_adapter.execute
+                request, context, executor
             )
             if not gate.accepted or transport is None:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
                     ",".join(gate.reasons) or "native_gate_blocked",
                 ))
-            if transport.status is not ZenSdkCommandStatus.SENT:
+            if transport.status is not expected_status:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.FAILED, transport.reason
                 ))
@@ -574,6 +608,19 @@ class NativeZendureRuntime:
             )
             self._record_zensdk_cycle(zensdk)
             self._transport = ZendureCloudMqttTransport(bootstrap)
+            if self._local_mqtt_credentials is not None:
+                candidate = ZendureLocalMqttTransport(
+                    bootstrap, self._local_mqtt_credentials
+                )
+                if candidate.topics:
+                    self._local_transport = candidate
+                    try:
+                        await self._local_transport.async_start()
+                    except Exception as error:
+                        _LOGGER.warning(
+                            "Zendure Local MQTT remains unavailable: %s",
+                            _safe_reason(error),
+                        )
             self._set_status(STATUS_CONNECTING)
             self._set_status(STATUS_CAPTURING)
             capture = await async_capture_initial_sync(
@@ -596,7 +643,11 @@ class NativeZendureRuntime:
             if capture.completion_reason not in {
                 "initial_sync_quiet",
                 "hard_timeout",
-            }:
+            } and not (
+                self._selected_local_transport() is ZendureTransport.LOCAL_MQTT
+                and self._local_transport is not None
+                and self._local_transport.state is ConnectionState.CONNECTED
+            ):
                 self._error = capture.completion_reason
                 self._set_status(STATUS_ERROR)
                 return
@@ -604,6 +655,7 @@ class NativeZendureRuntime:
             self._initialize_zensdk_schedule(asyncio.get_running_loop().time())
             while True:
                 self._consume_messages()
+                self._consume_local_messages()
                 loop = asyncio.get_running_loop()
                 await self._async_poll_zensdk(now_monotonic=loop.time())
                 self._refresh_snapshots()
@@ -619,6 +671,8 @@ class NativeZendureRuntime:
             )
             if self._transport is not None:
                 await self._transport.async_stop()
+            if self._local_transport is not None:
+                await self._local_transport.async_stop()
 
     async def _post_json(self, url: str, **kwargs: Any) -> _JsonPayloadResponse:
         session = async_get_clientsession(self._hass)
@@ -650,6 +704,15 @@ class NativeZendureRuntime:
         self._apply_messages(new_messages)
         if new_messages:
             self._last_processed_message = new_messages[-1]
+
+    def _consume_local_messages(self) -> None:
+        if self._local_transport is None or self._normalizer is None:
+            return
+        messages = self._local_transport.messages
+        start = getattr(self, "_local_processed_count", 0)
+        new_messages = messages[start:]
+        self._apply_messages(new_messages)
+        self._local_processed_count = len(messages)
 
     def _consume_captured_messages(self, messages: tuple[Any, ...]) -> None:
         """Apply ZenSDK seed data and MQTT messages captured during startup."""
@@ -751,8 +814,15 @@ class NativeZendureRuntime:
         for system_id in tuple(self._inventory.devices):
             self._normalizer.set_hems_monitoring(
                 system_id,
-                self._transport is not None
-                and self._transport.state is ConnectionState.CONNECTED,
+                (
+                    self._transport is not None
+                    and self._transport.state is ConnectionState.CONNECTED
+                )
+                or (
+                    self._local_transport is not None
+                    and self._local_transport.state is ConnectionState.CONNECTED
+                    and system_id in self._local_transport.device_states
+                ),
                 observed_at=now,
             )
             result = self._normalizer.snapshot(
@@ -794,6 +864,36 @@ class NativeZendureRuntime:
             }
             for candidate_id in sorted(self._zensdk_last_result)
         ]
+
+    def _local_mqtt_diagnostics(self) -> dict[str, Any]:
+        transport = self._local_transport
+        if transport is None:
+            return {
+                "configured": self._local_mqtt_credentials is not None,
+                "state": "not_started",
+                "devices": [],
+                "command_verification": {"commands": []},
+            }
+        return {
+            "configured": True,
+            "state": transport.state.value,
+            "connection_variant": transport.connection_variant,
+            "connection_phase": transport.connection_phase,
+            "connection": dict(transport.connection_diagnostics),
+            "last_message_at": transport.last_message_at,
+            "devices": [
+                {
+                    "device_id": candidate_id,
+                    "last_message_at": state.last_message_at,
+                    "online": state.online,
+                    "property_count": len(state.property_updated_at),
+                }
+                for candidate_id, state in sorted(
+                    transport.device_states.items()
+                )
+            ],
+            "command_verification": transport.command_diagnostics,
+        }
 
     def _zensdk_health(self, candidate_id: str, now: datetime) -> dict[str, Any]:
         last = self._zensdk_last_success.get(candidate_id)
@@ -853,6 +953,22 @@ class NativeZendureRuntime:
                 and self._zensdk_health(
                     self._selected_device, datetime.now(timezone.utc)
                 )["available"]
+            )
+        if transport is ZendureTransport.LOCAL_MQTT:
+            if (
+                self._local_transport is None
+                or self._local_transport.state is not ConnectionState.CONNECTED
+                or self._selected_device is None
+            ):
+                return False
+            local_state = self._local_transport.device_states.get(
+                self._selected_device
+            )
+            last = local_state.last_message_at if local_state is not None else None
+            return bool(
+                last is not None
+                and 0 <= (datetime.now(timezone.utc) - last).total_seconds()
+                <= ZENSDK_MAX_DATA_AGE
             )
         return False
 

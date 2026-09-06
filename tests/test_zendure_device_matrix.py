@@ -41,7 +41,10 @@ def identity(
 
 class ZendureDeviceMatrixTests(unittest.TestCase):
     def test_known_current_generation_models_prefer_zensdk_automatically(self):
-        for entry in ZENDURE_DEVICE_MATRIX.values():
+        for entry in (
+            ZENDURE_DEVICE_MATRIX[key]
+            for key in ("SF2400AC", "SF2400Pro", "SF2400AC+", "SF800Pro")
+        ):
             with self.subTest(profile=entry.profile_key):
                 self.assertIs(
                     preferred_local_transport(
@@ -62,12 +65,30 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             "SF2400AC+": "SolarFlow 2400 AC+",
             "SF800Pro": "SolarFlow 800 Pro",
         }
-        self.assertEqual(set(ZENDURE_DEVICE_MATRIX), set(models))
+        self.assertTrue(set(models).issubset(ZENDURE_DEVICE_MATRIX))
         for profile_key, model in models.items():
             with self.subTest(profile=profile_key):
                 entry = resolve_zendure_device(identity(model=model))
                 self.assertIsNotNone(entry)
                 self.assertIs(entry.profile, DEVICE_PROFILE_MODELS[profile_key])
+
+    def test_verified_legacy_models_prefer_local_mqtt_automatically(self):
+        for profile_key, model in (
+            ("Hyper 2000", "Hyper 2000"),
+            ("HUB 2000", "SolarFlow Hub 2000"),
+        ):
+            native_identity = NativeDeviceIdentity(
+                ZendureTransport.CLOUD_MQTT,
+                device_id=profile_key,
+                product_model=model,
+            )
+            entry = resolve_zendure_device(native_identity)
+            self.assertIsNotNone(entry)
+            self.assertEqual(entry.profile_key, profile_key)
+            self.assertEqual(
+                preferred_local_transport(native_identity),
+                ZendureTransport.LOCAL_MQTT,
+            )
 
     def test_only_confirmed_product_ids_are_mapped(self):
         self.assertEqual(
