@@ -181,6 +181,38 @@ def legacy_runtime(*, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_fresh_install_operates_natively_without_zha(self):
+        target = runtime(migration_bound_device=None)
+        target._refresh_write_authority()
+
+        self.assertEqual(target.sensor_data()["native_zendure_device_count"], 1)
+        overview = target.hardware_overview()
+        self.assertEqual(len(overview), 1)
+        self.assertTrue(overview[0].online)
+        self.assertEqual(overview[0].measurements["discharge_power_w"].value, 0)
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=600,
+        ))
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
+
+    async def test_migrated_v47_install_operates_natively_without_zha(self):
+        target = runtime(migration_bound_device=DEVICE)
+        target._refresh_write_authority()
+
+        authority = target._transport_router.snapshot
+        self.assertTrue(authority.synchronized)
+        self.assertEqual(authority.device_id, DEVICE)
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=725,
+        ))
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(
+            target._zensdk_command_adapter.commands[0].command.output_limit_w,
+            725,
+        )
+
     async def test_migration_binding_mismatch_revokes_write_authority(self):
         target = runtime(migration_bound_device="cloud_mqtt:other-device")
         target._refresh_write_authority()
