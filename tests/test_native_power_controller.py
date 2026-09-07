@@ -36,6 +36,7 @@ from custom_components.battery_smartflow_ai.native_command_verification import (
 from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
     STATUS_OBSERVING,
     NativeZendureRuntime,
+    _maintenance_pack_conflict,
 )
 from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     ConnectionState,  # noqa: E402
@@ -67,6 +68,7 @@ def measured(value):
 def state(*, input_w=0, output_w=0, charge_w=0, discharge_w=0, hems=False):
     return SimpleNamespace(
         online=measured(True),
+        soc_pct=measured(80),
         protection_active=measured(False),
         hems_active=measured(hems),
         charge_power_w=measured(charge_w),
@@ -181,6 +183,50 @@ def legacy_runtime(*, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    def test_pack_soc_only_conflicts_with_a_reported_full_system(self):
+        pack = SimpleNamespace(
+            soc_pct=measured(80), protection_active=measured(False)
+        )
+        charging = state()
+        charging.soc_pct = measured(90)
+        charging.packs = (pack,)
+        self.assertFalse(_maintenance_pack_conflict(charging, now=NOW))
+
+        full = state()
+        full.soc_pct = measured(100)
+        full.packs = (pack,)
+        self.assertTrue(_maintenance_pack_conflict(full, now=NOW))
+
+    def test_maintenance_input_uses_only_selected_native_device(self):
+        target = runtime()
+        target._refresh_write_authority()
+
+        result = target.full_charge_maintenance_input(
+            now=NOW,
+            enabled=True,
+            pv_window_favorable=True,
+        )
+
+        self.assertEqual(target.selected_device_id, DEVICE)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.soc_pct, 80.0)
+        self.assertTrue(result.soc_fresh)
+        self.assertTrue(result.device_ready)
+        self.assertTrue(result.transport_available)
+        self.assertTrue(result.pv_window_favorable)
+
+    def test_maintenance_input_fails_closed_without_native_state(self):
+        target = runtime()
+        target._states.clear()
+
+        result = target.full_charge_maintenance_input(now=NOW, enabled=True)
+
+        self.assertIsNotNone(result)
+        self.assertIsNone(result.soc_pct)
+        self.assertFalse(result.soc_fresh)
+        self.assertFalse(result.device_ready)
+        self.assertFalse(result.transport_available)
+
     async def test_fresh_install_operates_natively_without_zha(self):
         target = runtime(migration_bound_device=None)
         target._refresh_write_authority()
