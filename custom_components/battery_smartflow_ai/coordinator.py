@@ -206,6 +206,7 @@ from .market_price import (
     NumericPriceNormalizer,
 )
 from .manual_standby import active_power_direction
+from .full_charge_maintenance_runtime import FullChargeMaintenanceRuntime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -400,6 +401,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
         self._charge_source_allocator = ChargeSourceAllocator()
+        self._full_charge_maintenance = FullChargeMaintenanceRuntime()
         self._energy_accumulator = EnergyAccumulator()
         self._economics_engine = EconomicsEngine(
             currency=self.price_currency.code
@@ -471,6 +473,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "economics_energy_state": None,
             "economics_money_state": None,
             "economics_money_day": None,
+            "full_charge_maintenance": None,
 
             # season detection
             "season_mode": "winter",
@@ -602,6 +605,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             migrate_legacy_price_fields(loaded_data)
             self._persist.update(loaded_data)
+            invalid_maintenance = self._full_charge_maintenance.restore(
+                self._persist.get("full_charge_maintenance")
+            )
+            if invalid_maintenance:
+                _LOGGER.warning(
+                    "Skipped invalid full-charge maintenance records: %s",
+                    ", ".join(invalid_maintenance),
+                )
 
             # V4.2.2:
             # Normalize old persisted extreme values. Previous versions could let
@@ -647,6 +658,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _save(self) -> None:
         self._persist["runtime_mode"] = dict(self.runtime_mode)
+        self._persist["full_charge_maintenance"] = (
+            self._full_charge_maintenance.persisted_state()
+        )
         save_result = await self._state_store.save(self._persist)
         if not save_result.saved:
             _LOGGER.warning(
@@ -6357,12 +6371,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             economic_discharge_threshold = transparency_result.economic_discharge_threshold
             effective_discharge_threshold = transparency_result.effective_discharge_threshold
 
+            maintenance_status = self._full_charge_maintenance.sensor_data()
+            if (
+                native_runtime is not None
+                and hasattr(native_runtime, "full_charge_maintenance_input")
+                and getattr(native_runtime, "selected_device_id", None)
+            ):
+                maintenance_input = native_runtime.full_charge_maintenance_input(
+                    now=now,
+                    enabled=False,
+                    pv_window_favorable=bool(
+                        pv_charge_latched
+                        or float(grid_export or 0.0)
+                        >= float(pv_charge_start_export_w)
+                    ),
+                    price_window_favorable=bool(
+                        price_now is not None
+                        and current_valley_threshold is not None
+                        and float(price_now) <= float(current_valley_threshold)
+                    ),
+                    strategic_charge_active=bool(charge_commit_active),
+                )
+                if maintenance_input is not None:
+                    self._full_charge_maintenance.evaluate(
+                        native_runtime.selected_device_id,
+                        maintenance_input,
+                    )
+                    maintenance_status = self._full_charge_maintenance.sensor_data()
+
             self._persist["debug"] = "OK"
             self._persist["last_ts"] = now.isoformat()
 
             await self._save()
 
             details = {
+                **maintenance_status,
                 "soc": soc,
                 "pv_w": pv_w,
                 "pv_sensor_valid": bool(pv_sensor_valid),
