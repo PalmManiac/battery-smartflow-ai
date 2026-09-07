@@ -493,6 +493,7 @@ class ZendureCloudMqttTransport:
                     device_id=candidate_id,
                     properties=properties,
                     observed_at=received_at,
+                    retained=retained,
                 )
 
     def _route_message(self, topic: str, parsed: Any) -> tuple[str | None, str | None]:

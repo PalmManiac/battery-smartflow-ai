@@ -228,6 +228,7 @@ class ZendureLocalMqttCommandAdapter:
         device_id: str,
         properties: Mapping[str, object],
         observed_at: datetime,
+        retained: bool = False,
     ) -> int:
         confirmed = 0
         for property_name, raw_value in properties.items():
@@ -244,6 +245,8 @@ class ZendureLocalMqttCommandAdapter:
                 property_name=property_name,
                 value=value,
                 observed_at=observed_at,
+                source_transport=ZendureTransport.LOCAL_MQTT,
+                retained=retained,
             ):
                 confirmed += 1
         return confirmed

@@ -180,7 +180,14 @@ class ZendureCloudCommandAdapter:
         sent = len(writes)
         return CloudCommandResult(CloudCommandStatus.SENT, "awaiting_readback", tuple(verification_ids), sent)
 
-    def observe_properties(self, *, device_id: str, properties: Mapping[str, object], observed_at: datetime) -> int:
+    def observe_properties(
+        self,
+        *,
+        device_id: str,
+        properties: Mapping[str, object],
+        observed_at: datetime,
+        retained: bool = False,
+    ) -> int:
         """Attach fresh reports only to the currently active matching target."""
 
         confirmed = 0
@@ -195,6 +202,8 @@ class ZendureCloudCommandAdapter:
             if self._verification.observe_readback(
                 active.command_id, device_id=device_id, property_name=property_name,
                 value=value, observed_at=observed_at,
+                source_transport=ZendureTransport.CLOUD_MQTT,
+                retained=retained,
             ):
                 confirmed += 1
         return confirmed

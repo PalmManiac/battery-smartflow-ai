@@ -86,6 +86,44 @@ class NativeCommandVerificationTests(unittest.TestCase):
             observed_at=NOW + timedelta(seconds=1),
         ))
 
+    def test_readback_records_actual_source_not_write_transport(self):
+        manager = NativeCommandVerificationManager()
+        command = prepared(manager)
+        sent(manager, command)
+        self.assertTrue(manager.observe_readback(
+            command.command_id,
+            device_id="private-device-a",
+            property_name="outputLimit",
+            value=100,
+            observed_at=NOW + timedelta(seconds=1),
+            source_transport=ZendureTransport.CLOUD_MQTT,
+        ))
+        self.assertEqual(command.transport, ZendureTransport.ZENSDK)
+        self.assertEqual(
+            command.readback_transport,
+            ZendureTransport.CLOUD_MQTT,
+        )
+        self.assertEqual(
+            command.diagnostics()["readback_transport"],
+            "cloud_mqtt",
+        )
+
+    def test_retained_readback_never_confirms_command(self):
+        manager = NativeCommandVerificationManager()
+        command = prepared(manager)
+        sent(manager, command)
+        self.assertFalse(manager.observe_readback(
+            command.command_id,
+            device_id="private-device-a",
+            property_name="outputLimit",
+            value=100,
+            observed_at=NOW + timedelta(seconds=1),
+            source_transport=ZendureTransport.LOCAL_MQTT,
+            retained=True,
+        ))
+        self.assertEqual(command.status, CommandVerificationStatus.TRANSPORT_OK)
+        self.assertIsNone(command.readback_transport)
+
     def test_mismatch_contradiction_and_timeouts_are_distinct(self):
         manager = NativeCommandVerificationManager()
         mismatch = prepared(manager)

@@ -170,4 +170,5 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
                     device_id=local_message.device_candidate_id,
                     properties=properties,
                     observed_at=local_message.received_at,
+                    retained=local_message.retained,
                 )
