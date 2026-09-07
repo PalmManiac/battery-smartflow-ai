@@ -223,10 +223,22 @@ class FullChargeMaintenancePlanner:
             )
 
         record = replace(record, full_candidate_since=None)
+        if record.active and not data.enabled:
+            return FullChargeMaintenanceDecision(
+                record,
+                MaintenanceState.BLOCKED,
+                block_reason=MaintenanceBlockReason.NOT_ENABLED,
+            )
         if record.active:
             return _charging_decision(record, MaintenanceWindow.NONE)
         if base_state in {MaintenanceState.NOT_DUE, MaintenanceState.DUE_SOON}:
             return FullChargeMaintenanceDecision(record, base_state)
+        if not data.enabled:
+            return FullChargeMaintenanceDecision(
+                record,
+                MaintenanceState.BLOCKED,
+                block_reason=MaintenanceBlockReason.NOT_ENABLED,
+            )
         window = _select_window(data)
         if window is MaintenanceWindow.NONE and next_due is not None:
             if now >= next_due + self._max_postpone:
@@ -265,8 +277,6 @@ def _schedule_state(
 
 
 def _block_reason(data: FullChargeMaintenanceInput) -> MaintenanceBlockReason:
-    if not data.enabled:
-        return MaintenanceBlockReason.NOT_ENABLED
     if not data.automation_allowed:
         return MaintenanceBlockReason.MANUAL_MODE
     if data.hems_active:

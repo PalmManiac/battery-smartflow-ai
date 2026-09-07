@@ -4609,6 +4609,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             maintenance_status = self._full_charge_maintenance.sensor_data()
             maintenance_decision = None
+            maintenance_enabled = bool(self.entry.options.get(
+                SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+                DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
+            ))
             if (
                 native_runtime is not None
                 and hasattr(native_runtime, "full_charge_maintenance_input")
@@ -4616,10 +4620,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ):
                 maintenance_input = native_runtime.full_charge_maintenance_input(
                     now=now,
-                    enabled=bool(self.entry.options.get(
-                        SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
-                        DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
-                    )),
+                    enabled=maintenance_enabled,
                     pv_window_favorable=bool(
                         pv_charge_latched
                         or float(grid_export or 0.0)
@@ -4656,7 +4657,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 configured_soc_max=float(soc_max),
                 max_charge_w=float(max_charge),
                 grid_export_w=float(grid_export or 0.0),
-                automation_allowed=bool(ai_mode != AI_MODE_MANUAL),
+                automation_allowed=bool(
+                    ai_mode != AI_MODE_MANUAL and maintenance_enabled
+                ),
             )
             decision = maintenance_application.decision
             if maintenance_application.applied:
