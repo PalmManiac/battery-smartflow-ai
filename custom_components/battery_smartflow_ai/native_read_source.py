@@ -71,6 +71,7 @@ class NativeReadSourceArbiter:
         candidates: tuple[SourceMeasurement[ValueT], ...],
         *,
         safety_critical: bool = False,
+        conflict_tolerance: float | None = None,
     ) -> SelectedMeasurement[ValueT]:
         """Return a stable property winner with conservative conflict handling."""
 
@@ -116,7 +117,18 @@ class NativeReadSourceArbiter:
         fresh = tuple(item for item in usable if not item.retained)
         pool = fresh or usable
         distinct = {_comparable(item.measurement.value) for item in pool}
-        if safety_critical and len(distinct) > 1:
+        conflict = len(distinct) > 1
+        if conflict and conflict_tolerance is not None:
+            numeric = [item.measurement.value for item in pool]
+            conflict = not (
+                all(
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    for value in numeric
+                )
+                and max(numeric) - min(numeric) <= conflict_tolerance
+            )
+        if safety_critical and conflict:
             return SelectedMeasurement(
                 MeasuredValue.absent(ValueValidity.INVALID),
                 None,
