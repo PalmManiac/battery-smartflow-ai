@@ -48,6 +48,20 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertNotEqual(overview[0].public_id, overview[1].public_id)
         self.assertEqual({item.display_name for item in overview}, {"Battery"})
 
+    def test_only_confirmed_upgrade_device_is_marked_as_bound(self):
+        inventory = DeviceInventory(devices=(
+            MainDevice("native-a", "First"),
+            MainDevice("native-b", "Second"),
+        ))
+        overview = build_native_device_overview(
+            inventory,
+            {},
+            migration_bound_device="native-b",
+        )
+        by_name = {item.display_name: item for item in overview}
+        self.assertFalse(by_name["First"].migration_bound)
+        self.assertTrue(by_name["Second"].migration_bound)
+
     def test_unknown_pack_model_keeps_verified_measurements(self):
         main = MainDevice("main-secret", "Main")
         inventory = DeviceInventory(

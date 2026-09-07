@@ -1638,6 +1638,17 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         return None
 
     @property
+    def extra_state_attributes(self):
+        item = self._item()
+        if self._kind != "main" or item is None:
+            return None
+        return {
+            "v4_migration_binding": (
+                "confirmed" if item.migration_bound else "not_bound"
+            )
+        }
+
+    @property
     def available(self) -> bool:
         item = self._item()
         if item is None or not self.coordinator.last_update_success:

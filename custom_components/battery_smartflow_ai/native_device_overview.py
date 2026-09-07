@@ -58,6 +58,7 @@ class MainSystemOverview:
     control_block_reason: str | None
     last_message_at: datetime | None
     packs: tuple[PackOverview, ...]
+    migration_bound: bool = False
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -68,6 +69,8 @@ class MainSystemOverview:
 def build_native_device_overview(
     inventory: DeviceInventory,
     states: Mapping[str, NeutralDeviceState],
+    *,
+    migration_bound_device: str | None = None,
 ) -> tuple[MainSystemOverview, ...]:
     """Build an unbounded hierarchy without exposing stable source identities."""
 
@@ -170,6 +173,7 @@ def build_native_device_overview(
                 ),
                 last_message_at=state.last_message_at if state else None,
                 packs=tuple(packs),
+                migration_bound=system_id == migration_bound_device,
             )
         )
     return tuple(result)
