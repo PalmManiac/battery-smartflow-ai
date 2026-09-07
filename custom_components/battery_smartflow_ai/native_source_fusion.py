@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import fields
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from .core.models import (
@@ -21,7 +21,12 @@ from .native_read_source import (
 from .zendure_cloud import ZendureCloudBootstrap
 from .zendure_cloud_mqtt import CloudMqttMessage
 from .zendure_hems_activity import HemsActivityDiagnostic
-from .zendure_normalizer import NormalizationResult, ZendureCloudNormalizer
+from .zendure_normalizer import (
+    MAIN_PROPERTY_MAPPINGS,
+    PACK_PROPERTY_MAPPINGS,
+    NormalizationResult,
+    ZendureCloudNormalizer,
+)
 
 
 _TRANSPORTS = (
@@ -49,6 +54,13 @@ class NativeSourceFusion:
             )
         self._arbiter = NativeReadSourceArbiter()
         self._selection: dict[str, dict[str, SelectedMeasurement[Any]]] = {}
+        self._selection_changed_at: dict[str, dict[str, datetime]] = {}
+        self._retained_main: dict[
+            tuple[ZendureTransport, str], dict[str, bool]
+        ] = {}
+        self._retained_packs: dict[
+            tuple[ZendureTransport, str, str], dict[str, bool]
+        ] = {}
 
     def apply(
         self, message: CloudMqttMessage, *, now: datetime | None = None
@@ -59,6 +71,7 @@ class NativeSourceFusion:
         result = self._normalizers[transport].apply(message, now=now)
         if result is None or message.device_candidate_id is None:
             return None
+        self._record_retained(transport, message)
         return self.snapshot(
             message.device_candidate_id,
             now=now or message.received_at,
@@ -73,17 +86,29 @@ class NativeSourceFusion:
         }
         states = {transport: result.state for transport, result in results.items()}
         trace: dict[str, SelectedMeasurement[Any]] = {}
+        current = now or datetime.now(timezone.utc)
 
-        def select(name: str, values: dict[ZendureTransport, MeasuredValue[Any]]):
+        def select(
+            name: str,
+            values: dict[ZendureTransport, MeasuredValue[Any]],
+            retained: dict[ZendureTransport, bool] | None = None,
+        ):
             selected = self._arbiter.select(
                 name,
                 tuple(
-                    SourceMeasurement(source, value)
+                    SourceMeasurement(
+                        source,
+                        value,
+                        (retained or {}).get(source, False),
+                    )
                     for source, value in values.items()
                 ),
                 safety_critical=name.rsplit(".", 1)[-1] in _SAFETY_PROPERTIES,
             )
             trace[name] = selected
+            previous = self._selection.get(system_id, {}).get(name)
+            if previous is None or previous.transport != selected.transport:
+                self._selection_changed_at.setdefault(system_id, {})[name] = current
             return selected.measurement
 
         scalar_names = (
@@ -110,6 +135,12 @@ class NativeSourceFusion:
                     source: getattr(state, name)
                     for source, state in states.items()
                 },
+                {
+                    source: self._retained_main.get((source, system_id), {}).get(
+                        name, False
+                    )
+                    for source in states
+                },
             )
             for name in scalar_names
         }
@@ -120,6 +151,12 @@ class NativeSourceFusion:
                     {
                         source: getattr(state.setpoints, item.name)
                         for source, state in states.items()
+                    },
+                    {
+                        source: self._retained_main.get(
+                            (source, system_id), {}
+                        ).get(item.name, False)
+                        for source in states
                     },
                 )
                 for item in fields(ReportedDeviceSetpoints)
@@ -206,6 +243,12 @@ class NativeSourceFusion:
                         source: getattr(pack, name)
                         for source, pack in available.items()
                     },
+                    {
+                        source: self._retained_packs.get(
+                            (source, system_id, pack_id), {}
+                        ).get(name, False)
+                        for source in available
+                    },
                 )
                 for name in measurement_names
             }
@@ -266,16 +309,112 @@ class NativeSourceFusion:
         ]
         return next((value for value in values if value.monitoring), values[0])
 
-    def source_diagnostics(self, system_id: str) -> dict[str, Any]:
+    def source_diagnostics(
+        self,
+        system_id: str,
+        *,
+        now: datetime | None = None,
+    ) -> dict[str, Any]:
+        current = now or datetime.now(timezone.utc)
         return {
             name: {
                 "transport": selected.transport.value if selected.transport else None,
                 "status": selected.status.value,
                 "reason": selected.reason,
                 "alternatives": [source.value for source in selected.alternatives],
+                "selected_at": self._selection_changed_at.get(
+                    system_id, {}
+                ).get(name),
+                "sources": self._source_quality(
+                    system_id,
+                    name,
+                    current,
+                ),
             }
             for name, selected in sorted(self._selection.get(system_id, {}).items())
         }
+
+    def _record_retained(
+        self,
+        transport: ZendureTransport,
+        message: CloudMqttMessage,
+    ) -> None:
+        system_id = message.device_candidate_id
+        payload = message.parsed_payload
+        if system_id is None or not isinstance(payload, dict):
+            return
+        properties = payload.get("properties")
+        if isinstance(properties, dict):
+            destination = self._retained_main.setdefault(
+                (transport, system_id), {}
+            )
+            for raw_name in properties:
+                mapping = MAIN_PROPERTY_MAPPINGS.get(str(raw_name))
+                if mapping is not None:
+                    destination[mapping.target] = message.retained
+        packs = payload.get("packData")
+        if not isinstance(packs, list):
+            return
+        for pack in packs:
+            if not isinstance(pack, dict):
+                continue
+            pack_id = _pack_id(pack)
+            if pack_id is None:
+                continue
+            destination = self._retained_packs.setdefault(
+                (transport, system_id, pack_id), {}
+            )
+            for raw_name in pack:
+                mapping = PACK_PROPERTY_MAPPINGS.get(str(raw_name))
+                if mapping is not None:
+                    destination[mapping.target] = message.retained
+            if "power" in pack:
+                destination["charge_power_w"] = message.retained
+                destination["discharge_power_w"] = message.retained
+
+    def _source_quality(
+        self,
+        system_id: str,
+        property_name: str,
+        now: datetime,
+    ) -> list[dict[str, Any]]:
+        values = []
+        for source, normalizer in self._normalizers.items():
+            state = normalizer.snapshot(system_id, now=now).state
+            measurement = _measurement(state, property_name)
+            if measurement is None:
+                continue
+            observed = measurement.observed_at
+            values.append({
+                "transport": source.value,
+                "validity": measurement.validity.value,
+                "observed_at": observed,
+                "age_seconds": (
+                    max(0.0, (now - observed).total_seconds())
+                    if observed is not None
+                    else None
+                ),
+                "retained": self._property_retained(
+                    source, system_id, property_name
+                ),
+            })
+        return values
+
+    def _property_retained(
+        self,
+        source: ZendureTransport,
+        system_id: str,
+        name: str,
+    ) -> bool:
+        if name.startswith("packs."):
+            _, pack_id, target = name.split(".", 2)
+            return self._retained_packs.get(
+                (source, system_id, pack_id), {}
+            ).get(target, False)
+        target = name.split(".", 1)[-1]
+        return self._retained_main.get((source, system_id), {}).get(
+            target, False
+        )
 
 
 def _transport(value: object) -> ZendureTransport | None:
@@ -283,3 +422,26 @@ def _transport(value: object) -> ZendureTransport | None:
         return ZendureTransport(str(value))
     except ValueError:
         return None
+
+
+def _pack_id(pack: dict[str, Any]) -> str | None:
+    for key in ("sn", "packId", "packKey"):
+        value = pack.get(key)
+        if isinstance(value, (str, int)) and not isinstance(value, bool):
+            text = str(value).strip()
+            if text:
+                return text
+    return None
+
+
+def _measurement(
+    state: NeutralDeviceState,
+    property_name: str,
+) -> MeasuredValue[Any] | None:
+    if property_name.startswith("setpoints."):
+        return getattr(state.setpoints, property_name.split(".", 1)[1], None)
+    if property_name.startswith("packs."):
+        _, pack_id, target = property_name.split(".", 2)
+        pack = next((item for item in state.packs if item.pack_id == pack_id), None)
+        return getattr(pack, target, None) if pack is not None else None
+    return getattr(state, property_name, None)

@@ -147,8 +147,13 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
                 self._schedule_command_timeout(command_id)
             return result
 
-    def _handle_message(self, topic: str, payload: bytes) -> None:
-        super()._handle_message(topic, payload)
+    def _handle_message(
+        self,
+        topic: str,
+        payload: bytes,
+        retained: bool = False,
+    ) -> None:
+        super()._handle_message(topic, payload, retained)
         if not self._messages:
             return
         message = self._messages[-1]

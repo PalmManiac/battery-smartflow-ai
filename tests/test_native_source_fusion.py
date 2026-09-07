@@ -48,7 +48,14 @@ async def make_bootstrap():
     return await ZendureCloudClient(post).async_discover(token)
 
 
-def report(at, properties, *, transport="cloud_mqtt", packs=None):
+def report(
+    at,
+    properties,
+    *,
+    transport="cloud_mqtt",
+    packs=None,
+    retained=False,
+):
     payload = {"properties": properties}
     if packs is not None:
         payload["packData"] = packs
@@ -63,6 +70,7 @@ def report(at, properties, *, transport="cloud_mqtt", packs=None):
         known_topic=True,
         session_number=1,
         transport=transport,
+        retained=retained,
     )
 
 
@@ -120,6 +128,57 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
         diagnostics = self.fusion.source_diagnostics("cloud_mqtt:device-1")
         self.assertEqual(diagnostics["soc_pct"]["transport"], "zensdk")
         self.assertNotIn("value", diagnostics["soc_pct"])
+
+    def test_retained_message_cannot_override_fresh_cloud_value(self):
+        self.fusion.apply(
+            report(self.now, {"electricLevel": 44}, transport="cloud_mqtt")
+        )
+        result = self.fusion.apply(
+            report(
+                self.now + timedelta(seconds=1),
+                {"electricLevel": 99},
+                transport="zensdk",
+                retained=True,
+            )
+        )
+        self.assertEqual(result.state.soc_pct.value, 44.0)
+        diagnostics = self.fusion.source_diagnostics(
+            "cloud_mqtt:device-1",
+            now=self.now + timedelta(seconds=1),
+        )["soc_pct"]
+        self.assertEqual(diagnostics["transport"], "cloud_mqtt")
+        zensdk = next(
+            item for item in diagnostics["sources"]
+            if item["transport"] == "zensdk"
+        )
+        self.assertTrue(zensdk["retained"])
+        self.assertEqual(zensdk["age_seconds"], 0.0)
+
+    def test_selected_at_changes_only_when_selected_source_changes(self):
+        self.fusion.apply(
+            report(self.now, {"electricLevel": 40}, transport="cloud_mqtt")
+        )
+        first = self.fusion.source_diagnostics(
+            "cloud_mqtt:device-1", now=self.now
+        )["soc_pct"]["selected_at"]
+        self.fusion.snapshot(
+            "cloud_mqtt:device-1", now=self.now + timedelta(seconds=1)
+        )
+        unchanged = self.fusion.source_diagnostics(
+            "cloud_mqtt:device-1", now=self.now + timedelta(seconds=1)
+        )["soc_pct"]["selected_at"]
+        self.fusion.apply(
+            report(
+                self.now + timedelta(seconds=2),
+                {"electricLevel": 41},
+                transport="zensdk",
+            )
+        )
+        changed = self.fusion.source_diagnostics(
+            "cloud_mqtt:device-1", now=self.now + timedelta(seconds=2)
+        )["soc_pct"]["selected_at"]
+        self.assertEqual(first, unchanged)
+        self.assertGreater(changed, unchanged)
 
 
 class NativeReadToleranceTests(unittest.TestCase):

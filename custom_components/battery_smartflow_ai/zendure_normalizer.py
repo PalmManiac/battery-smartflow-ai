@@ -342,7 +342,10 @@ class ZendureCloudNormalizer:
                     observed_at,
                 )
             self._apply_packs(system_id, payload.get("packData"), observed_at)
-        if message.topic.endswith("/properties/energy"):
+        if (
+            message.topic.endswith("/properties/energy")
+            and not message.retained
+        ):
             self._hems_activity[system_id].observe_energy(observed_at=observed_at)
         return self.snapshot(system_id, now=now or observed_at)
 

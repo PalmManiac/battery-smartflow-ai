@@ -61,7 +61,8 @@ class FakeSession:
         self.property_writes.append((product_id, device_id, writes))
         return True
     def disconnect(self): self.disconnected = True
-    def emit(self, topic, payload): self.on_message(topic, payload)
+    def emit(self, topic, payload, retained=False):
+        self.on_message(topic, payload, retained)
     def drop(self): self.on_disconnect("network lost")
 
 
@@ -153,6 +154,21 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         message = transport.messages[0]
         self.assertEqual(message.device_candidate_id, "cloud_mqtt:main-1")
         self.assertEqual(message.pack_id, "pack-77")
+
+    async def test_mqtt_retained_flag_is_preserved_on_message(self):
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=self.factory,
+            clock=lambda: self.now,
+        )
+        await transport.async_start()
+        self.sessions[0].emit(
+            "/product-a/main-1/properties/report",
+            json.dumps({"properties": {"socLevel": 55}}).encode(),
+            retained=True,
+        )
+        await asyncio.sleep(0)
+        self.assertTrue(transport.messages[0].retained)
 
     async def test_properties_energy_is_known_and_routed_per_device(self):
         transport = ZendureCloudMqttTransport(

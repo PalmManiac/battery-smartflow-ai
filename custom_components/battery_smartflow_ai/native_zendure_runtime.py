@@ -1169,6 +1169,7 @@ class NativeZendureRuntime:
                     device_id=device_id,
                     transport=message_transport,
                     observed_at=message.received_at,
+                    retained=bool(getattr(message, "retained", False)),
                 )
             if (
                 message.transport == "zensdk"
