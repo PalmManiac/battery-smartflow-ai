@@ -104,6 +104,32 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.hems_active.validity, ValueValidity.INVALID)
         self.assertIsNone(state.hems_active.value)
 
+    def test_small_soc_difference_is_allowed_but_large_conflict_blocks(self):
+        self.fusion.apply(
+            report(self.now, {"electricLevel": 50}, transport="cloud_mqtt")
+        )
+        plausible = self.fusion.apply(
+            report(self.now, {"electricLevel": 52}, transport="zensdk")
+        ).state
+        self.assertTrue(plausible.soc_pct.valid)
+        conflicting = self.fusion.apply(
+            report(
+                self.now + timedelta(seconds=1),
+                {"electricLevel": 70},
+                transport="zensdk",
+            )
+        ).state
+        self.assertEqual(conflicting.soc_pct.validity, ValueValidity.INVALID)
+
+    def test_conflicting_fresh_modes_block_selection(self):
+        self.fusion.apply(
+            report(self.now, {"acMode": 1}, transport="cloud_mqtt")
+        )
+        state = self.fusion.apply(
+            report(self.now, {"acMode": 2}, transport="zensdk")
+        ).state
+        self.assertEqual(state.mode.validity, ValueValidity.INVALID)
+
     def test_pack_properties_are_fused_and_zero_remains_valid(self):
         self.fusion.apply(report(
             self.now,

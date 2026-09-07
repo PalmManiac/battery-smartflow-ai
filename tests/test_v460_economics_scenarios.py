@@ -208,6 +208,25 @@ def test_restart_preserves_totals_without_booking_offline_gap_twice() -> None:
     assert restored_engine.total_snapshot().grid_charge_cost == pytest.approx(0.003)
 
 
+def test_same_runtime_cycle_cannot_book_parallel_sources_twice() -> None:
+    """One arbitrated state timestamp remains one physical accounting sample."""
+
+    power = EconomicPowerFlows(grid_to_battery_w=1800)
+    accumulator = EnergyAccumulator(max_interval_seconds=300)
+    accumulator.add_sample(sampled_at=NOW, power=power)
+    first = accumulator.add_sample(
+        sampled_at=NOW + timedelta(seconds=20), power=power
+    )
+    duplicate = accumulator.add_sample(
+        sampled_at=NOW + timedelta(seconds=20), power=power
+    )
+
+    assert first.status == "accounted"
+    assert duplicate.status == "duplicate_or_out_of_order"
+    assert duplicate.accounted_seconds == 0.0
+    assert accumulator.snapshot().total.grid_to_battery_kwh == pytest.approx(0.01)
+
+
 def test_midnight_keeps_total_and_books_only_new_day_share_as_daily() -> None:
     accumulator = EnergyAccumulator(max_interval_seconds=300)
     engine = EconomicsEngine(currency="EUR")

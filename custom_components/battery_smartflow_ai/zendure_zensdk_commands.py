@@ -231,6 +231,7 @@ class ZendureZenSdkCommandAdapter:
                 property_name=property_name,
                 value=value,
                 observed_at=observed_at,
+                source_transport=ZendureTransport.ZENSDK,
             ):
                 confirmed += 1
         return confirmed

@@ -35,8 +35,23 @@ _TRANSPORTS = (
     ZendureTransport.CLOUD_MQTT,
 )
 _SAFETY_PROPERTIES = frozenset(
-    {"hems_active", "fault_code", "protection_active"}
+    {
+        "hems_active",
+        "fault_code",
+        "protection_active",
+        "mode",
+        "soc_pct",
+        "cell_min_v",
+        "cell_max_v",
+        "temperature_c",
+    }
 )
+_SAFETY_TOLERANCES = {
+    "soc_pct": 5.0,
+    "cell_min_v": 0.15,
+    "cell_max_v": 0.15,
+    "temperature_c": 10.0,
+}
 
 
 class NativeSourceFusion:
@@ -93,6 +108,7 @@ class NativeSourceFusion:
             values: dict[ZendureTransport, MeasuredValue[Any]],
             retained: dict[ZendureTransport, bool] | None = None,
         ):
+            target = name.rsplit(".", 1)[-1]
             selected = self._arbiter.select(
                 name,
                 tuple(
@@ -103,7 +119,8 @@ class NativeSourceFusion:
                     )
                     for source, value in values.items()
                 ),
-                safety_critical=name.rsplit(".", 1)[-1] in _SAFETY_PROPERTIES,
+                safety_critical=target in _SAFETY_PROPERTIES,
+                conflict_tolerance=_SAFETY_TOLERANCES.get(target),
             )
             trace[name] = selected
             previous = self._selection.get(system_id, {}).get(name)

@@ -70,6 +70,7 @@ class CommandVerification:
     transport_at: datetime | None = None
     readback_at: datetime | None = None
     readback_value: float | None = None
+    readback_transport: ZendureTransport | None = None
     effect_at: datetime | None = None
     effect_status: EffectStatus = EffectStatus.PENDING
     reason: str | None = None
@@ -116,6 +117,11 @@ class CommandVerification:
             "max_attempts": self.max_attempts,
             "transport_status": self.transport_status,
             "readback_value": self.readback_value,
+            "readback_transport": (
+                self.readback_transport.value
+                if self.readback_transport is not None
+                else None
+            ),
             "prepared_at": self.prepared_at,
             "gate_at": self.gate_at,
             "sent_at": self.sent_at,
@@ -212,11 +218,15 @@ class NativeCommandVerificationManager:
 
     def observe_readback(self, command_id: str, *, device_id: str,
                          property_name: str, value: float,
-                         observed_at: datetime) -> bool:
+                         observed_at: datetime,
+                         source_transport: ZendureTransport | None = None,
+                         retained: bool = False) -> bool:
         command = self._commands[command_id]
         if command.status is CommandVerificationStatus.SUPERSEDED:
             return False
         if device_id != command.device_id or property_name != command.readback.property_name:
+            return False
+        if retained:
             return False
         observed = _aware(observed_at)
         if command.sent_at is None or observed <= command.sent_at:
@@ -227,6 +237,7 @@ class NativeCommandVerificationManager:
         if command.readback.matches(numeric):
             command.readback_at = observed
             command.readback_value = numeric
+            command.readback_transport = source_transport
             if command.status is CommandVerificationStatus.TRANSPORT_ERROR:
                 command.status = CommandVerificationStatus.CONTRADICTORY_RESPONSE
                 command.reason = "transport_error_but_readback_confirmed"
@@ -237,6 +248,7 @@ class NativeCommandVerificationManager:
             return True
         command.readback_value = numeric
         command.readback_at = observed
+        command.readback_transport = source_transport
         command.status = (
             CommandVerificationStatus.CONTRADICTORY_RESPONSE
             if previously_confirmed or len(set(command.readback_values)) > 1
