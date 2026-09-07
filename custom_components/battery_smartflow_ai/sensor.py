@@ -53,6 +53,11 @@ from .const import (
     AUTOMATIC_WEIGHTING_ENUMS,
 )
 from .device_profiles import DEVICE_PROFILES
+from .core.full_charge_maintenance import (
+    MaintenanceBlockReason,
+    MaintenanceState,
+    MaintenanceWindow,
+)
 from .diagnostic_values import safe_diagnostic_sensor_value
 from .native_registry_identity import (
     native_hardware_unique_id,
@@ -1430,6 +1435,60 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = tuple(
     description
     for description in _SENSOR_DESCRIPTIONS
     if description.key not in RETIRED_DIAGNOSTIC_SENSOR_KEYS
+)
+
+# V5-only full-charge maintenance entities stay outside the frozen V4.6
+# description tuple so existing entity identity remains provably unchanged.
+SENSORS += (
+    ZendureSensorEntityDescription(
+        key="full_charge_maintenance_state",
+        translation_key="full_charge_maintenance_state",
+        runtime_key="full_charge_maintenance_state",
+        device_class=SensorDeviceClass.ENUM,
+        options=[item.value for item in MaintenanceState],
+        icon="mdi:battery-sync-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="full_charge_maintenance_active",
+        translation_key="full_charge_maintenance_active",
+        runtime_key="full_charge_maintenance_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
+        icon="mdi:battery-arrow-up-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="full_charge_maintenance_next_recommended",
+        translation_key="full_charge_maintenance_next_recommended",
+        runtime_key="full_charge_maintenance_next_recommended",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:calendar-clock-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="full_charge_maintenance_last_confirmed",
+        translation_key="full_charge_maintenance_last_confirmed",
+        runtime_key="full_charge_maintenance_last_confirmed",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:battery-check-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="full_charge_maintenance_window",
+        translation_key="full_charge_maintenance_window",
+        runtime_key="full_charge_maintenance_window",
+        device_class=SensorDeviceClass.ENUM,
+        options=[item.value for item in MaintenanceWindow],
+        icon="mdi:weather-sunset-up",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="full_charge_maintenance_block_reason",
+        translation_key="full_charge_maintenance_block_reason",
+        runtime_key="full_charge_maintenance_block_reason",
+        device_class=SensorDeviceClass.ENUM,
+        options=[item.value for item in MaintenanceBlockReason],
+        icon="mdi:battery-alert-variant-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 NATIVE_ZENDURE_SENSOR_KEYS = frozenset(

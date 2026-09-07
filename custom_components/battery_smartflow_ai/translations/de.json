@@ -212,10 +212,14 @@
         "description": "Erweiterte Schutz-, Diagnose- und Planungsfunktionen. Die lernbasierte Ladefenster-Planung wird automatisch verwendet, sobald genügend Lerndaten vorhanden sind. Bei Bedarf kann sie hier deaktiviert werden. Für den Zellspannungs-Schutz muss zuerst der Expertenmodus aktiviert werden.",
         "data": {
           "expert_mode_enabled": "Expertenmodus aktivieren",
+          "full_charge_maintenance_enabled": "Volladungswartung verwenden",
+          "full_charge_maintenance_interval_days": "Empfohlenes Volladeintervall",
           "learned_planning_enabled": "Lernbasierte Ladefenster-Planung verwenden"
         },
         "data_description": {
           "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen.",
+          "full_charge_maintenance_enabled": "Erlaubt BSFAI, zu günstigen Zeitpunkten eine schonende Volladung zu planen. Dies ist kein BMS-Kalibrierungsbefehl.",
+          "full_charge_maintenance_interval_days": "Tage zwischen empfohlenen bestätigten Volladungen (7–90).",
           "learned_planning_enabled": "Wenn aktiviert, nutzt Battery SmartFlow AI die lernbasierte Ladefenster-Planung automatisch, sobald genügend Lerndaten vorhanden sind. Bis dahin bleibt die klassische Planung aktiv. Wenn deaktiviert, wird dauerhaft die klassische Planung verwendet."
         }
       },
@@ -407,6 +411,12 @@
           "reserve_oriented": "Reserveorientiert"
         }
       },
+      "full_charge_maintenance_state": {"name": "Volladungswartung", "state": {"unknown": "Unbekannt", "not_due": "Noch nicht fällig", "due_soon": "Bald fällig", "due": "Fällig", "waiting_for_favorable_window": "Wartet auf günstiges Ladefenster", "charging_to_full": "Lädt vollständig", "confirming_full": "Bestätigt Volladung", "completed": "Abgeschlossen", "blocked": "Blockiert"}},
+      "full_charge_maintenance_active": {"name": "Volladungswartung aktiv", "state": {"yes": "Ja", "no": "Nein"}},
+      "full_charge_maintenance_next_recommended": {"name": "Nächste empfohlene Volladung"},
+      "full_charge_maintenance_last_confirmed": {"name": "Diagnose: Letzte bestätigte Volladung"},
+      "full_charge_maintenance_window": {"name": "Diagnose: Wartungs-Ladefenster", "state": {"none": "Keines", "pv_surplus": "PV-Überschuss", "low_price": "Niedriger Preis", "existing_strategic_charge": "Bestehende strategische Ladung", "overdue_deadline": "Überfällige Frist"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnose: Blockierungsgrund der Volladungswartung", "state": {"none": "Kein Blocker", "not_enabled": "Nicht aktiviert", "hems_active": "Zendure HEMS aktiv", "device_not_ready": "Gerät nicht bereit", "transport_unavailable": "Verbindung nicht verfügbar", "soc_invalid_or_stale": "SoC ungültig oder veraltet", "protection_active": "Batterieschutz aktiv", "pack_data_conflict": "Widersprüchliche Batterie-Pack-Daten"}},
       "learned_planning_status": {
         "name": "Ladeplanung: Lernstatus",
         "state": {

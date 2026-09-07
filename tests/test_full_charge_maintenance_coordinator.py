@@ -37,12 +37,14 @@ class FullChargeMaintenanceCoordinatorTests(unittest.TestCase):
             "strategic_charge_active=bool(charge_commit_active)", self.source
         )
 
-    def test_observation_mode_cannot_request_maintenance_charge(self):
+    def test_user_setting_is_passed_to_observation_planner(self):
         call = self.source[
             self.source.index("native_runtime.full_charge_maintenance_input("):
         ]
         call = call[:call.index(")\n                if maintenance_input")]
-        self.assertIn("enabled=False", call)
+        self.assertIn("SETTING_FULL_CHARGE_MAINTENANCE_ENABLED", call)
+        self.assertIn("DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED", call)
+        self.assertIn("SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS", self.source)
 
     def test_status_is_exposed_without_changing_strategy_decision(self):
         self.assertIn("**maintenance_status", self.source)
@@ -52,6 +54,7 @@ class FullChargeMaintenanceCoordinatorTests(unittest.TestCase):
         ]
         self.assertNotIn("DeviceCommand(", maintenance_section)
         self.assertNotIn("charge_commit_target_soc =", maintenance_section)
+        self.assertNotIn("display_decision =", maintenance_section)
 
 
 if __name__ == "__main__":

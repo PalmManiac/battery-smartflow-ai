@@ -212,10 +212,14 @@
         "description": "Fonctions avancées de protection, de diagnostic et de planification. La planification apprise des fenêtres de charge est utilisée automatiquement dès que suffisamment de données sont disponibles. Elle peut être désactivée ici si nécessaire. La protection par tension de cellule nécessite d’abord l’activation du mode expert.",
         "data": {
           "expert_mode_enabled": "Activer le mode expert",
+          "full_charge_maintenance_enabled": "Utiliser l’entretien par charge complète",
+          "full_charge_maintenance_interval_days": "Intervalle recommandé de charge complète",
           "learned_planning_enabled": "Utiliser la planification apprise des fenêtres de charge"
         },
         "data_description": {
           "expert_mode_enabled": "Active la zone expert avancée pour des fonctions supplémentaires de protection et de diagnostic.",
+          "full_charge_maintenance_enabled": "Autorise BSFAI à planifier une charge complète protectrice à un moment favorable. Il ne s’agit pas d’une commande d’étalonnage du BMS.",
+          "full_charge_maintenance_interval_days": "Jours entre les charges complètes confirmées recommandées (7–90).",
           "learned_planning_enabled": "Si activé, Battery SmartFlow AI utilise automatiquement la planification apprise des fenêtres de charge dès que suffisamment de données sont disponibles. Jusque-là, la planification classique reste active. Si désactivé, la planification classique est toujours utilisée."
         }
       },
@@ -407,6 +411,12 @@
           "reserve_oriented": "Orientée réserve"
         }
       },
+      "full_charge_maintenance_state": {"name": "Entretien par charge complète", "state": {"unknown": "Inconnu", "not_due": "Non requis", "due_soon": "Bientôt requis", "due": "Requis", "waiting_for_favorable_window": "En attente d’une fenêtre favorable", "charging_to_full": "Charge complète en cours", "confirming_full": "Confirmation de la charge complète", "completed": "Terminé", "blocked": "Bloqué"}},
+      "full_charge_maintenance_active": {"name": "Entretien par charge complète actif", "state": {"yes": "Oui", "no": "Non"}},
+      "full_charge_maintenance_next_recommended": {"name": "Prochaine charge complète recommandée"},
+      "full_charge_maintenance_last_confirmed": {"name": "Diagnostic : dernière charge complète confirmée"},
+      "full_charge_maintenance_window": {"name": "Diagnostic : fenêtre de charge d’entretien", "state": {"none": "Aucune", "pv_surplus": "Surplus photovoltaïque", "low_price": "Prix bas", "existing_strategic_charge": "Charge stratégique existante", "overdue_deadline": "Échéance dépassée"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnostic : blocage de l’entretien", "state": {"none": "Aucun blocage", "not_enabled": "Non activé", "hems_active": "Zendure HEMS actif", "device_not_ready": "Appareil non prêt", "transport_unavailable": "Connexion indisponible", "soc_invalid_or_stale": "SoC invalide ou obsolète", "protection_active": "Protection de batterie active", "pack_data_conflict": "Conflit des données des batteries"}},
       "learned_planning_status": {
         "name": "Planification de charge : état d’apprentissage",
         "state": {

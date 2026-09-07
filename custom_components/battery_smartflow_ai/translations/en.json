@@ -212,10 +212,14 @@
         "description": "Advanced protection, diagnostic and planning functions. Learned charge-window planning is used automatically once enough learning data is available. It can be disabled here if needed. Cell-voltage protection requires expert mode to be enabled first.",
         "data": {
           "expert_mode_enabled": "Enable expert mode",
+          "full_charge_maintenance_enabled": "Use full-charge maintenance",
+          "full_charge_maintenance_interval_days": "Recommended full-charge interval",
           "learned_planning_enabled": "Use learned charge-window planning"
         },
         "data_description": {
           "expert_mode_enabled": "Enables the advanced expert area for additional protection and diagnostic functions.",
+          "full_charge_maintenance_enabled": "Allows BSFAI to plan a protective full charge at favorable times. This is not a BMS calibration command.",
+          "full_charge_maintenance_interval_days": "Days between recommended confirmed full charges (7–90).",
           "learned_planning_enabled": "When enabled, Battery SmartFlow AI automatically uses learned charge-window planning once enough learning data is available. Until then, classic planning remains active. When disabled, classic planning is always used."
         }
       },
@@ -407,6 +411,12 @@
           "reserve_oriented": "Reserve-oriented"
         }
       },
+      "full_charge_maintenance_state": {"name": "Full-charge maintenance", "state": {"unknown": "Unknown", "not_due": "Not due", "due_soon": "Due soon", "due": "Due", "waiting_for_favorable_window": "Waiting for favorable window", "charging_to_full": "Charging to full", "confirming_full": "Confirming full charge", "completed": "Completed", "blocked": "Blocked"}},
+      "full_charge_maintenance_active": {"name": "Full-charge maintenance active", "state": {"yes": "Yes", "no": "No"}},
+      "full_charge_maintenance_next_recommended": {"name": "Next recommended full charge"},
+      "full_charge_maintenance_last_confirmed": {"name": "Diagnostic: Last confirmed full charge"},
+      "full_charge_maintenance_window": {"name": "Diagnostic: Maintenance charging window", "state": {"none": "None", "pv_surplus": "PV surplus", "low_price": "Low price", "existing_strategic_charge": "Existing strategic charge", "overdue_deadline": "Overdue deadline"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnostic: Full-charge maintenance blocker", "state": {"none": "No blocker", "not_enabled": "Not enabled", "hems_active": "Zendure HEMS active", "device_not_ready": "Device not ready", "transport_unavailable": "Transport unavailable", "soc_invalid_or_stale": "SoC invalid or stale", "protection_active": "Battery protection active", "pack_data_conflict": "Battery-pack data conflict"}},
       "learned_planning_status": {
         "name": "Charge planning: Learning status",
         "state": {
