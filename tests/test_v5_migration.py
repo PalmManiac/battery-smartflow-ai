@@ -66,6 +66,40 @@ class V5MigrationTests(unittest.TestCase):
         )
         self.assertEqual(once, twice)
 
+    def test_empty_or_partial_v47_storage_gets_only_safe_metadata(self):
+        empty = migrate_persisted_v47_state(
+            {}, legacy_system_id="config_entry:entry-1"
+        )
+        self.assertEqual(empty["v5_binding_state"], "unmatched")
+        self.assertIsNone(empty["v5_native_candidate_id"])
+        self.assertFalse(empty["v5_native_control_enabled"])
+        self.assertTrue(empty["v5_legacy_zha_enabled"])
+        self.assertNotIn("v5_charge_commit_owner", empty)
+
+        partial = {"soc_min": 9.0, "optional_future_section": None}
+        migrated = migrate_persisted_v47_state(
+            partial, legacy_system_id="config_entry:entry-1"
+        )
+        self.assertEqual(migrated["soc_min"], 9.0)
+        self.assertIsNone(migrated["optional_future_section"])
+
+    def test_unavailable_discovery_cannot_promote_previous_unmatched_state(self):
+        first = migrate_persisted_v47_state(
+            {"charge_commit_active": True},
+            legacy_system_id="config_entry:entry-1",
+        )
+        restarted = migrate_persisted_v47_state(
+            first,
+            legacy_system_id="config_entry:entry-1",
+            native_candidate_id=None,
+        )
+        self.assertEqual(restarted["v5_binding_state"], "unmatched")
+        self.assertIsNone(restarted["v5_native_candidate_id"])
+        self.assertEqual(
+            restarted["v5_charge_commit_owner"], "config_entry:entry-1"
+        )
+        self.assertFalse(restarted["v5_native_control_enabled"])
+
     def test_confirmed_binding_keeps_zha_and_native_writes_separate(self):
         initial = initial_v5_migration_state("entry-1")
         confirmed = confirm_native_binding(
