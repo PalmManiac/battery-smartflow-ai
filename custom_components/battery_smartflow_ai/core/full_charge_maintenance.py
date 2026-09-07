@@ -42,6 +42,7 @@ class MaintenanceBlockReason(StrEnum):
     SOC_INVALID_OR_STALE = "soc_invalid_or_stale"
     PROTECTION_ACTIVE = "protection_active"
     PACK_DATA_CONFLICT = "pack_data_conflict"
+    MANUAL_MODE = "manual_mode"
 
 
 class MaintenanceWindow(StrEnum):
@@ -140,6 +141,7 @@ class FullChargeMaintenanceInput:
     price_window_favorable: bool = False
     strategic_charge_active: bool = False
     native_full_state_confirmed: bool = False
+    automation_allowed: bool = True
 
     def __post_init__(self) -> None:
         if self.now.tzinfo is None:
@@ -225,13 +227,6 @@ class FullChargeMaintenancePlanner:
             return _charging_decision(record, MaintenanceWindow.NONE)
         if base_state in {MaintenanceState.NOT_DUE, MaintenanceState.DUE_SOON}:
             return FullChargeMaintenanceDecision(record, base_state)
-        if not data.enabled:
-            return FullChargeMaintenanceDecision(
-                record,
-                MaintenanceState.BLOCKED,
-                block_reason=MaintenanceBlockReason.NOT_ENABLED,
-            )
-
         window = _select_window(data)
         if window is MaintenanceWindow.NONE and next_due is not None:
             if now >= next_due + self._max_postpone:
@@ -270,6 +265,10 @@ def _schedule_state(
 
 
 def _block_reason(data: FullChargeMaintenanceInput) -> MaintenanceBlockReason:
+    if not data.enabled:
+        return MaintenanceBlockReason.NOT_ENABLED
+    if not data.automation_allowed:
+        return MaintenanceBlockReason.MANUAL_MODE
     if data.hems_active:
         return MaintenanceBlockReason.HEMS_ACTIVE
     if data.protection_active:

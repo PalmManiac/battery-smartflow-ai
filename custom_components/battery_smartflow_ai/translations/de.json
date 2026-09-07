@@ -416,7 +416,7 @@
       "full_charge_maintenance_next_recommended": {"name": "Nächste empfohlene Volladung"},
       "full_charge_maintenance_last_confirmed": {"name": "Diagnose: Letzte bestätigte Volladung"},
       "full_charge_maintenance_window": {"name": "Diagnose: Wartungs-Ladefenster", "state": {"none": "Keines", "pv_surplus": "PV-Überschuss", "low_price": "Niedriger Preis", "existing_strategic_charge": "Bestehende strategische Ladung", "overdue_deadline": "Überfällige Frist"}},
-      "full_charge_maintenance_block_reason": {"name": "Diagnose: Blockierungsgrund der Volladungswartung", "state": {"none": "Kein Blocker", "not_enabled": "Nicht aktiviert", "hems_active": "Zendure HEMS aktiv", "device_not_ready": "Gerät nicht bereit", "transport_unavailable": "Verbindung nicht verfügbar", "soc_invalid_or_stale": "SoC ungültig oder veraltet", "protection_active": "Batterieschutz aktiv", "pack_data_conflict": "Widersprüchliche Batterie-Pack-Daten"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnose: Blockierungsgrund der Volladungswartung", "state": {"none": "Kein Blocker", "not_enabled": "Nicht aktiviert", "hems_active": "Zendure HEMS aktiv", "device_not_ready": "Gerät nicht bereit", "transport_unavailable": "Verbindung nicht verfügbar", "soc_invalid_or_stale": "SoC ungültig oder veraltet", "protection_active": "Batterieschutz aktiv", "pack_data_conflict": "Widersprüchliche Batterie-Pack-Daten", "manual_mode": "Manueller Modus aktiv"}},
       "learned_planning_status": {
         "name": "Ladeplanung: Lernstatus",
         "state": {

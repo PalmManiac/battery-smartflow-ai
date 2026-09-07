@@ -416,7 +416,7 @@
       "full_charge_maintenance_next_recommended": {"name": "Next recommended full charge"},
       "full_charge_maintenance_last_confirmed": {"name": "Diagnostic: Last confirmed full charge"},
       "full_charge_maintenance_window": {"name": "Diagnostic: Maintenance charging window", "state": {"none": "None", "pv_surplus": "PV surplus", "low_price": "Low price", "existing_strategic_charge": "Existing strategic charge", "overdue_deadline": "Overdue deadline"}},
-      "full_charge_maintenance_block_reason": {"name": "Diagnostic: Full-charge maintenance blocker", "state": {"none": "No blocker", "not_enabled": "Not enabled", "hems_active": "Zendure HEMS active", "device_not_ready": "Device not ready", "transport_unavailable": "Transport unavailable", "soc_invalid_or_stale": "SoC invalid or stale", "protection_active": "Battery protection active", "pack_data_conflict": "Battery-pack data conflict"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnostic: Full-charge maintenance blocker", "state": {"none": "No blocker", "not_enabled": "Not enabled", "hems_active": "Zendure HEMS active", "device_not_ready": "Device not ready", "transport_unavailable": "Transport unavailable", "soc_invalid_or_stale": "SoC invalid or stale", "protection_active": "Battery protection active", "pack_data_conflict": "Battery-pack data conflict", "manual_mode": "Manual mode active"}},
       "learned_planning_status": {
         "name": "Charge planning: Learning status",
         "state": {

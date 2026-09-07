@@ -416,7 +416,7 @@
       "full_charge_maintenance_next_recommended": {"name": "Volgende aanbevolen volledige lading"},
       "full_charge_maintenance_last_confirmed": {"name": "Diagnose: laatste bevestigde volledige lading"},
       "full_charge_maintenance_window": {"name": "Diagnose: onderhoudslaadvenster", "state": {"none": "Geen", "pv_surplus": "PV-overschot", "low_price": "Lage prijs", "existing_strategic_charge": "Bestaande strategische lading", "overdue_deadline": "Termijn overschreden"}},
-      "full_charge_maintenance_block_reason": {"name": "Diagnose: blokkering volledig-laadonderhoud", "state": {"none": "Geen blokkering", "not_enabled": "Niet ingeschakeld", "hems_active": "Zendure HEMS actief", "device_not_ready": "Apparaat niet gereed", "transport_unavailable": "Verbinding niet beschikbaar", "soc_invalid_or_stale": "SoC ongeldig of verouderd", "protection_active": "Accubeveiliging actief", "pack_data_conflict": "Tegenstrijdige accupakketgegevens"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnose: blokkering volledig-laadonderhoud", "state": {"none": "Geen blokkering", "not_enabled": "Niet ingeschakeld", "hems_active": "Zendure HEMS actief", "device_not_ready": "Apparaat niet gereed", "transport_unavailable": "Verbinding niet beschikbaar", "soc_invalid_or_stale": "SoC ongeldig of verouderd", "protection_active": "Accubeveiliging actief", "pack_data_conflict": "Tegenstrijdige accupakketgegevens", "manual_mode": "Handmatige modus actief"}},
       "learned_planning_status": {
         "name": "Laadplanning: leerstatus",
         "state": {

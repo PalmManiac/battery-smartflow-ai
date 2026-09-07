@@ -34,7 +34,7 @@ class FullChargeMaintenanceCoordinatorTests(unittest.TestCase):
         self.assertIn("pv_window_favorable=bool(", self.source)
         self.assertIn("price_window_favorable=bool(", self.source)
         self.assertIn(
-            "strategic_charge_active=bool(charge_commit_active)", self.source
+            'self._persist.get("charge_commit_active", False)', self.source
         )
 
     def test_user_setting_is_passed_to_observation_planner(self):
@@ -46,15 +46,28 @@ class FullChargeMaintenanceCoordinatorTests(unittest.TestCase):
         self.assertIn("DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED", call)
         self.assertIn("SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS", self.source)
 
-    def test_status_is_exposed_without_changing_strategy_decision(self):
+    def test_request_crosses_only_the_strategy_adapter(self):
         self.assertIn("**maintenance_status", self.source)
-        maintenance_section = self.source[
-            self.source.index("maintenance_status ="):
-            self.source.index('self._persist["debug"] = "OK"')
-        ]
-        self.assertNotIn("DeviceCommand(", maintenance_section)
-        self.assertNotIn("charge_commit_target_soc =", maintenance_section)
-        self.assertNotIn("display_decision =", maintenance_section)
+        self.assertIn("apply_maintenance_charge_request(", self.source)
+        adapter = (COMPONENT / "full_charge_maintenance_control.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("DeviceCommand(", adapter)
+        self.assertNotIn("native_zendure", adapter)
+
+    def test_maintenance_is_evaluated_before_strategy_and_charge_binding(self):
+        maintenance = self.source.index(
+            "maintenance_decision = self._full_charge_maintenance.evaluate("
+        )
+        strategy = self.source.index("decision = self._engine.evaluate(ctx)")
+        binding = self.source.index("decision = self._apply_charge_commit(")
+        self.assertLess(maintenance, strategy)
+        self.assertLess(strategy, binding)
+        self.assertIn("ctx.soc_max = 100.0", self.source[maintenance:strategy])
+        self.assertIn(
+            "soc_max = maintenance_application.effective_soc_max",
+            self.source[strategy:binding],
+        )
 
 
 if __name__ == "__main__":

@@ -211,6 +211,7 @@ from .market_price import (
 )
 from .manual_standby import active_power_direction
 from .full_charge_maintenance_runtime import FullChargeMaintenanceRuntime
+from .full_charge_maintenance_control import apply_maintenance_charge_request
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -4606,8 +4607,60 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._engine._learned_planning_waits_for_window(ctx)
             )
 
+            maintenance_status = self._full_charge_maintenance.sensor_data()
+            maintenance_decision = None
+            if (
+                native_runtime is not None
+                and hasattr(native_runtime, "full_charge_maintenance_input")
+                and getattr(native_runtime, "selected_device_id", None)
+            ):
+                maintenance_input = native_runtime.full_charge_maintenance_input(
+                    now=now,
+                    enabled=bool(self.entry.options.get(
+                        SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+                        DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
+                    )),
+                    pv_window_favorable=bool(
+                        pv_charge_latched
+                        or float(grid_export or 0.0)
+                        >= float(pv_charge_start_export_w)
+                    ),
+                    price_window_favorable=bool(
+                        price_now is not None
+                        and self._engine._is_valley_price_now(ctx)
+                    ),
+                    strategic_charge_active=bool(
+                        self._persist.get("charge_commit_active", False)
+                    ),
+                    automation_allowed=bool(ai_mode != AI_MODE_MANUAL),
+                )
+                if maintenance_input is not None:
+                    maintenance_decision = self._full_charge_maintenance.evaluate(
+                        native_runtime.selected_device_id,
+                        maintenance_input,
+                        interval_days=int(self.entry.options.get(
+                            SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+                            DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+                        )),
+                    )
+                    maintenance_status = self._full_charge_maintenance.sensor_data()
+                    if maintenance_decision.temporary_user_limit_override:
+                        ctx.soc_max = 100.0
+
             decision = self._engine.evaluate(ctx)
             strategy_selection = self._engine.last_strategy_selection
+
+            maintenance_application = apply_maintenance_charge_request(
+                decision,
+                maintenance_decision,
+                configured_soc_max=float(soc_max),
+                max_charge_w=float(max_charge),
+                grid_export_w=float(grid_export or 0.0),
+                automation_allowed=bool(ai_mode != AI_MODE_MANUAL),
+            )
+            decision = maintenance_application.decision
+            if maintenance_application.applied:
+                soc_max = maintenance_application.effective_soc_max
 
             cell_voltage_post_emergency_discharge_locked = (
                 self._update_cell_voltage_post_emergency_discharge_lock(
@@ -6374,41 +6427,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             current_valley_threshold = transparency_result.current_valley_threshold
             economic_discharge_threshold = transparency_result.economic_discharge_threshold
             effective_discharge_threshold = transparency_result.effective_discharge_threshold
-
-            maintenance_status = self._full_charge_maintenance.sensor_data()
-            if (
-                native_runtime is not None
-                and hasattr(native_runtime, "full_charge_maintenance_input")
-                and getattr(native_runtime, "selected_device_id", None)
-            ):
-                maintenance_input = native_runtime.full_charge_maintenance_input(
-                    now=now,
-                    enabled=bool(self.entry.options.get(
-                        SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
-                        DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
-                    )),
-                    pv_window_favorable=bool(
-                        pv_charge_latched
-                        or float(grid_export or 0.0)
-                        >= float(pv_charge_start_export_w)
-                    ),
-                    price_window_favorable=bool(
-                        price_now is not None
-                        and current_valley_threshold is not None
-                        and float(price_now) <= float(current_valley_threshold)
-                    ),
-                    strategic_charge_active=bool(charge_commit_active),
-                )
-                if maintenance_input is not None:
-                    self._full_charge_maintenance.evaluate(
-                        native_runtime.selected_device_id,
-                        maintenance_input,
-                        interval_days=int(self.entry.options.get(
-                            SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
-                            DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
-                        )),
-                    )
-                    maintenance_status = self._full_charge_maintenance.sensor_data()
 
             self._persist["debug"] = "OK"
             self._persist["last_ts"] = now.isoformat()
