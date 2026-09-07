@@ -207,6 +207,7 @@ class NativeZendureRuntime:
         pv_window_favorable: bool = False,
         price_window_favorable: bool = False,
         strategic_charge_active: bool = False,
+        automation_allowed: bool = True,
     ) -> FullChargeMaintenanceInput | None:
         """Build one native-only maintenance observation for the core planner."""
 
@@ -257,6 +258,7 @@ class NativeZendureRuntime:
             pv_window_favorable=pv_window_favorable,
             price_window_favorable=price_window_favorable,
             strategic_charge_active=strategic_charge_active,
+            automation_allowed=automation_allowed,
         )
 
     def consume_control_baseline(self) -> tuple[str, int, int] | None:

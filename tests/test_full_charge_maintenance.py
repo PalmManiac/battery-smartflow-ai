@@ -79,6 +79,21 @@ class FullChargeMaintenanceTests(unittest.TestCase):
             existing.selected_window, MaintenanceWindow.EXISTING_STRATEGIC_CHARGE
         )
 
+    def test_manual_mode_blocks_new_and_running_maintenance(self):
+        for record in (self.record(), self.record(active=True)):
+            decision = self.planner.evaluate(
+                record,
+                observation(
+                    automation_allowed=False,
+                    pv_window_favorable=True,
+                ),
+            )
+            self.assertEqual(decision.state, MaintenanceState.BLOCKED)
+            self.assertEqual(
+                decision.block_reason, MaintenanceBlockReason.MANUAL_MODE
+            )
+            self.assertFalse(decision.request_full_charge)
+
     def test_overdue_deadline_prevents_unbounded_postponement(self):
         result = self.planner.evaluate(self.record(days_ago=38), observation())
         self.assertEqual(result.selected_window, MaintenanceWindow.OVERDUE_DEADLINE)
@@ -95,6 +110,14 @@ class FullChargeMaintenanceTests(unittest.TestCase):
         self.assertEqual(active.target_soc_pct, 100.0)
         self.assertTrue(active.temporary_user_limit_override)
         self.assertTrue(active.record.active)
+        disabled_again = self.planner.evaluate(
+            active.record,
+            observation(enabled=False, price_window_favorable=True),
+        )
+        self.assertEqual(
+            disabled_again.block_reason, MaintenanceBlockReason.NOT_ENABLED
+        )
+        self.assertFalse(disabled_again.request_full_charge)
 
     def test_hems_protection_stale_soc_and_pack_conflict_block(self):
         cases = (

@@ -416,7 +416,7 @@
       "full_charge_maintenance_next_recommended": {"name": "Prochaine charge complète recommandée"},
       "full_charge_maintenance_last_confirmed": {"name": "Diagnostic : dernière charge complète confirmée"},
       "full_charge_maintenance_window": {"name": "Diagnostic : fenêtre de charge d’entretien", "state": {"none": "Aucune", "pv_surplus": "Surplus photovoltaïque", "low_price": "Prix bas", "existing_strategic_charge": "Charge stratégique existante", "overdue_deadline": "Échéance dépassée"}},
-      "full_charge_maintenance_block_reason": {"name": "Diagnostic : blocage de l’entretien", "state": {"none": "Aucun blocage", "not_enabled": "Non activé", "hems_active": "Zendure HEMS actif", "device_not_ready": "Appareil non prêt", "transport_unavailable": "Connexion indisponible", "soc_invalid_or_stale": "SoC invalide ou obsolète", "protection_active": "Protection de batterie active", "pack_data_conflict": "Conflit des données des batteries"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnostic : blocage de l’entretien", "state": {"none": "Aucun blocage", "not_enabled": "Non activé", "hems_active": "Zendure HEMS actif", "device_not_ready": "Appareil non prêt", "transport_unavailable": "Connexion indisponible", "soc_invalid_or_stale": "SoC invalide ou obsolète", "protection_active": "Protection de batterie active", "pack_data_conflict": "Conflit des données des batteries", "manual_mode": "Mode manuel actif"}},
       "learned_planning_status": {
         "name": "Planification de charge : état d’apprentissage",
         "state": {
