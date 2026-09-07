@@ -372,7 +372,7 @@ class ZendureCloudNormalizer:
             raise KeyError(system_id)
         return self._hems_activity[system_id].diagnostics(now=now)
 
-    def set_online(self, system_id: str, online: bool) -> None:
+    def set_online(self, system_id: str, online: bool | None) -> None:
         if system_id not in self._models:
             raise KeyError(system_id)
         self._online[system_id] = online

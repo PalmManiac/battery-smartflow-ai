@@ -65,7 +65,7 @@ from .zendure_local_mqtt import (
     ZendureLocalMqttTransport,
 )
 from .zendure_local_mqtt_commands import LocalMqttCommandStatus
-from .zendure_normalizer import ZendureCloudNormalizer
+from .native_source_fusion import NativeSourceFusion
 from .zendure_privacy import ZendureDiagnosticSanitizer
 from .zendure_zensdk import (
     ZenSdkReadResult,
@@ -141,7 +141,7 @@ class NativeZendureRuntime:
         self._capture_reason: str | None = None
         self._inventory = DeviceInventory()
         self._states: dict[str, Any] = {}
-        self._normalizer: ZendureCloudNormalizer | None = None
+        self._normalizer: NativeSourceFusion | None = None
         self._processed_messages = 0
         self._last_processed_message: Any | None = None
         self._last_received_at: Any | None = None
@@ -467,6 +467,14 @@ class NativeZendureRuntime:
                 "transport_metrics": self._transport_metrics.export(
                     self._command_verification.measurements()
                 ),
+                "read_source_selection": (
+                    {
+                        system_id: self._normalizer.source_diagnostics(system_id)
+                        for system_id in sorted(self._inventory.devices)
+                    }
+                    if self._normalizer is not None
+                    else {}
+                ),
                 "cloud_command_verification": (
                     self._transport.command_diagnostics
                     if self._transport is not None else {"commands": []}
@@ -749,7 +757,7 @@ class NativeZendureRuntime:
                     candidate_id,
                     system_id=candidate_id,
                 )
-            self._normalizer = ZendureCloudNormalizer(bootstrap)
+            self._normalizer = NativeSourceFusion(bootstrap)
             self._zensdk_command_adapter = ZendureZenSdkCommandAdapter(
                 bootstrap,
                 self._post_json,
@@ -952,7 +960,7 @@ class NativeZendureRuntime:
                 self._zensdk_failures[candidate_id] = 0
                 self._zensdk_last_success[candidate_id] = successful[candidate_id]
                 if self._normalizer is not None:
-                    self._normalizer.set_online(candidate_id, True)
+                    self._set_normalizer_online(candidate_id, True)
                 if candidate_id in self._inventory.devices:
                     self._inventory.mark_available(candidate_id)
                 continue
@@ -960,9 +968,19 @@ class NativeZendureRuntime:
             self._zensdk_failures[candidate_id] = failures
             if failures >= ZENSDK_OFFLINE_AFTER_FAILURES:
                 if self._normalizer is not None:
-                    self._normalizer.set_online(candidate_id, False)
+                    self._set_normalizer_online(candidate_id, False)
                 if candidate_id in self._inventory.devices:
                     self._inventory.mark_unavailable(candidate_id)
+
+    def _set_normalizer_online(self, system_id: str, online: bool) -> None:
+        """Update only ZenSDK health while retaining old test-double support."""
+
+        if isinstance(self._normalizer, NativeSourceFusion):
+            self._normalizer.set_online(
+                system_id, online, transport=ZendureTransport.ZENSDK
+            )
+        elif self._normalizer is not None:
+            self._normalizer.set_online(system_id, online)
 
     def _refresh_snapshots(self) -> None:
         if self._normalizer is None:
