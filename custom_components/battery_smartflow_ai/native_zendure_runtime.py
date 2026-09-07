@@ -110,6 +110,7 @@ class NativeZendureRuntime:
         app_token: str | None,
         selected_device: str | None,
         notify: Callable[[], None],
+        migration_bound_device: str | None = None,
         control_enabled: bool = False,
         local_mqtt_server: str | None = None,
         local_mqtt_port: int = 1883,
@@ -119,6 +120,7 @@ class NativeZendureRuntime:
         self._hass = hass
         self._app_token = app_token
         self._selected_device = selected_device
+        self._migration_bound_device = migration_bound_device
         self._control_enabled = bool(control_enabled)
         self._notify = notify
         self._task: asyncio.Task[None] | None = None
@@ -312,7 +314,11 @@ class NativeZendureRuntime:
 
     def overview_attributes(self) -> dict[str, Any]:
         systems = []
-        overview = build_native_device_overview(self._inventory, self._states)
+        overview = build_native_device_overview(
+            self._inventory,
+            self._states,
+            migration_bound_device=self._migration_bound_device,
+        )
         now = datetime.now(timezone.utc)
         for system_id, item in zip(sorted(self._inventory.devices), overview):
             state = self._states.get(system_id)
@@ -324,6 +330,9 @@ class NativeZendureRuntime:
                     "model": item.model,
                     "profile": item.profile_key,
                     "selected": system_id == self._selected_device,
+                    "migration_binding": (
+                        "confirmed" if item.migration_bound else "not_bound"
+                    ),
                     "online": item.online,
                     "status": item.status_text,
                     "transport": (
@@ -375,7 +384,11 @@ class NativeZendureRuntime:
     def hardware_overview(self):
         """Return the privacy-safe native hierarchy used by HA entities."""
 
-        overview = build_native_device_overview(self._inventory, self._states)
+        overview = build_native_device_overview(
+            self._inventory,
+            self._states,
+            migration_bound_device=self._migration_bound_device,
+        )
         selected_transport = self._selected_local_transport()
         if selected_transport is None or self._selected_device is None:
             return overview
@@ -1037,6 +1050,16 @@ class NativeZendureRuntime:
             self._transport_router.update_readiness(
                 ready=False,
                 reason="native_control_disabled",
+            )
+            return
+        if (
+            self._migration_bound_device is not None
+            and self._migration_bound_device != self._selected_device
+        ):
+            self._transport_router.select(self._selected_device, None)
+            self._transport_router.update_readiness(
+                ready=False,
+                reason="migration_binding_mismatch",
             )
             return
         device = self._inventory.devices.get(self._selected_device)

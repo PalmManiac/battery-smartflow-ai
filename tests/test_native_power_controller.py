@@ -132,10 +132,11 @@ class FakeLocalTransport:
         )
 
 
-def runtime(*, enabled=True, current_state=None):
+def runtime(*, enabled=True, current_state=None, migration_bound_device=None):
     result = NativeZendureRuntime(
         SimpleNamespace(), app_token="configured", selected_device=DEVICE,
         notify=lambda: None, control_enabled=enabled,
+        migration_bound_device=migration_bound_device,
     )
     identity = NativeDeviceIdentity(
         ZendureTransport.CLOUD_MQTT, device_id="main-1",
@@ -180,6 +181,14 @@ def legacy_runtime(*, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_migration_binding_mismatch_revokes_write_authority(self):
+        target = runtime(migration_bound_device="cloud_mqtt:other-device")
+        target._refresh_write_authority()
+        authority = target._transport_router.snapshot
+        self.assertFalse(authority.synchronized)
+        self.assertIsNone(authority.transport)
+        self.assertEqual(authority.reason, "migration_binding_mismatch")
+
     async def test_hardware_status_separates_enabled_idle_from_active_control(self):
         idle = runtime(current_state=state())
         idle._refresh_write_authority()

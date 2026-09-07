@@ -143,10 +143,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         from .native_zendure_runtime import NativeZendureRuntime
 
+        migration = entry.data.get("v5_migration", {})
+        migration_bound_device = (
+            migration.get("native_candidate_id")
+            if isinstance(migration, dict)
+            and migration.get("binding_state") == "confirmed"
+            else None
+        )
         coordinator.native_zendure = NativeZendureRuntime(
             hass,
             app_token=entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
             selected_device=entry.options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
+            migration_bound_device=migration_bound_device,
             control_enabled=bool(
                 entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
             ),
