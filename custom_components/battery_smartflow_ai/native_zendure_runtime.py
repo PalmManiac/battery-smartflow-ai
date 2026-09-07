@@ -25,6 +25,7 @@ from .core.models import (
     ValueValidity,
     ZendureTransport,
 )
+from .core.full_charge_maintenance import FullChargeMaintenanceInput
 from .native_command_verification import (
     EffectStatus,
     NativeCommandVerificationManager,
@@ -191,6 +192,72 @@ class NativeZendureRuntime:
         if state is None or not _fresh_native_state(state):
             return None
         return state
+
+    @property
+    def selected_device_id(self) -> str | None:
+        """Return the explicitly selected main-system identity."""
+
+        return self._selected_device
+
+    def full_charge_maintenance_input(
+        self,
+        *,
+        now: datetime,
+        enabled: bool,
+        pv_window_favorable: bool = False,
+        price_window_favorable: bool = False,
+        strategic_charge_active: bool = False,
+    ) -> FullChargeMaintenanceInput | None:
+        """Build one native-only maintenance observation for the core planner."""
+
+        if self._selected_device is None:
+            return None
+        state = self._states.get(self._selected_device)
+        if state is None:
+            return FullChargeMaintenanceInput(
+                now=now,
+                enabled=enabled,
+                soc_pct=None,
+                soc_fresh=False,
+                device_ready=False,
+                transport_available=False,
+            )
+
+        soc = state.soc_pct
+        charge_power = state.charge_power_w
+        online = state.online
+        protection = state.protection_active
+        hems = state.hems_active
+        authority = self._transport_router.snapshot
+        return FullChargeMaintenanceInput(
+            now=now,
+            enabled=enabled,
+            soc_pct=float(soc.value) if _fresh_at(soc, now=now) else None,
+            soc_fresh=_fresh_at(soc, now=now),
+            charge_power_w=(
+                float(charge_power.value)
+                if _fresh_at(charge_power, now=now)
+                else None
+            ),
+            device_ready=bool(
+                self._control_enabled
+                and _fresh_at(online, now=now)
+                and online.value
+            ),
+            transport_available=bool(
+                authority.device_id == self._selected_device
+                and authority.transport is not None
+                and authority.synchronized
+            ),
+            hems_active=bool(_fresh_at(hems, now=now) and hems.value),
+            protection_active=bool(
+                _fresh_at(protection, now=now) and protection.value
+            ),
+            pack_data_conflict=_maintenance_pack_conflict(state, now=now),
+            pv_window_favorable=pv_window_favorable,
+            price_window_favorable=price_window_favorable,
+            strategic_charge_active=strategic_charge_active,
+        )
 
     def consume_control_baseline(self) -> tuple[str, int, int] | None:
         """Return one fresh device baseline when native control takes ownership."""
@@ -1355,6 +1422,40 @@ def _fresh_measured_value(
         return False
     age = (datetime.now(timezone.utc) - measured.observed_at).total_seconds()
     return 0 <= age <= maximum_age_seconds
+
+
+def _fresh_at(
+    measured: Any,
+    *,
+    now: datetime,
+    maximum_age_seconds: float = 30.0,
+) -> bool:
+    """Evaluate measurement freshness against the coordinator cycle clock."""
+
+    if not measured.valid or measured.observed_at is None:
+        return False
+    age = (now.astimezone(timezone.utc) - measured.observed_at).total_seconds()
+    return 0 <= age <= maximum_age_seconds
+
+
+def _maintenance_pack_conflict(state: Any, *, now: datetime) -> bool:
+    """Reject pack protection or a contradiction to a reported full system."""
+
+    main_soc = state.soc_pct
+    main_value = float(main_soc.value) if _fresh_at(main_soc, now=now) else None
+    for pack in state.packs:
+        protection = pack.protection_active
+        if _fresh_at(protection, now=now) and protection.value:
+            return True
+        pack_soc = pack.soc_pct
+        if (
+            main_value is not None
+            and main_value >= 100.0
+            and _fresh_at(pack_soc, now=now)
+            and float(pack_soc.value) < 99.0
+        ):
+            return True
+    return False
 
 
 def _native_power_control_active(state: Any) -> bool:
