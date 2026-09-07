@@ -67,6 +67,15 @@ class NativeReadSourceArbiterTests(unittest.TestCase):
         self.assertEqual(selected.transport, ZendureTransport.CLOUD_MQTT)
         self.assertEqual(selected.measurement.value, 41.0)
 
+    def test_retained_only_value_is_not_reported_as_fresh(self) -> None:
+        selected = self.arbiter.select(
+            "soc_pct",
+            (source(ZendureTransport.LOCAL_MQTT, 40.0, retained=True),),
+        )
+        self.assertEqual(selected.measurement.value, 40.0)
+        self.assertEqual(selected.measurement.validity, ValueValidity.STALE)
+        self.assertEqual(selected.reason, "retained_value_not_fresh")
+
     def test_fresh_safety_conflict_fails_closed(self) -> None:
         selected = self.arbiter.select(
             "hems_active",

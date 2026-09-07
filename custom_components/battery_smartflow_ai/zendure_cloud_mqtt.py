@@ -71,6 +71,7 @@ class CloudMqttMessage:
     known_topic: bool
     session_number: int
     transport: str = "cloud_mqtt"
+    retained: bool = False
 
 
 @dataclass(slots=True)
@@ -82,7 +83,7 @@ class CloudMqttDeviceState:
     property_updated_at: dict[str, datetime] = field(default_factory=dict)
 
 
-MessageCallback = Callable[[str, bytes], None]
+MessageCallback = Callable[[str, bytes, bool], None]
 ConnectCallback = Callable[[bool, str | None], None]
 DisconnectCallback = Callable[[str | None], None]
 
@@ -442,10 +443,20 @@ class ZendureCloudMqttTransport:
                 _LOGGER.warning("Zendure Cloud MQTT reconnect failed: %s", safe)
                 attempt += 1
 
-    def _on_message(self, topic: str, payload: bytes) -> None:
-        self._threadsafe(self._handle_message, topic, bytes(payload))
+    def _on_message(
+        self,
+        topic: str,
+        payload: bytes,
+        retained: bool = False,
+    ) -> None:
+        self._threadsafe(self._handle_message, topic, bytes(payload), retained)
 
-    def _handle_message(self, topic: str, payload: bytes) -> None:
+    def _handle_message(
+        self,
+        topic: str,
+        payload: bytes,
+        retained: bool = False,
+    ) -> None:
         received_at = self._clock()
         parsed, payload_format = _parse_payload(payload)
         candidate_id, pack_id = self._route_message(topic, parsed)
@@ -464,6 +475,7 @@ class ZendureCloudMqttTransport:
             pack_id=pack_id,
             known_topic=known_topic,
             session_number=self._session_number,
+            retained=retained,
         )
         self._messages.append(message)
         self._last_message_at = received_at
@@ -733,7 +745,11 @@ class PahoReadOnlyMqttSession:
 
     def _paho_message(self, _client: Any, _userdata: Any, message: Any) -> None:
         if self._on_message is not None:
-            self._on_message(str(message.topic), bytes(message.payload))
+            self._on_message(
+                str(message.topic),
+                bytes(message.payload),
+                bool(getattr(message, "retain", False)),
+            )
 
 
 def _safe_socket_family(mqtt_socket: Any) -> str:

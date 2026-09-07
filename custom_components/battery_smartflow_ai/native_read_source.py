@@ -138,6 +138,18 @@ class NativeReadSourceArbiter:
             )
 
         winner = pool[0]
+        if not fresh and winner.retained:
+            return SelectedMeasurement(
+                MeasuredValue(
+                    value=winner.measurement.value,
+                    validity=ValueValidity.STALE,
+                    observed_at=winner.measurement.observed_at,
+                ),
+                winner.transport,
+                ReadSourceStatus.FALLBACK,
+                "retained_value_not_fresh",
+                tuple(item.transport for item in pool[1:]),
+            )
         if len(pool) == 1:
             status = (
                 ReadSourceStatus.FALLBACK
