@@ -87,9 +87,15 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
 
     def test_native_hardware_is_exposed_as_child_devices_not_config_inputs(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        identity = (COMPONENT / "native_registry_identity.py").read_text(
+            encoding="utf-8"
+        )
         config = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
         self.assertIn("class NativeZendureHardwareSensor", sensor)
-        self.assertIn('via_device=(DOMAIN, f"native_zendure_{parent_public_id}")', sensor)
+        self.assertIn(
+            "via_device=native_main_device_identifier(parent_public_id)", sensor
+        )
+        self.assertIn('return DOMAIN, f"native_zendure_{public_id}"', identity)
         self.assertIn("coordinator.native_zendure.hardware_overview()", sensor)
         self.assertIn("coordinator.async_add_listener", sensor)
         self.assertNotIn("native_hardware_soc_pct", config)
@@ -100,8 +106,8 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         entity = sensor[sensor.index("class NativeZendureHardwareSensor"):]
         self.assertIn("public_id", entity)
         self.assertIn("serial_number=item.serial_number", entity)
-        self.assertNotIn("device_id", entity)
-        self.assertNotIn("pack_id", entity)
+        self.assertNotIn("item.device_id", entity)
+        self.assertNotIn("item.pack_id", entity)
 
     def test_pack_device_name_uses_parent_name_and_stable_position(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")

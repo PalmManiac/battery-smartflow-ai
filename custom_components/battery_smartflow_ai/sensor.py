@@ -54,6 +54,11 @@ from .const import (
 )
 from .device_profiles import DEVICE_PROFILES
 from .diagnostic_values import safe_diagnostic_sensor_value
+from .native_registry_identity import (
+    native_hardware_unique_id,
+    native_main_device_identifier,
+    native_pack_device_identifier,
+)
 from .price_currency import price_input_profile
 
 _LOGGER = logging.getLogger(__name__)
@@ -1578,14 +1583,17 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         self._kind = kind
         self._public_id = public_id
         self._parent_public_id = parent_public_id
-        self._attr_unique_id = (
-            f"{DOMAIN}_{entry.entry_id}_native_{kind}_{public_id}_{description.key}"
+        self._attr_unique_id = native_hardware_unique_id(
+            entry.entry_id,
+            kind,
+            public_id,
+            description.key,
         )
         item = self._item()
         if kind == "main":
             firmware = _measured_value(getattr(item, "firmware", None))
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"native_zendure_{public_id}")},
+                identifiers={native_main_device_identifier(public_id)},
                 name=item.display_name if item else "Zendure system",
                 manufacturer="Zendure",
                 model=(item.model or "Unknown Zendure system") if item else None,
@@ -1612,13 +1620,13 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 parent.display_name if parent is not None else "Zendure"
             )
             self._attr_device_info = DeviceInfo(
-                identifiers={(DOMAIN, f"native_zendure_pack_{public_id}")},
+                identifiers={native_pack_device_identifier(public_id)},
                 name=f"{parent_name} {_battery_pack_label(coordinator.hass.config.language)} {pack_number}",
                 manufacturer="Zendure",
                 model=(item.pack_model or "Unknown battery pack") if item else None,
                 serial_number=item.serial_number if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
-                via_device=(DOMAIN, f"native_zendure_{parent_public_id}"),
+                via_device=native_main_device_identifier(parent_public_id),
             )
 
     def _parent_system(self):
