@@ -68,6 +68,10 @@ from .const import (
     SETTING_PV_CHARGE_START_EXPORT_W,
     SETTING_FORECAST_BASE_LOAD,
     SETTING_LEARNED_PLANNING_ENABLED,
+    SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+    SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+    DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
+    DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
     # defaults
     DEFAULT_SOC_MIN,
     DEFAULT_SOC_MAX,
@@ -6379,7 +6383,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ):
                 maintenance_input = native_runtime.full_charge_maintenance_input(
                     now=now,
-                    enabled=False,
+                    enabled=bool(self.entry.options.get(
+                        SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+                        DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
+                    )),
                     pv_window_favorable=bool(
                         pv_charge_latched
                         or float(grid_export or 0.0)
@@ -6396,6 +6403,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._full_charge_maintenance.evaluate(
                         native_runtime.selected_device_id,
                         maintenance_input,
+                        interval_days=int(self.entry.options.get(
+                            SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+                            DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+                        )),
                     )
                     maintenance_status = self._full_charge_maintenance.sensor_data()
 

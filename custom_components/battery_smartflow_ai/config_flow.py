@@ -53,6 +53,8 @@ from .const import (
     DEFAULT_FEED_IN_TARIFF,
     DEFAULT_INSTALLED_PV_WP,
     DEFAULT_LEARNED_PLANNING_ENABLED,
+    DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
+    DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
     DEFAULT_PACK_CAPACITY_KWH,
     DOMAIN,
     GRID_MODE_NONE,
@@ -64,6 +66,8 @@ from .const import (
     SETTING_CELL_VOLTAGE_RESUME,
     SETTING_CELL_VOLTAGE_WARNING,
     SETTING_LEARNED_PLANNING_ENABLED,
+    SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+    SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
 )
 from .core.models import ZendureTransport
 from .device_profiles import DEVICE_PROFILE_MODELS
@@ -715,6 +719,15 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             merged_options[SETTING_LEARNED_PLANNING_ENABLED] = bool(
                 user_input[SETTING_LEARNED_PLANNING_ENABLED]
             )
+
+        if SETTING_FULL_CHARGE_MAINTENANCE_ENABLED in user_input:
+            merged_options[SETTING_FULL_CHARGE_MAINTENANCE_ENABLED] = bool(
+                user_input[SETTING_FULL_CHARGE_MAINTENANCE_ENABLED]
+            )
+        if SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS in user_input:
+            merged_options[SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS] = int(
+                user_input[SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS]
+            )
             
         for key in LOWEST_CELL_VOLTAGE_CONFIG_KEYS:
             if key in user_input:
@@ -1158,6 +1171,15 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             {
                 vol.Optional(CONF_EXPERT_MODE_ENABLED): selector.BooleanSelector(),
                 vol.Optional(SETTING_LEARNED_PLANNING_ENABLED): selector.BooleanSelector(),
+                vol.Optional(SETTING_FULL_CHARGE_MAINTENANCE_ENABLED): selector.BooleanSelector(),
+                vol.Optional(SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=7,
+                        max=90,
+                        step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
             }
         )
 
@@ -1169,6 +1191,14 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             SETTING_LEARNED_PLANNING_ENABLED: preview.get(
                 SETTING_LEARNED_PLANNING_ENABLED,
                 DEFAULT_LEARNED_PLANNING_ENABLED,
+            ),
+            SETTING_FULL_CHARGE_MAINTENANCE_ENABLED: preview.get(
+                SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+                DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
+            ),
+            SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS: preview.get(
+                SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+                DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
             ),
         }
 

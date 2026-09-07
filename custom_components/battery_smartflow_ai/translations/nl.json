@@ -212,10 +212,14 @@
         "description": "Geavanceerde beschermings-, diagnose- en planningsfuncties. De lerende laadvensterplanning wordt automatisch gebruikt zodra voldoende leerdata beschikbaar is. Indien nodig kan deze hier worden uitgeschakeld. Voor celspanningsbescherming moet eerst de expertmodus worden geactiveerd.",
         "data": {
           "expert_mode_enabled": "Expertmodus inschakelen",
+          "full_charge_maintenance_enabled": "Onderhoud met volledige lading gebruiken",
+          "full_charge_maintenance_interval_days": "Aanbevolen interval voor volledige lading",
           "learned_planning_enabled": "Lerende laadvensterplanning gebruiken"
         },
         "data_description": {
           "expert_mode_enabled": "Activeert het uitgebreide expertgedeelte voor aanvullende beschermings- en diagnosefuncties.",
+          "full_charge_maintenance_enabled": "Laat BSFAI op gunstige momenten een beschermende volledige lading plannen. Dit is geen BMS-kalibratieopdracht.",
+          "full_charge_maintenance_interval_days": "Dagen tussen aanbevolen bevestigde volledige ladingen (7–90).",
           "learned_planning_enabled": "Indien ingeschakeld gebruikt Battery SmartFlow AI automatisch de lerende laadvensterplanning zodra voldoende leerdata beschikbaar is. Tot die tijd blijft de klassieke planning actief. Indien uitgeschakeld wordt altijd de klassieke planning gebruikt."
         }
       },
@@ -407,6 +411,12 @@
           "reserve_oriented": "Reservegericht"
         }
       },
+      "full_charge_maintenance_state": {"name": "Onderhoud met volledige lading", "state": {"unknown": "Onbekend", "not_due": "Nog niet nodig", "due_soon": "Binnenkort nodig", "due": "Nodig", "waiting_for_favorable_window": "Wacht op gunstig laadvenster", "charging_to_full": "Laadt volledig", "confirming_full": "Bevestigt volledige lading", "completed": "Voltooid", "blocked": "Geblokkeerd"}},
+      "full_charge_maintenance_active": {"name": "Onderhoud met volledige lading actief", "state": {"yes": "Ja", "no": "Nee"}},
+      "full_charge_maintenance_next_recommended": {"name": "Volgende aanbevolen volledige lading"},
+      "full_charge_maintenance_last_confirmed": {"name": "Diagnose: laatste bevestigde volledige lading"},
+      "full_charge_maintenance_window": {"name": "Diagnose: onderhoudslaadvenster", "state": {"none": "Geen", "pv_surplus": "PV-overschot", "low_price": "Lage prijs", "existing_strategic_charge": "Bestaande strategische lading", "overdue_deadline": "Termijn overschreden"}},
+      "full_charge_maintenance_block_reason": {"name": "Diagnose: blokkering volledig-laadonderhoud", "state": {"none": "Geen blokkering", "not_enabled": "Niet ingeschakeld", "hems_active": "Zendure HEMS actief", "device_not_ready": "Apparaat niet gereed", "transport_unavailable": "Verbinding niet beschikbaar", "soc_invalid_or_stale": "SoC ongeldig of verouderd", "protection_active": "Accubeveiliging actief", "pack_data_conflict": "Tegenstrijdige accupakketgegevens"}},
       "learned_planning_status": {
         "name": "Laadplanning: leerstatus",
         "state": {
