@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Mapping
 
 import voluptuous as vol
 from homeassistant import config_entries
@@ -897,6 +897,19 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD
                         ),
                     )
+                )
+            migration = self.config_entry.data.get("v5_migration")
+            if isinstance(migration, Mapping):
+                from .v5_migration import confirm_native_binding
+
+                data = dict(self.config_entry.data)
+                data["v5_migration"] = confirm_native_binding(
+                    migration,
+                    native_candidate_id=selected,
+                )
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry,
+                    data=data,
                 )
             return self.async_create_entry(title="", data=options)
 

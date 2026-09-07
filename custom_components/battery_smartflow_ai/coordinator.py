@@ -588,9 +588,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _load(self) -> None:
         load_result = await self._state_store.load()
         if load_result.usable:
+            migration = self.entry.data.get("v5_migration", {})
+            confirmed_native_id = (
+                migration.get("native_candidate_id")
+                if isinstance(migration, dict)
+                and migration.get("binding_state") == "confirmed"
+                else None
+            )
             loaded_data = migrate_persisted_v47_state(
                 load_result.data,
                 legacy_system_id=f"config_entry:{self.entry.entry_id}",
+                native_candidate_id=confirmed_native_id,
             )
             migrate_legacy_price_fields(loaded_data)
             self._persist.update(loaded_data)

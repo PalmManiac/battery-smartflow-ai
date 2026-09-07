@@ -10,7 +10,8 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     DiscoveryCandidate, NativeDeviceIdentity, ZendureTransport,
 )
 from custom_components.battery_smartflow_ai.v5_migration import (  # noqa: E402
-    initial_v5_migration_state, match_v4_device, migrate_persisted_v47_state,
+    confirm_native_binding, initial_v5_migration_state, match_v4_device,
+    migrate_persisted_v47_state,
 )
 
 
@@ -62,6 +63,51 @@ class V5MigrationTests(unittest.TestCase):
         )
         twice = migrate_persisted_v47_state(
             once, legacy_system_id="config_entry:entry-1"
+        )
+        self.assertEqual(once, twice)
+
+    def test_confirmed_binding_keeps_zha_and_native_writes_separate(self):
+        initial = initial_v5_migration_state("entry-1")
+        confirmed = confirm_native_binding(
+            initial.as_dict(),
+            native_candidate_id="cloud_mqtt:device-1",
+        )
+        self.assertEqual(confirmed["binding_state"], "confirmed")
+        self.assertEqual(confirmed["phase"], "shadow_ready")
+        self.assertEqual(
+            confirmed["native_candidate_id"],
+            "cloud_mqtt:device-1",
+        )
+        self.assertFalse(confirmed["native_control_enabled"])
+        self.assertTrue(confirmed["legacy_zha_enabled"])
+
+    def test_confirmed_device_owns_persisted_economics_and_commitment(self):
+        native_id = "cloud_mqtt:device-1"
+        migrated = migrate_persisted_v47_state(
+            {
+                "charge_commit_active": True,
+                "v5_economics_owner": "config_entry:entry-1",
+                "v5_charge_commit_owner": "config_entry:entry-1",
+            },
+            legacy_system_id="config_entry:entry-1",
+            native_candidate_id=native_id,
+        )
+        self.assertEqual(migrated["v5_binding_state"], "confirmed")
+        self.assertEqual(migrated["v5_economics_owner"], native_id)
+        self.assertEqual(migrated["v5_charge_commit_owner"], native_id)
+        self.assertFalse(migrated["v5_native_control_enabled"])
+
+    def test_confirmed_persistence_binding_is_idempotent(self):
+        native_id = "cloud_mqtt:device-1"
+        once = migrate_persisted_v47_state(
+            {"charge_commit_active": True},
+            legacy_system_id="config_entry:entry-1",
+            native_candidate_id=native_id,
+        )
+        twice = migrate_persisted_v47_state(
+            once,
+            legacy_system_id="config_entry:entry-1",
+            native_candidate_id=native_id,
         )
         self.assertEqual(once, twice)
 
