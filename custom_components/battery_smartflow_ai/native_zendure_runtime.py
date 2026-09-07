@@ -180,6 +180,16 @@ class NativeZendureRuntime:
     def status(self) -> str:
         return self._status
 
+    def selected_device_state(self):
+        """Return the fresh selected native state intended for core input."""
+
+        if self._selected_device is None:
+            return None
+        state = self._states.get(self._selected_device)
+        if state is None or not _fresh_native_state(state):
+            return None
+        return state
+
     def consume_control_baseline(self) -> tuple[str, int, int] | None:
         """Return one fresh device baseline when native control takes ownership."""
 

@@ -3842,7 +3842,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist["native_handover_baseline_input_w"] = baseline_input_w
                 self._persist["native_handover_baseline_output_w"] = baseline_output_w
 
-            soc = _to_float(self._state(self.entities.soc), None)
+            native_state = (
+                native_runtime.selected_device_state()
+                if native_runtime is not None
+                and native_runtime.control_enabled
+                and hasattr(native_runtime, "selected_device_state")
+                else None
+            )
+            native_soc = native_state.soc_pct if native_state is not None else None
+            soc = (
+                float(native_soc.value)
+                if native_soc is not None and native_soc.valid
+                else _to_float(self._state(self.entities.soc), None)
+            )
+            soc_source = (
+                "native_zendure"
+                if native_soc is not None and native_soc.valid
+                else "home_assistant_entity"
+            )
             pv = _to_float(self._state(self.entities.pv), None)
             native_pv = _to_float(self._state(self.entities.native_pv), None)
 
@@ -4110,16 +4127,29 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             battery_raw = self._state(self.entities.battery_ac_power)
             battery_power_value = _to_float(battery_raw, None)
-            battery_ac_power_sensor_valid = battery_power_value is not None
-            battery_power = (
-                float(battery_power_value)
-                if battery_power_value is not None
-                else 0.0
+            native_charge = (
+                native_state.charge_power_w if native_state is not None else None
             )
-            battery_power = float(battery_power or 0.0)
-
-            battery_discharge_w = max(0.0, battery_power)
-            battery_charge_w = max(0.0, -battery_power)
+            native_discharge = (
+                native_state.discharge_power_w if native_state is not None else None
+            )
+            if (
+                native_charge is not None
+                and native_charge.valid
+                and native_discharge is not None
+                and native_discharge.valid
+            ):
+                battery_charge_w = max(0.0, float(native_charge.value))
+                battery_discharge_w = max(0.0, float(native_discharge.value))
+                battery_power = battery_discharge_w - battery_charge_w
+                battery_ac_power_sensor_valid = True
+                battery_power_source = "native_zendure"
+            else:
+                battery_ac_power_sensor_valid = battery_power_value is not None
+                battery_power = float(battery_power_value or 0.0)
+                battery_discharge_w = max(0.0, battery_power)
+                battery_charge_w = max(0.0, -battery_power)
+                battery_power_source = "home_assistant_entity"
 
             pv_attributable_export_w = compute_pv_attributable_export_w(
                 grid_export_w=float(grid_export or 0.0),
@@ -6417,7 +6447,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economics_daily": economics_daily_snapshot.as_dict(),
                 "economics_total": economics_total_snapshot.as_dict(),
                 **economics_runtime_values,
+                "soc_source": soc_source,
                 "battery_ac_power_raw": battery_power,
+                "battery_power_source": battery_power_source,
                 "battery_ac_power_sensor_valid": bool(
                     battery_ac_power_sensor_valid
                 ),
