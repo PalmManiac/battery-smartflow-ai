@@ -183,6 +183,12 @@ def legacy_runtime(*, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    def test_calibration_diagnostics_never_claim_unverified_native_truth(self):
+        diagnostic = runtime().diagnostic_data()["calibration_information"]
+        self.assertEqual(diagnostic["information_source"], "bsfai_derived")
+        self.assertEqual(diagnostic["native_calibration_command"], "unsupported")
+        self.assertNotIn(DEVICE, str(diagnostic))
+
     def test_pack_soc_only_conflicts_with_a_reported_full_system(self):
         pack = SimpleNamespace(
             soc_pct=measured(80), protection_active=measured(False)

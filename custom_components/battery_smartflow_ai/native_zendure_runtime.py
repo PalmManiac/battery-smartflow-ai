@@ -527,6 +527,7 @@ class NativeZendureRuntime:
                     else None
                 ),
                 "selected_device": self._selected_device,
+                "calibration_information": self._calibration_diagnostics(),
                 "message_count": self._processed_messages,
                 "capture_complete": self._capture_complete,
                 "capture_reason": self._capture_reason,
@@ -567,6 +568,35 @@ class NativeZendureRuntime:
                 "overview": self.overview_attributes(),
             }
         )
+
+    def _calibration_diagnostics(self) -> dict[str, Any]:
+        """Describe verified capability without exporting physical identity."""
+
+        source = self._inventory.devices.get(self._selected_device or "")
+        identity = source.native_identities[0] if (
+            source is not None and source.native_identities
+        ) else None
+        matrix = resolve_zendure_device(identity) if identity is not None else None
+        if matrix is None:
+            return {
+                "native_status_capability": VerificationLevel.UNKNOWN.value,
+                "native_next_due_capability": VerificationLevel.UNKNOWN.value,
+                "information_source": "bsfai_derived",
+                "native_calibration_command": "unsupported",
+            }
+        calibration = matrix.calibration
+        verified_native = bool(
+            calibration.raw_status is VerificationLevel.VERIFIED
+            or calibration.next_due_from_device is VerificationLevel.VERIFIED
+        )
+        return {
+            "native_status_capability": calibration.raw_status.value,
+            "native_next_due_capability": calibration.next_due_from_device.value,
+            "information_source": (
+                "verified_native" if verified_native else "bsfai_derived"
+            ),
+            "native_calibration_command": "unsupported",
+        }
 
     async def async_run_first_write_test(self) -> NativeWriteVerification:
         """Run the explicit SF2400AC ZenSDK +1 W write and restore test."""

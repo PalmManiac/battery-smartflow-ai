@@ -185,6 +185,9 @@ def build_debug_sample(
         "learned": _prefixed(details, "learned_planning_"),
         "forecast": _prefixed(details, "forecast_"),
         "charge_commit": _prefixed(details, "charge_commit_"),
+        "full_charge_maintenance": _prefixed(
+            details, "full_charge_maintenance_"
+        ),
     }
     if "pv_outlook" in details:
         planning["forecast"]["pv_outlook"] = details["pv_outlook"]

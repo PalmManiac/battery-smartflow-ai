@@ -39,6 +39,12 @@ async def async_get_config_entry_diagnostics(
 
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     native = getattr(coordinator, "native_zendure", None)
+    maintenance = getattr(coordinator, "_full_charge_maintenance", None)
+    maintenance_data = (
+        redact_secrets(maintenance.sensor_data())
+        if maintenance is not None
+        else None
+    )
     native_path = native.capture_path if native is not None else None
     debug_path = (
         coordinator.debug_last_package_path if coordinator is not None else None
@@ -51,6 +57,7 @@ async def async_get_config_entry_diagnostics(
             "native_zendure": (
                 native.diagnostic_data() if native is not None else None
             ),
+            "full_charge_maintenance": maintenance_data,
         }
     package = await hass.async_add_executor_job(
         partial(
@@ -62,6 +69,7 @@ async def async_get_config_entry_diagnostics(
     if native_path:
         return {
             "native_zendure": native.diagnostic_data(),
+            "full_charge_maintenance": maintenance_data,
             "package": package,
         }
     return package

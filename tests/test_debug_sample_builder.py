@@ -50,6 +50,9 @@ class DebugSampleBuilderTests(unittest.TestCase):
             "pv_outlook": "high",
             "charge_commit_active": True,
             "charge_commit_reason": "learned_window",
+            "full_charge_maintenance_state": "charging_to_full",
+            "full_charge_maintenance_block_reason": "none",
+            "full_charge_maintenance_active": True,
             "set_mode": "input",
             "set_input_w": 500,
             "mode_write_requested": "input",
@@ -70,6 +73,10 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(result["strategy"]["decision_action"], "charge")
         self.assertEqual(result["strategy"]["season_mode"], "summer")
         self.assertTrue(result["strategy"]["automatic"]["strategy_active"])
+        self.assertEqual(
+            result["planning"]["full_charge_maintenance"]["state"],
+            "charging_to_full",
+        )
         self.assertEqual(result["strategy"]["intent"]["intent"], "charge")
         allocation = result["strategy"]["charge_source_allocation"]
         self.assertTrue(allocation["active"])

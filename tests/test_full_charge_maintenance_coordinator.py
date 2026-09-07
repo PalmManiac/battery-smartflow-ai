@@ -42,8 +42,12 @@ class FullChargeMaintenanceCoordinatorTests(unittest.TestCase):
             self.source.index("native_runtime.full_charge_maintenance_input("):
         ]
         call = call[:call.index(")\n                if maintenance_input")]
-        self.assertIn("SETTING_FULL_CHARGE_MAINTENANCE_ENABLED", call)
-        self.assertIn("DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED", call)
+        self.assertIn("enabled=maintenance_enabled", call)
+        before_call = self.source[:self.source.index(
+            "native_runtime.full_charge_maintenance_input("
+        )]
+        self.assertIn("SETTING_FULL_CHARGE_MAINTENANCE_ENABLED", before_call)
+        self.assertIn("DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED", before_call)
         self.assertIn("SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS", self.source)
 
     def test_request_crosses_only_the_strategy_adapter(self):
