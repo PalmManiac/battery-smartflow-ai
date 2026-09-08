@@ -1799,7 +1799,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         item = self._item()
-        if item is None or not self.coordinator.last_update_success:
+        if item is None:
             return False
         description = self.entity_description
         if description.source == "measurement":
