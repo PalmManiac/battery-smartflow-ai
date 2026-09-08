@@ -515,6 +515,22 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             0,
         )
 
+    async def test_idle_after_charge_forces_atomic_zero_even_with_stale_mode(self):
+        target = runtime(current_state=state(charge_w=200))
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", input_limit_w=0, output_limit_w=0,
+            should_write_mode=False, should_write_input=False,
+            should_write_output=False, skipped=True,
+            skip_reason="unchanged_within_tolerance",
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        command = target._zensdk_command_adapter.commands[-1].command
+        self.assertTrue(command.should_write_mode)
+        self.assertTrue(command.should_write_output)
+        self.assertEqual(command.input_limit_w, 0)
+        self.assertEqual(command.output_limit_w, 0)
+
     async def test_no_change_never_writes(self):
         target = runtime(current_state=state(output_w=250, discharge_w=250))
         result = await target.async_execute_device_command(DeviceCommand(
