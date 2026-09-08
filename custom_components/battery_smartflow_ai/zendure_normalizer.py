@@ -173,6 +173,10 @@ MAIN_PROPERTY_MAPPINGS = {
             "masterSoftVersion", "firmware", MappingScope.MAIN,
             (str, int), converter=str,
         ),
+        _mapping(
+            "softVersion", "firmware", MappingScope.MAIN,
+            (str, int), converter=str,
+        ),
     )
 }
 
@@ -235,6 +239,7 @@ RAW_MAIN_DIAGNOSTICS = (
 for _raw in RAW_MAIN_DIAGNOSTICS:
     MAIN_PROPERTY_MAPPINGS[_raw] = _mapping(
         _raw, _raw, MappingScope.MAIN, (bool, int, float),
+        converter=(float if _raw in {"rssi", "solarPower1", "solarPower2", "solarPower3", "solarPower4", "solarPower5", "solarPower6"} else int),
     )
 MAIN_PROPERTY_MAPPINGS["PowerCycle"] = _mapping(
     "PowerCycle", "switching_count", MappingScope.MAIN, (int, float), minimum=0,

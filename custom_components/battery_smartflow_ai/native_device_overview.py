@@ -161,8 +161,8 @@ def build_native_device_overview(
                      "hardware_soc_min": _measurement(getattr(state, "setpoints", None), "min_soc_pct"),
                      "hardware_soc_max": _measurement(getattr(state, "setpoints", None), "max_soc_pct"),
                      "heating_active": _boolean_status(_measurement(state, "heating_active")),
-                     "switching_count": _measurement(state, "diagnostics.switching_count"),
-                     "rssi": _measurement(state, "diagnostics.rssi"),
+                     "switching_count": _diagnostic_measurement(state, "switching_count"),
+                     "rssi": _diagnostic_measurement(state, "rssi"),
                      "available_energy_kwh": _optional_value(derived_statistics(
                          soc_pct=_measurement(state, "soc_pct").value if _measurement(state, "soc_pct").valid else None,
                          capacity_kwh=native_capacity(state).capacity_kwh,
@@ -214,6 +214,12 @@ def _measurement(state: object | None, key: str) -> MeasuredValue:
     if state is None:
         return MeasuredValue.absent(ValueValidity.MISSING)
     return getattr(state, key, MeasuredValue.absent(ValueValidity.MISSING))
+
+def _diagnostic_measurement(state: object | None, key: str) -> MeasuredValue:
+    if state is None:
+        return MeasuredValue.absent(ValueValidity.MISSING)
+    value = getattr(state, "diagnostics", {}).get(key)
+    return value if isinstance(value, MeasuredValue) else MeasuredValue.absent(ValueValidity.MISSING)
 
 
 def _optional_value(value):
