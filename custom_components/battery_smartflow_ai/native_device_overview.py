@@ -180,9 +180,11 @@ def build_native_device_overview(
                 ),
                 product_id=identity.product_id if identity else None,
                 profile_key=(device.profile_key or (
-                    getattr(resolve_zendure_device(identity), "profile_key", None)
-                    or getattr(resolve_zendure_device(identity), "key", None)
-                    or (identity.product_model if identity is not None else None)
+                    (
+                        getattr(resolve_zendure_device(identity), "profile_key", None)
+                        or getattr(resolve_zendure_device(identity), "key", None)
+                        or identity.product_model
+                    ) if identity is not None else None
                 )),
                 control_state=device.control_state,
                 control_enabled=device.control_state in {
