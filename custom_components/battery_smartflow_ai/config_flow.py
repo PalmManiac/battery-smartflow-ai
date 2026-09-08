@@ -845,9 +845,17 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         self._working_options = {}
+        native_configured = bool(
+            self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
+            or self.config_entry.data.get("connection_type") == "native"
+        )
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general", "expert", "native_zendure", "debug"],
+            menu_options=(
+                ["general", "expert", "debug"]
+                if native_configured
+                else ["general", "expert", "native_zendure", "debug"]
+            ),
         )
 
     async def async_step_native_zendure(

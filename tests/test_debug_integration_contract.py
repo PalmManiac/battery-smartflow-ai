@@ -81,10 +81,9 @@ class DebugIntegrationContractTests(unittest.TestCase):
             if isinstance(node, ast.AsyncFunctionDef)
         }
 
-        self.assertIn(
-            'menu_options=["general", "expert", "native_zendure", "debug"]',
-            source,
-        )
+        self.assertIn('menu_options=', source)
+        self.assertIn('native_configured', source)
+        self.assertIn('"debug"', source)
         self.assertIn("async_step_debug_start", methods)
         self.assertIn("async_step_debug_stop", methods)
         self.assertIn("async_step_debug_started", methods)
