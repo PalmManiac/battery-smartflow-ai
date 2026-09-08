@@ -467,9 +467,11 @@ class ZendureCloudNormalizer:
             ),
             hems_active=hems_active,
             fault_code=device_value("fault_code"),
-            protection_active=_fault_block(
-                device_value("fault_code"),
-                self._value(values, "is_error", frozenset({"is_error"}), online, current),
+            protection_active=_device_protection_state(
+                fault_code=device_value("fault_code"),
+                is_error=self._value(
+                    values, "is_error", frozenset({"is_error"}), online, current
+                ),
             ),
             heating_active=device_value("heating_active"),
             temperature_c=device_value("temperature_c"),
@@ -641,6 +643,23 @@ def _fault_block(*values):
         any(float(value.value) != 0 for value in available),
         observed_at=min((value.observed_at for value in available if value.observed_at), default=None),
     )
+
+
+def _device_protection_state(*, fault_code, is_error):
+    """Use the explicit error flag before interpreting model-specific fault levels.
+
+    ZenSDK devices can report a non-zero ``faultLevel`` during normal operation
+    (the SF2400AC has been observed with ``faultLevel=2`` and ``is_error=0``).
+    When the explicit flag is available it is therefore authoritative. The raw
+    fault level remains a conservative fallback for devices that do not expose
+    ``is_error`` at all.
+    """
+    if is_error.valid:
+        return MeasuredValue.available(
+            float(is_error.value) != 0,
+            observed_at=is_error.observed_at,
+        )
+    return _fault_block(fault_code)
 
 
 def _normalize(
