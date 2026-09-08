@@ -432,6 +432,8 @@
       "native_hardware_offgrid_power_w": {"name":"Off-Grid-Leistung"},
       "native_hardware_cell_delta_v": {"name":"Zellspannungsdifferenz"},
       "native_hardware_pack_status": {"name":"Status","state":{"idle":"Ruhezustand","charge":"Laden","discharge":"Entladen"}},
+      "native_hardware_rssi": {"name": "WLAN-Signalstärke"},
+      "native_hardware_available_energy": {"name": "Verfügbare Energie"},
       "native_hardware_switching_count": {"name": "Schaltvorgänge"},
       "native_hardware_soc_min": {"name":"Hardware-SoC-Minimum"},
       "native_hardware_soc_max": {"name":"Hardware-SoC-Maximum"},

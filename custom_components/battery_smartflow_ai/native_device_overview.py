@@ -8,6 +8,7 @@ import hashlib
 from types import MappingProxyType
 from typing import Mapping
 from .native_capacity import native_capacity, pack_capacity_kwh
+from .native_statistics import derived_statistics
 
 from .core.models import (
     DeviceControlState,
@@ -161,6 +162,11 @@ def build_native_device_overview(
                      "hardware_soc_max": _measurement(getattr(state, "setpoints", None), "max_soc_pct"),
                      "heating_active": _boolean_status(_measurement(state, "heating_active")),
                      "switching_count": _measurement(state, "diagnostics.switching_count"),
+                     "rssi": _measurement(state, "diagnostics.rssi"),
+                     "available_energy_kwh": _optional_value(derived_statistics(
+                         soc_pct=_measurement(state, "soc_pct").value if _measurement(state, "soc_pct").valid else None,
+                         capacity_kwh=native_capacity(state).capacity_kwh,
+                     ).available_energy_kwh),
                     }
                     if state
                     else {}
