@@ -160,6 +160,7 @@ def build_native_device_overview(
                      "hardware_soc_min": _measurement(getattr(state, "setpoints", None), "min_soc_pct"),
                      "hardware_soc_max": _measurement(getattr(state, "setpoints", None), "max_soc_pct"),
                      "heating_active": _boolean_status(_measurement(state, "heating_active")),
+                     "switching_count": _measurement(state, "diagnostics.switching_count"),
                     }
                     if state
                     else {}

@@ -432,6 +432,7 @@
       "native_hardware_offgrid_power_w": {"name":"Off-grid power"},
       "native_hardware_cell_delta_v": {"name":"Cell voltage difference"},
       "native_hardware_pack_status": {"name":"Status","state":{"idle":"Idle","charge":"Charging","discharge":"Discharging"}},
+      "native_hardware_switching_count": {"name": "Cycles de commutation"},
       "native_hardware_soc_min": {"name":"Hardware minimum SoC"},
       "native_hardware_soc_max": {"name":"Hardware maximum SoC"},
       "native_hardware_heating": {"name":"Battery heating","state":{"on":"On","off":"Off"}},

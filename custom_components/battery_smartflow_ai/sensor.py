@@ -296,6 +296,11 @@ NATIVE_MAIN_SENSORS = (
 
 NATIVE_MAIN_SENSORS += (
     NativeHardwareSensorDescription(
+        key="switching_count", translation_key="native_hardware_switching_count",
+        measurement_key="switching_count", entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
+    NativeHardwareSensorDescription(
         key="heating_active", translation_key="native_hardware_heating", measurement_key="heating_active",
         device_class=SensorDeviceClass.ENUM, options=["on", "off"],
     ),
