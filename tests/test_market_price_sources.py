@@ -30,6 +30,7 @@ class FakeState:
     state: object
     attributes: dict[str, object]
     last_updated: datetime = NOW
+    last_reported: datetime | None = None
 
 
 class MarketPriceSourceTests(unittest.TestCase):
@@ -61,6 +62,37 @@ class MarketPriceSourceTests(unittest.TestCase):
         self.assertEqual(price.source, "sensor.import_price")
         self.assertTrue(price.is_dynamic)
         self.assertFalse(price.is_fallback)
+
+    def test_unchanged_price_uses_fresh_last_reported_timestamp(self) -> None:
+        old_update = datetime(2026, 8, 21, 5, 0, tzinfo=timezone.utc)
+        fresh_report = datetime(2026, 8, 21, 12, 55, tzinfo=timezone.utc)
+        source = GenericStatePriceSource(
+            "sensor.import_price",
+            lambda _: FakeState(
+                state="0.20",
+                attributes={"unit_of_measurement": "EUR/kWh"},
+                last_updated=old_update,
+                last_reported=fresh_report,
+            ),
+        )
+
+        price = MarketPriceSourceAdapter(
+            source=source,
+            normalizer=NumericPriceNormalizer(now=NOW),
+            direction=MarketPriceDirection.IMPORT,
+            active_currency="EUR",
+        ).read()
+
+        self.assertTrue(price.valid)
+        self.assertEqual(price.timestamp, fresh_report)
+
+    def test_older_state_without_last_reported_falls_back_to_last_updated(self) -> None:
+        source = GenericStatePriceSource(
+            "sensor.import_price",
+            lambda _: FakeState(state="0.20", attributes={}, last_updated=NOW),
+        )
+
+        self.assertEqual(source.read().timestamp, NOW)
 
     def test_generic_state_preserves_explicit_currency_metadata(self) -> None:
         states = {

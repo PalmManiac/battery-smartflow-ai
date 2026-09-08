@@ -95,7 +95,14 @@ class GenericStatePriceSource:
                 if raw_currency is not None
                 else None
             ),
-            timestamp=getattr(state, "last_updated", None),
+            # ``last_updated`` changes only when state or attributes change.
+            # Price providers may legitimately report the same price again;
+            # HA's ``last_reported`` records that fresh report without causing
+            # a false six-hour stale gap (Issue #396).
+            timestamp=(
+                getattr(state, "last_reported", None)
+                or getattr(state, "last_updated", None)
+            ),
             source=self.entity_id,
             status=status,
             is_dynamic=True,
