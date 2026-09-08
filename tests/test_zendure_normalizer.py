@@ -220,6 +220,18 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             self.at,
         )
 
+    async def test_explicit_no_error_overrides_nonzero_zensdk_fault_level(self):
+        """SF2400AC faultLevel=2 is no protection block when is_error=0."""
+        result = ZendureCloudNormalizer(self.bootstrap).apply(
+            report(
+                self.at,
+                {"properties": {"faultLevel": 2, "is_error": 0}},
+            )
+        )
+
+        self.assertTrue(result.state.protection_active.valid)
+        self.assertFalse(result.state.protection_active.value)
+
     async def test_missing_invalid_unsupported_stale_and_offline_are_distinct(self):
         system_id = "cloud_mqtt:device-1"
         normalizer = ZendureCloudNormalizer(
