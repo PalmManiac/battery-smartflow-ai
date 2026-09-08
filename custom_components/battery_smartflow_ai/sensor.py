@@ -296,6 +296,18 @@ NATIVE_MAIN_SENSORS = (
 
 NATIVE_MAIN_SENSORS += (
     NativeHardwareSensorDescription(
+        key="rssi", translation_key="native_hardware_rssi", measurement_key="rssi",
+        native_unit_of_measurement="dBm", device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
+    NativeHardwareSensorDescription(
+        key="available_energy_kwh", translation_key="native_hardware_available_energy",
+        measurement_key="available_energy_kwh", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+    ),
+    NativeHardwareSensorDescription(
         key="switching_count", translation_key="native_hardware_switching_count",
         measurement_key="switching_count", entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
