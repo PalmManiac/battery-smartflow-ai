@@ -335,6 +335,7 @@ from .zendure_normalizer import RAW_MAIN_DIAGNOSTICS
 NATIVE_MAIN_SENSORS += tuple(
     NativeHardwareSensorDescription(
         key=key, name=key, measurement_key=key,
+        suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ) for key in RAW_MAIN_DIAGNOSTICS
