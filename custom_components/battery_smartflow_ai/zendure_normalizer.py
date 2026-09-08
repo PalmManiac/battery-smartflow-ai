@@ -230,12 +230,15 @@ RAW_MAIN_DIAGNOSTICS = (
     "LCNState", "localAPIEnable", "net", "OldMode", "OTAState", "phaseSwitch",
     "pvStatus", "rssi", "smartMode", "socStatus", "socCompSwitch", "writeRsp",
     "packNum", "solarPower1", "solarPower2", "solarPower3", "solarPower4",
-    "solarPower5", "solarPower6",
+    "solarPower5", "solarPower6", "PowerCycle",
 )
 for _raw in RAW_MAIN_DIAGNOSTICS:
     MAIN_PROPERTY_MAPPINGS[_raw] = _mapping(
         _raw, _raw, MappingScope.MAIN, (bool, int, float),
     )
+MAIN_PROPERTY_MAPPINGS["PowerCycle"] = _mapping(
+    "PowerCycle", "switching_count", MappingScope.MAIN, (int, float), minimum=0,
+)
 
 
 @dataclass(frozen=True, slots=True)
