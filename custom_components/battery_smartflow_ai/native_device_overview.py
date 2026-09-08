@@ -7,6 +7,7 @@ from datetime import datetime
 import hashlib
 from types import MappingProxyType
 from typing import Mapping
+from .native_capacity import native_capacity, pack_capacity_kwh
 
 from .core.models import (
     DeviceControlState,
@@ -108,6 +109,14 @@ def build_native_device_overview(
                             "fault_code": observed.fault_code,
                             "protection_active": observed.protection_active,
                             "pack_type": observed.pack_type,
+                            "cell_delta_v": _difference(observed.cell_max_v, observed.cell_min_v),
+                            "power_w": _difference(observed.discharge_power_w, observed.charge_power_w),
+                            "capacity_kwh": _optional_value(pack_capacity_kwh(
+                                observed.serial_number,
+                                observed.pack_type.value if observed.pack_type.valid else None,
+                            )),
+                            "status": _pack_status(observed.state_code),
+                            "heating_active": _boolean_status(_measurement(observed, "heating_active")),
                         }
                     ),
                     last_message_at=observed.last_message_at,
@@ -128,7 +137,7 @@ def build_native_device_overview(
                 ),
                 firmware=_measurement(state, "firmware"),
                 measurements=MappingProxyType(
-                    {
+                    {**{
                         key: _measurement(state, key)
                         for key in (
                             "soc_pct",
@@ -142,7 +151,15 @@ def build_native_device_overview(
                             "protection_active",
                             "temperature_c",
                             "battery_voltage_v",
+                            "offgrid_power_w",
                         )
+                    }, **dict(getattr(state, "diagnostics", {})),
+                     "pack_count": _optional_value(native_capacity(state).pack_count),
+                     "capacity_kwh": _optional_value(native_capacity(state).capacity_kwh),
+                     "power_w": _difference(_measurement(state, "discharge_power_w"), _measurement(state, "charge_power_w")),
+                     "hardware_soc_min": _measurement(getattr(state, "setpoints", None), "min_soc_pct"),
+                     "hardware_soc_max": _measurement(getattr(state, "setpoints", None), "max_soc_pct"),
+                     "heating_active": _boolean_status(_measurement(state, "heating_active")),
                     }
                     if state
                     else {}
@@ -183,6 +200,24 @@ def _measurement(state: object | None, key: str) -> MeasuredValue:
     if state is None:
         return MeasuredValue.absent(ValueValidity.MISSING)
     return getattr(state, key, MeasuredValue.absent(ValueValidity.MISSING))
+
+
+def _optional_value(value):
+    return MeasuredValue.available(value) if value is not None else MeasuredValue.absent(ValueValidity.UNKNOWN)
+
+
+def _difference(left, right):
+    if not left.valid or not right.valid:
+        return MeasuredValue.absent(ValueValidity.UNAVAILABLE)
+    return MeasuredValue.available(round(float(left.value) - float(right.value), 3))
+
+
+def _pack_status(value):
+    return _optional_value({0: "idle", 1: "charge", 2: "discharge"}.get(value.value) if value.valid else None)
+
+
+def _boolean_status(value):
+    return _optional_value(("on" if value.value else "off") if value.valid else None)
 
 
 def _pack_model(value: str | None, parent_model: str | None) -> str | None:

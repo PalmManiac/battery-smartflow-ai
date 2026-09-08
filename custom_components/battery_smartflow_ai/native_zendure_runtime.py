@@ -199,6 +199,14 @@ class NativeZendureRuntime:
 
         return self._selected_device
 
+    def selected_capacity(self):
+        """Use only packs of the selected system, never a legacy setting."""
+        from .native_capacity import native_capacity
+
+        expected = next((item.pack_count for item in self._bootstrap.devices
+                         if item.candidate.candidate_id == self._selected_device), None) if self._bootstrap else None
+        return native_capacity(self.selected_device_state(), expected)
+
     def full_charge_maintenance_input(
         self,
         *,
@@ -244,6 +252,8 @@ class NativeZendureRuntime:
                 self._control_enabled
                 and _fresh_at(online, now=now)
                 and online.value
+                and _fresh_at(protection, now=now)
+                and _fresh_at(hems, now=now)
             ),
             transport_available=bool(
                 authority.device_id == self._selected_device

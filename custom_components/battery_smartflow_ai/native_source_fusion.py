@@ -141,6 +141,7 @@ class NativeSourceFusion:
             "hems_active",
             "fault_code",
             "protection_active",
+            "heating_active",
             "temperature_c",
             "battery_voltage_v",
             "offgrid_power_w",
@@ -202,6 +203,13 @@ class NativeSourceFusion:
                 default=None,
             ),
             packs=packs,
+            diagnostics={
+                name: select(
+                    f"diagnostics.{name}",
+                    {source: item.diagnostics[name] for source, item in states.items() if name in item.diagnostics},
+                    {source: self._retained_main.get((source, system_id), {}).get(name, False) for source in states},
+                ) for name in sorted({key for item in states.values() for key in item.diagnostics})
+            },
             **selected_values,
         )
         self._selection[system_id] = trace
@@ -369,6 +377,10 @@ class NativeSourceFusion:
                 mapping = MAIN_PROPERTY_MAPPINGS.get(str(raw_name))
                 if mapping is not None:
                     destination[mapping.target] = message.retained
+            if "faultLevel" in properties or "is_error" in properties:
+                destination["protection_active"] = any(
+                    destination.get(key, False) for key in ("fault_code", "is_error")
+                )
         packs = payload.get("packData")
         if not isinstance(packs, list):
             return
@@ -388,6 +400,8 @@ class NativeSourceFusion:
             if "power" in pack:
                 destination["charge_power_w"] = message.retained
                 destination["discharge_power_w"] = message.retained
+            if "faultLevel" in pack:
+                destination["protection_active"] = message.retained
 
     def _source_quality(
         self,
@@ -455,6 +469,8 @@ def _measurement(
     state: NeutralDeviceState,
     property_name: str,
 ) -> MeasuredValue[Any] | None:
+    if property_name.startswith("diagnostics."):
+        return state.diagnostics.get(property_name.split(".", 1)[1])
     if property_name.startswith("setpoints."):
         return getattr(state.setpoints, property_name.split(".", 1)[1], None)
     if property_name.startswith("packs."):

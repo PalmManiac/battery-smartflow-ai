@@ -50,7 +50,9 @@ class FullChargeMaintenanceRuntimeTests(unittest.TestCase):
                 price_window_favorable=False,
             ),
         )
-        self.assertEqual(resumed.state, MaintenanceState.CHARGING_TO_FULL)
+        self.assertEqual(resumed.state, MaintenanceState.WAITING_FOR_FAVORABLE_WINDOW)
+        self.assertTrue(resumed.record.active)
+        self.assertFalse(resumed.request_full_charge)
         self.assertNotIn("command", str(persisted).lower())
         self.assertNotIn("transport", str(persisted).lower())
 

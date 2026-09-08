@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Mapping
 from datetime import datetime
 from enum import StrEnum
 
 from .inventory import ZendureTransport
-from .states import MeasuredValue
+from .states import MeasuredValue, ValueValidity
 
 
 class DeviceOperatingMode(StrEnum):
@@ -52,6 +53,7 @@ class NeutralPackState:
     fault_code: MeasuredValue[int]
     protection_active: MeasuredValue[bool]
     last_message_at: datetime | None
+    heating_active: MeasuredValue[bool] = field(default_factory=lambda: MeasuredValue.absent(ValueValidity.MISSING))
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,3 +81,5 @@ class NeutralDeviceState:
     last_message_at: datetime | None
     packs: tuple[NeutralPackState, ...]
     offgrid_power_w: MeasuredValue[float]
+    diagnostics: Mapping[str, MeasuredValue] = field(default_factory=dict)
+    heating_active: MeasuredValue[bool] = field(default_factory=lambda: MeasuredValue.absent(ValueValidity.MISSING))

@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0.beta1")
+        self.assertEqual(manifest["version"], "5.0.0-beta2")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -128,7 +128,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             for node in ast.walk(tree)
             if isinstance(node, ast.Call)
             and getattr(node.func, "id", None) == "NativeHardwareSensorDescription"
-            and any(keyword.arg == "key" for keyword in node.keywords)
+            and any(keyword.arg == "key" and isinstance(keyword.value, ast.Constant) for keyword in node.keywords)
         }
         for key in (
             "battery_voltage_v",

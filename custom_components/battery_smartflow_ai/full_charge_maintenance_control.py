@@ -57,7 +57,8 @@ def apply_maintenance_charge_request(
     if maintenance.selected_window is MaintenanceWindow.PV_SURPLUS:
         charge_w = min(
             float(max_charge_w),
-            max(float(decision.charge_w or 0.0), float(grid_export_w), 0.0),
+            max(float(decision.charge_w or 0.0) if decision.reason == "pv_surplus_charge" else 0.0,
+                float(grid_export_w), 0.0),
         )
         reason = "pv_surplus_charge"
     elif maintenance.selected_window is MaintenanceWindow.LOW_PRICE:

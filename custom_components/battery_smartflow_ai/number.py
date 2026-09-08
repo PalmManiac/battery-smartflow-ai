@@ -6,6 +6,7 @@ from homeassistant.components.number import NumberEntity, NumberEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     DOMAIN,
@@ -241,10 +242,20 @@ async def async_setup_entry(
     add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]
+    native = entry.data.get("connection_type") == "native" or entry.options.get("native_zendure_control_enabled", False)
+    registry = er.async_get(hass)
+    pack_entity = registry.async_get_entity_id("number", DOMAIN, f"{entry.entry_id}_{SETTING_BATTERY_PACKS}")
+    if pack_entity:
+        registered = registry.async_get(pack_entity)
+        if native and registered.disabled_by is None:
+            registry.async_update_entity(pack_entity, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+        elif not native and registered.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+            registry.async_update_entity(pack_entity, disabled_by=None)
 
     entities = [
         ZendureSmartFlowNumber(entry, coordinator, description)
         for description in NUMBERS
+        if not (native and description.runtime_key == SETTING_BATTERY_PACKS)
     ]
 
     add_entities(entities)

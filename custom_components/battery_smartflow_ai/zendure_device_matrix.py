@@ -173,6 +173,7 @@ _COMMON_DEVICE_TARGETS = frozenset(
         "hems_active",
         "fault_code",
         "protection_active",
+        "heating_active",
         "temperature_c",
         "battery_voltage_v",
         "firmware",
@@ -193,6 +194,7 @@ _COMMON_PACK_TARGETS = frozenset(
         "state_code",
         "fault_code",
         "protection_active",
+        "heating_active",
     }
 )
 
