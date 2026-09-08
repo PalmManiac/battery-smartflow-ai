@@ -861,17 +861,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
 
         errors: dict[str, str] = {}
         if user_input is not None:
-            if bool(user_input.get("disable_native_zendure_test", False)):
-                options = dict(self.config_entry.options)
-                options.pop(CONF_NATIVE_ZENDURE_APP_TOKEN, None)
-                options.pop(CONF_NATIVE_ZENDURE_SELECTED_DEVICE, None)
-                options.pop(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, None)
-                options.pop(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT, None)
-                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, None)
-                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT, None)
-                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME, None)
-                options.pop(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD, None)
-                return self.async_create_entry(title="", data=options)
             token = resolve_app_token_input(
                 user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
                 self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
@@ -924,10 +913,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
             )
         }
-        if configured:
-            schema[vol.Optional("disable_native_zendure_test", default=False)] = (
-                selector.BooleanSelector()
-            )
         return vol.Schema(schema)
 
     async def async_step_native_zendure_device(
@@ -960,9 +945,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             options = dict(self.config_entry.options)
             options[CONF_NATIVE_ZENDURE_APP_TOKEN] = self._native_token
             options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
-            options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
-                user_input.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
-            )
+            options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
             options.pop(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT, None)
             selected_device = next(
                 item for item in devices
@@ -1059,10 +1042,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                vol.Optional(
-                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
-                    default=native_control_enabled,
-                ): selector.BooleanSelector(),
             }
         if any(
             preferred_local_transport(item.candidate.identity)

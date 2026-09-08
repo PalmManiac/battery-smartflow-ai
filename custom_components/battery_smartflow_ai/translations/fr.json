@@ -434,6 +434,7 @@
       "native_hardware_pack_status": {"name":"Status","state":{"idle":"Idle","charge":"Charging","discharge":"Discharging"}},
       "native_hardware_rssi": {"name": "Wi-Fi signal strength"},
       "native_hardware_available_energy": {"name": "Available energy"},
+      "native_hardware_roundtrip_efficiency": {"name": "Rendement aller-retour"},
       "native_hardware_switching_count": {"name": "Cycles de commutation"},
       "native_hardware_soc_min": {"name":"Hardware minimum SoC"},
       "native_hardware_soc_max": {"name":"Hardware maximum SoC"},
