@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0-beta2")
+        self.assertEqual(manifest["version"], "5.0.0-beta.11")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -33,7 +33,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn("TextSelectorType.PASSWORD", text)
         self.assertNotIn("add_suggested_values_to_schema", text)
         self.assertIn("STORED_APP_TOKEN_MASK", text)
-        self.assertIn("disable_native_zendure_test", text)
+        self.assertNotIn("disable_native_zendure_test", text)
 
     def test_options_flow_does_not_ask_for_a_transport(self) -> None:
         source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
@@ -42,7 +42,8 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             source.index("def _native_device_summary")
         ]
         self.assertNotIn("CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT", schema)
-        self.assertIn("CONF_NATIVE_ZENDURE_CONTROL_ENABLED", schema)
+        self.assertNotIn("CONF_NATIVE_ZENDURE_CONTROL_ENABLED", schema)
+        self.assertIn("options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True", source)
 
     def test_runtime_keeps_native_control_explicit_and_transport_typed(self) -> None:
         setup = (COMPONENT / "__init__.py").read_text(encoding="utf-8")
