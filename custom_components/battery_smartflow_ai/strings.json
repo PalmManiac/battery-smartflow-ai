@@ -13,6 +13,7 @@
     },
     "error": {
       "grid_split_missing": "When using two sensors, both grid import and grid export must be selected.",
+      "unsupported_device": "Unsupported device model.",
       "invalid_token": "The App Token format is invalid.",
       "invalid_or_expired_token": "The App Token is invalid or expired.",
       "cannot_connect": "Could not connect to Zendure Cloud.",
@@ -115,6 +116,76 @@
         }
       },
       "user": {
+        "title": "Set up Battery SmartFlow AI",
+        "menu_options": {
+          "native_login": "Connect Zendure directly",
+          "legacy": "Use existing HA entities"
+        }
+      },
+      "native_login": {
+        "title": "Sign in to Zendure",
+        "description": "The App Token is stored privately. The local transport is selected automatically for the device model.",
+        "data": {
+          "native_zendure_app_token": "App Token"
+        }
+      },
+      "native_device": {
+        "title": "Select the Zendure system",
+        "description": "Zendure reported these devices:\n\n{device_summary}\n\nSelect exactly one system. Battery SmartFlow AI automatically uses the supported local transport for its model. Native control is activated only by the separate switch below. When enabled, BSFAI stops writing through the configured Z-HA entities.",
+        "data": {
+          "native_zendure_selected_device": "Zendure system",
+          "native_zendure_control_enabled": "Enable native Zendure control",
+          "native_zendure_local_mqtt_server": "Local MQTT server",
+          "native_zendure_local_mqtt_port": "Local MQTT port",
+          "native_zendure_local_mqtt_username": "Local MQTT username",
+          "native_zendure_local_mqtt_password": "Local MQTT password"
+        },
+        "data_description": {
+          "native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently. BSFAI selects ZenSDK or Local MQTT from the verified model family.",
+          "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the model's local transport. Disable this switch to retain the established Z-HA control path.",
+          "native_zendure_local_mqtt_server": "Shown only when the account contains a verified legacy family. The device must already be provisioned to publish to this broker.",
+          "native_zendure_local_mqtt_port": "Usually 1883 for a local unencrypted broker.",
+          "native_zendure_local_mqtt_username": "Broker account used by BSFAI; it is kept private.",
+          "native_zendure_local_mqtt_password": "Keep the dot mask unchanged to reuse the stored password. It is never exposed by sensors or diagnostics."
+        }
+      },
+      "native_external": {
+        "title": "Set up Battery SmartFlow AI",
+        "description": "Select external measurements and price sources. Hardware data and pack capacities are detected automatically.",
+        "data": {
+          "additional_battery_charge_entity": "Additional battery charge power (optional)",
+          "additional_battery_discharge_entity": "Additional battery discharge power (optional)",
+          "installed_pv_wp": "Installed PV power (Wp)",
+          "pv_entity": "PV power sensor",
+          "pv_forecast_today_entity": "PV forecast today (optional)",
+          "pv_forecast_tomorrow_entity": "PV forecast tomorrow (optional)",
+          "price_now_entity": "Current electricity price",
+          "price_export_entity": "Price forecast (e.g. Tibber / EPEX)",
+          "grid_mode": "Grid metering",
+          "grid_power_entity": "Grid power (single)",
+          "grid_import_entity": "Grid import (split)",
+          "grid_export_entity": "Grid export (split)",
+          "feed_in_tariff": "Feed-in tariff",
+          "dynamic_feed_in_price_entity": "Current dynamic feed-in price (optional)"
+        },
+        "data_description": {
+          "additional_battery_charge_entity": "Optional sensor of a second battery system. If this sensor reports positive charge power, Battery SmartFlow AI blocks discharging.",
+          "additional_battery_discharge_entity": "Optional sensor of a second battery system. If this sensor reports positive discharge power, Battery SmartFlow AI blocks charging to avoid battery-to-battery charging.",
+          "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative PV-context thresholds and other PV-related logic.",
+          "pv_entity": "Sensor with the current PV power in watts.",
+          "pv_forecast_today_entity": "Optional sensor with today's PV daily forecast, for example from Solcast PV Forecast. The forecast is only an additional planning input and is not required for the integration.",
+          "pv_forecast_tomorrow_entity": "Optional sensor with tomorrow's PV daily forecast, for example from Solcast PV Forecast. The forecast is only an additional planning input and is not required for the integration.",
+          "price_now_entity": "Current electricity price. Enables price-dependent discharging.",
+          "price_export_entity": "Price forecast data for the next hours. Enables intelligent charge planning.",
+          "grid_mode": "Defines how grid import and export are recorded.",
+          "grid_power_entity": "A single sensor with positive power for import and negative power for export.",
+          "grid_import_entity": "Sensor with current grid import power in watts.",
+          "grid_export_entity": "Sensor with current grid export power in watts.",
+          "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as a fallback when no valid dynamic feed-in price is available.",
+          "dynamic_feed_in_price_entity": "Optional numeric Home Assistant sensor for the current dynamic feed-in price. A valid sensor value, including zero or a negative price, takes priority over the fixed feed-in tariff."
+        }
+      },
+      "legacy": {
         "title": "Set up Battery SmartFlow AI",
         "description": "Select the required sensors",
         "data": {
@@ -239,13 +310,15 @@
           "expert_mode_enabled": "Enable expert mode",
           "full_charge_maintenance_enabled": "Use full-charge maintenance",
           "full_charge_maintenance_interval_days": "Recommended full-charge interval",
-          "learned_planning_enabled": "Use learned charge-window planning"
+          "learned_planning_enabled": "Use learned charge-window planning",
+          "native_capacity_override_kwh": "Total capacity for an unknown pack profile (kWh)"
         },
         "data_description": {
           "expert_mode_enabled": "Enables the advanced expert area for additional protection and diagnostic functions.",
           "full_charge_maintenance_enabled": "Allows BSFAI to plan a protective full charge at favorable times. This is not a BMS calibration command.",
           "full_charge_maintenance_interval_days": "Days between recommended confirmed full charges (7–90).",
-          "learned_planning_enabled": "When enabled, Battery SmartFlow AI automatically uses learned charge-window planning once enough learning data is available. Until then, classic planning remains active. When disabled, classic planning is always used."
+          "learned_planning_enabled": "When enabled, Battery SmartFlow AI automatically uses learned charge-window planning once enough learning data is available. Until then, classic planning remains active. When disabled, classic planning is always used.",
+          "native_capacity_override_kwh": "Unknown packs only: verified total capacity of all packs in this system. 0 disables the override. Missing measurements still block control."
         }
       },
       "expert_cell_voltage": {
@@ -384,6 +457,15 @@
       "native_zendure_last_message": {"name": "Last native Zendure message"},
       "native_zendure_last_capture": {"name": "Native Zendure initial-sync package"},
       "native_zendure_error": {"name": "Native Zendure error"},
+      "native_hardware_pack_count": {"name":"Battery count"},
+      "native_hardware_capacity_kwh": {"name":"Nominal capacity"},
+      "native_hardware_power_w": {"name":"Battery power"},
+      "native_hardware_offgrid_power_w": {"name":"Off-grid power"},
+      "native_hardware_cell_delta_v": {"name":"Cell voltage difference"},
+      "native_hardware_pack_status": {"name":"Status","state":{"idle":"Idle","charge":"Charging","discharge":"Discharging"}},
+      "native_hardware_soc_min": {"name":"Hardware minimum SoC"},
+      "native_hardware_soc_max": {"name":"Hardware maximum SoC"},
+      "native_hardware_heating": {"name":"Battery heating","state":{"on":"On","off":"Off"}},
       "native_hardware_online": {"name": "Online status", "state": {"online": "Online", "offline": "Offline"}},
       "native_hardware_soc_pct": {"name": "State of charge"},
       "native_hardware_charge_power_w": {"name": "Charge power"},

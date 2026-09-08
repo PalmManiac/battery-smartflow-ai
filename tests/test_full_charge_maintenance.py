@@ -180,8 +180,11 @@ class FullChargeMaintenanceTests(unittest.TestCase):
         resumed = self.planner.evaluate(
             restored, observation(now=NOW + timedelta(minutes=1))
         )
-        self.assertEqual(resumed.state, MaintenanceState.CHARGING_TO_FULL)
-        self.assertTrue(resumed.request_full_charge)
+        self.assertEqual(resumed.state, MaintenanceState.WAITING_FOR_FAVORABLE_WINDOW)
+        self.assertFalse(resumed.request_full_charge)
+        self.assertTrue(resumed.record.active)
+        favorable = self.planner.evaluate(resumed.record, observation(price_window_favorable=True))
+        self.assertTrue(favorable.request_full_charge)
 
     def test_multiple_devices_are_independent(self):
         first = self.planner.evaluate(

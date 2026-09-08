@@ -12,6 +12,7 @@
     },
     "error": {
       "grid_split_missing": "Bij gebruik van twee sensoren moeten zowel netafname als netteruglevering zijn geselecteerd.",
+      "unsupported_device": "Unsupported device model.",
       "invalid_token": "De indeling van het app-token is ongeldig.", "invalid_or_expired_token": "Het app-token is ongeldig of verlopen.", "cannot_connect": "Kan geen verbinding maken met Zendure Cloud.", "timeout": "Zendure Cloud antwoordde niet op tijd.", "invalid_response": "Zendure Cloud gaf een onverwacht antwoord.", "no_devices": "Er zijn geen Zendure-apparaten gevonden.", "no_mqtt_credentials": "Zendure gaf geen Cloud MQTT-toegang.", "duplicate_device_id": "Zendure gaf dubbele apparaatidentiteiten.", "incomplete_device": "Zendure gaf een onvolledig apparaat terug.", "device_not_found": "Het geselecteerde apparaat is niet meer beschikbaar.", "local_mqtt_required": "Voor dit Legacy-apparaat zijn de lokale MQTT-brokerinstellingen vereist."
     },
     "step": {
@@ -104,6 +105,76 @@
         }
       },
       "user": {
+        "title": "Battery SmartFlow AI instellen",
+        "menu_options": {
+          "native_login": "Connect Zendure directly",
+          "legacy": "Use existing HA entities"
+        }
+      },
+      "native_login": {
+        "title": "Sign in to Zendure",
+        "description": "The App Token is stored privately. The local transport is selected automatically for the device model.",
+        "data": {
+          "native_zendure_app_token": "App Token"
+        }
+      },
+      "native_device": {
+        "title": "Zendure-systeem selecteren",
+        "description": "Zendure meldde deze apparaten:\n\n{device_summary}\n\nSelecteer precies één systeem. Battery SmartFlow AI gebruikt automatisch het lokale transport dat door het model wordt ondersteund. Native besturing wordt alleen met de aparte schakelaar hieronder geactiveerd.",
+        "data": {
+          "native_zendure_selected_device": "Zendure-systeem",
+          "native_zendure_control_enabled": "Native Zendure-besturing inschakelen",
+          "native_zendure_local_mqtt_server": "Lokale MQTT-server",
+          "native_zendure_local_mqtt_port": "Lokale MQTT-poort",
+          "native_zendure_local_mqtt_username": "Lokale MQTT-gebruikersnaam",
+          "native_zendure_local_mqtt_password": "Lokaal MQTT-wachtwoord"
+        },
+        "data_description": {
+          "native_zendure_selected_device": "Er wordt precies één hoofdsysteem geselecteerd; packs kunnen niet afzonderlijk worden bestuurd. BSFAI bepaalt ZenSDK of Local MQTT aan de hand van de geverifieerde modelfamilie.",
+          "native_zendure_control_enabled": "Zet BSFAI-opdrachten expliciet over van Z-HA-entiteiten naar het lokale transport van het model.",
+          "native_zendure_local_mqtt_server": "Alleen getoond voor een geverifieerde Legacy-familie. Het apparaat moet al naar deze broker publiceren.",
+          "native_zendure_local_mqtt_port": "Meestal 1883 voor een lokale onversleutelde broker.",
+          "native_zendure_local_mqtt_username": "Privébrokeraccount voor BSFAI.",
+          "native_zendure_local_mqtt_password": "Laat het puntenmasker staan om het opgeslagen wachtwoord opnieuw te gebruiken."
+        }
+      },
+      "native_external": {
+        "title": "Battery SmartFlow AI instellen",
+        "description": "Select external measurements and price sources. Hardware data and pack capacities are detected automatically.",
+        "data": {
+          "additional_battery_charge_entity": "Extra batterij laadvermogen (optioneel)",
+          "additional_battery_discharge_entity": "Extra batterij ontlaadvermogen (optioneel)",
+          "installed_pv_wp": "Geïnstalleerd PV-vermogen (Wp)",
+          "pv_entity": "PV-vermogenssensor",
+          "pv_forecast_today_entity": "PV-voorspelling vandaag (optioneel)",
+          "pv_forecast_tomorrow_entity": "PV-voorspelling morgen (optioneel)",
+          "price_now_entity": "Actuele stroomprijs",
+          "price_export_entity": "Prijsprognose (bijv. Tibber / EPEX)",
+          "grid_mode": "Netmeting",
+          "grid_power_entity": "Netvermogen (single)",
+          "grid_import_entity": "Netafname (split)",
+          "grid_export_entity": "Netteruglevering (split)",
+          "feed_in_tariff": "Terugleververgoeding",
+          "dynamic_feed_in_price_entity": "Actuele dynamische terugleverprijs (optioneel)"
+        },
+        "data_description": {
+          "additional_battery_charge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief laadvermogen meldt, blokkeert Battery SmartFlow AI het ontladen.",
+          "additional_battery_discharge_entity": "Optionele sensor van een tweede batterijsysteem. Als deze sensor positief ontlaadvermogen meldt, blokkeert Battery SmartFlow AI het laden, zodat er geen batterij-naar-batterij-laden ontstaat.",
+          "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve PV-contextdrempels en andere PV-logica.",
+          "pv_entity": "Sensor met het actuele PV-vermogen in watt.",
+          "pv_forecast_today_entity": "Optionele sensor met de PV-dagvoorspelling voor vandaag, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
+          "pv_forecast_tomorrow_entity": "Optionele sensor met de PV-dagvoorspelling voor morgen, bijvoorbeeld uit Solcast PV Forecast. De voorspelling is alleen een extra planningsinput en geen vereiste.",
+          "price_now_entity": "Actuele stroomprijs. Maakt prijsafhankelijk ontladen mogelijk.",
+          "price_export_entity": "Prijsprognosegegevens voor de komende uren. Maakt intelligente laadplanning mogelijk.",
+          "grid_mode": "Bepaalt hoe netafname en teruglevering worden geregistreerd.",
+          "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
+          "grid_import_entity": "Sensor met actuele netafname in watt.",
+          "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
+          "feed_in_tariff": "Vergoeding per teruggeleverde kWh in dezelfde valuta-eenheid als de stroomprijzen. Deze dient als terugvalwaarde wanneer geen geldige dynamische terugleverprijs beschikbaar is.",
+          "dynamic_feed_in_price_entity": "Optionele numerieke Home Assistant-sensor voor de actuele dynamische terugleverprijs. Een geldige sensorwaarde, inclusief nul of een negatieve prijs, krijgt voorrang op de vaste vergoeding."
+        }
+      },
+      "legacy": {
         "title": "Battery SmartFlow AI instellen",
         "description": "Selecteer de benodigde sensoren",
         "data": {
@@ -214,13 +285,15 @@
           "expert_mode_enabled": "Expertmodus inschakelen",
           "full_charge_maintenance_enabled": "Onderhoud met volledige lading gebruiken",
           "full_charge_maintenance_interval_days": "Aanbevolen interval voor volledige lading",
-          "learned_planning_enabled": "Lerende laadvensterplanning gebruiken"
+          "learned_planning_enabled": "Lerende laadvensterplanning gebruiken",
+          "native_capacity_override_kwh": "Total capacity for an unknown pack profile (kWh)"
         },
         "data_description": {
           "expert_mode_enabled": "Activeert het uitgebreide expertgedeelte voor aanvullende beschermings- en diagnosefuncties.",
           "full_charge_maintenance_enabled": "Laat BSFAI op gunstige momenten een beschermende volledige lading plannen. Dit is geen BMS-kalibratieopdracht.",
           "full_charge_maintenance_interval_days": "Dagen tussen aanbevolen bevestigde volledige ladingen (7–90).",
-          "learned_planning_enabled": "Indien ingeschakeld gebruikt Battery SmartFlow AI automatisch de lerende laadvensterplanning zodra voldoende leerdata beschikbaar is. Tot die tijd blijft de klassieke planning actief. Indien uitgeschakeld wordt altijd de klassieke planning gebruikt."
+          "learned_planning_enabled": "Indien ingeschakeld gebruikt Battery SmartFlow AI automatisch de lerende laadvensterplanning zodra voldoende leerdata beschikbaar is. Tot die tijd blijft de klassieke planning actief. Indien uitgeschakeld wordt altijd de klassieke planning gebruikt.",
+          "native_capacity_override_kwh": "Unknown packs only: verified total capacity of all packs in this system. 0 disables the override. Missing measurements still block control."
         }
       },
       "expert_cell_voltage": {
@@ -353,6 +426,15 @@
     },
     "sensor": {
       "native_zendure_status": {"name": "Status native Zendure-test", "state": {"disabled": "Niet ingesteld", "discovering": "Apparaten zoeken", "connecting": "Verbinden", "capturing": "Eerste gegevens verzamelen", "observing": "Observatie actief", "error": "Fout"}}, "native_zendure_control": {"name": "Native Zendure-besturing", "state": {"disabled_zha_active": "Uitgeschakeld – Z-HA blijft actief", "native_zensdk_active": "Ingeschakeld – lokale ZenSDK actief", "native_local_mqtt_active": "Ingeschakeld – Local MQTT actief", "native_local_unsupported": "Geblokkeerd – geen geverifieerd lokaal transport"}}, "native_zendure_device_count": {"name": "Gevonden native Zendure-apparaten"}, "native_zendure_message_count": {"name": "Ontvangen native Zendure-berichten"}, "native_zendure_last_message": {"name": "Laatste native Zendure-bericht"}, "native_zendure_last_capture": {"name": "Native Zendure-synchronisatiepakket"}, "native_zendure_error": {"name": "Native Zendure-fout"},
+      "native_hardware_pack_count": {"name":"Battery count"},
+      "native_hardware_capacity_kwh": {"name":"Nominal capacity"},
+      "native_hardware_power_w": {"name":"Battery power"},
+      "native_hardware_offgrid_power_w": {"name":"Off-grid power"},
+      "native_hardware_cell_delta_v": {"name":"Cell voltage difference"},
+      "native_hardware_pack_status": {"name":"Status","state":{"idle":"Idle","charge":"Charging","discharge":"Discharging"}},
+      "native_hardware_soc_min": {"name":"Hardware minimum SoC"},
+      "native_hardware_soc_max": {"name":"Hardware maximum SoC"},
+      "native_hardware_heating": {"name":"Battery heating","state":{"on":"On","off":"Off"}},
       "native_hardware_online": {"name": "Onlinestatus", "state": {"online": "Online", "offline": "Offline"}}, "native_hardware_soc_pct": {"name": "Laadstatus"}, "native_hardware_charge_power_w": {"name": "Laadvermogen"}, "native_hardware_discharge_power_w": {"name": "Ontlaadvermogen"}, "native_hardware_ac_input_power_w": {"name": "AC-ingangsvermogen"}, "native_hardware_ac_output_power_w": {"name": "AC-uitgangsvermogen"}, "native_hardware_pv_power_w": {"name": "PV-vermogen"}, "native_hardware_mode": {"name": "Bedrijfsmodus", "state": {"idle": "Stand-by", "charge": "Laden", "discharge": "Ontladen", "unknown": "Onbekend"}}, "native_hardware_temperature_c": {"name": "Temperatuur"}, "native_hardware_battery_voltage_v": {"name": "Accuspanning"}, "native_hardware_voltage_v": {"name": "Spanning"}, "native_hardware_current_a": {"name": "Stroom"}, "native_hardware_cell_min_v": {"name": "Laagste celspanning"}, "native_hardware_cell_max_v": {"name": "Hoogste celspanning"}, "native_hardware_state_code": {"name": "Statuscode"}, "native_hardware_pack_type": {"name": "Accutype"}, "native_hardware_fault_code": {"name": "Foutcode"}, "native_hardware_protection_active": {"name": "Beveiliging actief"}, "native_hardware_firmware": {"name": "Firmware"}, "native_hardware_product_id": {"name": "Product-ID"}, "native_hardware_profile": {"name": "Apparaatprofiel"}, "native_hardware_transport": {"name": "Communicatieroute", "state": {"home_assistant": "Home Assistant / Z-HA", "cloud_mqtt": "Cloud", "local_mqtt": "Lokaal", "zensdk": "ZenSDK"}}, "native_hardware_control_state": {"name": "Besturingsstatus", "state": {"observation": "Observatie", "eligible": "Geschikt", "enabled": "Ingeschakeld", "active": "Actief bestuurd", "hems_blocked": "Geblokkeerd door HEMS", "unsupported": "Niet ondersteund", "offline": "Offline"}}, "native_hardware_hems": {"name": "Zendure HEMS", "state": {"active": "Actief", "inactive": "Inactief", "unknown": "Onbekend", "stale": "Verouderd", "invalid": "Ongeldig", "unsupported": "Niet ondersteund"}}, "native_hardware_last_message": {"name": "Laatste gegevens ontvangen"},
       "device_profile": {
         "name": "Actief apparaatprofiel"

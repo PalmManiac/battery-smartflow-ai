@@ -79,7 +79,7 @@ from .native_config_ui import (
 )
 from .price_currency import price_input_profile, resolve_price_currency
 from .zendure_cloud import ZendureCloudClient, ZendureCloudError
-from .zendure_device_matrix import preferred_local_transport
+from .zendure_device_matrix import preferred_local_transport, resolve_zendure_device
 
 EMPTY_ENTITY_VALUES = {
     "",
@@ -169,13 +169,89 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 4
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
+        return self.async_show_menu(step_id="user", menu_options=["native_login", "legacy"])
+
+    async def async_step_legacy(self, user_input: dict[str, Any] | None = None):
         if user_input is not None:
             self._user_input = dict(user_input)
             return await self.async_step_grid()
 
         return self.async_show_form(
-            step_id="user",
+            step_id="legacy",
             data_schema=self._base_schema(),
+        )
+
+    async def async_step_native_login(self, user_input=None):
+        """Discover first; native setup never requires entities from another integration."""
+        errors = {}
+        if user_input is not None:
+            token = resolve_app_token_input(user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN), None)
+            try:
+                from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+                session = async_get_clientsession(self.hass)
+
+                async def post_json(url, **kwargs):
+                    async with session.post(url, **kwargs) as response:
+                        payload = await response.json(content_type=None)
+
+                    class Response:
+                        async def json(self):
+                            return payload
+
+                    return Response()
+
+                self._native_bootstrap = await ZendureCloudClient(post_json).async_discover(token)
+                self._native_options = {CONF_NATIVE_ZENDURE_APP_TOKEN: token}
+                return await self.async_step_native_device()
+            except ZendureCloudError as error:
+                errors["base"] = error.reason
+            except Exception:
+                errors["base"] = "cannot_connect"
+        return self.async_show_form(
+            step_id="native_login", errors=errors,
+            data_schema=vol.Schema({
+                vol.Required(CONF_NATIVE_ZENDURE_APP_TOKEN): selector.TextSelector(
+                    selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
+                ),
+            }),
+        )
+
+    async def async_step_native_device(self, user_input=None):
+        devices = self._native_bootstrap.devices
+        errors = {}
+        if user_input is not None:
+            selected = next((item for item in devices if item.candidate.candidate_id ==
+                             user_input.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)), None)
+            profile = resolve_zendure_device(selected.candidate.identity) if selected else None
+            if selected is None:
+                errors["base"] = "device_not_found"
+            elif profile is None:
+                errors["base"] = "unsupported_device"
+            elif (preferred_local_transport(selected.candidate.identity) is ZendureTransport.LOCAL_MQTT
+                  and not str(user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, "")).strip()):
+                errors["base"] = "local_mqtt_required"
+            else:
+                self._native_options.update(user_input)
+                self._user_input = {
+                    "connection_type": "native",
+                    CONF_DEVICE_PROFILE: profile.profile_key,
+                }
+                return await self.async_step_native_external()
+        return self.async_show_form(
+            step_id="native_device", errors=errors,
+            data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(devices),
+            description_placeholders={
+                "device_summary": ZendureSmartFlowOptionsFlow._native_device_summary(devices),
+            },
+        )
+
+    async def async_step_native_external(self, user_input=None):
+        if user_input is not None:
+            self._user_input.update(user_input)
+            return await self.async_step_grid()
+        return self.async_show_form(
+            step_id="native_external", data_schema=self._base_schema(native=True),
         )
 
     async def async_step_grid(self, user_input: dict[str, Any] | None = None):
@@ -210,6 +286,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_create_entry(
                     title="Battery SmartFlow AI",
                     data=self._user_input,
+                    options=getattr(self, "_native_options", {}),
                 )
 
         return self.async_show_form(
@@ -285,6 +362,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def _base_schema(
         self,
         entry: config_entries.ConfigEntry | None = None,
+        *, native: bool = False,
     ) -> vol.Schema:
         def _val(key: str):
             if not entry:
@@ -602,6 +680,18 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         )
 
+        if native or (entry and (
+            entry.data.get("connection_type") == "native"
+            or entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
+        )):
+            hardware_keys = {
+                CONF_DEVICE_PROFILE, CONF_SOC_ENTITY, CONF_SOC_LIMIT_ENTITY,
+                CONF_PACK_CAPACITY_KWH, CONF_NATIVE_PV_ENTITY,
+                CONF_BATTERY_AC_POWER_ENTITY, CONF_AC_MODE_ENTITY,
+                CONF_INPUT_LIMIT_ENTITY, CONF_OUTPUT_LIMIT_ENTITY,
+                CONF_OFFGRID_POWER_ENTITY, CONF_OFFGRID_MODE_ENTITY,
+            }
+            schema = {key: value for key, value in schema.items() if key.schema not in hardware_keys}
         return vol.Schema(schema)
 
     def _grid_schema(
@@ -1183,6 +1273,18 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             }
         )
 
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        runtime = getattr(coordinator, "native_zendure", None)
+        if (runtime is not None and hasattr(runtime, "selected_capacity")
+            and runtime.selected_capacity().reason == "unknown_pack_profile"):
+            options_schema = options_schema.extend({
+                vol.Optional("native_capacity_override_kwh", default=preview.get("native_capacity_override_kwh", 0)):
+                    selector.NumberSelector(selector.NumberSelectorConfig(
+                        min=0, step=0.01, mode=selector.NumberSelectorMode.BOX,
+                        unit_of_measurement="kWh",
+                    )),
+            })
+
         suggested_values = {
             CONF_EXPERT_MODE_ENABLED: preview.get(
                 CONF_EXPERT_MODE_ENABLED,
@@ -1252,6 +1354,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         user_input: dict[str, Any] | None = None,
     ):
         packs = self._get_battery_packs()
+        if (self.config_entry.data.get("connection_type") == "native"
+            or self.config_entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)):
+            packs = 0  # Native pack measurements are inputs, not entity selectors.
         preview = self._merged_preview()
 
         if user_input is not None:

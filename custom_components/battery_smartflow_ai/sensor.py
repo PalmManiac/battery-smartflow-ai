@@ -294,7 +294,64 @@ NATIVE_MAIN_SENSORS = (
     ),
 )
 
+NATIVE_MAIN_SENSORS += (
+    NativeHardwareSensorDescription(
+        key="heating_active", translation_key="native_hardware_heating", measurement_key="heating_active",
+        device_class=SensorDeviceClass.ENUM, options=["on", "off"],
+    ),
+    NativeHardwareSensorDescription(
+        key="hardware_soc_min", translation_key="native_hardware_soc_min", measurement_key="hardware_soc_min",
+        native_unit_of_measurement=PERCENTAGE, suggested_display_precision=0,
+    ),
+    NativeHardwareSensorDescription(
+        key="hardware_soc_max", translation_key="native_hardware_soc_max", measurement_key="hardware_soc_max",
+        native_unit_of_measurement=PERCENTAGE, suggested_display_precision=0,
+    ),
+    NativeHardwareSensorDescription(
+        key="pack_count", translation_key="native_hardware_pack_count", measurement_key="pack_count",
+        state_class=SensorStateClass.MEASUREMENT, suggested_display_precision=0,
+    ),
+    NativeHardwareSensorDescription(
+        key="capacity_kwh", translation_key="native_hardware_capacity_kwh", measurement_key="capacity_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+    ),
+    NativeHardwareSensorDescription(
+        key="power_w", translation_key="native_hardware_power_w", measurement_key="power_w",
+        native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+    NativeHardwareSensorDescription(
+        key="offgrid_power_w", translation_key="native_hardware_offgrid_power_w", measurement_key="offgrid_power_w",
+        native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+    ),
+)
+
+# Raw properties stay disabled diagnostics until the user needs them; no guessed enums.
+from .zendure_normalizer import RAW_MAIN_DIAGNOSTICS
+
+NATIVE_MAIN_SENSORS += tuple(
+    NativeHardwareSensorDescription(
+        key=key, name=key, measurement_key=key,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ) for key in RAW_MAIN_DIAGNOSTICS
+)
+
 NATIVE_PACK_SENSORS = (
+    NativeHardwareSensorDescription(
+        key="status", translation_key="native_hardware_pack_status", measurement_key="status",
+        device_class=SensorDeviceClass.ENUM, options=["idle", "charge", "discharge"],
+    ),
+    NativeHardwareSensorDescription(
+        key="cell_delta_v", translation_key="native_hardware_cell_delta_v", measurement_key="cell_delta_v",
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        device_class=SensorDeviceClass.VOLTAGE, state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
+    ),
+    *tuple(description for description in NATIVE_MAIN_SENSORS if description.key in {"capacity_kwh", "power_w", "heating_active"}),
     NativeHardwareSensorDescription(
         key="soc_pct", translation_key="native_hardware_soc_pct",
         measurement_key="soc_pct", native_unit_of_measurement=PERCENTAGE,

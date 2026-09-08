@@ -157,7 +157,7 @@ MAIN_PROPERTY_MAPPINGS = {
         ),
         _mapping("faultLevel", "fault_code", MappingScope.MAIN, (int,)),
         _mapping(
-            "heatState", "protection_active", MappingScope.MAIN,
+            "heatState", "heating_active", MappingScope.MAIN,
             (bool, int), converter=_binary,
         ),
         _mapping(
@@ -217,11 +217,25 @@ PACK_PROPERTY_MAPPINGS = {
         _mapping("state", "state_code", MappingScope.PACK, (int,)),
         _mapping("faultLevel", "fault_code", MappingScope.PACK, (int,)),
         _mapping(
-            "heatState", "protection_active", MappingScope.PACK,
+            "heatState", "heating_active", MappingScope.PACK,
             (bool, int), converter=_binary,
         ),
     )
 }
+
+# Keep unverified vendor status codes as raw diagnostics, not control decisions.
+RAW_MAIN_DIAGNOSTICS = (
+    "acStatus", "aiState", "batCalTime", "bindstate", "dataReady", "dcStatus",
+    "factoryModeState", "gridStandard", "gridState", "IOTState", "is_error",
+    "LCNState", "localAPIEnable", "net", "OldMode", "OTAState", "phaseSwitch",
+    "pvStatus", "rssi", "smartMode", "socStatus", "socCompSwitch", "writeRsp",
+    "packNum", "solarPower1", "solarPower2", "solarPower3", "solarPower4",
+    "solarPower5", "solarPower6",
+)
+for _raw in RAW_MAIN_DIAGNOSTICS:
+    MAIN_PROPERTY_MAPPINGS[_raw] = _mapping(
+        _raw, _raw, MappingScope.MAIN, (bool, int, float),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -445,12 +459,18 @@ class ZendureCloudNormalizer:
             ),
             hems_active=hems_active,
             fault_code=device_value("fault_code"),
-            protection_active=device_value("protection_active"),
+            protection_active=_fault_block(
+                device_value("fault_code"),
+                self._value(values, "is_error", frozenset({"is_error"}), online, current),
+            ),
+            heating_active=device_value("heating_active"),
             temperature_c=device_value("temperature_c"),
             battery_voltage_v=device_value("battery_voltage_v"),
             last_message_at=self._last_message[system_id],
             packs=packs,
             offgrid_power_w=device_value("offgrid_power_w"),
+            diagnostics={key: self._value(values, key, frozenset(RAW_MAIN_DIAGNOSTICS), online, current)
+                         for key in RAW_MAIN_DIAGNOSTICS if key in values},
         )
         return NormalizationResult(
             state,
@@ -570,7 +590,8 @@ class ZendureCloudNormalizer:
             temperature_c=value("temperature_c"),
             state_code=value("state_code"),
             fault_code=value("fault_code"),
-            protection_active=value("protection_active"),
+            protection_active=_fault_block(value("fault_code")),
+            heating_active=value("heating_active"),
             last_message_at=accumulator.last_message_at,
         )
 
@@ -601,6 +622,17 @@ class ZendureCloudNormalizer:
         ):
             validity = ValueValidity.STALE
         return MeasuredValue(observed.value, validity, observed.observed_at)
+
+
+def _fault_block(*values):
+    """Fail closed on missing evidence; heating is not a fault indicator."""
+    available = [value for value in values if value.valid]
+    if not available:
+        return MeasuredValue.absent(ValueValidity.UNAVAILABLE)
+    return MeasuredValue.available(
+        any(float(value.value) != 0 for value in available),
+        observed_at=min((value.observed_at for value in available if value.observed_at), default=None),
+    )
 
 
 def _normalize(

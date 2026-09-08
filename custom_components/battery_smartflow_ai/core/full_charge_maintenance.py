@@ -181,6 +181,8 @@ class FullChargeMaintenancePlanner:
         data: FullChargeMaintenanceInput,
     ) -> FullChargeMaintenanceDecision:
         now = data.now.astimezone(timezone.utc)
+        if not data.enabled:
+            record = replace(record, active=False)
         next_due = record.next_recommended_full_at
         base_state = _schedule_state(next_due, now, self._due_soon)
 
@@ -194,6 +196,10 @@ class FullChargeMaintenancePlanner:
 
         at_full = data.soc_pct is not None and data.soc_pct >= FULL_SOC_PCT
         if at_full:
+            if (record.full_candidate_since is not None
+                and record.last_confirmed_full_at is not None
+                and record.last_confirmed_full_at >= record.full_candidate_since):
+                return FullChargeMaintenanceDecision(record, base_state)
             candidate_since = record.full_candidate_since or now
             confirming = replace(record, full_candidate_since=candidate_since)
             full_is_plausible = (
@@ -209,7 +215,7 @@ class FullChargeMaintenancePlanner:
                         record.last_completed_maintenance_at
                     ),
                     active=False,
-                    full_candidate_since=None,
+                    full_candidate_since=candidate_since,
                 )
                 return FullChargeMaintenanceDecision(
                     completed, MaintenanceState.COMPLETED
@@ -217,21 +223,14 @@ class FullChargeMaintenancePlanner:
             return FullChargeMaintenanceDecision(
                 confirming,
                 MaintenanceState.CONFIRMING_FULL,
-                request_full_charge=record.active,
-                target_soc_pct=FULL_SOC_PCT if record.active else None,
-                temporary_user_limit_override=record.active,
+                selected_window=_select_window(data),
+                request_full_charge=record.active and _select_window(data) is not MaintenanceWindow.NONE,
+                target_soc_pct=FULL_SOC_PCT if record.active and _select_window(data) is not MaintenanceWindow.NONE else None,
+                temporary_user_limit_override=record.active and _select_window(data) is not MaintenanceWindow.NONE,
             )
 
         record = replace(record, full_candidate_since=None)
-        if record.active and not data.enabled:
-            return FullChargeMaintenanceDecision(
-                record,
-                MaintenanceState.BLOCKED,
-                block_reason=MaintenanceBlockReason.NOT_ENABLED,
-            )
-        if record.active:
-            return _charging_decision(record, MaintenanceWindow.NONE)
-        if base_state in {MaintenanceState.NOT_DUE, MaintenanceState.DUE_SOON}:
+        if not record.active and base_state in {MaintenanceState.NOT_DUE, MaintenanceState.DUE_SOON}:
             return FullChargeMaintenanceDecision(record, base_state)
         if not data.enabled:
             return FullChargeMaintenanceDecision(
