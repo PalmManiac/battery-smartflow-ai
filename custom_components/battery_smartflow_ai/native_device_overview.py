@@ -166,7 +166,14 @@ def build_native_device_overview(
                      "available_energy_kwh": _optional_value(derived_statistics(
                          soc_pct=_measurement(state, "soc_pct").value if _measurement(state, "soc_pct").valid else None,
                          capacity_kwh=native_capacity(state).capacity_kwh,
+                         charged_kwh=_measurement(state, "diagnostics.charged_kwh").value,
+                         discharged_kwh=_measurement(state, "diagnostics.discharged_kwh").value,
                      ).available_energy_kwh),
+                     "roundtrip_efficiency_pct": _optional_value(derived_statistics(
+                         soc_pct=None, capacity_kwh=None,
+                         charged_kwh=_measurement(state, "diagnostics.charged_kwh").value,
+                         discharged_kwh=_measurement(state, "diagnostics.discharged_kwh").value,
+                     ).roundtrip_efficiency_pct),
                     }
                     if state
                     else {}

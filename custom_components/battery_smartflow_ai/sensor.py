@@ -308,6 +308,12 @@ NATIVE_MAIN_SENSORS += (
         suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
+        key="roundtrip_efficiency_pct", translation_key="native_hardware_roundtrip_efficiency",
+        measurement_key="roundtrip_efficiency_pct", native_unit_of_measurement="%",
+        state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=1,
+    ),
+    NativeHardwareSensorDescription(
         key="switching_count", translation_key="native_hardware_switching_count",
         measurement_key="switching_count", entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
