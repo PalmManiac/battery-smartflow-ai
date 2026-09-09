@@ -3,9 +3,10 @@
   "name": "Battery SmartFlow AI",
   "codeowners": ["@PalmManiac"],
   "config_flow": true,
+  "after_dependencies": ["energy"],
   "documentation": "https://github.com/PalmManiac/battery-smartflow-ai",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/PalmManiac/battery-smartflow-ai/issues",
   "requirements": ["paho-mqtt==2.1.0"],
-  "version": "5.0.0-rc.01"
+  "version": "5.0.0-rc01"
 }
