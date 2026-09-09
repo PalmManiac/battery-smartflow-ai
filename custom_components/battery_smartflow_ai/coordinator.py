@@ -622,6 +622,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             migrate_legacy_price_fields(loaded_data)
             self._persist.update(loaded_data)
+            if hasattr(self.native_zendure, "restore_statistics"):
+                self.native_zendure.restore_statistics(
+                    self._persist.get("native_energy_statistics")
+                )
             invalid_maintenance = self._full_charge_maintenance.restore(
                 self._persist.get("full_charge_maintenance")
             )
@@ -675,6 +679,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _save(self) -> None:
         self._persist["runtime_mode"] = dict(self.runtime_mode)
+        if hasattr(self.native_zendure, "statistics_state"):
+            self._persist["native_energy_statistics"] = (
+                self.native_zendure.statistics_state()
+            )
         self._persist["full_charge_maintenance"] = (
             self._full_charge_maintenance.persisted_state()
         )
@@ -7260,8 +7268,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "pv_outlook": forecast_summary.pv_outlook,
                 "forecast_remaining_today_kwh": float(forecast_summary.remaining_today_kwh),
                 "forecast_tomorrow_kwh": float(forecast_summary.tomorrow_kwh),
+                "forecast_gross_remaining_today_kwh": float(
+                    forecast_summary.gross_remaining_today_kwh
+                ),
+                "forecast_gross_tomorrow_kwh": float(
+                    forecast_summary.gross_tomorrow_kwh
+                ),
                 "forecast_next_3h_kwh": float(forecast_summary.next_3h_kwh),
                 "forecast_next_6h_kwh": float(forecast_summary.next_6h_kwh),
+                "forecast_gross_next_3h_kwh": float(
+                    forecast_summary.gross_next_3h_kwh
+                ),
+                "forecast_gross_next_6h_kwh": float(
+                    forecast_summary.gross_next_6h_kwh
+                ),
                 "forecast_peak_today_w": float(forecast_summary.peak_today_w),
                 "forecast_peak_tomorrow_w": float(forecast_summary.peak_tomorrow_w),
                 "forecast_source_name": forecast_summary.source_name,

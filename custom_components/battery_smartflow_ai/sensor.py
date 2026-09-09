@@ -314,6 +314,22 @@ NATIVE_MAIN_SENSORS += (
         suggested_display_precision=1,
     ),
     NativeHardwareSensorDescription(
+        key="charged_energy_kwh", translation_key="native_hardware_charged_energy",
+        measurement_key="charged_energy_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+    ),
+    NativeHardwareSensorDescription(
+        key="discharged_energy_kwh", translation_key="native_hardware_discharged_energy",
+        measurement_key="discharged_energy_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
+    ),
+    NativeHardwareSensorDescription(
         key="switching_count", translation_key="native_hardware_switching_count",
         measurement_key="switching_count", entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
@@ -774,6 +790,34 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         key="forecast_next_6h_kwh",
         translation_key="forecast_next_6h_kwh",
         runtime_key="forecast_next_6h_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:clock-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="forecast_gross_remaining_today_kwh",
+        translation_key="forecast_gross_remaining_today_kwh",
+        runtime_key="forecast_gross_remaining_today_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:solar-power",
+    ),
+    ZendureSensorEntityDescription(
+        key="forecast_gross_tomorrow_kwh",
+        translation_key="forecast_gross_tomorrow_kwh",
+        runtime_key="forecast_gross_tomorrow_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:weather-sunny",
+    ),
+    ZendureSensorEntityDescription(
+        key="forecast_gross_next_3h_kwh",
+        translation_key="forecast_gross_next_3h_kwh",
+        runtime_key="forecast_gross_next_3h_kwh",
+        native_unit_of_measurement="kWh",
+        icon="mdi:clock-fast",
+    ),
+    ZendureSensorEntityDescription(
+        key="forecast_gross_next_6h_kwh",
+        translation_key="forecast_gross_next_6h_kwh",
+        runtime_key="forecast_gross_next_6h_kwh",
         native_unit_of_measurement="kWh",
         icon="mdi:clock-outline",
     ),
@@ -1790,11 +1834,17 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         item = self._item()
         if self._kind != "main" or item is None:
             return None
-        return {
+        attributes = {
             "v4_migration_binding": (
                 "confirmed" if item.migration_bound else "not_bound"
             )
         }
+        if self.entity_description.key == "switching_count":
+            estimate = item.measurements.get("switching_count_is_estimate")
+            attributes["estimated"] = bool(
+                estimate is not None and estimate.valid and estimate.value
+            )
+        return attributes
 
     @property
     def available(self) -> bool:
@@ -1804,6 +1854,12 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         description = self.entity_description
         if description.source == "measurement":
             measured = item.measurements.get(description.measurement_key)
+            if (
+                description.measurement_key == "localAPIEnable"
+                and (measured is None or not measured.valid)
+                and item.selected_transport.value == "zensdk"
+            ):
+                return True
             return bool(measured is not None and measured.valid)
         if description.source == "firmware":
             return bool(item.firmware.valid)
@@ -1823,6 +1879,12 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         source = self.entity_description.source
         if source == "measurement":
             measured = item.measurements.get(self.entity_description.measurement_key)
+            if (
+                self.entity_description.measurement_key == "localAPIEnable"
+                and (measured is None or not measured.valid)
+                and item.selected_transport.value == "zensdk"
+            ):
+                return 1
             return _measured_value(measured)
         if source == "firmware":
             return _measured_value(item.firmware)

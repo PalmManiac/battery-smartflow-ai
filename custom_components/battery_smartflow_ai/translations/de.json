@@ -441,6 +441,8 @@
       "native_hardware_rssi": {"name": "WLAN-Signalstärke"},
       "native_hardware_available_energy": {"name": "Verfügbare Energie"},
       "native_hardware_roundtrip_efficiency": {"name": "Wirkungsgrad (Roundtrip)"},
+      "native_hardware_charged_energy": {"name": "Gesamtenergie Laden"},
+      "native_hardware_discharged_energy": {"name": "Gesamtenergie Entladen"},
       "native_hardware_switching_count": {"name": "Schaltvorgänge"},
       "native_hardware_soc_min": {"name":"Hardware-SoC-Minimum"},
       "native_hardware_soc_max": {"name":"Hardware-SoC-Maximum"},
@@ -612,16 +614,28 @@
         "name": "Diagnose: Lernplanung aktueller Slot Ø Leistung"
       },
       "forecast_remaining_today_kwh": {
-        "name": "PV-Prognose heute"
+        "name": "Nutzbare PV-Prognose – Rest heute"
       },
       "forecast_tomorrow_kwh": {
-        "name": "PV-Prognose morgen"
+        "name": "Nutzbare PV-Prognose – morgen"
       },
       "forecast_next_3h_kwh": {
-        "name": "PV-Prognose nächste 3 Stunden"
+        "name": "Nutzbare PV-Prognose – nächste 3 Stunden"
       },
       "forecast_next_6h_kwh": {
-        "name": "PV-Prognose nächste 6 Stunden"
+        "name": "Nutzbare PV-Prognose – nächste 6 Stunden"
+      },
+      "forecast_gross_remaining_today_kwh": {
+        "name": "PV-Prognose brutto – Rest heute"
+      },
+      "forecast_gross_tomorrow_kwh": {
+        "name": "PV-Prognose brutto – morgen"
+      },
+      "forecast_gross_next_3h_kwh": {
+        "name": "PV-Prognose brutto – nächste 3 Stunden"
+      },
+      "forecast_gross_next_6h_kwh": {
+        "name": "PV-Prognose brutto – nächste 6 Stunden"
       },
       "price_daily_average": {
         "name": "Preise – Ø dynamischer Tagespreis"

@@ -67,6 +67,7 @@ from .zendure_local_mqtt import (
 )
 from .zendure_local_mqtt_commands import LocalMqttCommandStatus
 from .native_source_fusion import NativeSourceFusion
+from .native_statistics import NativeEnergyAccumulator
 from .zendure_privacy import ZendureDiagnosticSanitizer
 from .zendure_zensdk import (
     ZenSdkReadResult,
@@ -164,6 +165,9 @@ class NativeZendureRuntime:
         self._last_command_result: dict[str, Any] | None = None
         self._control_baseline_consumed = False
         self._transport_router = NativeTransportRouter()
+        self._energy_accumulators: dict[str, NativeEnergyAccumulator] = {}
+        self._switching_counts: dict[str, int] = {}
+        self._last_energy_modes: dict[str, str] = {}
 
     @property
     def configured(self) -> bool:
@@ -466,6 +470,7 @@ class NativeZendureRuntime:
         overview = build_native_device_overview(
             self._inventory,
             self._states,
+            statistics=self.statistics_state(),
             migration_bound_device=self._migration_bound_device,
         )
         selected_transport = self._selected_local_transport()
@@ -492,6 +497,71 @@ class NativeZendureRuntime:
             else item
             for index, item in enumerate(overview)
         )
+
+    def restore_statistics(self, data: Any) -> None:
+        """Restore locally accumulated, per-device lifetime statistics."""
+
+        if not isinstance(data, dict):
+            return
+        for system_id, values in data.items():
+            if not isinstance(values, dict):
+                continue
+            self._energy_accumulators[str(system_id)] = (
+                NativeEnergyAccumulator.from_dict(values)
+            )
+            try:
+                self._switching_counts[str(system_id)] = max(
+                    0, int(values.get("switching_count", 0))
+                )
+            except (TypeError, ValueError):
+                self._switching_counts[str(system_id)] = 0
+            mode = values.get("last_mode")
+            if mode in {"idle", "charge", "discharge"}:
+                self._last_energy_modes[str(system_id)] = str(mode)
+
+    def statistics_state(self) -> dict[str, dict[str, Any]]:
+        """Return the persistable native statistics and their quality metadata."""
+
+        system_ids = set(self._energy_accumulators) | set(self._switching_counts)
+        result: dict[str, dict[str, Any]] = {}
+        for system_id in system_ids:
+            accumulator = self._energy_accumulators.get(
+                system_id, NativeEnergyAccumulator()
+            )
+            result[system_id] = {
+                **accumulator.as_dict(),
+                "switching_count": int(self._switching_counts.get(system_id, 0)),
+                "last_mode": self._last_energy_modes.get(system_id),
+            }
+        return result
+
+    def _update_statistics(self, state: Any) -> None:
+        """Integrate valid native power samples without bridging telemetry gaps."""
+
+        timestamp = getattr(state, "last_message_at", None)
+        charge = _numeric_value(getattr(state, "charge_power_w", None))
+        discharge = _numeric_value(getattr(state, "discharge_power_w", None))
+        if timestamp is None or charge is None or discharge is None:
+            return
+        system_id = str(state.system_id)
+        accumulator = self._energy_accumulators.setdefault(
+            system_id, NativeEnergyAccumulator()
+        )
+        accumulator.add(
+            timestamp=timestamp.timestamp(),
+            charge_power_w=charge,
+            discharge_power_w=discharge,
+        )
+
+        mode = "charge" if charge > 0 else "discharge" if discharge > 0 else "idle"
+        previous = self._last_energy_modes.get(system_id)
+        # Match Z-HA's orientation counter: one completed active phase is
+        # counted when the battery returns to idle. It remains an estimate.
+        if previous in {"charge", "discharge"} and mode == "idle":
+            self._switching_counts[system_id] = (
+                self._switching_counts.get(system_id, 0) + 1
+            )
+        self._last_energy_modes[system_id] = mode
 
     def _hardware_control_state(self) -> DeviceControlState:
         """Describe readiness separately from the current strategy decision."""
@@ -1372,6 +1442,7 @@ class NativeZendureRuntime:
 
     def _apply_state(self, state: Any) -> None:
         self._states[state.system_id] = state
+        self._update_statistics(state)
         device = self._inventory.devices[state.system_id]
         identity = device.native_identities[0] if device.native_identities else None
         profile = resolve_zendure_device(identity) if identity is not None else None
@@ -1431,6 +1502,15 @@ def _control_path_name(transport: ZendureTransport | None) -> str:
 
 def _value(measured: Any) -> str | None:
     return str(measured.value) if measured.validity is ValueValidity.VALID else None
+
+
+def _numeric_value(measured: Any) -> float | None:
+    if measured is None or getattr(measured, "validity", None) is not ValueValidity.VALID:
+        return None
+    try:
+        return max(0.0, float(measured.value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> bool:

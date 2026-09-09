@@ -51,8 +51,8 @@ class EnergyForecastConfigTests(unittest.TestCase):
     def test_rc_version_is_consistent(self):
         const = (COMPONENT / "const.py").read_text(encoding="utf-8")
         manifest = (COMPONENT / "manifest.json").read_text(encoding="utf-8")
-        self.assertIn('INTEGRATION_VERSION = "5.0.0-rc01"', const)
-        self.assertIn('"version": "5.0.0-rc01"', manifest)
+        self.assertIn('INTEGRATION_VERSION = "5.0.0-rc02"', const)
+        self.assertIn('"version": "5.0.0-rc02"', manifest)
         self.assertIn('"after_dependencies": ["energy"]', manifest)
         self.assertLess(
             manifest.index('"after_dependencies"'), manifest.index('"codeowners"')

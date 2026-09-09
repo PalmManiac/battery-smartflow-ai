@@ -38,6 +38,26 @@ def observed_pack(pack_id, parent):
 
 
 class NativeDeviceOverviewTests(unittest.TestCase):
+    def test_persisted_native_statistics_feed_energy_and_efficiency_sensors(self):
+        main = MainDevice("main-secret", "System")
+        item = build_native_device_overview(
+            DeviceInventory(devices=(main,)),
+            {},
+            statistics={
+                main.system_id: {
+                    "charged_kwh": 12.5,
+                    "discharged_kwh": 10.0,
+                    "switching_count": 7,
+                }
+            },
+        )[0]
+
+        self.assertEqual(item.measurements["charged_energy_kwh"].value, 12.5)
+        self.assertEqual(item.measurements["discharged_energy_kwh"].value, 10.0)
+        self.assertEqual(item.measurements["roundtrip_efficiency_pct"].value, 80.0)
+        self.assertEqual(item.measurements["switching_count"].value, 7)
+        self.assertTrue(item.measurements["switching_count_is_estimate"].value)
+
     def test_recognized_native_identity_supplies_missing_profile_key(self):
         identity = NativeDeviceIdentity(
             ZendureTransport.ZENSDK,

@@ -441,6 +441,8 @@
       "native_hardware_rssi": {"name": "Wi-Fi signal strength"},
       "native_hardware_available_energy": {"name": "Available energy"},
       "native_hardware_roundtrip_efficiency": {"name": "Retourrendement"},
+      "native_hardware_charged_energy": {"name": "Totale geladen energie"},
+      "native_hardware_discharged_energy": {"name": "Totale ontladen energie"},
       "native_hardware_switching_count": {"name": "Schakelbewerkingen"},
       "native_hardware_soc_min": {"name":"Hardware minimum SoC"},
       "native_hardware_soc_max": {"name":"Hardware maximum SoC"},
@@ -612,16 +614,28 @@
         "name": "Diagnose: gemiddeld vermogen huidig slot lerende planning"
       },
       "forecast_remaining_today_kwh": {
-        "name": "PV-prognose vandaag"
+        "name": "Bruikbare PV-prognose resterend vandaag"
       },
       "forecast_tomorrow_kwh": {
-        "name": "PV-prognose morgen"
+        "name": "Bruikbare PV-prognose morgen"
       },
       "forecast_next_3h_kwh": {
-        "name": "PV-prognose komende 3 uur"
+        "name": "Bruikbare PV-prognose komende 3 uur"
       },
       "forecast_next_6h_kwh": {
-        "name": "PV-prognose komende 6 uur"
+        "name": "Bruikbare PV-prognose komende 6 uur"
+      },
+      "forecast_gross_remaining_today_kwh": {
+        "name": "Bruto PV-prognose resterend vandaag"
+      },
+      "forecast_gross_tomorrow_kwh": {
+        "name": "Bruto PV-prognose morgen"
+      },
+      "forecast_gross_next_3h_kwh": {
+        "name": "Bruto PV-prognose komende 3 uur"
+      },
+      "forecast_gross_next_6h_kwh": {
+        "name": "Bruto PV-prognose komende 6 uur"
       },
       "price_daily_average": {
         "name": "Prijzen – Dynamisch daggemiddelde"

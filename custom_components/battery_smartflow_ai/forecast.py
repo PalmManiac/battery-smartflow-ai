@@ -30,9 +30,13 @@ class ForecastSummary:
 
     remaining_today_kwh: float = 0.0
     tomorrow_kwh: float = 0.0
+    gross_remaining_today_kwh: float = 0.0
+    gross_tomorrow_kwh: float = 0.0
 
     next_3h_kwh: float = 0.0
     next_6h_kwh: float = 0.0
+    gross_next_3h_kwh: float = 0.0
+    gross_next_6h_kwh: float = 0.0
 
     peak_today_w: float = 0.0
     peak_tomorrow_w: float = 0.0
@@ -460,6 +464,15 @@ def build_forecast_summary(
         forecast_base_load_w=forecast_base_load_w,
         now_local=now_local,
     )
+    gross_remaining_today_kwh = _compute_daily_net_energy_for_sensor(
+        hass, today_entity_id, today_kwh_raw, today, 0.0
+    )
+    gross_tomorrow_kwh = _compute_daily_net_energy_for_sensor(
+        hass, tomorrow_entity_id, tomorrow_kwh_raw, tomorrow, 0.0
+    )
+    gross_next_3h_kwh, gross_next_6h_kwh, _, _ = _compute_subday_metrics(
+        hass, today_entity_id, tomorrow_entity_id, 0.0, now_local
+    )
 
     pv_outlook = _classify_pv_outlook(
         remaining_today_kwh=remaining_today_kwh,
@@ -473,8 +486,12 @@ def build_forecast_summary(
         source_name="Solcast",
         remaining_today_kwh=round(float(remaining_today_kwh), 3),
         tomorrow_kwh=round(float(tomorrow_kwh_val), 3),
+        gross_remaining_today_kwh=round(float(gross_remaining_today_kwh), 3),
+        gross_tomorrow_kwh=round(float(gross_tomorrow_kwh), 3),
         next_3h_kwh=round(float(next_3h_kwh), 3),
         next_6h_kwh=round(float(next_6h_kwh), 3),
+        gross_next_3h_kwh=round(float(gross_next_3h_kwh), 3),
+        gross_next_6h_kwh=round(float(gross_next_6h_kwh), 3),
         peak_today_w=round(float(peak_today_w), 1),
         peak_tomorrow_w=round(float(peak_tomorrow_w), 1),
         pv_outlook=pv_outlook,
@@ -558,6 +575,18 @@ def build_energy_forecast_summary(
     next_6h = _energy_window_kwh(
         intervals, now_local, now_local + timedelta(hours=6), forecast_base_load_w
     )
+    gross_remaining_today = _energy_window_kwh(
+        intervals, now_local, tomorrow_start, 0.0
+    )
+    gross_tomorrow = _energy_window_kwh(
+        intervals, tomorrow_start, day_after_tomorrow, 0.0
+    )
+    gross_next_3h = _energy_window_kwh(
+        intervals, now_local, now_local + timedelta(hours=3), 0.0
+    )
+    gross_next_6h = _energy_window_kwh(
+        intervals, now_local, now_local + timedelta(hours=6), 0.0
+    )
 
     peak_today_w = 0.0
     peak_tomorrow_w = 0.0
@@ -578,8 +607,12 @@ def build_energy_forecast_summary(
         source_name=source_name,
         remaining_today_kwh=round(remaining_today, 3),
         tomorrow_kwh=round(tomorrow, 3),
+        gross_remaining_today_kwh=round(gross_remaining_today, 3),
+        gross_tomorrow_kwh=round(gross_tomorrow, 3),
         next_3h_kwh=round(next_3h, 3),
         next_6h_kwh=round(next_6h, 3),
+        gross_next_3h_kwh=round(gross_next_3h, 3),
+        gross_next_6h_kwh=round(gross_next_6h, 3),
         peak_today_w=round(peak_today_w, 1),
         peak_tomorrow_w=round(peak_tomorrow_w, 1),
         pv_outlook=outlook,

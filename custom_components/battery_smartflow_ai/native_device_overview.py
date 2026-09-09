@@ -73,13 +73,16 @@ def build_native_device_overview(
     inventory: DeviceInventory,
     states: Mapping[str, NeutralDeviceState],
     *,
+    statistics: Mapping[str, Mapping[str, object]] | None = None,
     migration_bound_device: str | None = None,
 ) -> tuple[MainSystemOverview, ...]:
     """Build an unbounded hierarchy without exposing stable source identities."""
 
     result = []
+    statistics = statistics or {}
     for system_id, device in sorted(inventory.devices.items()):
         state = states.get(system_id)
+        system_statistics = statistics.get(system_id, {})
         public_id = _public_id("DEVICE", system_id)
         identity = device.native_identities[0] if device.native_identities else None
         matrix_entry = resolve_zendure_device(identity) if identity else None
@@ -163,22 +166,32 @@ def build_native_device_overview(
                      "hardware_soc_min": _measurement(getattr(state, "setpoints", None), "min_soc_pct"),
                      "hardware_soc_max": _measurement(getattr(state, "setpoints", None), "max_soc_pct"),
                      "heating_active": _boolean_status(_measurement(state, "heating_active")),
-                     "switching_count": _diagnostic_measurement(state, "switching_count"),
+                     "switching_count": _first_valid(
+                         _diagnostic_measurement(state, "switching_count"),
+                         _optional_value(system_statistics.get("switching_count")),
+                     ),
+                     "switching_count_is_estimate": _optional_value(
+                         not _diagnostic_measurement(state, "switching_count").valid
+                     ),
                      "rssi": _diagnostic_measurement(state, "rssi"),
+                     "charged_energy_kwh": _optional_value(
+                         system_statistics.get("charged_kwh")
+                     ),
+                     "discharged_energy_kwh": _optional_value(
+                         system_statistics.get("discharged_kwh")
+                     ),
                      "available_energy_kwh": _optional_value(derived_statistics(
                          soc_pct=_measurement(state, "soc_pct").value if _measurement(state, "soc_pct").valid else None,
                          capacity_kwh=native_capacity(state).capacity_kwh,
-                         charged_kwh=_measurement(state, "diagnostics.charged_kwh").value,
-                         discharged_kwh=_measurement(state, "diagnostics.discharged_kwh").value,
+                         charged_kwh=system_statistics.get("charged_kwh"),
+                         discharged_kwh=system_statistics.get("discharged_kwh"),
                      ).available_energy_kwh),
                      "roundtrip_efficiency_pct": _optional_value(derived_statistics(
                          soc_pct=None, capacity_kwh=None,
-                         charged_kwh=_measurement(state, "diagnostics.charged_kwh").value,
-                         discharged_kwh=_measurement(state, "diagnostics.discharged_kwh").value,
+                         charged_kwh=system_statistics.get("charged_kwh"),
+                         discharged_kwh=system_statistics.get("discharged_kwh"),
                      ).roundtrip_efficiency_pct),
                     }
-                    if state
-                    else {}
                 ),
                 product_id=identity.product_id if identity else None,
                 profile_key=(
@@ -229,6 +242,10 @@ def _diagnostic_measurement(state: object | None, key: str) -> MeasuredValue:
 
 def _optional_value(value):
     return MeasuredValue.available(value) if value is not None else MeasuredValue.absent(ValueValidity.UNKNOWN)
+
+
+def _first_valid(primary, fallback):
+    return primary if primary.valid else fallback
 
 
 def _difference(left, right):
