@@ -1,9 +1,9 @@
 {
   "domain": "battery_smartflow_ai",
   "name": "Battery SmartFlow AI",
+  "after_dependencies": ["energy"],
   "codeowners": ["@PalmManiac"],
   "config_flow": true,
-  "after_dependencies": ["energy"],
   "documentation": "https://github.com/PalmManiac/battery-smartflow-ai",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/PalmManiac/battery-smartflow-ai/issues",

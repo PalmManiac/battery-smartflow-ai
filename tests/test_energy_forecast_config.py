@@ -54,6 +54,9 @@ class EnergyForecastConfigTests(unittest.TestCase):
         self.assertIn('INTEGRATION_VERSION = "5.0.0-rc01"', const)
         self.assertIn('"version": "5.0.0-rc01"', manifest)
         self.assertIn('"after_dependencies": ["energy"]', manifest)
+        self.assertLess(
+            manifest.index('"after_dependencies"'), manifest.index('"codeowners"')
+        )
 
     def test_untouched_legacy_forecast_sensors_remain_compatible(self):
         data = {
