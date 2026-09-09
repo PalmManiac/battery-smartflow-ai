@@ -77,18 +77,25 @@ def approved_matrix():
     )
 
 
-def main_device(*, active=True, transport=TRANSPORT):
+def main_device(
+    *,
+    active=True,
+    transport=TRANSPORT,
+    model="SolarFlow 2400 AC",
+    profile_key="SF2400AC",
+    product_id="BC8B7F",
+):
     identity = NativeDeviceIdentity(
         transport,
         device_id="native-secret",
-        product_id="BC8B7F",
-        product_model="SolarFlow 2400 AC",
+        product_id=product_id,
+        product_model=model,
     )
     return MainDevice(
         DEVICE_ID,
         "Main",
-        model="SolarFlow 2400 AC",
-        profile_key="SF2400AC",
+        model=model,
+        profile_key=profile_key,
         control_state=DeviceControlState.ACTIVE if active else DeviceControlState.OBSERVATION,
         selected_transport=transport,
         available_transports=frozenset({transport}),
@@ -192,6 +199,30 @@ class NativeDeviceCommandGateTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(result.accepted)
         self.assertEqual(result.reasons, ())
+
+    async def test_production_matrix_allows_all_known_zensdk_models(self):
+        hems = ZendureHemsCommandGate()
+        hems.update(DEVICE_ID, valid(False), capability=VerificationLevel.VERIFIED)
+        gate = NativeDeviceCommandGate(hems)
+        for profile_key in (
+            "SF2400AC",
+            "SF2400Pro",
+            "SF2400AC+",
+            "SF800Pro",
+            "SF800Pro2",
+        ):
+            entry = ZENDURE_DEVICE_MATRIX[profile_key]
+            device = main_device(
+                model=entry.canonical_model,
+                profile_key=profile_key,
+                product_id=None,
+            )
+            with self.subTest(profile=profile_key):
+                result = gate.evaluate(
+                    NativeCommandRequest(DEVICE_ID, TRANSPORT, command()),
+                    context(device=device),
+                )
+                self.assertTrue(result.accepted, result.reasons)
 
     async def test_production_matrix_keeps_unverified_zensdk_soc_closed(self):
         hems = ZendureHemsCommandGate()

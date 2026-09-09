@@ -38,6 +38,23 @@ def observed_pack(pack_id, parent):
 
 
 class NativeDeviceOverviewTests(unittest.TestCase):
+    def test_recognized_native_identity_supplies_missing_profile_key(self):
+        identity = NativeDeviceIdentity(
+            ZendureTransport.ZENSDK,
+            device_id="native-secret",
+            product_model="SolarFlow 2400 Pro",
+        )
+        main = MainDevice(
+            "main-secret",
+            "System",
+            model="SolarFlow 2400 Pro",
+            native_identities=(identity,),
+        )
+        item = build_native_device_overview(
+            DeviceInventory(devices=(main,)), {}
+        )[0]
+        self.assertEqual(item.profile_key, "SF2400Pro")
+
     def test_multiple_systems_and_duplicate_names_remain_separate(self):
         inventory = DeviceInventory(devices=(
             MainDevice("main-secret-a", "Battery", model="SF2400AC"),
