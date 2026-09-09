@@ -531,6 +531,52 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(command.input_limit_w, 0)
         self.assertEqual(command.output_limit_w, 0)
 
+    async def test_idle_after_hardware_stopped_charge_clears_previous_target(self):
+        target = runtime(current_state=state(charge_w=0, input_w=0, output_w=0))
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", input_limit_w=0, output_limit_w=0,
+            should_write_mode=False, should_write_input=False,
+            should_write_output=True,
+            metadata={"last_input_limit_w": 800, "last_output_limit_w": 0},
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        command = target._zensdk_command_adapter.commands[-1].command
+        self.assertTrue(command.should_write_mode)
+        self.assertTrue(command.should_write_output)
+        self.assertEqual(command.input_limit_w, 0)
+        self.assertEqual(command.output_limit_w, 0)
+
+    async def test_idle_after_hardware_stopped_discharge_clears_previous_target(self):
+        target = runtime(current_state=state(charge_w=0, discharge_w=0, output_w=0))
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", input_limit_w=0, output_limit_w=0,
+            should_write_mode=False, should_write_input=False,
+            should_write_output=True,
+            metadata={"last_input_limit_w": 0, "last_output_limit_w": 650},
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        command = target._zensdk_command_adapter.commands[-1].command
+        self.assertTrue(command.should_write_mode)
+        self.assertTrue(command.should_write_output)
+        self.assertEqual(command.input_limit_w, 0)
+        self.assertEqual(command.output_limit_w, 0)
+
+    async def test_stable_idle_does_not_repeat_atomic_zero(self):
+        target = runtime(current_state=state(charge_w=0, discharge_w=0))
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", input_limit_w=0, output_limit_w=0,
+            should_write_mode=False, should_write_input=False,
+            should_write_output=False, skipped=True,
+            skip_reason="unchanged_within_tolerance",
+            metadata={"last_input_limit_w": 0, "last_output_limit_w": 0},
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+        self.assertEqual(result.reason, "native_setpoints_unchanged")
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
+
     async def test_no_change_never_writes(self):
         target = runtime(current_state=state(output_w=250, discharge_w=250))
         result = await target.async_execute_device_command(DeviceCommand(
