@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from .debug_package import DebugSample, redact_secrets
 
@@ -93,7 +93,7 @@ def _prefixed(
 
 
 def build_entity_diagnostics(
-    configured_entities: Mapping[str, str | None] | None,
+    configured_entities: Mapping[str, Any] | None,
     entity_availability: Mapping[str, bool | None] | None,
     *,
     compact: bool = False,
@@ -129,11 +129,32 @@ def build_entity_diagnostics(
     return redact_secrets(result)
 
 
+def configured_entity_availability(
+    configured_entities: Mapping[str, Any] | None,
+    state_getter: Callable[[str], Any],
+) -> dict[str, bool | None]:
+    """Read availability only for actual Home Assistant entity IDs.
+
+    Debug configuration also contains structured source selections such as the
+    list of Energy dashboard forecast config entries. Those values describe a
+    provider, not an entity, and must never be passed to ``hass.states.get``.
+    """
+
+    return {
+        str(role): (
+            state_getter(entity_id) is not None
+            if isinstance(entity_id, str) and bool(entity_id)
+            else None
+        )
+        for role, entity_id in (configured_entities or {}).items()
+    }
+
+
 def build_debug_sample(
     *,
     timestamp: datetime,
     details: Mapping[str, Any],
-    configured_entities: Mapping[str, str | None] | None = None,
+    configured_entities: Mapping[str, Any] | None = None,
     entity_availability: Mapping[str, bool | None] | None = None,
 ) -> DebugSample:
     """Group existing coordinator diagnostics into one schema-v1 sample.
