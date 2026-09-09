@@ -1,7 +1,10 @@
 """Derived native hardware statistics with explicit data-quality semantics."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Any
+
 
 @dataclass(frozen=True)
 class NativeStatistics:
@@ -9,6 +12,7 @@ class NativeStatistics:
     roundtrip_efficiency_pct: float | None
     switch_count: int | None
     switch_count_is_estimate: bool
+
 
 @dataclass
 class NativeEnergyAccumulator:
@@ -31,14 +35,24 @@ class NativeEnergyAccumulator:
         return cls(charge, discharge, stamp)
 
     def as_dict(self) -> dict[str, float | None]:
-        return {"charged_kwh": self.charged_kwh, "discharged_kwh": self.discharged_kwh,
-                "last_timestamp": self.last_timestamp}
+        return {
+            "charged_kwh": self.charged_kwh,
+            "discharged_kwh": self.discharged_kwh,
+            "last_timestamp": self.last_timestamp,
+        }
 
-    def add(self, *, timestamp: Any, charge_power_w: Any, discharge_power_w: Any,
-            max_interval_seconds: float = 300.0) -> bool:
+    def add(
+        self,
+        *,
+        timestamp: Any,
+        charge_power_w: Any,
+        discharge_power_w: Any,
+        max_interval_seconds: float = 300.0,
+    ) -> bool:
         """Integrate one sample; reject invalid samples and large/offline gaps."""
         try:
-            now = float(timestamp); charge = max(0.0, float(charge_power_w))
+            now = float(timestamp)
+            charge = max(0.0, float(charge_power_w))
             discharge = max(0.0, float(discharge_power_w))
         except (TypeError, ValueError):
             return False
@@ -50,6 +64,7 @@ class NativeEnergyAccumulator:
         self.last_timestamp = now
         return True
 
+
 def roundtrip_efficiency_pct(charged_kwh: Any, discharged_kwh: Any) -> float | None:
     try:
         charged, discharged = float(charged_kwh), float(discharged_kwh)
@@ -59,17 +74,35 @@ def roundtrip_efficiency_pct(charged_kwh: Any, discharged_kwh: Any) -> float | N
         return None
     return round(min(100.0, discharged / charged * 100.0), 1)
 
-def derived_statistics(*, soc_pct: Any, capacity_kwh: Any,
-                       charged_kwh: Any = None, discharged_kwh: Any = None,
-                       switch_count: Any = None) -> NativeStatistics:
+
+def derived_statistics(
+    *,
+    soc_pct: Any,
+    capacity_kwh: Any,
+    charged_kwh: Any = None,
+    discharged_kwh: Any = None,
+    switch_count: Any = None,
+) -> NativeStatistics:
     try:
         soc, capacity = float(soc_pct), float(capacity_kwh)
-        available = round(capacity * soc / 100.0, 3) if 0 <= soc <= 100 and capacity > 0 else None
+        available = (
+            round(capacity * soc / 100.0, 3)
+            if 0 <= soc <= 100 and capacity > 0
+            else None
+        )
     except (TypeError, ValueError):
         available = None
     try:
-        count = int(switch_count) if switch_count is not None and int(switch_count) >= 0 else None
+        count = (
+            int(switch_count)
+            if switch_count is not None and int(switch_count) >= 0
+            else None
+        )
     except (TypeError, ValueError):
         count = None
-    return NativeStatistics(available, roundtrip_efficiency_pct(charged_kwh, discharged_kwh),
-                            count, count is not None)
+    return NativeStatistics(
+        available,
+        roundtrip_efficiency_pct(charged_kwh, discharged_kwh),
+        count,
+        count is not None,
+    )

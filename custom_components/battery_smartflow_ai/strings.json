@@ -472,6 +472,8 @@
       "native_hardware_rssi": {"name": "Wi-Fi signal strength"},
       "native_hardware_available_energy": {"name": "Available energy"},
       "native_hardware_roundtrip_efficiency": {"name": "Round-trip efficiency"},
+      "native_hardware_charged_energy": {"name": "Total energy charged"},
+      "native_hardware_discharged_energy": {"name": "Total energy discharged"},
       "native_hardware_switching_count": {"name": "Switching operations"},
       "native_hardware_soc_min": {"name":"Hardware minimum SoC"},
       "native_hardware_soc_max": {"name":"Hardware maximum SoC"},
@@ -667,16 +669,28 @@
         "name": "Diagnostic: Learned planning current slot avg. power"
       },
       "forecast_remaining_today_kwh": {
-        "name": "PV forecast today"
+        "name": "Usable PV forecast remaining today"
       },
       "forecast_tomorrow_kwh": {
-        "name": "PV forecast tomorrow"
+        "name": "Usable PV forecast tomorrow"
       },
       "forecast_next_3h_kwh": {
-        "name": "PV forecast next 3 hours"
+        "name": "Usable PV forecast next 3 hours"
       },
       "forecast_next_6h_kwh": {
-        "name": "PV forecast next 6 hours"
+        "name": "Usable PV forecast next 6 hours"
+      },
+      "forecast_gross_remaining_today_kwh": {
+        "name": "Gross PV forecast remaining today"
+      },
+      "forecast_gross_tomorrow_kwh": {
+        "name": "Gross PV forecast tomorrow"
+      },
+      "forecast_gross_next_3h_kwh": {
+        "name": "Gross PV forecast next 3 hours"
+      },
+      "forecast_gross_next_6h_kwh": {
+        "name": "Gross PV forecast next 6 hours"
       },
       "price_daily_average": {
         "name": "Prices – Dynamic daily average"

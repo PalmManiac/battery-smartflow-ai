@@ -57,6 +57,10 @@ class EnergyForecastTests(unittest.TestCase):
         self.assertEqual(result.next_3h_kwh, 2.75)
         self.assertEqual(result.next_6h_kwh, 2.75)
         self.assertEqual(result.tomorrow_kwh, 0.7)
+        self.assertEqual(result.gross_remaining_today_kwh, 3.5)
+        self.assertEqual(result.gross_tomorrow_kwh, 1.0)
+        self.assertEqual(result.gross_next_3h_kwh, 3.5)
+        self.assertEqual(result.gross_next_6h_kwh, 3.5)
         self.assertEqual(result.peak_today_w, 2000.0)
 
     def test_empty_or_invalid_energy_forecast_is_unavailable(self):
@@ -127,6 +131,7 @@ class EnergyForecastApiTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(result.status, FORECAST_STATUS_AVAILABLE)
         self.assertEqual(result.remaining_today_kwh, 1.0)
+        self.assertEqual(result.gross_remaining_today_kwh, 1.0)
         self.assertEqual(result.source_name, "Broken roof, East roof")
 
 
