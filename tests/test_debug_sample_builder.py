@@ -13,6 +13,7 @@ bootstrap()
 from custom_components.battery_smartflow_ai.debug_sample_builder import (  # noqa: E402
     build_debug_sample,
     build_entity_diagnostics,
+    configured_entity_availability,
 )
 
 
@@ -178,6 +179,27 @@ class DebugSampleBuilderTests(unittest.TestCase):
             result["raw_values"]["entities"]["token_sensor"],
             "[REDACTED]",
         )
+
+    def test_availability_skips_structured_forecast_source_selection(self) -> None:
+        requested: list[str] = []
+
+        def get_state(entity_id: str):
+            requested.append(entity_id)
+            return object() if entity_id == "sensor.battery_soc" else None
+
+        result = configured_entity_availability(
+            {
+                "soc": "sensor.battery_soc",
+                "pv_forecast_config_entries": ["forecast-east", "forecast-west"],
+                "optional": None,
+            },
+            get_state,
+        )
+
+        self.assertEqual(requested, ["sensor.battery_soc"])
+        self.assertTrue(result["soc"])
+        self.assertIsNone(result["pv_forecast_config_entries"])
+        self.assertIsNone(result["optional"])
 
     def test_source_mapping_changes_do_not_change_built_sample(self) -> None:
         details = {"soc": 40.0, "automatic_strategy_active": True}

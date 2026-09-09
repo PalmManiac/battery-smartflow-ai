@@ -194,7 +194,10 @@ from .command_effectiveness import (
 )
 from .debug_recorder import DebugRecorder
 from .debug_exporter import DebugExportError, export_debug_package
-from .debug_sample_builder import build_debug_sample
+from .debug_sample_builder import (
+    build_debug_sample,
+    configured_entity_availability,
+)
 from .price_currency import (
     PriceCurrency,
     migrate_legacy_price_fields,
@@ -1818,14 +1821,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _debug_entity_availability(self) -> dict[str, bool | None]:
         """Return availability for configured diagnostic entities."""
 
-        return {
-            role: (
-                self.hass.states.get(entity_id) is not None
-                if entity_id
-                else None
-            )
-            for role, entity_id in self._debug_configured_entities().items()
-        }
+        return configured_entity_availability(
+            self._debug_configured_entities(),
+            self.hass.states.get,
+        )
 
     async def _async_export_debug_package(self, package) -> None:
         """Write a completed package outside the event loop and retain its path."""
