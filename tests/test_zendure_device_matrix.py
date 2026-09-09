@@ -43,7 +43,13 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
     def test_known_current_generation_models_prefer_zensdk_automatically(self):
         for entry in (
             ZENDURE_DEVICE_MATRIX[key]
-            for key in ("SF2400AC", "SF2400Pro", "SF2400AC+", "SF800Pro")
+            for key in (
+                "SF2400AC",
+                "SF2400Pro",
+                "SF2400AC+",
+                "SF800Pro",
+                "SF800Pro2",
+            )
         ):
             with self.subTest(profile=entry.profile_key):
                 self.assertIs(
@@ -64,6 +70,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             "SF2400Pro": "SolarFlow 2400 Pro",
             "SF2400AC+": "SolarFlow 2400 AC+",
             "SF800Pro": "SolarFlow 800 Pro",
+            "SF800Pro2": "SolarFlow 800 Pro 2",
         }
         self.assertTrue(set(models).issubset(ZENDURE_DEVICE_MATRIX))
         for profile_key, model in models.items():
@@ -107,7 +114,10 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
                 identity(model="My SF800Pro in the basement")
             )
         )
-        self.assertIsNone(resolve_zendure_device(identity(model="SF800Pro2")))
+        self.assertEqual(
+            resolve_zendure_device(identity(model="SF800Pro2")).profile_key,
+            "SF800Pro2",
+        )
 
     def test_conflicting_verified_identity_is_rejected(self):
         self.assertIsNone(
@@ -150,16 +160,24 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
                     ),
                     VerificationLevel.VERIFIED,
                 )
+                expected = (
+                    VerificationLevel.REFERENCE_ONLY
+                    if key in {"Hyper 2000", "HUB 2000"}
+                    else VerificationLevel.VERIFIED
+                )
                 self.assertIs(
                     entry.property_write_level(
                         ZendureTransport.ZENSDK, "outputLimit"
                     ),
-                    VerificationLevel.VERIFIED
-                    if key == "SF2400AC"
-                    else VerificationLevel.REFERENCE_ONLY,
+                    expected,
                 )
+                if key in {"Hyper 2000", "HUB 2000"}:
+                    self.assertIs(
+                        entry.transport(ZendureTransport.ZENSDK).write,
+                        VerificationLevel.UNSUPPORTED,
+                    )
 
-    def test_transports_remain_separate_evidence_domains(self):
+    def test_zensdk_family_is_verified_without_enabling_local_mqtt(self):
         entry = ZENDURE_DEVICE_MATRIX["SF800Pro"]
         self.assertIs(
             entry.transport(ZendureTransport.CLOUD_MQTT).read,
@@ -167,7 +185,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
         )
         self.assertIs(
             entry.transport(ZendureTransport.ZENSDK).read,
-            VerificationLevel.REFERENCE_ONLY,
+            VerificationLevel.VERIFIED,
         )
         self.assertIs(
             entry.transport(ZendureTransport.LOCAL_MQTT).read,

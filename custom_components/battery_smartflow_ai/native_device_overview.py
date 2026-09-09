@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Mapping
 from .native_capacity import native_capacity, pack_capacity_kwh
 from .native_statistics import derived_statistics
+from .zendure_device_matrix import resolve_zendure_device
 
 from .core.models import (
     DeviceControlState,
@@ -81,6 +82,7 @@ def build_native_device_overview(
         state = states.get(system_id)
         public_id = _public_id("DEVICE", system_id)
         identity = device.native_identities[0] if device.native_identities else None
+        matrix_entry = resolve_zendure_device(identity) if identity else None
         packs = []
         state_packs = {item.pack_id: item for item in state.packs} if state else {}
         for pack_id, pack_identity in sorted(inventory.packs.items()):
@@ -179,7 +181,10 @@ def build_native_device_overview(
                     else {}
                 ),
                 product_id=identity.product_id if identity else None,
-                profile_key=device.profile_key,
+                profile_key=(
+                    device.profile_key
+                    or (matrix_entry.profile_key if matrix_entry else None)
+                ),
                 control_state=device.control_state,
                 control_enabled=device.control_state in {
                     DeviceControlState.ENABLED,

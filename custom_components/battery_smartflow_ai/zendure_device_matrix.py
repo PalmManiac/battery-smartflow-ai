@@ -236,10 +236,10 @@ def _entry(
     canonical_model: str,
     *aliases: str,
     product_ids: tuple[str, ...] = (),
+    zensdk_verified: bool = False,
     local_mqtt_verified: bool = False,
     local_mqtt_input_verified: bool = True,
 ) -> ZendureDeviceMatrixEntry:
-    first_write_model = profile_key == "SF2400AC"
     transports = dict(_transport_matrix())
     writes = dict(_REFERENCE_WRITES)
     transport_writes = {
@@ -252,13 +252,16 @@ def _entry(
             property_name: VerificationLevel.UNKNOWN for property_name in writes
         },
     }
-    if first_write_model:
+    if zensdk_verified:
         transports[ZendureTransport.ZENSDK] = TransportCapability(
             ZendureTransport.ZENSDK,
             VerificationLevel.VERIFIED,
             VerificationLevel.VERIFIED,
             VerificationLevel.REFERENCE_ONLY,
-            ("SF2400AC ZenSDK directional command group approved for field validation",),
+            (
+                "ZendureZenSdk directional command contract verified from the "
+                "shared implementation and matching field payloads",
+            ),
         )
         for property_name in ("smartMode", "acMode", "inputLimit", "outputLimit"):
             writes[property_name] = VerificationLevel.VERIFIED
@@ -328,18 +331,21 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 "solarFlow2400AC",
                 "SF2400AC",
                 product_ids=("BC8B7F",),
+                zensdk_verified=True,
             ),
             _entry(
                 "SF2400Pro",
                 "SolarFlow 2400 Pro",
                 "solarFlow2400Pro",
                 "SF2400Pro",
+                zensdk_verified=True,
             ),
             _entry(
                 "SF2400AC+",
                 "SolarFlow 2400 AC+",
                 "solarFlow2400AC+",
                 "SF2400AC+",
+                zensdk_verified=True,
             ),
             _entry(
                 "SF800Pro",
@@ -347,6 +353,15 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 "solarFlow800Pro",
                 "SF800Pro",
                 product_ids=("R3mn8U",),
+                zensdk_verified=True,
+            ),
+            _entry(
+                "SF800Pro2",
+                "SolarFlow 800 Pro 2",
+                "SolarFlow 800 Pro2",
+                "solarFlow800Pro2",
+                "SF800Pro2",
+                zensdk_verified=True,
             ),
             _entry(
                 "Hyper 2000",
