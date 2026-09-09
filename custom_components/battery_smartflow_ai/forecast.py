@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -18,6 +19,8 @@ from .const import (
 )
 from .core.clock import SystemClock
 from .core.ports import Clock
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
@@ -476,3 +479,192 @@ def build_forecast_summary(
         peak_tomorrow_w=round(float(peak_tomorrow_w), 1),
         pv_outlook=pv_outlook,
     )
+
+
+def _energy_forecast_intervals(
+    forecasts: list[dict[str, Any]],
+) -> list[tuple[datetime, float, float]]:
+    """Merge forecasts into the same hourly Wh buckets as HA Energy."""
+
+    merged: dict[datetime, float] = {}
+    for forecast in forecasts:
+        values = forecast.get("wh_hours") if isinstance(forecast, dict) else None
+        if not isinstance(values, dict):
+            continue
+        for raw_timestamp, raw_wh in values.items():
+            timestamp = _normalize_dt(raw_timestamp)
+            wh = _to_float(raw_wh, None)
+            if timestamp is None or wh is None or wh < 0:
+                continue
+            bucket = timestamp.replace(minute=0, second=0, microsecond=0)
+            merged[bucket] = merged.get(bucket, 0.0) + wh
+
+    return [(start, 1.0, merged[start]) for start in sorted(merged)]
+
+
+def _energy_window_kwh(
+    intervals: list[tuple[datetime, float, float]],
+    window_start: datetime,
+    window_end: datetime,
+    base_load_w: float,
+) -> float:
+    total = 0.0
+    for start, duration_h, energy_wh in intervals:
+        end = start + timedelta(hours=duration_h)
+        overlap_start = max(start, window_start)
+        overlap_end = min(end, window_end)
+        overlap_h = max(
+            0.0, (overlap_end - overlap_start).total_seconds() / 3600.0
+        )
+        if overlap_h <= 0 or duration_h <= 0:
+            continue
+        gross_kwh = (energy_wh / 1000.0) * (overlap_h / duration_h)
+        total += _net_interval_energy_kwh(
+            gross_kwh, overlap_h, base_load_w
+        )
+    return total
+
+
+def build_energy_forecast_summary(
+    forecasts: list[dict[str, Any]],
+    *,
+    now_local: datetime,
+    installed_pv_wp: float = 0.0,
+    forecast_base_load_w: float = 300.0,
+    source_name: str | None = None,
+) -> ForecastSummary:
+    """Normalize the standard Home Assistant Energy solar-forecast contract."""
+
+    intervals = _energy_forecast_intervals(forecasts)
+    if not intervals:
+        return ForecastSummary(
+            status=FORECAST_STATUS_UNAVAILABLE,
+            source_name=source_name,
+            pv_outlook=PV_OUTLOOK_UNKNOWN,
+        )
+
+    today_start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+    day_after_tomorrow = tomorrow_start + timedelta(days=1)
+    remaining_today = _energy_window_kwh(
+        intervals, now_local, tomorrow_start, forecast_base_load_w
+    )
+    tomorrow = _energy_window_kwh(
+        intervals, tomorrow_start, day_after_tomorrow, forecast_base_load_w
+    )
+    next_3h = _energy_window_kwh(
+        intervals, now_local, now_local + timedelta(hours=3), forecast_base_load_w
+    )
+    next_6h = _energy_window_kwh(
+        intervals, now_local, now_local + timedelta(hours=6), forecast_base_load_w
+    )
+
+    peak_today_w = 0.0
+    peak_tomorrow_w = 0.0
+    for start, duration_h, energy_wh in intervals:
+        if duration_h <= 0:
+            continue
+        power_w = energy_wh / duration_h
+        if start.date() == today_start.date():
+            peak_today_w = max(peak_today_w, power_w)
+        elif start.date() == tomorrow_start.date():
+            peak_tomorrow_w = max(peak_tomorrow_w, power_w)
+
+    outlook = _classify_pv_outlook(
+        remaining_today, next_6h, tomorrow, installed_pv_wp
+    )
+    return ForecastSummary(
+        status=FORECAST_STATUS_AVAILABLE,
+        source_name=source_name,
+        remaining_today_kwh=round(remaining_today, 3),
+        tomorrow_kwh=round(tomorrow, 3),
+        next_3h_kwh=round(next_3h, 3),
+        next_6h_kwh=round(next_6h, 3),
+        peak_today_w=round(peak_today_w, 1),
+        peak_tomorrow_w=round(peak_tomorrow_w, 1),
+        pv_outlook=outlook,
+    )
+
+
+async def async_energy_forecast_sources(
+    hass: HomeAssistant,
+) -> list[dict[str, str]]:
+    """Return selectable config entries supported by HA's Energy forecast API."""
+
+    from homeassistant.components.energy.websocket_api import (
+        async_get_energy_platforms,
+    )
+
+    platforms = await async_get_energy_platforms(hass)
+    result = []
+    for entry in hass.config_entries.async_entries():
+        if entry.domain not in platforms:
+            continue
+        result.append(
+            {
+                "value": entry.entry_id,
+                "label": f"{entry.title} ({entry.domain})",
+            }
+        )
+    return sorted(result, key=lambda item: item["label"].casefold())
+
+
+async def async_build_forecast_summary(
+    hass: HomeAssistant,
+    config_entry_ids: tuple[str, ...],
+    today_entity_id: str | None,
+    tomorrow_entity_id: str | None,
+    installed_pv_wp: float = 0.0,
+    forecast_base_load_w: float = 300.0,
+    *,
+    clock: Clock | None = None,
+) -> ForecastSummary:
+    """Prefer HA Energy forecasts and retain legacy sensor compatibility."""
+
+    if not config_entry_ids:
+        return build_forecast_summary(
+            hass,
+            today_entity_id,
+            tomorrow_entity_id,
+            installed_pv_wp,
+            forecast_base_load_w,
+            clock=clock,
+        )
+
+    from homeassistant.components.energy.websocket_api import (
+        async_get_energy_platforms,
+    )
+
+    try:
+        platforms = await async_get_energy_platforms(hass)
+        forecasts = []
+        source_names = []
+        for entry_id in config_entry_ids:
+            entry = hass.config_entries.async_get_entry(entry_id)
+            if entry is None or entry.domain not in platforms:
+                continue
+            try:
+                forecast = await platforms[entry.domain](hass, entry_id)
+            except Exception as error:
+                _LOGGER.warning(
+                    "Unable to read solar forecast %s: %s", entry.title, error
+                )
+                source_names.append(entry.title)
+                continue
+            if forecast is not None:
+                forecasts.append(forecast)
+            source_names.append(entry.title)
+        return build_energy_forecast_summary(
+            forecasts,
+            now_local=(clock or SystemClock()).local_now(),
+            installed_pv_wp=installed_pv_wp,
+            forecast_base_load_w=forecast_base_load_w,
+            source_name=", ".join(source_names) or "Home Assistant Energy",
+        )
+    except Exception as error:
+        _LOGGER.warning("Unable to read Home Assistant solar forecast: %s", error)
+        return ForecastSummary(
+            status=FORECAST_STATUS_UNAVAILABLE,
+            source_name="Home Assistant Energy",
+            pv_outlook=PV_OUTLOOK_UNKNOWN,
+        )

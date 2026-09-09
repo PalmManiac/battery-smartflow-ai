@@ -196,14 +196,17 @@ Without an electricity price, PV- and load-based control still works.
 
 ## 5️⃣ PV forecast integration (optional)
 
-PV forecast sensors are optional.
+PV forecasts are optional.
 
 They can improve charge planning, but Battery SmartFlow AI can also run without forecast data.
 
-Supported forecast sources depend on the sensors you provide, for example:
+Battery SmartFlow AI lists the same solar forecast integrations that expose
+forecast data to the Home Assistant Energy dashboard. Select one or more
+sources during setup; multiple sources are combined automatically.
 
 * Solcast PV Forecast
-* Other Home Assistant sensors exposing today's and tomorrow's PV forecast
+* Forecast.Solar
+* Other integrations supporting Home Assistant's Energy solar-forecast API
 
 ---
 
@@ -731,14 +734,18 @@ Ohne Strompreis funktioniert PV- und lastbasierte Steuerung weiterhin.
 
 ## 5️⃣ PV-Prognoseintegration (optional)
 
-PV-Prognosesensoren sind optional.
+PV-Prognosen sind optional.
 
 Sie können die Ladeplanung verbessern, Battery SmartFlow AI funktioniert aber auch ohne Prognosedaten.
 
-Unterstützt werden passende Home-Assistant-Sensoren, z. B.:
+Battery SmartFlow AI listet dieselben Solarprognose-Integrationen auf, die ihre
+Prognosedaten auch dem Home-Assistant-Energie-Dashboard bereitstellen. Bei der
+Einrichtung können eine oder mehrere Quellen ausgewählt werden; mehrere Quellen
+werden automatisch zusammengeführt.
 
 * Solcast PV Forecast
-* andere Sensoren für PV-Prognose heute und morgen
+* Forecast.Solar
+* weitere Integrationen mit Unterstützung der Solarprognose-Schnittstelle von Home Assistant Energy
 
 ---
 

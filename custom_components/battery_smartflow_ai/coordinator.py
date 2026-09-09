@@ -23,6 +23,7 @@ from .const import (
     CONF_NATIVE_PV_ENTITY,
     CONF_PV_FORECAST_TODAY_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
+    CONF_PV_FORECAST_CONFIG_ENTRIES,
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
     CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
@@ -120,7 +121,7 @@ from .decision_engine import (
     DecisionResult,
 )
 from .core.models.runtime import RuntimeSnapshot
-from .forecast import build_forecast_summary
+from .forecast import async_build_forecast_summary
 from .learned_planning import (
     LearningSample,
     LearningChargePowerSample,
@@ -310,6 +311,7 @@ class SelectedEntities:
     native_pv: str | None
     pv_forecast_today: str | None
     pv_forecast_tomorrow: str | None
+    pv_forecast_config_entries: tuple[str, ...]
     price_export: str | None
     price_now: str | None
     dynamic_feed_in_price: str | None
@@ -364,12 +366,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.runtime_settings: dict[str, float] = dict(entry.options)
 
+        raw_forecast_entries = entry.data.get(CONF_PV_FORECAST_CONFIG_ENTRIES, ())
+        if isinstance(raw_forecast_entries, str):
+            raw_forecast_entries = (raw_forecast_entries,)
+
         self.entities = SelectedEntities(
             soc=str(entry.data.get(CONF_SOC_ENTITY, "")),
             pv=str(entry.data[CONF_PV_ENTITY]),
             native_pv=entry.data.get(CONF_NATIVE_PV_ENTITY),
             pv_forecast_today=entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY),
             pv_forecast_tomorrow=entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY),
+            pv_forecast_config_entries=tuple(
+                str(value)
+                for value in raw_forecast_entries
+                if value
+            ),
             battery_ac_power=str(
                 entry.options.get(CONF_BATTERY_AC_POWER_ENTITY)
                 or entry.data.get(CONF_BATTERY_AC_POWER_ENTITY, "")
@@ -1776,6 +1787,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "native_pv": self.entities.native_pv,
             "pv_forecast_today": self.entities.pv_forecast_today,
             "pv_forecast_tomorrow": self.entities.pv_forecast_tomorrow,
+            "pv_forecast_config_entries": list(
+                self.entities.pv_forecast_config_entries
+            ),
             "price_now": self.entities.price_now,
             "price_export": self.entities.price_export,
             "dynamic_feed_in_price": self.entities.dynamic_feed_in_price,
@@ -4133,8 +4147,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else ()
             )
 
-            forecast_summary = build_forecast_summary(
+            forecast_summary = await async_build_forecast_summary(
                 hass=self.hass,
+                config_entry_ids=self.entities.pv_forecast_config_entries,
                 today_entity_id=self.entities.pv_forecast_today,
                 tomorrow_entity_id=self.entities.pv_forecast_tomorrow,
                 installed_pv_wp=self._get_installed_pv_wp(),

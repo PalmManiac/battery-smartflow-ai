@@ -41,6 +41,7 @@ from .const import (
     CONF_PV_ENTITY,
     CONF_PV_FORECAST_TODAY_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
+    CONF_PV_FORECAST_CONFIG_ENTRIES,
     CONF_SOC_ENTITY,
     CONF_SOC_LIMIT_ENTITY,
     DEFAULT_BATTERY_PACKS,
@@ -71,6 +72,7 @@ from .const import (
 )
 from .core.models import ZendureTransport
 from .device_profiles import DEVICE_PROFILE_MODELS
+from .forecast import async_energy_forecast_sources
 from .native_config_ui import (
     STORED_APP_TOKEN_MASK,
     native_device_label,
@@ -133,6 +135,28 @@ def _cleanup_optional_entities(data: dict[str, Any]) -> None:
             data.pop(key, None)
         else:
             data[key] = value
+
+
+def _normalize_forecast_entries(value: Any) -> list[str]:
+    """Normalize the multi-select value and remove duplicate entry IDs."""
+
+    if not isinstance(value, (list, tuple, set)):
+        return []
+    return list(dict.fromkeys(str(item) for item in value if str(item).strip()))
+
+
+def _apply_forecast_selection(data: dict[str, Any]) -> None:
+    """Prefer Energy forecast entries while retaining untouched legacy data."""
+
+    if CONF_PV_FORECAST_CONFIG_ENTRIES not in data:
+        return
+    selected = _normalize_forecast_entries(data[CONF_PV_FORECAST_CONFIG_ENTRIES])
+    if selected:
+        data[CONF_PV_FORECAST_CONFIG_ENTRIES] = selected
+    else:
+        data.pop(CONF_PV_FORECAST_CONFIG_ENTRIES, None)
+    data.pop(CONF_PV_FORECAST_TODAY_ENTITY, None)
+    data.pop(CONF_PV_FORECAST_TOMORROW_ENTITY, None)
             
             
 def _normalize_optional_float(value: Any, default: float = 0.0) -> float:
@@ -178,7 +202,9 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="legacy",
-            data_schema=self._base_schema(),
+            data_schema=self._base_schema(
+                forecast_options=await self._forecast_options()
+            ),
         )
 
     async def async_step_native_login(self, user_input=None):
@@ -251,7 +277,10 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._user_input.update(user_input)
             return await self.async_step_grid()
         return self.async_show_form(
-            step_id="native_external", data_schema=self._base_schema(native=True),
+            step_id="native_external",
+            data_schema=self._base_schema(
+                native=True, forecast_options=await self._forecast_options()
+            ),
         )
 
     async def async_step_grid(self, user_input: dict[str, Any] | None = None):
@@ -269,6 +298,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "grid_split_missing"
 
             _cleanup_optional_entities(self._user_input)
+            _apply_forecast_selection(self._user_input)
             
             self._user_input[CONF_FEED_IN_TARIFF] = _normalize_optional_float(
                 self._user_input.get(CONF_FEED_IN_TARIFF),
@@ -305,7 +335,9 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=self._base_schema(entry),
+            data_schema=self._base_schema(
+                entry, forecast_options=await self._forecast_options()
+            ),
         )
 
     async def async_step_reconfigure_grid(
@@ -336,6 +368,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["base"] = "grid_split_missing"
 
             _cleanup_optional_entities(cleaned)
+            _apply_forecast_selection(cleaned)
             
             cleaned[CONF_FEED_IN_TARIFF] = _normalize_optional_float(
                 cleaned.get(CONF_FEED_IN_TARIFF),
@@ -363,6 +396,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self,
         entry: config_entries.ConfigEntry | None = None,
         *, native: bool = False,
+        forecast_options: list[dict[str, str]] | None = None,
     ) -> vol.Schema:
         def _val(key: str):
             if not entry:
@@ -501,39 +535,31 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 selector.EntitySelectorConfig(domain="sensor")
             )
 
-        pv_forecast_today_val = _val(CONF_PV_FORECAST_TODAY_ENTITY)
-        if pv_forecast_today_val:
-            schema[
-                vol.Optional(
-                    CONF_PV_FORECAST_TODAY_ENTITY,
-                    default=pv_forecast_today_val,
+        selected_forecasts = _normalize_forecast_entries(
+            _val(CONF_PV_FORECAST_CONFIG_ENTRIES)
+        )
+        available_forecasts = list(forecast_options or [])
+        known_ids = {item["value"] for item in available_forecasts}
+        for entry_id in selected_forecasts:
+            if entry_id not in known_ids:
+                available_forecasts.append(
+                    {"value": entry_id, "label": entry_id}
                 )
-            ] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor")
+        forecast_key = (
+            vol.Optional(
+                CONF_PV_FORECAST_CONFIG_ENTRIES,
+                default=selected_forecasts,
             )
-        else:
-            schema[
-                vol.Optional(CONF_PV_FORECAST_TODAY_ENTITY)
-            ] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor")
+            if selected_forecasts
+            else vol.Optional(CONF_PV_FORECAST_CONFIG_ENTRIES)
+        )
+        schema[forecast_key] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=available_forecasts,
+                multiple=True,
+                mode=selector.SelectSelectorMode.DROPDOWN,
             )
-
-        pv_forecast_tomorrow_val = _val(CONF_PV_FORECAST_TOMORROW_ENTITY)
-        if pv_forecast_tomorrow_val:
-            schema[
-                vol.Optional(
-                    CONF_PV_FORECAST_TOMORROW_ENTITY,
-                    default=pv_forecast_tomorrow_val,
-                )
-            ] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor")
-            )
-        else:
-            schema[
-                vol.Optional(CONF_PV_FORECAST_TOMORROW_ENTITY)
-            ] = selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor")
-            )
+        )
 
         schema[
             vol.Required(
@@ -693,6 +719,14 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
             schema = {key: value for key, value in schema.items() if key.schema not in hardware_keys}
         return vol.Schema(schema)
+
+    async def _forecast_options(self) -> list[dict[str, str]]:
+        """List the same solar-forecast providers exposed to HA Energy."""
+
+        try:
+            return await async_energy_forecast_sources(self.hass)
+        except Exception:
+            return []
 
     def _grid_schema(
         self,
