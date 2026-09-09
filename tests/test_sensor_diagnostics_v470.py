@@ -12,6 +12,7 @@ bootstrap()
 
 from custom_components.battery_smartflow_ai.diagnostic_values import (  # noqa: E402
     safe_diagnostic_sensor_value,
+    smart_mode_state,
 )
 
 
@@ -59,6 +60,15 @@ class SensorDiagnosticsV470Tests(unittest.TestCase):
         self.assertNotIn("abc123", str(result))
         self.assertNotIn("hunter2", str(result))
         self.assertIn("[REDACTED]", str(result))
+
+    def test_smart_mode_describes_flash_write_semantics(self) -> None:
+        self.assertEqual(smart_mode_state(0), "persistent_storage")
+        self.assertEqual(smart_mode_state(0.0), "persistent_storage")
+        self.assertEqual(smart_mode_state(1), "temporary_control")
+        self.assertEqual(smart_mode_state(1.0), "temporary_control")
+        for unknown in (None, True, False, 2, "unexpected"):
+            with self.subTest(value=unknown):
+                self.assertEqual(smart_mode_state(unknown), "unknown")
 
     def test_sensor_unique_id_formula_is_unchanged(self) -> None:
         source = (PACKAGE_ROOT / "sensor.py").read_text(encoding="utf-8")
