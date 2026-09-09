@@ -1620,13 +1620,24 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
     output_value = state.setpoints.output_limit_w
     charge_power = state.charge_power_w
     discharge_power = state.discharge_power_w
-    stopping_active_input = bool(
+    zero_power_command = bool(
         command.ac_mode == "output"
         and float(command.input_limit_w) == 0
         and float(command.output_limit_w) == 0
+    )
+    stopping_active_input = bool(
+        zero_power_command
         and charge_power.valid
         and float(charge_power.value) > 30
     )
+    stopping_previous_target = bool(
+        zero_power_command
+        and any(
+            float(command.metadata.get(key, 0.0) or 0.0) > 0
+            for key in ("last_input_limit_w", "last_output_limit_w")
+        )
+    )
+    force_atomic_idle = stopping_active_input or stopping_previous_target
     input_is_inactive = bool(
         float(command.input_limit_w) > 0
         and charge_power.valid
@@ -1654,14 +1665,14 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
             and float(input_value.value) == float(command.input_limit_w)
         )
     )
-    should_write_output = stopping_active_input or force_output_write or (
+    should_write_output = force_atomic_idle or force_output_write or (
         command.should_write_output and not (
             not output_is_inactive
             and output_value.valid
             and float(output_value.value) == float(command.output_limit_w)
         )
     )
-    should_write_mode = stopping_active_input or (
+    should_write_mode = force_atomic_idle or (
         command.should_write_mode and not mode_matches
     )
     return replace(
