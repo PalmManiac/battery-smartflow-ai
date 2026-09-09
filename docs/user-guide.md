@@ -231,12 +231,14 @@ Without electricity price, price-based charging and discharging decisions are no
 
 PV forecasts are optional.
 
-If appropriate predictive sensors are present, Battery SmartFlow AI can use them for better charge planning.
+If an installed integration supplies forecasts through Home Assistant's Energy
+solar-forecast API, Battery SmartFlow AI can use it for better charge planning.
 
-Typical sensors:
+The configuration lists all compatible forecast integrations. One or more can
+be selected, just as in the Energy dashboard; multiple forecasts are combined.
 
-* PV forecast today
-* PV forecast tomorrow
+Existing installations using the former today/tomorrow sensors remain
+compatible until a new Energy forecast source is selected.
 
 The prognosis is not treated as the sole truth. It is an additional planning input.
 

@@ -228,12 +228,16 @@ Ohne Strompreis stehen preisbasierte Lade- und Entladeentscheidungen nicht oder 
 
 PV-Prognosen sind optional.
 
-Wenn passende Prognosesensoren vorhanden sind, kann Battery SmartFlow AI sie für bessere Ladeplanung nutzen.
+Wenn eine installierte Integration ihre Prognosen über die Solarprognose-
+Schnittstelle von Home Assistant Energy bereitstellt, kann Battery SmartFlow AI
+sie für eine bessere Ladeplanung nutzen.
 
-Typische Sensoren:
+In der Konfiguration werden alle kompatiblen Prognose-Integrationen aufgelistet.
+Wie im Energie-Dashboard können eine oder mehrere davon ausgewählt werden;
+mehrere Prognosen werden zusammengeführt.
 
-* PV-Prognose heute
-* PV-Prognose morgen
+Bestehende Installationen mit den bisherigen Heute-/Morgen-Sensoren bleiben
+kompatibel, bis eine neue Energy-Prognosequelle ausgewählt wird.
 
 Die Prognose wird nicht als alleinige Wahrheit behandelt. Sie ist ein zusätzlicher Planungs-Input.
 
