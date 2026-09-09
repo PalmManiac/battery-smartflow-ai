@@ -18,3 +18,19 @@ def safe_diagnostic_sensor_value(key: str, value: object) -> object:
         # Free error text may contain credentials from an upstream exception.
         return redact_secrets(str(value))
     return value
+
+
+def smart_mode_state(value: object) -> str:
+    """Translate Zendure's flash-write flag without guessing future values."""
+
+    if isinstance(value, bool):
+        return "unknown"
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return "unknown"
+    if numeric == 0:
+        return "persistent_storage"
+    if numeric == 1:
+        return "temporary_control"
+    return "unknown"

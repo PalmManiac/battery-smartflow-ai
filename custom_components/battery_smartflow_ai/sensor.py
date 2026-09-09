@@ -58,7 +58,7 @@ from .core.full_charge_maintenance import (
     MaintenanceState,
     MaintenanceWindow,
 )
-from .diagnostic_values import safe_diagnostic_sensor_value
+from .diagnostic_values import safe_diagnostic_sensor_value, smart_mode_state
 from .native_registry_identity import (
     native_hardware_unique_id,
     native_main_device_identifier,
@@ -366,6 +366,15 @@ NATIVE_MAIN_SENSORS += (
         native_unit_of_measurement=UnitOfPower.WATT, device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
     ),
+    NativeHardwareSensorDescription(
+        key="smartMode",
+        translation_key="native_hardware_setpoint_storage",
+        measurement_key="smartMode",
+        device_class=SensorDeviceClass.ENUM,
+        options=["persistent_storage", "temporary_control", "unknown"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    ),
 )
 
 # Raw properties stay disabled diagnostics until the user needs them; no guessed enums.
@@ -377,7 +386,7 @@ NATIVE_MAIN_SENSORS += tuple(
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-    ) for key in RAW_MAIN_DIAGNOSTICS
+    ) for key in RAW_MAIN_DIAGNOSTICS if key != "smartMode"
 )
 
 NATIVE_PACK_SENSORS = (
@@ -1844,6 +1853,25 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             attributes["estimated"] = bool(
                 estimate is not None and estimate.valid and estimate.value
             )
+        if self.entity_description.key == "smartMode":
+            measured = item.measurements.get("smartMode")
+            raw_value = _measured_value(measured)
+            state = smart_mode_state(raw_value)
+            attributes.update(
+                {
+                    "raw_value": raw_value,
+                    "writes_to_flash": (
+                        True if state == "persistent_storage"
+                        else False if state == "temporary_control"
+                        else None
+                    ),
+                    "restored_after_device_restart": (
+                        True if state == "temporary_control"
+                        else False if state == "persistent_storage"
+                        else None
+                    ),
+                }
+            )
         return attributes
 
     @property
@@ -1879,6 +1907,8 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         source = self.entity_description.source
         if source == "measurement":
             measured = item.measurements.get(self.entity_description.measurement_key)
+            if self.entity_description.measurement_key == "smartMode":
+                return smart_mode_state(_measured_value(measured))
             if (
                 self.entity_description.measurement_key == "localAPIEnable"
                 and (measured is None or not measured.valid)
