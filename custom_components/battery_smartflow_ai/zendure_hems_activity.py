@@ -34,7 +34,7 @@ class HemsActivityTracker:
         self._last_activity_at: datetime | None = None
 
     def set_monitoring(self, available: bool, *, observed_at: datetime) -> None:
-        """Start a fresh quiet window only for a healthy subscribed transport."""
+        """Start a fresh quiet window while a native observation path is healthy."""
 
         if available and not self._monitoring:
             self._monitoring_started_at = observed_at

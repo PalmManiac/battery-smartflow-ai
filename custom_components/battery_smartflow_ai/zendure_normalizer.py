@@ -378,7 +378,7 @@ class ZendureCloudNormalizer:
         *,
         observed_at: datetime,
     ) -> None:
-        """Tell the tracker whether Cloud MQTT is currently subscribed."""
+        """Tell the tracker whether a native observation path is healthy."""
 
         if system_id not in self._models:
             raise KeyError(system_id)
