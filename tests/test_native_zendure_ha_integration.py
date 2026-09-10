@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0-rc05")
+        self.assertEqual(manifest["version"], "5.0.0-rc06")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -112,7 +112,8 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
 
     def test_pack_device_name_uses_parent_name_and_stable_position(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
-        self.assertIn("parent.display_name", sensor)
+        self.assertIn("native_device_name(parent.display_name, parent.model)", sensor)
+        self.assertIn("native_device_name(item.display_name, item.model)", sensor)
         self.assertIn("enumerate(parent.packs, start=1)", sensor)
         self.assertIn('"de": "Batterie-Pack"', sensor)
         self.assertNotIn("public_id[-6:]", sensor)

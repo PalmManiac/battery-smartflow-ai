@@ -274,6 +274,16 @@ def _pack_model(value: str | None, parent_model: str | None) -> str | None:
     )
     if normalized == "5" and normalized_parent == "solarflow2400ac":
         return "AB3000X"
+    # Confirmed from multi-model field diagnostics in Discussion #456.  Type
+    # 300 is shared by AB2000S and AB2000X, so do not invent a distinction the
+    # native report does not provide.
+    confirmed_pack_types = {
+        "250": "AB1000",
+        "300": "AB2000S / AB2000X",
+        "500": "SF2400Pro internal battery",
+    }
+    if normalized in confirmed_pack_types:
+        return confirmed_pack_types[normalized]
     return normalized if normalized and not normalized.isdecimal() else None
 
 

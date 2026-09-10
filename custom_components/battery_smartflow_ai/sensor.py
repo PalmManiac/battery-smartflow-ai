@@ -64,6 +64,7 @@ from .native_registry_identity import (
     native_main_device_identifier,
     native_pack_device_identifier,
 )
+from .native_config_ui import native_device_name
 from .price_currency import price_input_profile
 
 _LOGGER = logging.getLogger(__name__)
@@ -1787,7 +1788,10 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             firmware = _measured_value(getattr(item, "firmware", None))
             self._attr_device_info = DeviceInfo(
                 identifiers={native_main_device_identifier(public_id)},
-                name=item.display_name if item else "Zendure system",
+                name=(
+                    native_device_name(item.display_name, item.model)
+                    if item else "Zendure system"
+                ),
                 manufacturer="Zendure",
                 model=(item.model or "Unknown Zendure system") if item else None,
                 serial_number=item.serial_number if item else None,
@@ -1810,7 +1814,8 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 else 1
             )
             parent_name = (
-                parent.display_name if parent is not None else "Zendure"
+                native_device_name(parent.display_name, parent.model)
+                if parent is not None else "Zendure"
             )
             self._attr_device_info = DeviceInfo(
                 identifiers={native_pack_device_identifier(public_id)},

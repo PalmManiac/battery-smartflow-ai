@@ -53,7 +53,12 @@ class Response:
         return self.data
 
 
-async def make_bootstrap(*, ip="192.168.1.44"):
+async def make_bootstrap(
+    *,
+    ip="192.168.1.44",
+    product_model="SolarFlow 2400 AC",
+    product_key="BC8B7F",
+):
     token = b64encode(b"https://api.example.com.app-key").decode()
 
     async def post(*_args, **_kwargs):
@@ -66,8 +71,8 @@ async def make_bootstrap(*, ip="192.168.1.44"):
                         {
                             "deviceKey": "device-real-1",
                             "snNumber": "serial-real-1",
-                            "productKey": "BC8B7F",
-                            "productModel": "SolarFlow 2400 AC",
+                            "productKey": product_key,
+                            "productModel": product_model,
                             "deviceName": "Garage",
                             "online": True,
                             "ip": ip,
@@ -105,6 +110,47 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
             calls[0][1]["json"],
             {"sn": "serial-real-1", "properties": {"outputLimit": 301}, "id": 7},
         )
+
+    async def test_verified_zensdk_models_are_not_rejected_by_low_level_writer(self):
+        verified_models = (
+            ("SolarFlow 2400 Pro", "unknown-product"),
+            ("SolarFlow 2400 AC+", "unknown-product"),
+            ("SolarFlow 800 Pro", "R3mn8U"),
+            ("SolarFlow 800 Pro 2", "unknown-product"),
+        )
+        for product_model, product_key in verified_models:
+            with self.subTest(product_model=product_model):
+                data = await make_bootstrap(
+                    product_model=product_model, product_key=product_key
+                )
+                calls = []
+
+                async def post(url, **kwargs):
+                    calls.append((url, kwargs))
+                    return Response({"success": True}, 200)
+
+                result = await async_write_zensdk_property(
+                    data, "cloud_mqtt:device-real-1", "outputLimit", 301, 7, post
+                )
+                self.assertTrue(result.accepted)
+                self.assertEqual(len(calls), 1)
+
+    async def test_unknown_zensdk_model_is_rejected_without_network(self):
+        data = await make_bootstrap(
+            product_model="Future SolarFlow", product_key="unknown-product"
+        )
+        calls = []
+
+        async def post(*args, **kwargs):
+            calls.append((args, kwargs))
+            return Response({"success": True}, 200)
+
+        result = await async_write_zensdk_property(
+            data, "cloud_mqtt:device-real-1", "outputLimit", 301, 7, post
+        )
+        self.assertFalse(result.accepted)
+        self.assertEqual(result.result, "model_not_allowed")
+        self.assertEqual(calls, [])
 
     async def test_first_write_rejects_every_other_property_without_network(self):
         data = await make_bootstrap()
