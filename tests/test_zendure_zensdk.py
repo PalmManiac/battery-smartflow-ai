@@ -401,6 +401,37 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
             ZendureTransport.ZENSDK,
         )
 
+        # HEMS activity is a safety gate, but its quiet-window tracking must
+        # follow the healthy native control path.  Losing an optional MQTT
+        # side channel must not leave a ZenSDK device blocked forever.
+        runtime._refresh_snapshots()
+        hems = runtime._normalizer.hems_diagnostics(
+            candidate_id,
+            now=datetime.now(timezone.utc),
+        )
+        self.assertTrue(hems.monitoring)
+        self.assertIsNotNone(hems.monitoring_started_at)
+
+        # Once that uninterrupted observation window has been quiet for more
+        # than 60 seconds, the HEMS gate can safely return to inactive even
+        # though neither MQTT transport is connected.
+        now = datetime.now(timezone.utc)
+        runtime._normalizer.set_hems_monitoring(
+            candidate_id,
+            False,
+            observed_at=now,
+        )
+        runtime._normalizer.set_hems_monitoring(
+            candidate_id,
+            True,
+            observed_at=now - timedelta(seconds=61),
+        )
+        runtime._refresh_snapshots()
+        self.assertEqual(
+            runtime._inventory.devices[candidate_id].hems_status.value,
+            "inactive",
+        )
+
     async def test_local_health_ages_without_failures_and_cloud_cannot_refresh_it(self):
         data = await make_bootstrap()
         device = data.devices[0].candidate.candidate_id

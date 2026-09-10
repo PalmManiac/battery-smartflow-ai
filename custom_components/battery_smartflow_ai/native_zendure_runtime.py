@@ -1211,6 +1211,11 @@ class NativeZendureRuntime:
                     self._local_transport is not None
                     and self._local_transport.state is ConnectionState.CONNECTED
                     and system_id in self._local_transport.device_states
+                )
+                or (
+                    system_id in self._zensdk_last_result
+                    and self._zensdk_health(system_id, now)["availability"]
+                    in {"available", "degraded"}
                 ),
                 observed_at=now,
             )
