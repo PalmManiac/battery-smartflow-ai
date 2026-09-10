@@ -97,6 +97,16 @@ class MixDeviceProfileTests(unittest.TestCase):
 
 
 class TypedDeviceProfileTests(unittest.TestCase):
+    def test_sf800plus_uses_confirmed_limits_and_conservative_800w_tuning(self):
+        plus = DEVICE_PROFILES["SF800Plus"]
+        pro = DEVICE_PROFILES["SF800Pro"]
+
+        self.assertEqual(plus["MAX_INPUT_W"], 1000.0)
+        self.assertEqual(plus["MAX_OUTPUT_W"], 800.0)
+        self.assertEqual(plus["CHARGE_KP_UP"], pro["CHARGE_KP_UP"])
+        self.assertEqual(plus["DISCHARGE_KP_DOWN"], pro["DISCHARGE_KP_DOWN"])
+        self.assertEqual(plus["label"], "Zendure SF800Plus")
+
     def test_every_typed_profile_rebuilds_the_legacy_mapping_exactly(self) -> None:
         self.assertEqual(set(DEVICE_PROFILE_MODELS), set(DEVICE_PROFILES))
 

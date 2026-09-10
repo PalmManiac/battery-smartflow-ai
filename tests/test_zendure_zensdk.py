@@ -115,6 +115,7 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         verified_models = (
             ("SolarFlow 2400 Pro", "unknown-product"),
             ("SolarFlow 2400 AC+", "unknown-product"),
+            ("SolarFlow 800 Plus", "unknown-product"),
             ("SolarFlow 800 Pro", "R3mn8U"),
             ("SolarFlow 800 Pro 2", "unknown-product"),
         )

@@ -47,6 +47,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
                 "SF2400AC",
                 "SF2400Pro",
                 "SF2400AC+",
+                "SF800Plus",
                 "SF800Pro",
                 "SF800Pro2",
             )
@@ -69,6 +70,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             "SF2400AC": "SolarFlow 2400 AC",
             "SF2400Pro": "SolarFlow 2400 Pro",
             "SF2400AC+": "SolarFlow 2400 AC+",
+            "SF800Plus": "SolarFlow 800 Plus",
             "SF800Pro": "SolarFlow 800 Pro",
             "SF800Pro2": "SolarFlow 800 Pro 2",
         }

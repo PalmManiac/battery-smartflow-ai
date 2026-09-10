@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from .ac_mode_options import canonical_ac_mode, resolve_ac_mode_option
 from .ai_status import map_ai_status
 from .const import (
     DOMAIN,
@@ -2180,14 +2181,30 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         - update the cache only after a successful call
         """
 
-        requested_mode = str(mode or "")
-        current_mode = str(
-            self._state(self.entities.ac_mode) or ""
-        )
+        requested_mode = canonical_ac_mode(mode)
+        if requested_mode is None:
+            raise ValueError(f"Unsupported AC mode: {mode!r}")
 
-        cached_mode = str(
-            self._persist.get("last_set_mode") or ""
+        entity_state = self.hass.states.get(self.entities.ac_mode)
+        current_raw = str(entity_state.state if entity_state is not None else "")
+        current_mode = canonical_ac_mode(current_raw) or current_raw
+
+        options = (
+            entity_state.attributes.get("options")
+            if entity_state is not None
+            else None
         )
+        service_option = requested_mode
+        if isinstance(options, (list, tuple)) and options:
+            service_option = resolve_ac_mode_option(requested_mode, options)
+            if service_option is None:
+                raise ValueError(
+                    "AC mode select does not expose one unambiguous "
+                    f"{requested_mode!r} option: {options!r}"
+                )
+
+        cached_raw = str(self._persist.get("last_set_mode") or "")
+        cached_mode = canonical_ac_mode(cached_raw) or cached_raw
 
         self._persist["mode_write_requested"] = requested_mode
         self._persist["mode_write_entity_state"] = current_mode
@@ -2226,7 +2243,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "select_option",
             {
                 "entity_id": self.entities.ac_mode,
-                "option": requested_mode,
+                "option": service_option,
             },
             blocking=True,
         )
