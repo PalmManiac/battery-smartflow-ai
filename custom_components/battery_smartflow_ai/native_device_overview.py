@@ -7,7 +7,7 @@ from datetime import datetime
 import hashlib
 from types import MappingProxyType
 from typing import Mapping
-from .native_capacity import native_capacity, pack_capacity_kwh
+from .native_capacity import native_capacity, pack_capacity_kwh, resolve_pack_profile
 from .native_statistics import derived_statistics
 from .zendure_device_matrix import resolve_zendure_device
 
@@ -99,7 +99,11 @@ def build_native_device_overview(
                     public_id=_public_id("PACK", pack_id),
                     parent_public_id=public_id,
                     serial_number=pack_identity.serial_number,
-                    pack_model=_pack_model(pack_identity.pack_type, device.model),
+                    pack_model=_pack_model(
+                        pack_identity.pack_type,
+                        device.model,
+                        pack_identity.serial_number or observed.serial_number,
+                    ),
                     firmware=observed.firmware,
                     measurements=MappingProxyType(
                         {
@@ -262,28 +266,20 @@ def _boolean_status(value):
     return _optional_value(("on" if value.value else "off") if value.valid else None)
 
 
-def _pack_model(value: str | None, parent_model: str | None) -> str | None:
+def _pack_model(
+    value: str | None,
+    parent_model: str | None,
+    serial_number: str | None = None,
+) -> str | None:
     """Resolve only verified pack models; never present a numeric code as one."""
 
     if value is None:
-        return None
+        profile = resolve_pack_profile(serial_number, None, parent_model)
+        return profile.model if profile is not None else None
     normalized = str(value).strip()
-    normalized_parent = "".join(
-        character for character in (parent_model or "").casefold()
-        if character.isalnum()
-    )
-    if normalized == "5" and normalized_parent == "solarflow2400ac":
-        return "AB3000X"
-    # Confirmed from multi-model field diagnostics in Discussion #456.  Type
-    # 300 is shared by AB2000S and AB2000X, so do not invent a distinction the
-    # native report does not provide.
-    confirmed_pack_types = {
-        "250": "AB1000",
-        "300": "AB2000S / AB2000X",
-        "500": "SF2400Pro internal battery",
-    }
-    if normalized in confirmed_pack_types:
-        return confirmed_pack_types[normalized]
+    profile = resolve_pack_profile(serial_number, normalized, parent_model)
+    if profile is not None:
+        return profile.model
     return normalized if normalized and not normalized.isdecimal() else None
 
 

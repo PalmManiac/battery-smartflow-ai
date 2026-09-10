@@ -16,14 +16,71 @@ class NativeCapacity:
     reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class NativePackProfile:
+    """One conservatively resolved battery model and nominal capacity."""
+
+    model: str
+    capacity_kwh: float
+    source: str
+
+
+def resolve_pack_profile(
+    serial: str | None,
+    pack_type: str | int | None,
+    parent_model: str | None = None,
+) -> NativePackProfile | None:
+    """Resolve serial evidence first, then field-confirmed pack-type fallback."""
+
+    normalized_serial = str(serial or "").strip().upper()
+    normalized_type = str(pack_type).strip() if pack_type is not None else ""
+    if len(normalized_serial) >= 4:
+        prefix = normalized_serial[0]
+        if prefix == "A":
+            return NativePackProfile(
+                "AIO2400" if normalized_serial[3] == "3" else "AB1000",
+                2.4 if normalized_serial[3] == "3" else 0.96,
+                "serial",
+            )
+        if prefix == "B":
+            return NativePackProfile(
+                "I8000" if normalized_type == "70" else "AB1000S",
+                8.0 if normalized_type == "70" else 0.96,
+                "serial_and_pack_type" if normalized_type == "70" else "serial",
+            )
+        if prefix == "C":
+            suffix = {"F": "S", "E": "X"}.get(normalized_serial[3], "")
+            return NativePackProfile(f"AB2000{suffix}", 1.92, "serial")
+        serial_profiles = {
+            "F": ("AB3000", 2.88),
+            "G": ("AB3000L", 2.88),
+            "J": ("I2400", 2.4),
+        }
+        if prefix in serial_profiles:
+            model, capacity = serial_profiles[prefix]
+            return NativePackProfile(model, capacity, "serial")
+
+    normalized_parent = "".join(
+        character for character in (parent_model or "").casefold()
+        if character.isalnum()
+    )
+    type_profiles = {
+        "70": ("I8000", 8.0),
+        "250": ("AB1000", 0.96),
+        "300": ("AB2000S / AB2000X", 1.92),
+        "500": ("I2400", 2.4),
+    }
+    if normalized_type == "5" and normalized_parent == "solarflow2400ac":
+        return NativePackProfile("AB3000X", 2.88, "pack_type_and_parent")
+    if normalized_type in type_profiles:
+        model, capacity = type_profiles[normalized_type]
+        return NativePackProfile(model, capacity, "pack_type")
+    return None
+
+
 def pack_capacity_kwh(serial: str | None, pack_type: str | None) -> float | None:
-    if not serial or len(serial) < 4:
-        return None
-    if serial[0] == "A":
-        return 2.4 if serial[3] == "3" else 0.96
-    if serial[0] == "B":
-        return 8.0 if str(pack_type) == "70" else 0.96
-    return {"C": 1.92, "F": 2.88, "G": 2.88, "J": 2.4}.get(serial[0])
+    profile = resolve_pack_profile(serial, pack_type)
+    return profile.capacity_kwh if profile is not None else None
 
 
 def native_capacity(state: NeutralDeviceState | None, expected_count: int | None = None) -> NativeCapacity:
