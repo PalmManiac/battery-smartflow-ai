@@ -352,6 +352,15 @@ SF800PRO_PROFILE = {
 }
 
 
+# SolarFlow 800 Plus is a ZenSDK device with the same confirmed AC limits as
+# the SF800Pro (1,000 W input / 800 W output).  Reuse the conservative 800 W
+# controller tuning until model-specific field evidence calls for divergence.
+SF800PLUS_PROFILE = {
+    **SF800PRO_PROFILE,
+    "label": "Zendure SF800Plus",
+}
+
+
 SF800PRO2_PROFILE = {
     # --- UI ---
     "label": "Zendure SF800Pro2",
@@ -795,6 +804,7 @@ HUB2000_PROFILE = {
 
 
 DEVICE_PROFILES = {
+    "SF800Plus": SF800PLUS_PROFILE,
     "SF800Pro": SF800PRO_PROFILE,
     "SF800Pro2": SF800PRO2_PROFILE,
     "SF2400AC": SF2400AC_PROFILE,
