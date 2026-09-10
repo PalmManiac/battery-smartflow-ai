@@ -108,7 +108,21 @@ async def async_write_zensdk_properties(
     if device is None:
         return ZenSdkWriteResult(False, None, "device_not_found")
     identity = device.candidate.identity
-    if identity.product_model != "SolarFlow 2400 AC" or not identity.serial_number:
+    matrix_entry = resolve_zendure_device(identity)
+    if (
+        not identity.serial_number
+        or matrix_entry is None
+        or not matrix_entry.native_control_approved
+        or matrix_entry.transport(ZendureTransport.ZENSDK).write
+        is not VerificationLevel.VERIFIED
+        or any(
+            matrix_entry.property_write_level(
+                ZendureTransport.ZENSDK, property_name
+            )
+            is not VerificationLevel.VERIFIED
+            for property_name in property_names
+        )
+    ):
         return ZenSdkWriteResult(False, None, "model_not_allowed")
     raw = next(
         (item for item in bootstrap.raw_device_list

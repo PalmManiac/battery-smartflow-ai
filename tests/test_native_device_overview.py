@@ -157,6 +157,30 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertEqual(pack.pack_model, "AB3000X")
         self.assertEqual(pack.measurements["pack_type"].value, 5)
 
+    def test_confirmed_pack_types_are_resolved_without_false_precision(self):
+        expected_models = {
+            "250": "AB1000",
+            "300": "AB2000S / AB2000X",
+            "500": "SF2400Pro internal battery",
+        }
+        for pack_type, expected_model in expected_models.items():
+            with self.subTest(pack_type=pack_type):
+                main = MainDevice("main-secret", "System", model="SolarFlow 2400 Pro")
+                inventory = DeviceInventory(
+                    devices=(main,),
+                    packs=(BatteryPackIdentity(
+                        "pack-secret", main.system_id, pack_type=pack_type
+                    ),),
+                )
+                state = SimpleNamespace(
+                    packs=(observed_pack("pack-secret", main.system_id),),
+                    last_message_at=None,
+                )
+                pack = build_native_device_overview(
+                    inventory, {main.system_id: state}
+                )[0].packs[0]
+                self.assertEqual(pack.pack_model, expected_model)
+
     def test_only_serial_number_is_exposed_for_local_device_information(self):
         identity = NativeDeviceIdentity(
             ZendureTransport.CLOUD_MQTT,
