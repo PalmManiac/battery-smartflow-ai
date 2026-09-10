@@ -146,6 +146,31 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(precision, 2)
 
+    def test_high_frequency_and_optional_pack_diagnostics_default_disabled(self) -> None:
+        source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        self.assertEqual(
+            source.count(
+                'key="last_message", translation_key="native_hardware_last_message"'
+            ),
+            2,
+        )
+        self.assertGreaterEqual(
+            source.count("entity_registry_enabled_default=False"),
+            6,
+        )
+        pack_section = source.split("NATIVE_PACK_SENSORS = (", 1)[1].split(
+            "_SENSOR_DESCRIPTIONS", 1
+        )[0]
+        for key in ("fault_code", "protection_active", "last_message"):
+            start = pack_section.index(f'key="{key}"')
+            block = pack_section[start:start + 400]
+            self.assertIn("entity_registry_enabled_default=False", block)
+        global_last_message = source.index('key="native_zendure_last_message"')
+        self.assertIn(
+            "entity_registry_enabled_default=False",
+            source[global_last_message:global_last_message + 500],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

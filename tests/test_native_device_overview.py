@@ -161,7 +161,7 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         expected_models = {
             "250": "AB1000",
             "300": "AB2000S / AB2000X",
-            "500": "SF2400Pro internal battery",
+            "500": "I2400",
         }
         for pack_type, expected_model in expected_models.items():
             with self.subTest(pack_type=pack_type):

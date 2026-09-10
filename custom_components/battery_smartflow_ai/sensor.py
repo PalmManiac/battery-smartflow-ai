@@ -292,6 +292,7 @@ NATIVE_MAIN_SENSORS = (
         key="last_message", translation_key="native_hardware_last_message",
         source="last_message", device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
 )
 
@@ -468,12 +469,14 @@ NATIVE_PACK_SENSORS = (
     NativeHardwareSensorDescription(
         key="fault_code", translation_key="native_hardware_fault_code",
         measurement_key="fault_code", entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     NativeHardwareSensorDescription(
         key="protection_active",
         translation_key="native_hardware_protection_active",
         measurement_key="protection_active",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     NativeHardwareSensorDescription(
         key="firmware", translation_key="native_hardware_firmware",
@@ -483,6 +486,7 @@ NATIVE_PACK_SENSORS = (
         key="last_message", translation_key="native_hardware_last_message",
         source="last_message", device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
 )
 
@@ -1683,6 +1687,7 @@ SENSORS += (
         device_class=SensorDeviceClass.TIMESTAMP,
         icon="mdi:clock-check-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     ZendureSensorEntityDescription(
         key="native_zendure_last_capture",
