@@ -1,13 +1,13 @@
 {
+  "domain": "battery_smartflow_ai",
+  "name": "Battery SmartFlow AI",
   "after_dependencies": ["energy"],
   "codeowners": ["@PalmManiac"],
   "config_flow": true,
   "dependencies": ["bluetooth"],
   "documentation": "https://github.com/PalmManiac/battery-smartflow-ai",
-  "domain": "battery_smartflow_ai",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/PalmManiac/battery-smartflow-ai/issues",
-  "name": "Battery SmartFlow AI",
   "requirements": ["bleak-retry-connector>=3.9.0", "paho-mqtt==2.1.0"],
   "version": "5.0.0-rc08"
 }
