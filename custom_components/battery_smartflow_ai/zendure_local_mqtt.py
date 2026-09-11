@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass, field, replace
 
 from .core.models import ZendureTransport
@@ -24,6 +25,9 @@ from .zendure_local_mqtt_commands import (
     LocalMqttInvocation,
     ZendureLocalMqttCommandAdapter,
 )
+from .zendure_legacy import ZendureLegacyCloudBridge
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -83,6 +87,14 @@ class PahoLocalMqttSession(PahoReadOnlyMqttSession):
                 return False
         return result_code == 0
 
+    def relay_cloud_message(self, topic: str, payload: bytes | str) -> bool:
+        """Relay one validated device Cloud message to the local broker."""
+
+        if not topic.startswith("iot/") or "#" in topic or "+" in topic:
+            return False
+        result = self._client.publish(topic, payload, qos=0, retain=False)
+        return getattr(result, "rc", result[0] if isinstance(result, tuple) else None) == 0
+
 
 class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
     """Reuse hardened MQTT lifecycle while retaining a distinct local adapter."""
@@ -96,6 +108,7 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
         clock=None,
         reconnect_delays=(1.0, 2.0, 5.0, 15.0, 30.0),
         max_messages=10_000,
+        bridge_factory=None,
     ) -> None:
         devices = tuple(
             item
@@ -121,6 +134,51 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
             max_messages=max_messages,
         )
         self._local_adapter: ZendureLocalMqttCommandAdapter | None = None
+        self._bridge_factory = bridge_factory or ZendureLegacyCloudBridge
+        self._legacy_bridge: ZendureLegacyCloudBridge | None = None
+
+    @property
+    def bridge_connected_devices(self) -> int:
+        return (
+            len(self._legacy_bridge.connected_devices)
+            if self._legacy_bridge is not None
+            else 0
+        )
+
+    @property
+    def bridge_status(self) -> str:
+        return (
+            self._legacy_bridge.status
+            if self._legacy_bridge is not None
+            else "not_started"
+        )
+
+    def _publish_bridged_local(self, topic: str, payload: bytes | str) -> bool:
+        session = self._session
+        publish = getattr(session, "relay_cloud_message", None)
+        return bool(publish and publish(topic, payload))
+
+    async def async_start(self, *, timeout: float = 15.0) -> None:
+        await super().async_start(timeout=timeout)
+        bridge = self._bridge_factory(
+            self._bootstrap,
+            self._publish_bridged_local,
+        )
+        try:
+            await bridge.async_start(timeout=timeout)
+        except Exception as error:
+            # Local control remains useful during a Zendure Cloud outage. The
+            # bridge is compatibility support for the app, not write authority.
+            _LOGGER.warning("Zendure Legacy Cloud bridge unavailable: %s", type(error).__name__)
+            await bridge.async_stop()
+        else:
+            self._legacy_bridge = bridge
+
+    async def async_stop(self) -> None:
+        bridge, self._legacy_bridge = self._legacy_bridge, None
+        if bridge is not None:
+            await bridge.async_stop()
+        await super().async_stop()
 
     @property
     def connection_variant(self) -> str:
@@ -154,6 +212,8 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
         retained: bool = False,
     ) -> None:
         super()._handle_message(topic, payload, retained)
+        if self._legacy_bridge is not None:
+            self._legacy_bridge.forward_local(topic, payload)
         if not self._messages:
             return
         message = self._messages[-1]

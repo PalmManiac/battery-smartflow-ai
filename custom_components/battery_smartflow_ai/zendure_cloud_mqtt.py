@@ -459,6 +459,10 @@ class ZendureCloudMqttTransport:
     ) -> None:
         received_at = self._clock()
         parsed, payload_format = _parse_payload(payload)
+        # Local Legacy bridges mark their Cloud copy to prevent account-wide
+        # consumers from treating it as a second physical observation.
+        if isinstance(parsed, Mapping) and parsed.get("isHA") is True:
+            return
         candidate_id, pack_id = self._route_message(topic, parsed)
         known_topic = (
             topic.endswith("/properties/report")
