@@ -1325,6 +1325,8 @@ class NativeZendureRuntime:
             "connection_variant": transport.connection_variant,
             "connection_phase": transport.connection_phase,
             "connection": dict(transport.connection_diagnostics),
+            "cloud_bridge_state": transport.bridge_status,
+            "cloud_bridge_connected_devices": transport.bridge_connected_devices,
             "last_message_at": transport.last_message_at,
             "devices": [
                 {

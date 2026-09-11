@@ -31,6 +31,9 @@ from .const import (
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
+    CONF_NATIVE_ZENDURE_LEGACY_PROVISION,
+    CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
+    CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID,
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     CONF_OFFGRID_MODE_ENTITY,
     CONF_OFFGRID_POWER_ENTITY,
@@ -82,6 +85,10 @@ from .native_config_ui import (
 from .price_currency import price_input_profile, resolve_price_currency
 from .zendure_cloud import ZendureCloudClient, ZendureCloudError
 from .zendure_device_matrix import preferred_local_transport, resolve_zendure_device
+from .zendure_legacy import (
+    async_ensure_legacy_mqtt_users,
+    async_provision_legacy_device,
+)
 
 EMPTY_ENTITY_VALUES = {
     "",
@@ -1008,9 +1015,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         },
                     )
                 options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER] = server
-                options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT] = int(
+                local_port = int(
                     user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT, 1883)
                 )
+                options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT] = local_port
                 options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME] = str(
                     user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME, "")
                 ).strip()
@@ -1022,6 +1030,73 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         ),
                     )
                 )
+                wifi_ssid = str(
+                    user_input.get(CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID, "")
+                ).strip()
+                wifi_password = resolve_app_token_input(
+                    user_input.get(CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD),
+                    self.config_entry.options.get(
+                        CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD
+                    ),
+                )
+                if wifi_ssid:
+                    options[CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID] = wifi_ssid
+                if wifi_password:
+                    options[CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD] = wifi_password
+                if bool(user_input.get(CONF_NATIVE_ZENDURE_LEGACY_PROVISION, False)):
+                    if local_port != 1883:
+                        return self.async_show_form(
+                            step_id="native_zendure_device",
+                            data_schema=self._native_device_schema(devices, True, options),
+                            errors={"base": "legacy_port_required"},
+                            description_placeholders={
+                                "device_summary": self._native_device_summary(devices)
+                            },
+                        )
+                    if not wifi_ssid or not wifi_password:
+                        return self.async_show_form(
+                            step_id="native_zendure_device",
+                            data_schema=self._native_device_schema(
+                                devices, True, options
+                            ),
+                            errors={"base": "legacy_wifi_required"},
+                            description_placeholders={
+                                "device_summary": self._native_device_summary(devices)
+                            },
+                        )
+                    identity = selected_device.candidate.identity
+                    try:
+                        if not identity.device_id:
+                            raise ValueError("legacy_device_id_missing")
+                        await async_ensure_legacy_mqtt_users(
+                            self.hass, (identity.device_id,)
+                        )
+                        await async_provision_legacy_device(
+                            self.hass,
+                            serial_number=str(identity.serial_number or ""),
+                            display_name=selected_device.candidate.display_name,
+                            mqtt_server=server,
+                            wifi_ssid=wifi_ssid,
+                            wifi_password=wifi_password,
+                        )
+                    except Exception as error:
+                        reason = str(error) or type(error).__name__
+                        allowed = {
+                            "legacy_ble_device_not_found",
+                            "legacy_device_id_missing",
+                        }
+                        return self.async_show_form(
+                            step_id="native_zendure_device",
+                            data_schema=self._native_device_schema(
+                                devices, True, options
+                            ),
+                            errors={
+                                "base": reason if reason in allowed else "legacy_provision_failed"
+                            },
+                            description_placeholders={
+                                "device_summary": self._native_device_summary(devices)
+                            },
+                        )
             migration = self.config_entry.data.get("v5_migration")
             if isinstance(migration, Mapping):
                 from .v5_migration import confirm_native_binding
@@ -1107,6 +1182,24 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 ): selector.TextSelector(selector.TextSelectorConfig(
                     type=selector.TextSelectorType.PASSWORD
                 )),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID,
+                    default=options.get(CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID, ""),
+                ): selector.TextSelector(),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
+                    default=(
+                        STORED_APP_TOKEN_MASK
+                        if options.get(CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD)
+                        else ""
+                    ),
+                ): selector.TextSelector(selector.TextSelectorConfig(
+                    type=selector.TextSelectorType.PASSWORD
+                )),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_LEGACY_PROVISION,
+                    default=False,
+                ): selector.BooleanSelector(),
             })
         return vol.Schema(schema)
 

@@ -146,6 +146,21 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.last_message_at, self.now)
         self.assertEqual(set(state.property_updated_at), {"socLevel", "solarInputPower"})
 
+    async def test_legacy_bridge_copy_is_not_counted_as_cloud_observation(self):
+        transport = ZendureCloudMqttTransport(
+            self.data, session_factory=self.factory, clock=lambda: self.now
+        )
+        await transport.async_start()
+        self.sessions[0].emit(
+            "/product-a/main-1/properties/report",
+            json.dumps({"properties": {"socLevel": 55}, "isHA": True}).encode(),
+        )
+        await asyncio.sleep(0)
+        self.assertEqual(transport.messages, ())
+        self.assertIsNone(
+            transport.device_states["cloud_mqtt:main-1"].last_message_at
+        )
+
     async def test_routes_pack_and_payload_device_identity(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory)
         await transport.async_start()
