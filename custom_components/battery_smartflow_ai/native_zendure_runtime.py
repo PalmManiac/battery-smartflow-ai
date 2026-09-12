@@ -545,7 +545,10 @@ class NativeZendureRuntime:
         timestamp = getattr(state, "last_message_at", None)
         charge = _numeric_value(getattr(state, "charge_power_w", None))
         discharge = _numeric_value(getattr(state, "discharge_power_w", None))
-        if timestamp is None or charge is None or discharge is None:
+        pv_power = _numeric_value(getattr(state, "pv_power_w", None))
+        if timestamp is None or (
+            (charge is None or discharge is None) and pv_power is None
+        ):
             return
         system_id = str(state.system_id)
         accumulator = self._energy_accumulators.setdefault(
@@ -555,8 +558,11 @@ class NativeZendureRuntime:
             timestamp=timestamp.timestamp(),
             charge_power_w=charge,
             discharge_power_w=discharge,
+            pv_power_w=pv_power,
         )
 
+        if charge is None or discharge is None:
+            return
         mode = "charge" if charge > 0 else "discharge" if discharge > 0 else "idle"
         previous = self._last_energy_modes.get(system_id)
         # Match Z-HA's orientation counter: one completed active phase is

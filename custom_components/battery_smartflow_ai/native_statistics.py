@@ -19,7 +19,9 @@ class NativeEnergyAccumulator:
     """Persistable, gap-safe integration of native power measurements."""
     charged_kwh: float = 0.0
     discharged_kwh: float = 0.0
+    pv_energy_kwh: float = 0.0
     last_timestamp: float | None = None
+    last_pv_timestamp: float | None = None
 
     @classmethod
     def from_dict(cls, data: Any) -> "NativeEnergyAccumulator":
@@ -28,18 +30,33 @@ class NativeEnergyAccumulator:
         try:
             charge = max(0.0, float(data.get("charged_kwh", 0.0)))
             discharge = max(0.0, float(data.get("discharged_kwh", 0.0)))
+            pv_energy = max(0.0, float(data.get("pv_energy_kwh", 0.0)))
             stamp = data.get("last_timestamp")
             stamp = float(stamp) if stamp is not None else None
+            pv_stamp = data.get("last_pv_timestamp")
+            pv_stamp = float(pv_stamp) if pv_stamp is not None else None
         except (TypeError, ValueError):
             return cls()
-        return cls(charge, discharge, stamp)
+        return cls(
+            charged_kwh=charge,
+            discharged_kwh=discharge,
+            pv_energy_kwh=pv_energy,
+            last_timestamp=stamp,
+            last_pv_timestamp=pv_stamp,
+        )
 
     def as_dict(self) -> dict[str, float | None]:
-        return {
+        state = {
             "charged_kwh": self.charged_kwh,
             "discharged_kwh": self.discharged_kwh,
             "last_timestamp": self.last_timestamp,
         }
+        if self.last_pv_timestamp is not None:
+            state.update({
+                "pv_energy_kwh": self.pv_energy_kwh,
+                "last_pv_timestamp": self.last_pv_timestamp,
+            })
+        return state
 
     def add(
         self,
@@ -47,22 +64,42 @@ class NativeEnergyAccumulator:
         timestamp: Any,
         charge_power_w: Any,
         discharge_power_w: Any,
+        pv_power_w: Any = None,
         max_interval_seconds: float = 300.0,
     ) -> bool:
         """Integrate one sample; reject invalid samples and large/offline gaps."""
         try:
             now = float(timestamp)
+        except (TypeError, ValueError):
+            return False
+
+        battery_valid = True
+        try:
             charge = max(0.0, float(charge_power_w))
             discharge = max(0.0, float(discharge_power_w))
         except (TypeError, ValueError):
-            return False
-        if self.last_timestamp is not None:
-            delta = now - self.last_timestamp
-            if 0 < delta <= max_interval_seconds:
-                self.charged_kwh += charge * delta / 3_600_000
-                self.discharged_kwh += discharge * delta / 3_600_000
-        self.last_timestamp = now
-        return True
+            battery_valid = False
+        if battery_valid:
+            if self.last_timestamp is not None:
+                delta = now - self.last_timestamp
+                if 0 < delta <= max_interval_seconds:
+                    self.charged_kwh += charge * delta / 3_600_000
+                    self.discharged_kwh += discharge * delta / 3_600_000
+            self.last_timestamp = now
+
+        pv_valid = True
+        try:
+            pv_power = max(0.0, float(pv_power_w))
+        except (TypeError, ValueError):
+            pv_valid = False
+        if pv_valid:
+            if self.last_pv_timestamp is not None:
+                delta = now - self.last_pv_timestamp
+                if 0 < delta <= max_interval_seconds:
+                    self.pv_energy_kwh += pv_power * delta / 3_600_000
+            self.last_pv_timestamp = now
+
+        return battery_valid or pv_valid
 
 
 def roundtrip_efficiency_pct(charged_kwh: Any, discharged_kwh: Any) -> float | None:
