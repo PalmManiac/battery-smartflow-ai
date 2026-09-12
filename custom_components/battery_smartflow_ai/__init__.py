@@ -6,6 +6,7 @@ from .const import (
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
@@ -157,6 +158,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             migration_bound_device=migration_bound_device,
             control_enabled=bool(
                 entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
+            ),
+            control_transport=entry.options.get(
+                CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT
             ),
             local_mqtt_server=entry.options.get(
                 CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER

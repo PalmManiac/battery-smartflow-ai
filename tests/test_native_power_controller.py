@@ -92,6 +92,9 @@ class FakeTransport:
 
     def __init__(self):
         self.commands = []
+        self.device_states = {
+            DEVICE: SimpleNamespace(last_message_at=NOW, online=True)
+        }
 
     async def async_execute_authorized(self, authorized):
         self.commands.append(authorized)
@@ -134,11 +137,15 @@ class FakeLocalTransport:
         )
 
 
-def runtime(*, enabled=True, current_state=None, migration_bound_device=None):
+def runtime(
+    *, enabled=True, current_state=None, migration_bound_device=None,
+    control_transport=None,
+):
     result = NativeZendureRuntime(
         SimpleNamespace(), app_token="configured", selected_device=DEVICE,
         notify=lambda: None, control_enabled=enabled,
         migration_bound_device=migration_bound_device,
+        control_transport=control_transport,
     )
     identity = NativeDeviceIdentity(
         ZendureTransport.CLOUD_MQTT, device_id="main-1",
@@ -362,6 +369,21 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             "native_local_mqtt_active",
         )
 
+    async def test_explicit_cloud_selection_reads_and_writes_only_cloud(self):
+        target = runtime(control_transport=ZendureTransport.CLOUD_MQTT.value)
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=450, should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._transport.commands), 1)
+        self.assertEqual(target._zensdk_command_adapter.commands, [])
+        self.assertEqual(
+            target.sensor_data()["native_zendure_control"],
+            "native_cloud_mqtt_active",
+        )
+
     async def test_stale_local_mqtt_never_falls_back(self):
         target = legacy_runtime()
         target._local_transport.device_states[DEVICE].last_message_at = (
@@ -377,6 +399,10 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(target._local_transport.commands, [])
         self.assertEqual(target._zensdk_command_adapter.commands, [])
         self.assertEqual(target._transport.commands, [])
+        self.assertEqual(
+            target.sensor_data()["native_zendure_control"],
+            "native_transport_not_ready",
+        )
 
     async def test_conflicting_model_families_never_select_a_writer(self):
         target = runtime()

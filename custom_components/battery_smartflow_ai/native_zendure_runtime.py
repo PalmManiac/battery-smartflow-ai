@@ -46,8 +46,10 @@ from .native_transport_router import (
 )
 from .zendure_cloud import ZendureCloudClient
 from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
+from .zendure_cloud_mqtt_commands import CloudCommandStatus
 from .zendure_device_matrix import (
     VerificationLevel,
+    preferred_local_transport,
     resolve_zendure_device,
 )
 from .zendure_first_write import (
@@ -114,6 +116,7 @@ class NativeZendureRuntime:
         notify: Callable[[], None],
         migration_bound_device: str | None = None,
         control_enabled: bool = False,
+        control_transport: str | None = None,
         local_mqtt_server: str | None = None,
         local_mqtt_port: int = 1883,
         local_mqtt_username: str = "",
@@ -124,6 +127,7 @@ class NativeZendureRuntime:
         self._selected_device = selected_device
         self._migration_bound_device = migration_bound_device
         self._control_enabled = bool(control_enabled)
+        self._configured_transport = _parse_transport(control_transport)
         self._notify = notify
         self._task: asyncio.Task[None] | None = None
         self._transport: ZendureCloudMqttTransport | None = None
@@ -419,10 +423,10 @@ class NativeZendureRuntime:
                     "online": item.online,
                     "status": item.status_text,
                     "transport": (
-                        self._selected_local_transport().value
+                        self._active_control_transport().value
                         if self._control_enabled
                         and system_id == self._selected_device
-                        and self._selected_local_transport() is not None
+                        and self._active_control_transport() is not None
                         else item.selected_transport.value
                     ),
                     "observed_transport": (
@@ -451,7 +455,7 @@ class NativeZendureRuntime:
             "read_only": False,
             "native_control": "enabled" if self._control_enabled else "disabled",
             "active_control_path": (
-                _control_path_name(self._selected_local_transport())
+                _control_path_name(self._active_control_transport())
                 if self._control_enabled
                 else "Z-HA / Home Assistant entities"
             ),
@@ -473,7 +477,7 @@ class NativeZendureRuntime:
             statistics=self.statistics_state(),
             migration_bound_device=self._migration_bound_device,
         )
-        selected_transport = self._selected_local_transport()
+        selected_transport = self._active_control_transport()
         if selected_transport is None or self._selected_device is None:
             return overview
         selected_index = next(
@@ -580,7 +584,7 @@ class NativeZendureRuntime:
             return device.control_state
         if state is None or not _fresh_native_state(state) or not device.online:
             return DeviceControlState.OFFLINE
-        if automatic_control_transport(device).transport is None:
+        if self._selected_control_transport(device).transport is None:
             return DeviceControlState.UNSUPPORTED
         if not self._transport_router.snapshot.synchronized:
             return DeviceControlState.ELIGIBLE
@@ -597,7 +601,7 @@ class NativeZendureRuntime:
                 "read_only": False,
                 "native_control": "enabled" if self._control_enabled else "disabled",
                 "active_control_path": (
-                    _control_path_name(self._selected_local_transport())
+                    _control_path_name(self._active_control_transport())
                     if self._control_enabled
                     else "Z-HA / Home Assistant entities"
                 ),
@@ -793,7 +797,7 @@ class NativeZendureRuntime:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_state_not_fresh"
                 ))
-            selection = automatic_control_transport(source_device)
+            selection = self._selected_control_transport(source_device)
             control_transport = selection.transport
             self._transport_router.select(
                 self._selected_device,
@@ -886,6 +890,12 @@ class NativeZendureRuntime:
             ):
                 executor = self._local_transport.async_execute_authorized
                 expected_status = LocalMqttCommandStatus.SENT
+            elif (
+                control_transport is ZendureTransport.CLOUD_MQTT
+                and self._transport is not None
+            ):
+                executor = self._transport.async_execute_authorized
+                expected_status = CloudCommandStatus.SENT
             if executor is None:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
@@ -949,7 +959,10 @@ class NativeZendureRuntime:
                     candidate_id,
                     system_id=candidate_id,
                 )
-            self._normalizer = NativeSourceFusion(bootstrap)
+            self._normalizer = NativeSourceFusion(
+                bootstrap,
+                preferred_transport=self._configured_transport,
+            )
             self._zensdk_command_adapter = ZendureZenSdkCommandAdapter(
                 bootstrap,
                 self._post_json,
@@ -1255,7 +1268,7 @@ class NativeZendureRuntime:
                 reason="selected_device_missing",
             )
             return
-        selection = automatic_control_transport(device)
+        selection = self._selected_control_transport(device)
         self._transport_router.select(self._selected_device, selection.transport)
         ready = bool(
             selection.transport is not None
@@ -1429,6 +1442,20 @@ class NativeZendureRuntime:
                 and 0 <= (datetime.now(timezone.utc) - last).total_seconds()
                 <= ZENSDK_MAX_DATA_AGE
             )
+        if transport is ZendureTransport.CLOUD_MQTT:
+            if (
+                self._transport is None
+                or self._transport.state is not ConnectionState.CONNECTED
+                or self._selected_device is None
+            ):
+                return False
+            cloud_state = self._transport.device_states.get(self._selected_device)
+            last = cloud_state.last_message_at if cloud_state is not None else None
+            return bool(
+                last is not None
+                and 0 <= (datetime.now(timezone.utc) - last).total_seconds()
+                <= ZENSDK_MAX_DATA_AGE
+            )
         return False
 
     def _selected_local_transport(self) -> ZendureTransport | None:
@@ -1437,14 +1464,47 @@ class NativeZendureRuntime:
         device = self._inventory.devices.get(self._selected_device)
         if device is None or not device.native_identities:
             return None
-        return automatic_control_transport(device).transport
+        return self._selected_control_transport(device).transport
+
+    def _active_control_transport(self) -> ZendureTransport | None:
+        """Return the configured path only after current telemetry confirms it."""
+
+        transport = self._selected_local_transport()
+        return transport if (
+            transport is not None and self._control_transport_ready(transport)
+        ) else None
+
+    def _selected_control_transport(self, device: MainDevice):
+        """Use the explicit choice; preserve pre-RC10 local installations."""
+
+        if self._configured_transport is None:
+            return automatic_control_transport(device)
+        supported = {ZendureTransport.CLOUD_MQTT}
+        for identity in device.native_identities:
+            local = preferred_local_transport(identity)
+            if local is not None:
+                supported.add(local)
+        if self._configured_transport not in supported:
+            from .native_transport_router import AutomaticTransportDecision
+
+            return AutomaticTransportDecision(None, "configured_transport_unsupported")
+        from .native_transport_router import AutomaticTransportDecision
+
+        return AutomaticTransportDecision(
+            self._configured_transport,
+            "configured_transport",
+        )
 
     def _control_sensor_state(self) -> str:
         transport = self._selected_local_transport()
+        if transport is not None and not self._control_transport_ready(transport):
+            return "native_transport_not_ready"
         if transport is ZendureTransport.ZENSDK:
             return "native_zensdk_active"
         if transport is ZendureTransport.LOCAL_MQTT:
             return "native_local_mqtt_active"
+        if transport is ZendureTransport.CLOUD_MQTT:
+            return "native_cloud_mqtt_active"
         return "native_local_unsupported"
 
     def _apply_state(self, state: Any) -> None:
@@ -1487,6 +1547,18 @@ class NativeZendureRuntime:
         self._status = value
         self._notify()
 
+
+def _parse_transport(value: str | None) -> ZendureTransport | None:
+    """Keep missing values distinct for pre-RC10 compatibility migration."""
+
+    if value is None:
+        return None
+    try:
+        return ZendureTransport(str(value))
+    except ValueError:
+        return None
+
+
 def _safe_reason(error: Exception) -> str:
     reason = getattr(error, "reason", None)
     allowed = {
@@ -1500,6 +1572,8 @@ def _safe_reason(error: Exception) -> str:
 
 
 def _control_path_name(transport: ZendureTransport | None) -> str:
+    if transport is ZendureTransport.CLOUD_MQTT:
+        return "Native Zendure Cloud"
     if transport is ZendureTransport.ZENSDK:
         return "Native Zendure ZenSDK"
     if transport is ZendureTransport.LOCAL_MQTT:

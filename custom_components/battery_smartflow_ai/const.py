@@ -38,7 +38,7 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "5.0.0-rc09"
+INTEGRATION_VERSION = "5.0.0-rc10"
 
 # V5 native Zendure discovery is observation-only in the first development
 # build. The App Token is account discovery material and must never be copied
@@ -53,8 +53,8 @@ CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD = "native_zendure_local_mqtt_password"
 CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID = "native_zendure_legacy_wifi_ssid"
 CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD = "native_zendure_legacy_wifi_password"
 CONF_NATIVE_ZENDURE_LEGACY_PROVISION = "native_zendure_legacy_provision"
-# Removed V5 development option. Retained only to purge an already stored
-# pre-release value when the native configuration is saved again.
+# Explicit per-device communication path. New setups start with Cloud; entries
+# created before RC10 retain the formerly automatic verified local path.
 CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT = "native_zendure_control_transport"
 
 PLATFORMS: list[Platform] = [

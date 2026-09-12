@@ -40,6 +40,23 @@ class NativeReadSourceArbiterTests(unittest.TestCase):
         self.assertEqual(second.transport, ZendureTransport.ZENSDK)
         self.assertEqual(first.status, ReadSourceStatus.CONSISTENT)
 
+    def test_explicit_cloud_mode_prefers_equal_cloud_telemetry(self) -> None:
+        arbiter = NativeReadSourceArbiter(default_priority=(
+            ZendureTransport.CLOUD_MQTT,
+            ZendureTransport.ZENSDK,
+            ZendureTransport.LOCAL_MQTT,
+        ))
+
+        selected = arbiter.select(
+            "soc_pct",
+            (
+                source(ZendureTransport.ZENSDK, 61.0),
+                source(ZendureTransport.CLOUD_MQTT, 61.0),
+            ),
+        )
+
+        self.assertEqual(selected.transport, ZendureTransport.CLOUD_MQTT)
+
     def test_valid_fallback_beats_stale_preferred_source(self) -> None:
         selected = self.arbiter.select(
             "soc_pct",
