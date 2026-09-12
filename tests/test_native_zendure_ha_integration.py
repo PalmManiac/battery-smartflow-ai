@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0-rc08")
+        self.assertEqual(manifest["version"], "5.0.0-rc09")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -93,9 +93,8 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         )
         config = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
         self.assertIn("class NativeZendureHardwareSensor", sensor)
-        self.assertIn(
-            "via_device=native_main_device_identifier(parent_public_id)", sensor
-        )
+        self.assertIn("via_device_id=parent_device_id", sensor)
+        self.assertNotIn("via_device=native_main_device_identifier", sensor)
         self.assertIn('return DOMAIN, f"native_zendure_{public_id}"', identity)
         self.assertIn("coordinator.native_zendure.hardware_overview()", sensor)
         self.assertIn("coordinator.async_add_listener", sensor)

@@ -58,6 +58,23 @@ def forecast_supports_early_pv_passthrough(
     return float(remaining_today_kwh or 0.0) > free_capacity_kwh + 0.25
 
 
+def forecast_blocks_pv_passthrough_start(
+    *,
+    mppt_clips_without_output: bool,
+    already_active: bool,
+    battery_near_full: bool,
+    forecast_surplus_expected: bool,
+) -> bool:
+    """Use the forecast threshold only to gate a new passthrough phase."""
+
+    return bool(
+        mppt_clips_without_output
+        and not already_active
+        and not battery_near_full
+        and not forecast_surplus_expected
+    )
+
+
 def maintain_active_economic_discharge(
     *,
     automatic_mode_active: bool,

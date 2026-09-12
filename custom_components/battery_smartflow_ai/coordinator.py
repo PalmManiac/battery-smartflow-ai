@@ -166,6 +166,7 @@ from .economics import (
 from .automatic_strategy import (
     AutomaticStrategy,
     economic_discharge_continuation_reason,
+    forecast_blocks_pv_passthrough_start,
     forecast_supports_early_pv_passthrough,
     maintain_active_economic_discharge,
 )
@@ -3410,11 +3411,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 stop_reason = "full_battery_pv_passthrough"
 
-            elif (
-                mppt_clips_without_output
-                and not battery_near_full
-                and not forecast_surplus_expected
+            elif forecast_blocks_pv_passthrough_start(
+                mppt_clips_without_output=mppt_clips_without_output,
+                already_active=active,
+                battery_near_full=battery_near_full,
+                forecast_surplus_expected=forecast_surplus_expected,
             ):
+                # The forecast threshold is a start gate, not an exit signal.
+                # Remaining forecast and battery headroom converge while PV is
+                # charging, so using the same threshold to stop an already
+                # active passthrough created repeated five-minute mode cycles.
+                # Once active, the explicit PV/load/export/protection exits
+                # below provide the required release hysteresis.
                 active = False
                 export_counter = 0
                 target_w = 0.0

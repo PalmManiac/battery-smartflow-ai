@@ -179,7 +179,7 @@ class EntityRegistryCompatibilityTests(unittest.TestCase):
             self.assertIn("(DOMAIN, entry.entry_id)", source)
 
         self.assertIn('identifiers={(DOMAIN, f"{entry.entry_id}_economics")}', sensor)
-        self.assertIn("via_device=(DOMAIN, entry.entry_id)", sensor)
+        self.assertIn("via_device_id=control_device_id", sensor)
 
 
 bootstrap()
