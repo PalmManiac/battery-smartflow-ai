@@ -15,6 +15,8 @@ from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudCli
 from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     CloudMqttError,
     ConnectionState,
+    PahoReadOnlyMqttSession,
+    PahoZendureCloudMqttSession,
     ZendureCloudMqttTransport,
     _bsfai_client_id,
     _get_all_request,
@@ -93,6 +95,16 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         session = FakeSession(credentials)
         self.sessions.append(session)
         return session
+
+    async def test_assigned_identity_is_limited_to_selected_cloud_mode(self):
+        cloud = ZendureCloudMqttTransport(self.data)
+        observer = ZendureCloudMqttTransport(
+            self.data,
+            use_assigned_client_id=False,
+        )
+
+        self.assertIs(cloud._session_factory, PahoZendureCloudMqttSession)
+        self.assertIs(observer._session_factory, PahoReadOnlyMqttSession)
 
     async def test_connects_and_subscribes_all_devices(self):
         transport = ZendureCloudMqttTransport(
@@ -365,6 +377,20 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(
             first,
             _bsfai_client_id("another-zendure-cloud-client"),
+        )
+
+    def test_zendure_cloud_uses_the_assigned_client_identity(self):
+        credentials = type(
+            "Credentials", (), {"client_id": "zendure-assigned-client"}
+        )()
+
+        self.assertEqual(
+            PahoZendureCloudMqttSession._client_id(credentials),
+            "zendure-assigned-client",
+        )
+        self.assertNotEqual(
+            PahoReadOnlyMqttSession._client_id(credentials),
+            "zendure-assigned-client",
         )
 
     def test_get_all_request_has_no_arbitrary_write_surface(self):

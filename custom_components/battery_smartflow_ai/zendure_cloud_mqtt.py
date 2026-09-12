@@ -140,9 +140,14 @@ class ZendureCloudMqttTransport:
         clock: Callable[[], datetime] | None = None,
         reconnect_delays: tuple[float, ...] = (1.0, 2.0, 5.0, 15.0, 30.0),
         max_messages: int = _MAX_RETAINED_MESSAGES,
+        use_assigned_client_id: bool = True,
     ) -> None:
         self._bootstrap = bootstrap
-        self._session_factory = session_factory or PahoReadOnlyMqttSession
+        self._session_factory = session_factory or (
+            PahoZendureCloudMqttSession
+            if use_assigned_client_id
+            else PahoReadOnlyMqttSession
+        )
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._reconnect_delays = reconnect_delays
         self._messages: deque[CloudMqttMessage] = deque(maxlen=max_messages)
@@ -609,7 +614,7 @@ class PahoReadOnlyMqttSession:
         self._connect_packet_sent = False
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
-            client_id=_bsfai_client_id(credentials.client_id),
+            client_id=self._client_id(credentials),
             clean_session=False,
             protocol=mqtt.MQTTv31,
         )
@@ -619,6 +624,12 @@ class PahoReadOnlyMqttSession:
         self._on_connect: ConnectCallback | None = None
         self._on_disconnect: DisconnectCallback | None = None
         self._on_message: MessageCallback | None = None
+
+    @staticmethod
+    def _client_id(credentials: CloudMqttCredentials) -> str:
+        """Use a private identity for non-Zendure MQTT sessions."""
+
+        return _bsfai_client_id(credentials.client_id)
 
     @property
     def connection_phase(self) -> str:
@@ -791,6 +802,19 @@ def _bsfai_client_id(cloud_client_id: str) -> str:
 
     digest = hashlib.sha256(cloud_client_id.encode("utf-8")).hexdigest()[:16]
     return f"bsfai-{digest}"
+
+
+class PahoZendureCloudMqttSession(PahoReadOnlyMqttSession):
+    """Cloud session using the client identity assigned by Zendure.
+
+    Zendure accepts authentication with another client ID but does not route
+    device traffic to that session. Its assigned ID is therefore part of the
+    Cloud MQTT credentials, just like username and password.
+    """
+
+    @staticmethod
+    def _client_id(credentials: CloudMqttCredentials) -> str:
+        return credentials.client_id
 
 
 def _get_all_request(

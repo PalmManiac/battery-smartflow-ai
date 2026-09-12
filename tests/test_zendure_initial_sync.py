@@ -92,6 +92,7 @@ def message(
     pack: str | None = None,
     payload_format: str = "json",
     raw: bytes | None = None,
+    transport: str = "cloud_mqtt",
 ):
     return CloudMqttMessage(
         received_at=at,
@@ -103,6 +104,7 @@ def message(
         pack_id=pack,
         known_topic=True,
         session_number=1,
+        transport=transport,
     )
 
 
@@ -213,6 +215,48 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.complete)
         self.assertEqual(result.completion_reason, "hard_timeout")
         self.assertEqual(len(result.messages), 1)
+
+    async def test_cloud_completion_ignores_successful_zensdk_fallback(self):
+        recorder = self.recorder(
+            completion_transport="cloud_mqtt",
+            initial_messages=(
+                message(
+                    self.time.clock(),
+                    "cloud_mqtt:real-device-1",
+                    "real-device-1",
+                    {"properties": {"socLevel": 60}},
+                    transport="zensdk",
+                ),
+                message(
+                    self.time.clock(),
+                    "cloud_mqtt:real-device-2",
+                    "real-device-2",
+                    {"properties": {"socLevel": 50}},
+                    transport="zensdk",
+                ),
+            ),
+        )
+        self.time.advance(3)
+        self.assertIsNone(recorder.completion())
+
+        recorder.observe_message(
+            message(
+                self.time.clock(),
+                "cloud_mqtt:real-device-1",
+                "real-device-1",
+                {"properties": {"socLevel": 60}},
+            )
+        )
+        recorder.observe_message(
+            message(
+                self.time.clock(),
+                "cloud_mqtt:real-device-2",
+                "real-device-2",
+                {"properties": {"socLevel": 50}},
+            )
+        )
+        self.time.advance(2.1)
+        self.assertEqual(recorder.completion(), (True, "initial_sync_quiet"))
 
     async def test_export_has_raw_and_summary_with_complete_nested_properties(self):
         recorder = self.recorder()

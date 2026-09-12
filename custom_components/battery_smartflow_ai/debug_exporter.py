@@ -103,14 +103,28 @@ def _anonymize_entity_ids(value):
     """
 
     aliases: dict[str, str] = {}
+    native_devices: dict[str, str] = {}
 
-    def anonymize(item):
+    def anonymize(item, *, key: str | None = None):
         if isinstance(item, dict):
-            return {key: anonymize(child) for key, child in item.items()}
+            return {
+                child_key: anonymize(child, key=child_key)
+                for child_key, child in item.items()
+            }
         if isinstance(item, list):
             return [anonymize(child) for child in item]
         if not isinstance(item, str):
             return item
+
+        if key == "native_zendure_selected_device":
+            transport, separator, device = item.partition(":")
+            if not separator:
+                transport, device = "native", item
+            if device not in native_devices:
+                native_devices[device] = (
+                    f"debug_device_{len(native_devices) + 1:02d}"
+                )
+            return f"{transport}:{native_devices[device]}"
 
         match = _ENTITY_ID_PATTERN.fullmatch(item)
         if match is None or match.group(1) not in _ENTITY_DOMAINS:

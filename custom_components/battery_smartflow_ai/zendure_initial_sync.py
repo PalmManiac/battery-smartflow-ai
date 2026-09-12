@@ -120,6 +120,7 @@ class ZendureInitialSyncRecorder:
         monotonic: Callable[[], float] = time.monotonic,
         initial_messages: tuple[CloudMqttMessage, ...] = (),
         zensdk_attempts: tuple[ZenSdkReadAttempt, ...] = (),
+        completion_transport: str | None = None,
     ) -> None:
         if quiet_period <= 0 or hard_timeout <= quiet_period:
             raise ValueError("hard_timeout must be greater than quiet_period")
@@ -134,6 +135,11 @@ class ZendureInitialSyncRecorder:
         self._seen_topics: set[str] = set()
         self._seen_properties: set[str] = set()
         self._seen_devices: set[str] = set()
+        self._completion_transport = completion_transport
+        self._completion_seen_devices: set[str] = set()
+        self._completion_seen_topics: set[str] = set()
+        self._completion_seen_properties: set[str] = set()
+        self._completion_last_novel = self._started_monotonic
         self._messages: list[CloudMqttMessage] = []
         self._zensdk_attempts = zensdk_attempts
         self._connection_events: list[dict[str, Any]] = []
@@ -179,10 +185,25 @@ class ZendureInitialSyncRecorder:
         if properties - self._seen_properties:
             novel = True
         self._seen_properties.update(properties)
+        completion_message = (
+            self._completion_transport is None
+            or message.transport == self._completion_transport
+        )
+        completion_novel = False
+        if completion_message:
+            completion_novel = message.topic not in self._completion_seen_topics
+            self._completion_seen_topics.add(message.topic)
+            if properties - self._completion_seen_properties:
+                completion_novel = True
+            self._completion_seen_properties.update(properties)
         if message.device_candidate_id is not None:
             self._seen_devices.add(message.device_candidate_id)
+            if completion_message:
+                self._completion_seen_devices.add(message.device_candidate_id)
         if novel:
             self._last_novel = self._monotonic()
+        if completion_novel:
+            self._completion_last_novel = self._monotonic()
 
     def completion(self) -> tuple[bool, str] | None:
         now = self._monotonic()
@@ -190,8 +211,11 @@ class ZendureInitialSyncRecorder:
             return False, "hard_timeout"
         all_devices_seen = bool(self._expected_devices) and set(
             self._expected_devices
-        ).issubset(self._seen_devices)
-        if all_devices_seen and now - self._last_novel >= self._quiet_period:
+        ).issubset(self._completion_seen_devices)
+        if (
+            all_devices_seen
+            and now - self._completion_last_novel >= self._quiet_period
+        ):
             return True, "initial_sync_quiet"
         return None
 
@@ -225,6 +249,7 @@ async def async_capture_initial_sync(
     monotonic: Callable[[], float] = time.monotonic,
     initial_messages: tuple[CloudMqttMessage, ...] = (),
     zensdk_attempts: tuple[ZenSdkReadAttempt, ...] = (),
+    completion_transport: str | None = None,
 ) -> InitialSyncCaptureResult:
     """Capture discovery and MQTT startup until structural traffic is quiet."""
 
@@ -236,6 +261,7 @@ async def async_capture_initial_sync(
         monotonic=monotonic,
         initial_messages=initial_messages,
         zensdk_attempts=zensdk_attempts,
+        completion_transport=completion_transport,
     )
     cursor = 0
     def observe_transport() -> None:
