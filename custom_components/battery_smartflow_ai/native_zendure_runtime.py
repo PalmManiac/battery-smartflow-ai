@@ -973,7 +973,12 @@ class NativeZendureRuntime:
                 self._get_json,
             )
             self._record_zensdk_cycle(zensdk)
-            self._transport = ZendureCloudMqttTransport(bootstrap)
+            self._transport = ZendureCloudMqttTransport(
+                bootstrap,
+                use_assigned_client_id=(
+                    self._configured_transport is ZendureTransport.CLOUD_MQTT
+                ),
+            )
             if self._local_mqtt_credentials is not None:
                 candidate = ZendureLocalMqttTransport(
                     bootstrap, self._local_mqtt_credentials
@@ -994,6 +999,14 @@ class NativeZendureRuntime:
                 self._transport,
                 initial_messages=zensdk.messages,
                 zensdk_attempts=zensdk.attempts,
+                completion_transport=(
+                    self._configured_transport.value
+                    if self._configured_transport in {
+                        ZendureTransport.CLOUD_MQTT,
+                        ZendureTransport.ZENSDK,
+                    }
+                    else None
+                ),
             )
             self._capture_complete = capture.complete
             self._capture_reason = capture.completion_reason

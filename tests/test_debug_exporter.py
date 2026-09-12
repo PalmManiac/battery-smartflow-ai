@@ -95,6 +95,29 @@ class DebugExporterTests(unittest.TestCase):
         self.assertEqual(entities["price_copy"], entities["price"])
         self.assertEqual(entities["mode"], "select.debug_entity_02")
 
+    def test_export_anonymizes_selected_native_zendure_device(self) -> None:
+        package = self.package()
+        package.config = {
+            "runtime_settings": {
+                "native_zendure_selected_device": "cloud_mqtt:private-device-key"
+            }
+        }
+
+        result = export_debug_package(
+            package,
+            config_directory=self.config_directory,
+        )
+        text = result.path.read_text(encoding="utf-8")
+        data = json.loads(text)
+
+        self.assertNotIn("private-device-key", text)
+        self.assertEqual(
+            data["config"]["runtime_settings"][
+                "native_zendure_selected_device"
+            ],
+            "cloud_mqtt:debug_device_01",
+        )
+
     def test_filename_does_not_repeat_untrusted_version_text(self) -> None:
         result = export_debug_package(
             self.package(version="../4.4.0 test"),
