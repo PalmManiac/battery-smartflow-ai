@@ -57,7 +57,12 @@ _SAFETY_TOLERANCES = {
 class NativeSourceFusion:
     """Keep transport histories separate and fuse only neutral snapshots."""
 
-    def __init__(self, bootstrap: ZendureCloudBootstrap) -> None:
+    def __init__(
+        self,
+        bootstrap: ZendureCloudBootstrap,
+        *,
+        preferred_transport: ZendureTransport | None = None,
+    ) -> None:
         self._normalizers = {
             transport: ZendureCloudNormalizer(bootstrap) for transport in _TRANSPORTS
         }
@@ -67,7 +72,13 @@ class NativeSourceFusion:
             self._normalizers[ZendureTransport.LOCAL_MQTT].set_online(
                 system_id, None
             )
-        self._arbiter = NativeReadSourceArbiter()
+        priority = (
+            (preferred_transport,)
+            + tuple(item for item in _TRANSPORTS if item is not preferred_transport)
+            if preferred_transport is not None
+            else _TRANSPORTS
+        )
+        self._arbiter = NativeReadSourceArbiter(default_priority=priority)
         self._selection: dict[str, dict[str, SelectedMeasurement[Any]]] = {}
         self._selection_changed_at: dict[str, dict[str, datetime]] = {}
         self._retained_main: dict[

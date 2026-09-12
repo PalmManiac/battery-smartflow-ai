@@ -99,6 +99,30 @@ EMPTY_ENTITY_VALUES = {
 }
 
 
+def _native_transport_options(identity) -> tuple[ZendureTransport, ...]:
+    """Expose Cloud plus only the verified local path for one model."""
+
+    local = preferred_local_transport(identity)
+    return (
+        (ZendureTransport.CLOUD_MQTT, local)
+        if local is not None
+        else (ZendureTransport.CLOUD_MQTT,)
+    )
+
+
+def _requested_native_transport(user_input, identity) -> ZendureTransport:
+    """Parse an explicit choice; new setups start safely on Cloud."""
+
+    raw = user_input.get(
+        CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
+        ZendureTransport.CLOUD_MQTT.value,
+    )
+    try:
+        return ZendureTransport(str(raw))
+    except ValueError:
+        return ZendureTransport.CLOUD_MQTT
+
+
 OPTIONAL_ENTITY_KEYS = (
     CONF_NATIVE_PV_ENTITY,
     CONF_PRICE_EXPORT_ENTITY,
@@ -261,16 +285,90 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = "device_not_found"
             elif profile is None:
                 errors["base"] = "unsupported_device"
-            elif (preferred_local_transport(selected.candidate.identity) is ZendureTransport.LOCAL_MQTT
-                  and not str(user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, "")).strip()):
-                errors["base"] = "local_mqtt_required"
             else:
-                self._native_options.update(user_input)
-                self._user_input = {
-                    "connection_type": "native",
-                    CONF_DEVICE_PROFILE: profile.profile_key,
-                }
-                return await self.async_step_native_external()
+                chosen_transport = _requested_native_transport(
+                    user_input, selected.candidate.identity
+                )
+                if chosen_transport not in _native_transport_options(
+                    selected.candidate.identity
+                ):
+                    errors["base"] = "device_not_found"
+                elif (
+                    chosen_transport is ZendureTransport.LOCAL_MQTT
+                    and not str(user_input.get(
+                        CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, ""
+                    )).strip()
+                ):
+                    errors["base"] = "local_mqtt_required"
+                else:
+                    if (
+                        chosen_transport is ZendureTransport.LOCAL_MQTT
+                        and bool(user_input.get(
+                            CONF_NATIVE_ZENDURE_LEGACY_PROVISION, False
+                        ))
+                    ):
+                        local_port = int(user_input.get(
+                            CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT, 1883
+                        ))
+                        wifi_ssid = str(user_input.get(
+                            CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID, ""
+                        )).strip()
+                        wifi_password = str(user_input.get(
+                            CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD, ""
+                        ))
+                        if local_port != 1883:
+                            errors["base"] = "legacy_port_required"
+                        elif not wifi_ssid or not wifi_password:
+                            errors["base"] = "legacy_wifi_required"
+                        else:
+                            identity = selected.candidate.identity
+                            try:
+                                if not identity.device_id:
+                                    raise ValueError("legacy_device_id_missing")
+                                await async_ensure_legacy_mqtt_users(
+                                    self.hass, (identity.device_id,)
+                                )
+                                await async_provision_legacy_device(
+                                    self.hass,
+                                    serial_number=str(
+                                        identity.serial_number or ""
+                                    ),
+                                    display_name=selected.candidate.display_name,
+                                    mqtt_server=str(user_input[
+                                        CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER
+                                    ]).strip(),
+                                    wifi_ssid=wifi_ssid,
+                                    wifi_password=wifi_password,
+                                )
+                            except Exception as error:
+                                reason = str(error) or type(error).__name__
+                                errors["base"] = (
+                                    reason
+                                    if reason in {
+                                        "legacy_ble_device_not_found",
+                                        "legacy_device_id_missing",
+                                    }
+                                    else "legacy_provision_failed"
+                                )
+                    if errors:
+                        return self.async_show_form(
+                            step_id="native_device",
+                            errors=errors,
+                            data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
+                                devices
+                            ),
+                            description_placeholders={
+                                "device_summary": ZendureSmartFlowOptionsFlow._native_device_summary(
+                                    devices
+                                )
+                            },
+                        )
+                    self._native_options.update(user_input)
+                    self._user_input = {
+                        "connection_type": "native",
+                        CONF_DEVICE_PROFILE: profile.profile_key,
+                    }
+                    return await self.async_step_native_external()
         return self.async_show_form(
             step_id="native_device", errors=errors,
             data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(devices),
@@ -987,15 +1085,26 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             options[CONF_NATIVE_ZENDURE_APP_TOKEN] = self._native_token
             options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
             options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
-            options.pop(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT, None)
             selected_device = next(
                 item for item in devices
                 if item.candidate.candidate_id == selected
             )
-            if (
-                preferred_local_transport(selected_device.candidate.identity)
-                is ZendureTransport.LOCAL_MQTT
+            chosen_transport = _requested_native_transport(
+                user_input, selected_device.candidate.identity
+            )
+            if chosen_transport not in _native_transport_options(
+                selected_device.candidate.identity
             ):
+                return self.async_show_form(
+                    step_id="native_zendure_device",
+                    data_schema=self._native_device_schema(devices, True, options),
+                    errors={"base": "device_not_found"},
+                    description_placeholders={
+                        "device_summary": self._native_device_summary(devices)
+                    },
+                )
+            options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = chosen_transport.value
+            if chosen_transport is ZendureTransport.LOCAL_MQTT:
                 server = str(
                     user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, "")
                 ).strip()
@@ -1133,6 +1242,37 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         stored_options: dict[str, Any] | None = None,
     ) -> vol.Schema:
         options = stored_options or {}
+        stored_transport = options.get(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT)
+        if stored_transport not in {item.value for item in ZendureTransport}:
+            selected_id = options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+            selected_item = next(
+                (
+                    item for item in devices
+                    if item.candidate.candidate_id == selected_id
+                ),
+                None,
+            )
+            inherited = (
+                preferred_local_transport(selected_item.candidate.identity)
+                if stored_options is not None and selected_item is not None
+                else None
+            )
+            stored_transport = (
+                inherited.value
+                if inherited is not None
+                else ZendureTransport.CLOUD_MQTT.value
+            )
+        available_transports = sorted(
+            {
+                transport.value
+                for item in devices
+                for transport in _native_transport_options(item.candidate.identity)
+            },
+            key=lambda value: (
+                value != ZendureTransport.CLOUD_MQTT.value,
+                value,
+            ),
+        )
         schema = {
                 vol.Required(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
                     selector.SelectSelector(
@@ -1151,6 +1291,16 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
+                vol.Required(
+                    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
+                    default=stored_transport,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=available_transports,
+                        translation_key="zendure_transport",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
             }
         if any(
             preferred_local_transport(item.candidate.identity)

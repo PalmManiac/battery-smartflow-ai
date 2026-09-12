@@ -62,8 +62,16 @@ class NativeReadSourceArbiter:
     def __init__(
         self,
         priorities: Mapping[str, tuple[ZendureTransport, ...]] | None = None,
+        *,
+        default_priority: tuple[ZendureTransport, ...] | None = None,
     ) -> None:
         self._priorities = dict(priorities or {})
+        self._default_priority = default_priority or (
+            ZendureTransport.ZENSDK,
+            ZendureTransport.LOCAL_MQTT,
+            ZendureTransport.CLOUD_MQTT,
+            ZendureTransport.HOME_ASSISTANT,
+        )
 
     def select(
         self,
@@ -86,12 +94,7 @@ class NativeReadSourceArbiter:
 
         priority = self._priorities.get(
             property_name,
-            (
-                ZendureTransport.ZENSDK,
-                ZendureTransport.LOCAL_MQTT,
-                ZendureTransport.CLOUD_MQTT,
-                ZendureTransport.HOME_ASSISTANT,
-            ),
+            self._default_priority,
         )
         order = {transport: index for index, transport in enumerate(priority)}
         ranked = sorted(
