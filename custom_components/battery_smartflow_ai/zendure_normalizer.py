@@ -360,6 +360,10 @@ class ZendureCloudNormalizer:
                 payload,
                 observed_at,
             )
+            self._refresh_confirmed_cloud_error_state(
+                self._device_values[system_id],
+                message,
+            )
             properties = payload.get("properties")
             if isinstance(properties, Mapping):
                 self._apply_properties(
@@ -405,6 +409,31 @@ class ZendureCloudNormalizer:
             ValueValidity.VALID,
             observed_at,
         )
+
+    @staticmethod
+    def _refresh_confirmed_cloud_error_state(
+        values: dict[str, _Observed],
+        message: CloudMqttMessage,
+    ) -> None:
+        """Keep a confirmed Cloud error snapshot fresh with device reports.
+
+        Zendure sends ``event/error`` as a state snapshot, not with every
+        report.  A subsequent inbound properties report confirms that the
+        device is still communicating on the same Cloud session, so the last
+        explicit error state remains current.  Outbound ``getAll`` requests
+        and retained data deliberately do not extend this safety window.
+        """
+
+        if (
+            message.transport != "cloud_mqtt"
+            or message.retained
+            or not message.topic.endswith("/properties/report")
+        ):
+            return
+        confirmed = values.get("is_error")
+        if confirmed is None or confirmed.validity is not ValueValidity.VALID:
+            return
+        confirmed.observed_at = message.received_at
 
     def set_hems_monitoring(
         self,
