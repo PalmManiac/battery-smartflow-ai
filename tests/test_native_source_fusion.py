@@ -74,6 +74,23 @@ def report(
     )
 
 
+def error_event(at, *, data=None, off_data=0):
+    payload = {"offData": off_data, "eventId": 3, "data": data or []}
+    return CloudMqttMessage(
+        received_at=at,
+        topic="/product-1/device-1/event/error",
+        payload=json.dumps(payload).encode(),
+        parsed_payload=payload,
+        payload_format="json",
+        device_candidate_id="cloud_mqtt:device-1",
+        pack_id=None,
+        known_topic=False,
+        session_number=1,
+        transport="cloud_mqtt",
+        retained=False,
+    )
+
+
 class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.now = datetime(2026, 9, 7, 12, 0, tzinfo=timezone.utc)
@@ -103,6 +120,33 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
         ).state
         self.assertEqual(state.hems_active.validity, ValueValidity.INVALID)
         self.assertIsNone(state.hems_active.value)
+
+    def test_cloud_error_snapshot_prevents_false_protection_conflict(self):
+        """Match the SF2400AC Cloud plus ZenSDK startup sequence."""
+        self.fusion.apply(
+            report(
+                self.now,
+                {"faultLevel": 2, "is_error": 0},
+                transport="zensdk",
+            )
+        )
+        conflict = self.fusion.apply(
+            report(
+                self.now + timedelta(milliseconds=1),
+                {"faultLevel": 2},
+                transport="cloud_mqtt",
+            )
+        ).state
+        self.assertEqual(
+            conflict.protection_active.validity,
+            ValueValidity.INVALID,
+        )
+
+        resolved = self.fusion.apply(
+            error_event(self.now + timedelta(milliseconds=2))
+        ).state
+        self.assertTrue(resolved.protection_active.valid)
+        self.assertFalse(resolved.protection_active.value)
 
     def test_small_soc_difference_is_allowed_but_large_conflict_blocks(self):
         self.fusion.apply(
