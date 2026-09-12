@@ -21,6 +21,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
@@ -1711,15 +1712,28 @@ async def async_setup_entry(
     entry: ConfigEntry,
     add_entities: AddEntitiesCallback,
 ) -> None:
-    registry = er.async_get(hass)
+    entity_registry = er.async_get(hass)
     for key in RETIRED_DIAGNOSTIC_SENSOR_KEYS:
         unique_id = f"{DOMAIN}_{entry.entry_id}_{key}"
-        entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+        entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id)
         if entity_id is not None:
-            registry.async_remove(entity_id)
+            entity_registry.async_remove(entity_id)
 
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = [ZendureSmartFlowSensor(entry, coordinator, d) for d in SENSORS]
+    device_registry = dr.async_get(hass)
+    control_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, entry.entry_id)},
+    )
+    entities = [
+        ZendureSmartFlowSensor(
+            entry,
+            coordinator,
+            description,
+            control_device_id=control_device.id,
+        )
+        for description in SENSORS
+    ]
     add_entities(entities)
 
     known_native_entities: set[tuple[str, str, str]] = set()
@@ -1727,6 +1741,17 @@ async def async_setup_entry(
     def add_discovered_native_entities() -> None:
         discovered = []
         for system in coordinator.native_zendure.hardware_overview():
+            firmware = _measured_value(getattr(system, "firmware", None))
+            main_device = device_registry.async_get_or_create(
+                config_entry_id=entry.entry_id,
+                identifiers={native_main_device_identifier(system.public_id)},
+                name=native_device_name(system.display_name, system.model),
+                manufacturer="Zendure",
+                model=system.model or "Unknown Zendure system",
+                serial_number=system.serial_number,
+                sw_version=str(firmware) if firmware is not None else None,
+                via_device_id=control_device.id,
+            )
             for description in NATIVE_MAIN_SENSORS:
                 key = ("main", system.public_id, description.key)
                 if key not in known_native_entities:
@@ -1737,6 +1762,7 @@ async def async_setup_entry(
                         kind="main",
                         public_id=system.public_id,
                         parent_public_id=None,
+                        parent_device_id=control_device.id,
                         description=description,
                     ))
             for pack in system.packs:
@@ -1750,6 +1776,7 @@ async def async_setup_entry(
                             kind="pack",
                             public_id=pack.public_id,
                             parent_public_id=system.public_id,
+                            parent_device_id=main_device.id,
                             description=description,
                         ))
         if discovered:
@@ -1774,6 +1801,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         kind: str,
         public_id: str,
         parent_public_id: str | None,
+        parent_device_id: str,
         description: NativeHardwareSensorDescription,
     ) -> None:
         super().__init__(coordinator)
@@ -1801,7 +1829,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 model=(item.model or "Unknown Zendure system") if item else None,
                 serial_number=item.serial_number if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
-                via_device=(DOMAIN, entry.entry_id),
+                via_device_id=parent_device_id,
             )
         else:
             firmware = _measured_value(getattr(item, "firmware", None))
@@ -1829,7 +1857,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 model=(item.pack_model or "Unknown battery pack") if item else None,
                 serial_number=item.serial_number if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
-                via_device=native_main_device_identifier(parent_public_id),
+                via_device_id=parent_device_id,
             )
 
     def _parent_system(self):
@@ -1964,7 +1992,14 @@ def _battery_pack_label(language: str | None) -> str:
 class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
 
-    def __init__(self, entry, coordinator, description):
+    def __init__(
+        self,
+        entry,
+        coordinator,
+        description,
+        *,
+        control_device_id: str,
+    ):
         super().__init__(coordinator)
         self.entity_description = description
         self._entry = entry
@@ -1990,7 +2025,7 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 manufacturer=INTEGRATION_MANUFACTURER,
                 model=virtual_device_model(coordinator.hass.config.language),
                 sw_version=INTEGRATION_VERSION,
-                via_device=(DOMAIN, entry.entry_id),
+                via_device_id=control_device_id,
             )
         else:
             self._attr_device_info = DeviceInfo(
