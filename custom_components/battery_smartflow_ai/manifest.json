@@ -9,5 +9,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/PalmManiac/battery-smartflow-ai/issues",
   "requirements": ["bleak-retry-connector>=3.9.0", "paho-mqtt==2.1.0"],
-  "version": "5.0.0-rc12"
+  "version": "5.0.0-rc13"
 }

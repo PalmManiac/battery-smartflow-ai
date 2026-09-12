@@ -268,6 +268,55 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.state.protection_active.valid)
         self.assertTrue(result.state.protection_active.value)
 
+    async def test_cloud_device_report_refreshes_confirmed_error_state(self):
+        normalizer = ZendureCloudNormalizer(
+            self.bootstrap, stale_after_seconds=30
+        )
+        normalizer.apply(
+            report(
+                self.at,
+                {"offData": 0, "eventId": 3, "data": []},
+                topic="event/error",
+            )
+        )
+
+        refreshed_at = self.at + timedelta(seconds=31)
+        result = normalizer.apply(
+            report(
+                refreshed_at,
+                {"properties": {"electricLevel": 55}},
+            ),
+            now=refreshed_at,
+        )
+
+        self.assertTrue(result.state.protection_active.valid)
+        self.assertFalse(result.state.protection_active.value)
+        self.assertEqual(result.state.protection_active.observed_at, refreshed_at)
+
+    async def test_cloud_getall_echo_cannot_refresh_confirmed_error_state(self):
+        normalizer = ZendureCloudNormalizer(
+            self.bootstrap, stale_after_seconds=30
+        )
+        normalizer.apply(
+            report(
+                self.at,
+                {"offData": 0, "eventId": 3, "data": []},
+                topic="event/error",
+            )
+        )
+
+        after_window = self.at + timedelta(seconds=31)
+        result = normalizer.apply(
+            report(
+                after_window,
+                {"properties": ["getAll"]},
+                topic="properties/read",
+            ),
+            now=after_window,
+        )
+
+        self.assertFalse(result.state.protection_active.valid)
+
     async def test_missing_invalid_unsupported_stale_and_offline_are_distinct(self):
         system_id = "cloud_mqtt:device-1"
         normalizer = ZendureCloudNormalizer(
