@@ -20,15 +20,17 @@ profiles and exact behavior are available.
 ## Broker prerequisite
 
 Legacy hardware publishes to a user-controlled MQTT broker only after its
-broker target has been provisioned. V5.0.0-dev24 connects to an already
-provisioned broker using private options for server, port, username and
-password. The password is displayed only as the fixed stored-secret mask and
-is excluded from states and diagnostics.
+broker target has been provisioned. BSFAI uses the user-entered server, port,
+username and password solely for its own connection to that broker; the broker
+may be Mosquitto, EMQX or another compatible service. BSFAI never creates or
+modifies broker users.
 
-Provisioning the hardware over Bluetooth is deliberately not hidden inside the
-transport: it requires Wi-Fi credentials, a reachable Bluetooth adapter and a
-separate user-visible operation. Until that onboarding operation exists, a
-Legacy tester must have configured the device for the chosen broker already.
+When a Legacy device is switched to Local MQTT for the first time, the setup
+defaults to provisioning it. The user-visible Bluetooth operation sends the
+broker address plus Wi-Fi credentials to the selected device, which then
+restarts and begins publishing locally. A working Local MQTT installation can
+explicitly skip this operation during later reconfiguration to avoid an
+unnecessary reboot.
 
 ## Read path
 

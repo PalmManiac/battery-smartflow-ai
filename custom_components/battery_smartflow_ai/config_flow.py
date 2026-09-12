@@ -86,8 +86,8 @@ from .price_currency import price_input_profile, resolve_price_currency
 from .zendure_cloud import ZendureCloudClient, ZendureCloudError
 from .zendure_device_matrix import preferred_local_transport, resolve_zendure_device
 from .zendure_legacy import (
-    async_ensure_legacy_mqtt_users,
     async_provision_legacy_device,
+    legacy_provisioning_default,
 )
 
 EMPTY_ENTITY_VALUES = {
@@ -325,9 +325,6 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             try:
                                 if not identity.device_id:
                                     raise ValueError("legacy_device_id_missing")
-                                await async_ensure_legacy_mqtt_users(
-                                    self.hass, (identity.device_id,)
-                                )
                                 await async_provision_legacy_device(
                                     self.hass,
                                     serial_number=str(
@@ -1177,9 +1174,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     try:
                         if not identity.device_id:
                             raise ValueError("legacy_device_id_missing")
-                        await async_ensure_legacy_mqtt_users(
-                            self.hass, (identity.device_id,)
-                        )
                         await async_provision_legacy_device(
                             self.hass,
                             serial_number=str(identity.serial_number or ""),
@@ -1348,7 +1342,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 )),
                 vol.Optional(
                     CONF_NATIVE_ZENDURE_LEGACY_PROVISION,
-                    default=False,
+                    default=legacy_provisioning_default(stored_transport),
                 ): selector.BooleanSelector(),
             })
         return vol.Schema(schema)
