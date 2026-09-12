@@ -354,6 +354,12 @@ class ZendureCloudNormalizer:
         )
         payload = message.parsed_payload
         if isinstance(payload, Mapping):
+            self._apply_error_event(
+                self._device_values[system_id],
+                message.topic,
+                payload,
+                observed_at,
+            )
             properties = payload.get("properties")
             if isinstance(properties, Mapping):
                 self._apply_properties(
@@ -370,6 +376,35 @@ class ZendureCloudNormalizer:
         ):
             self._hems_activity[system_id].observe_energy(observed_at=observed_at)
         return self.snapshot(system_id, now=now or observed_at)
+
+    @staticmethod
+    def _apply_error_event(
+        values: dict[str, _Observed],
+        topic: str,
+        payload: Mapping[str, Any],
+        observed_at: datetime,
+    ) -> None:
+        """Translate the Cloud error snapshot into the explicit error flag.
+
+        ZenSDK-class devices may report a non-zero ``faultLevel`` during
+        healthy operation.  Cloud MQTT supplies the authoritative current
+        error state separately through ``event/error``: an empty data list
+        with ``offData=0`` means that no error is active.
+        """
+
+        if not topic.endswith("/event/error"):
+            return
+        data = payload.get("data")
+        off_data = payload.get("offData")
+        if not isinstance(data, list) or isinstance(off_data, bool):
+            return
+        if not isinstance(off_data, (int, float)):
+            return
+        values["is_error"] = _Observed(
+            int(bool(data) or float(off_data) != 0),
+            ValueValidity.VALID,
+            observed_at,
+        )
 
     def set_hems_monitoring(
         self,

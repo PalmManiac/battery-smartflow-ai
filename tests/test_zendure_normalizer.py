@@ -232,6 +232,42 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.state.protection_active.valid)
         self.assertFalse(result.state.protection_active.value)
 
+    async def test_empty_cloud_error_event_clears_fault_level_fallback(self):
+        """The Cloud error snapshot is authoritative for ZenSDK devices."""
+        normalizer = ZendureCloudNormalizer(self.bootstrap)
+        initial = normalizer.apply(
+            report(self.at, {"properties": {"faultLevel": 2}})
+        )
+        self.assertTrue(initial.state.protection_active.value)
+
+        cleared = normalizer.apply(
+            report(
+                self.at + timedelta(milliseconds=1),
+                {"offData": 0, "eventId": 3, "data": []},
+                topic="event/error",
+            )
+        )
+
+        self.assertTrue(cleared.state.protection_active.valid)
+        self.assertFalse(cleared.state.protection_active.value)
+        self.assertEqual(
+            cleared.state.protection_active.observed_at,
+            self.at + timedelta(milliseconds=1),
+        )
+
+    async def test_populated_cloud_error_event_sets_explicit_error(self):
+        normalizer = ZendureCloudNormalizer(self.bootstrap)
+        result = normalizer.apply(
+            report(
+                self.at,
+                {"offData": 0, "eventId": 3, "data": [{"code": 17}]},
+                topic="event/error",
+            )
+        )
+
+        self.assertTrue(result.state.protection_active.valid)
+        self.assertTrue(result.state.protection_active.value)
+
     async def test_missing_invalid_unsupported_stale_and_offline_are_distinct(self):
         system_id = "cloud_mqtt:device-1"
         normalizer = ZendureCloudNormalizer(
