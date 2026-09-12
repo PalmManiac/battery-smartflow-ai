@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0-rc14")
+        self.assertEqual(manifest["version"], "5.0.0-rc15")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -45,6 +45,13 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn('translation_key="zendure_transport"', schema)
         self.assertNotIn("CONF_NATIVE_ZENDURE_CONTROL_ENABLED", schema)
         self.assertIn("options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True", source)
+
+    def test_legacy_local_setup_never_creates_a_broker_user(self) -> None:
+        source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+        legacy = (COMPONENT / "zendure_legacy.py").read_text(encoding="utf-8")
+        self.assertIn("legacy_provisioning_default", source)
+        self.assertIn("async_provision_legacy_device", source)
+        self.assertNotIn("async_ensure_legacy_mqtt_users", source + legacy)
 
     def test_runtime_keeps_native_control_explicit_and_transport_typed(self) -> None:
         setup = (COMPONENT / "__init__.py").read_text(encoding="utf-8")

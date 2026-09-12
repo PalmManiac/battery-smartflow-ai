@@ -44,30 +44,16 @@ def legacy_device_password(device_id: str) -> str:
     return hashlib.md5(str(device_id).encode()).hexdigest().upper()[8:24]  # noqa: S324
 
 
-async def async_ensure_legacy_mqtt_users(hass: Any, device_ids: tuple[str, ...]) -> None:
-    """Create the local-only HA users consumed by the Mosquitto add-on."""
+def legacy_provisioning_default(stored_transport: object | None) -> bool:
+    """Provision when switching a Legacy device to Local MQTT for the first time.
 
-    from homeassistant.auth.const import GROUP_ID_USER
-    from homeassistant.auth.providers import homeassistant as auth_ha
+    ZendureLegacy firmware has to receive the selected broker address and Wi-Fi
+    credentials over Bluetooth before it can publish locally.  Existing local
+    installations remain opt-in to prevent a routine reconfiguration from
+    rebooting a working device.
+    """
 
-    provider: auth_ha.HassAuthProvider = auth_ha.async_get_provider(hass)
-    for device_id in device_ids:
-        username = device_id.lower()
-        password = legacy_device_password(device_id)
-        credentials = await provider.async_get_or_create_credentials(
-            {"username": username}
-        )
-        user = await hass.auth.async_get_user_by_credentials(credentials)
-        if user is None:
-            user = await hass.auth.async_create_user(
-                device_id,
-                group_ids=[GROUP_ID_USER],
-                local_only=True,
-            )
-            await provider.async_add_auth(username, password)
-            await hass.auth.async_link_user(user, credentials)
-        else:
-            await provider.async_change_password(username, password)
+    return str(stored_transport or "") != "local_mqtt"
 
 
 def _legacy_routes(bootstrap: ZendureCloudBootstrap) -> tuple[tuple[str, str], ...]:

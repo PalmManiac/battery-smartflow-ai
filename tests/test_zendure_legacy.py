@@ -18,6 +18,7 @@ from custom_components.battery_smartflow_ai.zendure_legacy import (  # noqa: E40
     ZendureLegacyCloudBridge,
     legacy_ble_commands,
     legacy_device_password,
+    legacy_provisioning_default,
 )
 
 
@@ -108,6 +109,11 @@ class ZendureLegacyTests(unittest.IsolatedAsyncioTestCase):
                 {"messageId": 1003, "method": "station"},
             ),
         )
+
+    def test_first_local_selection_defaults_to_provisioning(self):
+        self.assertTrue(legacy_provisioning_default(None))
+        self.assertTrue(legacy_provisioning_default("cloud_mqtt"))
+        self.assertFalse(legacy_provisioning_default("local_mqtt"))
 
     async def test_bridge_is_lazy_marks_local_and_relays_cloud(self):
         data = await legacy_bootstrap()
