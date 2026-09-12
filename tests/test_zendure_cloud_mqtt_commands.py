@@ -105,10 +105,29 @@ class CloudCommandMappingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "model_not_approved"):
             map_cloud_command(envelope(command), unknown, first_message_id=1, timestamp=1)
 
-    def test_invalid_scaling_is_rejected(self):
+    def test_fractional_power_is_rounded_like_other_native_transports(self):
         fractional_power = DeviceCommand("output", output_limit_w=1.5, should_write_mode=False, should_write_input=False, should_write_output=True)
-        with self.assertRaisesRegex(ValueError, "invalid_power_value"):
-            map_cloud_command(envelope(fractional_power), self.data, first_message_id=1, timestamp=1)
+        *_, writes = map_cloud_command(
+            envelope(fractional_power), self.data, first_message_id=1, timestamp=1
+        )
+        self.assertEqual(
+            [(item.property_name, item.value) for item in writes],
+            [("smartMode", 1), ("acMode", 2), ("outputLimit", 2), ("inputLimit", 0)],
+        )
+
+    def test_negative_and_non_finite_power_are_rejected(self):
+        for value in (-1.0, float("nan"), float("inf")):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                ValueError, "invalid_power_value"
+            ):
+                map_cloud_command(
+                    envelope(DeviceCommand(
+                        "output", output_limit_w=value,
+                        should_write_mode=False, should_write_input=False,
+                        should_write_output=True,
+                    )),
+                    self.data, first_message_id=1, timestamp=1,
+                )
 
     def test_execute_records_publish_then_fresh_readback(self):
         publisher = Publisher()
@@ -139,6 +158,24 @@ class CloudCommandMappingTests(unittest.TestCase):
         failed = failed_adapter.execute(command(30))
         self.assertEqual(failed.status, CloudCommandStatus.TRANSPORT_ERROR)
         self.assertEqual(failed.writes_sent, 0)
+
+    def test_fractional_follow_up_command_is_published(self):
+        publisher = Publisher()
+        adapter = ZendureCloudCommandAdapter(
+            self.data, publisher, NativeCommandVerificationManager()
+        )
+        first = adapter.execute(envelope(DeviceCommand(
+            "output", output_limit_w=300.0, should_write_mode=False,
+            should_write_input=False, should_write_output=True,
+        )))
+        follow_up = adapter.execute(envelope(DeviceCommand(
+            "output", output_limit_w=310.4, should_write_mode=False,
+            should_write_input=False, should_write_output=True,
+        )))
+
+        self.assertEqual(first.status, CloudCommandStatus.SENT)
+        self.assertEqual(follow_up.status, CloudCommandStatus.SENT)
+        self.assertEqual(publisher.calls[1][2][2].value, 310)
 
     def test_diagnostics_contain_no_route_or_credentials(self):
         verification = NativeCommandVerificationManager()
