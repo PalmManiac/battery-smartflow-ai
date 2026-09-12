@@ -446,6 +446,7 @@
       "native_hardware_roundtrip_efficiency": {"name": "Rendement aller-retour"},
       "native_hardware_charged_energy": {"name": "Énergie totale chargée"},
       "native_hardware_discharged_energy": {"name": "Énergie totale déchargée"},
+      "native_hardware_pv_energy": {"name": "Énergie PV totale"},
       "native_hardware_switching_count": {"name": "Cycles de commutation"},
       "native_hardware_soc_min": {"name":"Hardware minimum SoC"},
       "native_hardware_soc_max": {"name":"Hardware maximum SoC"},

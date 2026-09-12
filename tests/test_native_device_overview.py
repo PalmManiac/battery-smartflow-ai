@@ -47,6 +47,7 @@ class NativeDeviceOverviewTests(unittest.TestCase):
                 main.system_id: {
                     "charged_kwh": 12.5,
                     "discharged_kwh": 10.0,
+                    "pv_energy_kwh": 23.75,
                     "switching_count": 7,
                 }
             },
@@ -54,6 +55,7 @@ class NativeDeviceOverviewTests(unittest.TestCase):
 
         self.assertEqual(item.measurements["charged_energy_kwh"].value, 12.5)
         self.assertEqual(item.measurements["discharged_energy_kwh"].value, 10.0)
+        self.assertEqual(item.measurements["pv_energy_kwh"].value, 23.75)
         self.assertEqual(item.measurements["roundtrip_efficiency_pct"].value, 80.0)
         self.assertEqual(item.measurements["switching_count"].value, 7)
         self.assertTrue(item.measurements["switching_count_is_estimate"].value)

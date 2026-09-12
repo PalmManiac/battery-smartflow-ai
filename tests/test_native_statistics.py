@@ -17,11 +17,36 @@ from custom_components.battery_smartflow_ai.native_statistics import (  # noqa: 
 class NativeStatisticsTests(unittest.TestCase):
     def test_accumulator_integrates_and_restores(self):
         accumulator = NativeEnergyAccumulator()
-        accumulator.add(timestamp=100, charge_power_w=3600, discharge_power_w=0)
-        accumulator.add(timestamp=110, charge_power_w=3600, discharge_power_w=1800)
+        accumulator.add(
+            timestamp=100, charge_power_w=3600, discharge_power_w=0,
+            pv_power_w=7200,
+        )
+        accumulator.add(
+            timestamp=110, charge_power_w=3600, discharge_power_w=1800,
+            pv_power_w=7200,
+        )
         restored = NativeEnergyAccumulator.from_dict(accumulator.as_dict())
         self.assertAlmostEqual(restored.charged_kwh, 0.01)
         self.assertAlmostEqual(restored.discharged_kwh, 0.005)
+        self.assertAlmostEqual(restored.pv_energy_kwh, 0.02)
+
+    def test_pv_accumulator_is_independent_from_battery_measurements(self):
+        accumulator = NativeEnergyAccumulator()
+        accumulator.add(
+            timestamp=100, charge_power_w=None, discharge_power_w=None,
+            pv_power_w=3600,
+        )
+        accumulator.add(
+            timestamp=110, charge_power_w=None, discharge_power_w=None,
+            pv_power_w=3600,
+        )
+        self.assertAlmostEqual(accumulator.pv_energy_kwh, 0.01)
+        self.assertIsNone(accumulator.last_timestamp)
+
+    def test_device_without_pv_does_not_publish_a_false_zero_total(self):
+        accumulator = NativeEnergyAccumulator()
+        accumulator.add(timestamp=100, charge_power_w=500, discharge_power_w=0)
+        self.assertNotIn("pv_energy_kwh", accumulator.as_dict())
 
     def test_accumulator_does_not_bridge_offline_gap(self):
         accumulator = NativeEnergyAccumulator()

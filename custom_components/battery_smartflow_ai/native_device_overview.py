@@ -184,6 +184,9 @@ def build_native_device_overview(
                      "discharged_energy_kwh": _optional_value(
                          system_statistics.get("discharged_kwh")
                      ),
+                     "pv_energy_kwh": _optional_value(
+                         system_statistics.get("pv_energy_kwh")
+                     ),
                      "available_energy_kwh": _optional_value(derived_statistics(
                          soc_pct=_measurement(state, "soc_pct").value if _measurement(state, "soc_pct").valid else None,
                          capacity_kwh=native_capacity(state).capacity_kwh,
