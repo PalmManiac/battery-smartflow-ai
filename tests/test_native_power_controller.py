@@ -303,6 +303,19 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             DeviceControlState.OBSERVATION,
         )
 
+    def test_hardware_overview_keeps_configured_local_path_while_unready(self):
+        target = legacy_runtime()
+        target._configured_transport = ZendureTransport.LOCAL_MQTT
+        target._local_transport = SimpleNamespace(
+            state=ConnectionState.DISCONNECTED,
+            device_states={},
+        )
+
+        overview = target.hardware_overview()[0]
+
+        self.assertEqual(overview.selected_transport, ZendureTransport.LOCAL_MQTT)
+        self.assertEqual(target._control_sensor_state(), "native_transport_not_ready")
+
     async def test_native_effectiveness_confirms_physical_effect_separately(self):
         target = runtime()
         verification = target._command_verification.prepare(
