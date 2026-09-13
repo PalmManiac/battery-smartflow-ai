@@ -477,7 +477,11 @@ class NativeZendureRuntime:
             statistics=self.statistics_state(),
             migration_bound_device=self._migration_bound_device,
         )
-        selected_transport = self._active_control_transport()
+        # Display the explicit user selection even while current telemetry is
+        # still being verified. Readiness and last observed source remain
+        # separate diagnostics; an unavailable Local path must not look like
+        # the configuration silently changed back to Cloud.
+        selected_transport = self._selected_local_transport()
         if selected_transport is None or self._selected_device is None:
             return overview
         selected_index = next(

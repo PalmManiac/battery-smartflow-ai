@@ -131,7 +131,81 @@ class FakeSession:
         return True
 
 
+class FakeBridge:
+    instances = []
+
+    def __init__(self, bootstrap, publish_local):
+        self.bootstrap = bootstrap
+        self.publish_local = publish_local
+        self.connected_devices = ()
+        self.status = "waiting_for_local_device"
+        self.started = False
+        self.__class__.instances.append(self)
+
+    async def async_start(self, *, timeout=15.0):
+        del timeout
+        self.started = True
+
+    async def async_stop(self):
+        return None
+
+
 class LocalMqttTests(unittest.IsolatedAsyncioTestCase):
+    async def test_bridge_uses_cloud_bootstrap_not_local_broker(self):
+        data = await discovered()
+        transport = ZendureLocalMqttTransport(
+            data,
+            LocalMqttCredentials("192.168.1.2", 1883, "user", "secret"),
+            session_factory=FakeSession,
+            bridge_factory=FakeBridge,
+        )
+        await transport.async_start()
+        bridge = FakeBridge.instances[-1]
+        self.assertTrue(bridge.started)
+        self.assertEqual(bridge.bootstrap.mqtt.url, "cloud:1883")
+        self.assertNotEqual(bridge.bootstrap.mqtt.url, transport._bootstrap.mqtt.url)
+        await transport.async_stop()
+
+    async def test_same_cloud_and_local_endpoint_disables_device_id_bridge(self):
+        data = await discovered()
+        same_endpoint = type(data)(
+            devices=data.devices,
+            mqtt=type(data.mqtt)(
+                client_id=data.mqtt.client_id,
+                url="mqtt://192.168.1.2:1883",
+                username=data.mqtt.username,
+                password=data.mqtt.password,
+            ),
+            raw_device_list=data.raw_device_list,
+        )
+        before = len(FakeBridge.instances)
+        transport = ZendureLocalMqttTransport(
+            same_endpoint,
+            LocalMqttCredentials("192.168.1.2", 1883, "user", "secret"),
+            session_factory=FakeSession,
+            bridge_factory=FakeBridge,
+        )
+        await transport.async_start()
+        self.assertEqual(len(FakeBridge.instances), before)
+        self.assertEqual(transport.bridge_status, "disabled_same_endpoint")
+        await transport.async_stop()
+
+    async def test_local_sessions_use_distinct_client_id_seeds(self):
+        data = await discovered()
+        credentials = LocalMqttCredentials(
+            "192.168.1.2", 1883, "shared-user", "secret"
+        )
+        first = ZendureLocalMqttTransport(
+            data, credentials, session_factory=FakeSession
+        )
+        second = ZendureLocalMqttTransport(
+            data, credentials, session_factory=FakeSession
+        )
+        self.assertNotEqual(
+            first._bootstrap.mqtt.client_id,
+            second._bootstrap.mqtt.client_id,
+        )
+
     async def test_transport_subscribes_only_verified_legacy_device(self):
         data = await discovered()
         sessions = []

@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import secrets
 from dataclasses import dataclass, field, replace
+from urllib.parse import urlparse
 
 from .core.models import ZendureTransport
 from .native_device_command_gate import AuthorizedNativeCommand
@@ -119,7 +121,13 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
         local_bootstrap = ZendureCloudBootstrap(
             devices=devices,
             mqtt=CloudMqttCredentials(
-                client_id=f"local:{credentials.username or 'anonymous'}",
+                # A reload may briefly overlap the previous runtime. A unique
+                # local client identity prevents MQTT "session taken over"
+                # disconnects during that handover.
+                client_id=(
+                    f"local:{credentials.username or 'anonymous'}:"
+                    f"{secrets.token_hex(8)}"
+                ),
                 url=f"mqtt://{credentials.server}:{int(credentials.port)}",
                 username=credentials.username,
                 password=credentials.password,
@@ -133,9 +141,15 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
             reconnect_delays=reconnect_delays,
             max_messages=max_messages,
         )
+        # Keep the original Cloud bootstrap separate. ``super()`` stores the
+        # Local bootstrap for subscriptions and commands; passing that object
+        # to the bridge would connect a device-shaped Cloud session to the
+        # Local broker and evict the real Legacy device with the same client ID.
+        self._cloud_bootstrap = bootstrap
         self._local_adapter: ZendureLocalMqttCommandAdapter | None = None
         self._bridge_factory = bridge_factory or ZendureLegacyCloudBridge
         self._legacy_bridge: ZendureLegacyCloudBridge | None = None
+        self._bridge_disabled_reason: str | None = None
 
     @property
     def bridge_connected_devices(self) -> int:
@@ -147,6 +161,8 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
 
     @property
     def bridge_status(self) -> str:
+        if self._bridge_disabled_reason is not None:
+            return self._bridge_disabled_reason
         return (
             self._legacy_bridge.status
             if self._legacy_bridge is not None
@@ -160,8 +176,21 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
 
     async def async_start(self, *, timeout: float = 15.0) -> None:
         await super().async_start(timeout=timeout)
+        if _same_mqtt_endpoint(
+            self._cloud_bootstrap.mqtt.url,
+            self._bootstrap.mqtt.url,
+        ):
+            # Never let a device-ID Cloud session compete with the physical
+            # Legacy device on its Local broker. Local telemetry/control stays
+            # available; only the optional app-compatibility bridge is omitted.
+            self._bridge_disabled_reason = "disabled_same_endpoint"
+            _LOGGER.warning(
+                "Zendure Legacy Cloud bridge disabled because Cloud and Local "
+                "MQTT endpoints are identical"
+            )
+            return
         bridge = self._bridge_factory(
-            self._bootstrap,
+            self._cloud_bootstrap,
             self._publish_bridged_local,
         )
         try:
@@ -232,3 +261,24 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
                     observed_at=local_message.received_at,
                     retained=local_message.retained,
                 )
+
+
+def _same_mqtt_endpoint(left: str, right: str) -> bool:
+    """Compare MQTT endpoints without resolving or exposing their hostnames."""
+
+    def normalized(value: str) -> tuple[str, int] | None:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        parsed = urlparse(raw if "://" in raw else f"mqtt://{raw}")
+        host = (parsed.hostname or "").rstrip(".").casefold()
+        if not host:
+            return None
+        try:
+            port = parsed.port or (8883 if parsed.scheme == "mqtts" else 1883)
+        except ValueError:
+            return None
+        return host, port
+
+    first, second = normalized(left), normalized(right)
+    return first is not None and first == second
