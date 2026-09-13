@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import unittest
 from base64 import b64encode
@@ -149,6 +150,9 @@ class FakeBridge:
     async def async_stop(self):
         return None
 
+    def forward_local(self, _topic, _payload):
+        return False
+
 
 class LocalMqttTests(unittest.IsolatedAsyncioTestCase):
     async def test_bridge_uses_cloud_bootstrap_not_local_broker(self):
@@ -215,6 +219,7 @@ class LocalMqttTests(unittest.IsolatedAsyncioTestCase):
             session_factory=lambda credentials: (
                 sessions.append(FakeSession(credentials)) or sessions[-1]
             ),
+            bridge_factory=FakeBridge,
             clock=lambda: NOW,
         )
         await transport.async_start()
@@ -235,6 +240,45 @@ class LocalMqttTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             transport.messages[-1].device_candidate_id,
             "cloud_mqtt:legacy-1",
+        )
+        await transport.async_stop()
+
+    async def test_retries_get_all_until_legacy_properties_arrive(self):
+        data = await discovered()
+        sessions = []
+        transport = ZendureLocalMqttTransport(
+            data,
+            LocalMqttCredentials("192.168.1.2", 1883, "user", "secret"),
+            session_factory=lambda credentials: (
+                sessions.append(FakeSession(credentials)) or sessions[-1]
+            ),
+            bridge_factory=FakeBridge,
+            clock=lambda: NOW,
+            initial_refresh_seconds=0.01,
+            periodic_refresh_seconds=0.2,
+        )
+        await transport.async_start()
+        self.assertEqual(len(sessions[0].requests), 1)
+
+        await asyncio.sleep(0.025)
+        self.assertGreaterEqual(len(sessions[0].requests), 2)
+        self.assertGreaterEqual(
+            transport.refresh_diagnostics["request_count"], 1
+        )
+        self.assertEqual(
+            transport.refresh_diagnostics["devices_waiting_for_properties"], 1
+        )
+
+        sessions[0].on_message(
+            "iot/legacy-product/legacy-1/properties/report",
+            json.dumps({"properties": {"electricLevel": 54}}).encode(),
+        )
+        await asyncio.sleep(0.025)
+        requests_after_telemetry = len(sessions[0].requests)
+        await asyncio.sleep(0.025)
+        self.assertEqual(len(sessions[0].requests), requests_after_telemetry)
+        self.assertEqual(
+            transport.refresh_diagnostics["devices_waiting_for_properties"], 0
         )
         await transport.async_stop()
 

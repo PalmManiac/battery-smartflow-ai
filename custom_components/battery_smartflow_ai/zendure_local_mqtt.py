@@ -31,6 +31,9 @@ from .zendure_legacy import ZendureLegacyCloudBridge
 
 _LOGGER = logging.getLogger(__name__)
 
+_LEGACY_INITIAL_REFRESH_SECONDS = 5.0
+_LEGACY_PERIODIC_REFRESH_SECONDS = 60.0
+
 
 @dataclass(frozen=True, slots=True, repr=False)
 class LocalMqttCredentials:
@@ -111,6 +114,8 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
         reconnect_delays=(1.0, 2.0, 5.0, 15.0, 30.0),
         max_messages=10_000,
         bridge_factory=None,
+        initial_refresh_seconds=_LEGACY_INITIAL_REFRESH_SECONDS,
+        periodic_refresh_seconds=_LEGACY_PERIODIC_REFRESH_SECONDS,
     ) -> None:
         devices = tuple(
             item
@@ -150,6 +155,10 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
         self._bridge_factory = bridge_factory or ZendureLegacyCloudBridge
         self._legacy_bridge: ZendureLegacyCloudBridge | None = None
         self._bridge_disabled_reason: str | None = None
+        self._initial_refresh_seconds = float(initial_refresh_seconds)
+        self._periodic_refresh_seconds = float(periodic_refresh_seconds)
+        self._refresh_task: asyncio.Task[None] | None = None
+        self._refresh_request_count = 0
 
     @property
     def bridge_connected_devices(self) -> int:
@@ -169,6 +178,20 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
             else "not_started"
         )
 
+    @property
+    def refresh_diagnostics(self) -> dict[str, object]:
+        """Return privacy-safe facts about active Legacy state refreshes."""
+
+        waiting = sum(
+            not state.property_updated_at for state in self._devices.values()
+        )
+        return {
+            "request_count": self._refresh_request_count,
+            "devices_waiting_for_properties": waiting,
+            "task_active": self._refresh_task is not None
+            and not self._refresh_task.done(),
+        }
+
     def _publish_bridged_local(self, topic: str, payload: bytes | str) -> bool:
         session = self._session
         publish = getattr(session, "relay_cloud_message", None)
@@ -176,6 +199,7 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
 
     async def async_start(self, *, timeout: float = 15.0) -> None:
         await super().async_start(timeout=timeout)
+        self._refresh_task = asyncio.create_task(self._async_refresh_legacy_state())
         if _same_mqtt_endpoint(
             self._cloud_bootstrap.mqtt.url,
             self._bootstrap.mqtt.url,
@@ -204,10 +228,54 @@ class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
             self._legacy_bridge = bridge
 
     async def async_stop(self) -> None:
+        refresh_task, self._refresh_task = self._refresh_task, None
+        if refresh_task is not None:
+            refresh_task.cancel()
+            await asyncio.gather(refresh_task, return_exceptions=True)
         bridge, self._legacy_bridge = self._legacy_bridge, None
         if bridge is not None:
             await bridge.async_stop()
         await super().async_stop()
+
+    async def _async_refresh_legacy_state(self) -> None:
+        """Retry Legacy getAll until telemetry arrives, then keep it current."""
+
+        try:
+            while not self._stopping:
+                missing = {
+                    candidate_id
+                    for candidate_id, state in self._devices.items()
+                    if not state.property_updated_at
+                }
+                await asyncio.sleep(
+                    self._initial_refresh_seconds
+                    if missing
+                    else self._periodic_refresh_seconds
+                )
+                if self._stopping or self._session is None:
+                    continue
+                for device_id, candidate_id, product_id in self._routes:
+                    if product_id is None or (missing and candidate_id not in missing):
+                        continue
+                    self._request_message_id += 1
+                    try:
+                        self._session.request_all(
+                            product_id,
+                            device_id,
+                            self._request_message_id,
+                            int(self._clock().timestamp()),
+                        )
+                    except Exception as error:
+                        # Keep retrying: a transient publish failure must not
+                        # permanently stop Legacy telemetry refreshes.
+                        _LOGGER.warning(
+                            "Zendure Legacy state refresh failed: %s",
+                            type(error).__name__,
+                        )
+                    else:
+                        self._refresh_request_count += 1
+        except asyncio.CancelledError:
+            raise
 
     @property
     def connection_variant(self) -> str:
