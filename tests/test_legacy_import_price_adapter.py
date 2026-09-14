@@ -309,7 +309,7 @@ class LegacyImportForecastAdapterTests(unittest.TestCase):
         self.assertEqual(forecast.points[0].end, datetime(2026, 8, 22, 12, tzinfo=UTC))
         self.assertEqual(forecast.points[1].start, datetime(2026, 8, 22, 13, tzinfo=UTC))
 
-    def test_expired_invalid_and_non_mapping_points_are_discarded(self) -> None:
+    def test_current_day_history_is_retained_but_invalid_points_are_discarded(self) -> None:
         forecast = normalize(
             {
                 "rates": [
@@ -329,7 +329,8 @@ class LegacyImportForecastAdapterTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(forecast.points, ())
+        self.assertEqual(len(forecast.points), 1)
+        self.assertEqual(forecast.points[0].price, 0.2)
 
     def test_points_are_sorted_and_aware_timestamps_are_localized(self) -> None:
         forecast = normalize(

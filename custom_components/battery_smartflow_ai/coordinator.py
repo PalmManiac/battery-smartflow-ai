@@ -215,6 +215,7 @@ from .market_price import (
     MarketPriceDirection,
     MarketPriceSourceAdapter,
     NumericPriceNormalizer,
+    daily_price_statistics,
 )
 from .manual_standby import active_power_direction
 from .full_charge_maintenance_runtime import FullChargeMaintenanceRuntime
@@ -424,7 +425,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._automatic_strategy = AutomaticStrategy()
         self._charge_source_allocator = ChargeSourceAllocator()
         self._full_charge_maintenance = FullChargeMaintenanceRuntime()
-        self._energy_accumulator = EnergyAccumulator()
+        self._energy_accumulator = EnergyAccumulator(
+            day_timezone=dt_util.get_default_time_zone()
+        )
         self._economics_engine = EconomicsEngine(
             currency=self.price_currency.code
         )
@@ -669,7 +672,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist.pop(legacy_key, None)
 
             self._energy_accumulator = EnergyAccumulator.from_state(
-                self._persist.get("economics_energy_state")
+                self._persist.get("economics_energy_state"),
+                day_timezone=dt_util.get_default_time_zone(),
             )
             self._economics_engine = EconomicsEngine.from_state(
                 self._persist.get("economics_money_state"),
@@ -4211,13 +4215,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             daily_min_price = None
             daily_max_price = None
 
-            if price_points:
-                prices = [float(p.price) for p in price_points]
-
-                if prices:
-                    daily_avg_price = sum(prices) / len(prices)
-                    daily_min_price = min(prices)
-                    daily_max_price = max(prices)
+            price_stats = daily_price_statistics(
+                price_points,
+                now_local=self._clock.local_now(),
+            )
+            if price_stats is not None:
+                daily_avg_price = price_stats.average
+                daily_min_price = price_stats.minimum
+                daily_max_price = price_stats.maximum
 
             peak_factor = float(
                 self.runtime_settings.get(
