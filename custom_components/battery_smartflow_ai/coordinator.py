@@ -161,6 +161,7 @@ from .economics import (
     EconomicPowerFlows,
     EconomicsEngine,
     EnergyAccumulator,
+    direct_native_pv_to_home_power,
     priceable_energy_flows,
 )
 from .automatic_strategy import (
@@ -498,6 +499,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "economics_energy_state": None,
             "economics_money_state": None,
             "economics_money_day": None,
+            "native_pv_home_accounting_supported": False,
             "full_charge_maintenance": None,
 
             # season detection
@@ -5215,6 +5217,36 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             battery_to_home_w = max(
                 0.0, float(battery_discharge_w) - battery_to_grid_w
             )
+            native_ac_output = (
+                native_state.ac_output_power_w
+                if native_state is not None
+                else None
+            )
+            native_pv_home_sample_valid = bool(
+                native_pv_sensor_valid
+                and native_ac_output is not None
+                and native_ac_output.valid
+                and native_charge is not None
+                and native_charge.valid
+                and native_discharge is not None
+                and native_discharge.valid
+            )
+            native_pv_to_home_w = (
+                direct_native_pv_to_home_power(
+                    native_pv_w=float(native_pv_w),
+                    native_pv_to_battery_w=float(
+                        current_charge_pricing.pv_part_w
+                        if current_charge_pricing.active
+                        else 0.0
+                    ),
+                    ac_output_w=float(native_ac_output.value),
+                    battery_discharge_w=float(battery_discharge_w),
+                )
+                if native_pv_home_sample_valid
+                else 0.0
+            )
+            if native_pv_home_sample_valid:
+                self._persist["native_pv_home_accounting_supported"] = True
             economics_energy_result = self._energy_accumulator.add_sample(
                 sampled_at=now,
                 power=EconomicPowerFlows(
@@ -5231,6 +5263,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     grid_export_w=float(grid_export),
                     battery_to_home_w=battery_to_home_w,
                     battery_to_grid_w=battery_to_grid_w,
+                    native_pv_to_home_w=native_pv_to_home_w,
                 ),
             )
             economics_energy_snapshot = self._energy_accumulator.snapshot()
@@ -5303,6 +5336,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._economics_engine.total_economic_efficiency_pct()
                 ),
             }
+            if not bool(
+                self._persist.get("native_pv_home_accounting_supported", False)
+            ):
+                for key in (
+                    "economics_daily_native_pv_to_home_kwh",
+                    "economics_total_native_pv_to_home_kwh",
+                    "economics_daily_native_pv_self_consumption_value",
+                    "economics_total_native_pv_self_consumption_value",
+                ):
+                    economics_runtime_values[key] = None
 
             sample_duration_seconds = float(UPDATE_INTERVAL)
             try:

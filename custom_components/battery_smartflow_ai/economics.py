@@ -20,6 +20,7 @@ class EconomicEnergyFlows:
     grid_export_kwh: float = 0.0
     battery_to_home_kwh: float = 0.0
     battery_to_grid_kwh: float = 0.0
+    native_pv_to_home_kwh: float = 0.0
 
     def __post_init__(self) -> None:
         for field in fields(self):
@@ -83,6 +84,9 @@ def priceable_energy_flows(
             battery_to_grid_kwh=(
                 flows.battery_to_grid_kwh if export_available else 0.0
             ),
+            native_pv_to_home_kwh=(
+                flows.native_pv_to_home_kwh if import_available else 0.0
+            ),
         ),
         status=status,
     )
@@ -97,6 +101,7 @@ class EconomicPowerFlows:
     grid_export_w: float = 0.0
     battery_to_home_w: float = 0.0
     battery_to_grid_w: float = 0.0
+    native_pv_to_home_w: float = 0.0
 
     def __post_init__(self) -> None:
         for field in fields(self):
@@ -115,7 +120,26 @@ class EconomicPowerFlows:
             grid_export_kwh=self.grid_export_w * factor,
             battery_to_home_kwh=self.battery_to_home_w * factor,
             battery_to_grid_kwh=self.battery_to_grid_w * factor,
+            native_pv_to_home_kwh=self.native_pv_to_home_w * factor,
         )
+
+
+def direct_native_pv_to_home_power(
+    *,
+    native_pv_w: float,
+    native_pv_to_battery_w: float,
+    ac_output_w: float,
+    battery_discharge_w: float,
+) -> float:
+    """Return native MPPT power delivered directly to the home AC output."""
+
+    pv_after_battery = max(
+        0.0, float(native_pv_w) - float(native_pv_to_battery_w)
+    )
+    output_after_battery = max(
+        0.0, float(ac_output_w) - float(battery_discharge_w)
+    )
+    return min(pv_after_battery, output_after_battery)
 
 
 @dataclass(frozen=True, slots=True)
@@ -342,6 +366,7 @@ class EconomicsSnapshot:
     export_revenue: float
     avoided_grid_import_cost: float
     battery_benefit: float
+    native_pv_self_consumption_value: float
     average_grid_charge_price: float | None
     average_pv_opportunity_value: float | None
     average_export_price: float | None
@@ -365,6 +390,7 @@ class _EconomicsTotals:
     battery_discharge_value: float = 0.0
     avoided_grid_import_cost: float = 0.0
     battery_benefit: float = 0.0
+    native_pv_self_consumption_value: float = 0.0
 
 
 class EconomicsEngine:
@@ -400,7 +426,9 @@ class EconomicsEngine:
             import_price,
             MarketPriceDirection.IMPORT,
             required=bool(
-                flows.grid_to_battery_kwh or flows.battery_to_home_kwh
+                flows.grid_to_battery_kwh
+                or flows.battery_to_home_kwh
+                or flows.native_pv_to_home_kwh
             ),
         )
         export_value = self._price(
@@ -437,6 +465,9 @@ class EconomicsEngine:
             totals.battery_discharge_value += battery_discharge_value
             totals.avoided_grid_import_cost += avoided_cost
             totals.battery_benefit += battery_benefit
+            totals.native_pv_self_consumption_value += (
+                flows.native_pv_to_home_kwh * import_value
+            )
 
     def record_grid_flows(
         self,
@@ -579,6 +610,9 @@ class EconomicsEngine:
             export_revenue=totals.export_revenue,
             avoided_grid_import_cost=totals.avoided_grid_import_cost,
             battery_benefit=totals.battery_benefit,
+            native_pv_self_consumption_value=(
+                totals.native_pv_self_consumption_value
+            ),
             average_grid_charge_price=self._average(
                 totals.grid_charge_cost, totals.grid_charge_kwh
             ),
@@ -609,7 +643,9 @@ class EconomicsEngine:
             import_price,
             MarketPriceDirection.IMPORT,
             required=bool(
-                flows.grid_to_battery_kwh or flows.battery_to_home_kwh
+                flows.grid_to_battery_kwh
+                or flows.battery_to_home_kwh
+                or flows.native_pv_to_home_kwh
             ),
         )
         export_value = self._price(
@@ -625,6 +661,9 @@ class EconomicsEngine:
         avoided_cost = flows.battery_to_home_kwh * import_value
         totals.battery_discharge_value += avoided_cost
         totals.avoided_grid_import_cost += avoided_cost
+        totals.native_pv_self_consumption_value += (
+            flows.native_pv_to_home_kwh * import_value
+        )
 
     def _record_battery_value_totals(
         self,

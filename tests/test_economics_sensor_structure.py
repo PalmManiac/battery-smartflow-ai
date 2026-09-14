@@ -17,6 +17,7 @@ MONEY_VALUES = {
     "export_revenue",
     "avoided_grid_import_cost",
     "battery_benefit",
+    "native_pv_self_consumption_value",
 }
 ENERGY_VALUES = {
     "grid_to_battery_kwh",
@@ -24,6 +25,7 @@ ENERGY_VALUES = {
     "grid_export_kwh",
     "battery_to_home_kwh",
     "battery_to_grid_kwh",
+    "native_pv_to_home_kwh",
 }
 PRICE_KEYS = {
     "economics_average_grid_charge_price",
@@ -76,7 +78,7 @@ def test_all_new_economics_sensors_use_the_virtual_device() -> None:
         *EFFICIENCY_KEYS,
     }
 
-    assert len(expected) == 25
+    assert len(expected) == 29
     for key in expected:
         assert key in descriptions
         assert _source(descriptions[key]["economics_device"]) == "True"

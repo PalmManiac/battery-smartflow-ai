@@ -134,7 +134,7 @@ class EntityRegistryCompatibilityTests(unittest.TestCase):
     V460_DESCRIPTION_HASHES = {
         "sensor.py": (
             "_SENSOR_DESCRIPTIONS",
-            "d9863a3278870b786ace527fdd222b1f533198990b78429b190c447a652a12d1",
+            "f716309f65dc9aefbcb5ec6da87a42c2bf1d8f6160bbc76f581ef5761e97b748",
         ),
         "number.py": (
             "NUMBERS",

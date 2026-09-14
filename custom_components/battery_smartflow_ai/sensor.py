@@ -107,6 +107,7 @@ ECONOMICS_MONETARY_SENSOR_KEYS = frozenset(
         "export_revenue",
         "avoided_grid_import_cost",
         "battery_benefit",
+        "native_pv_self_consumption_value",
     )
 )
 
@@ -1236,6 +1237,15 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         economics_device=True,
     ),
     ZendureSensorEntityDescription(
+        key="economics_daily_native_pv_self_consumption_value",
+        translation_key="economics_daily_native_pv_self_consumption_value",
+        runtime_key="economics_daily_native_pv_self_consumption_value",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:home-lightning-bolt-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
         key="economics_total_grid_charge_cost",
         translation_key="economics_total_grid_charge_cost",
         runtime_key="economics_total_grid_charge_cost",
@@ -1278,6 +1288,15 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.MONETARY,
         state_class=SensorStateClass.TOTAL,
         icon="mdi:battery-check-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_native_pv_self_consumption_value",
+        translation_key="economics_total_native_pv_self_consumption_value",
+        runtime_key="economics_total_native_pv_self_consumption_value",
+        device_class=SensorDeviceClass.MONETARY,
+        state_class=SensorStateClass.TOTAL,
+        icon="mdi:home-lightning-bolt-outline",
         economics_device=True,
     ),
     ZendureSensorEntityDescription(
@@ -1341,6 +1360,16 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         economics_device=True,
     ),
     ZendureSensorEntityDescription(
+        key="economics_daily_native_pv_to_home_kwh",
+        translation_key="economics_daily_native_pv_to_home_kwh",
+        runtime_key="economics_daily_native_pv_to_home_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:solar-power-variant",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
         key="economics_total_grid_to_battery_kwh",
         translation_key="economics_total_grid_to_battery_kwh",
         runtime_key="economics_total_grid_to_battery_kwh",
@@ -1388,6 +1417,16 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
         icon="mdi:battery-arrow-down-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_total_native_pv_to_home_kwh",
+        translation_key="economics_total_native_pv_to_home_kwh",
+        runtime_key="economics_total_native_pv_to_home_kwh",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        icon="mdi:solar-power-variant",
         economics_device=True,
     ),
     ZendureSensorEntityDescription(
