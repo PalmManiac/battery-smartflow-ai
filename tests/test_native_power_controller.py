@@ -92,13 +92,22 @@ class FakeTransport:
 
     def __init__(self):
         self.commands = []
+        self.stopped = False
         self.device_states = {
-            DEVICE: SimpleNamespace(last_message_at=NOW, online=True)
+            DEVICE: SimpleNamespace(
+                last_message_at=NOW,
+                online=True,
+                property_updated_at={"electricLevel": NOW},
+            )
         }
 
     async def async_execute_authorized(self, authorized):
         self.commands.append(authorized)
         return CloudCommandResult(CloudCommandStatus.SENT, "awaiting_readback", ("id",), 1)
+
+    async def async_stop(self):
+        self.stopped = True
+        self.state = ConnectionState.STOPPED
 
 
 class FakeZenSdkAdapter:
@@ -124,7 +133,11 @@ class FakeLocalTransport:
     def __init__(self):
         self.commands = []
         self.device_states = {
-            DEVICE: SimpleNamespace(last_message_at=NOW, online=True)
+            DEVICE: SimpleNamespace(
+                last_message_at=NOW,
+                online=True,
+                property_updated_at={"electricLevel": NOW},
+            )
         }
 
     async def async_execute_authorized(self, authorized):
@@ -314,7 +327,10 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         overview = target.hardware_overview()[0]
 
         self.assertEqual(overview.selected_transport, ZendureTransport.LOCAL_MQTT)
-        self.assertEqual(target._control_sensor_state(), "native_transport_not_ready")
+        self.assertEqual(
+            target._control_sensor_state(),
+            "native_local_handover_cloud_active",
+        )
 
     async def test_native_effectiveness_confirms_physical_effect_separately(self):
         target = runtime()
@@ -382,6 +398,48 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             "native_local_mqtt_active",
         )
 
+    async def test_local_handover_uses_cloud_until_local_properties_arrive(self):
+        target = legacy_runtime()
+        target._local_transport.device_states[DEVICE].last_message_at = None
+        target._local_transport.device_states[DEVICE].property_updated_at = {}
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", output_limit_w=450, should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._transport.commands), 1)
+        self.assertEqual(target._local_transport.commands, [])
+        self.assertEqual(
+            target.sensor_data()["native_zendure_control"],
+            "native_local_handover_cloud_active",
+        )
+
+    async def test_first_local_properties_complete_handover_and_retire_cloud(self):
+        target = legacy_runtime()
+
+        await target._advance_local_handover()
+
+        self.assertTrue(target._local_handover_complete)
+        self.assertTrue(target._transport.stopped)
+        self.assertEqual(
+            target.sensor_data()["native_zendure_control"],
+            "native_local_mqtt_active",
+        )
+
+    async def test_non_property_local_message_cannot_complete_handover(self):
+        target = legacy_runtime()
+        target._local_transport.device_states[DEVICE].property_updated_at = {}
+
+        await target._advance_local_handover()
+
+        self.assertFalse(target._local_handover_complete)
+        self.assertFalse(target._transport.stopped)
+        self.assertEqual(
+            target.sensor_data()["native_zendure_control"],
+            "native_local_handover_cloud_active",
+        )
+
     async def test_explicit_cloud_selection_reads_and_writes_only_cloud(self):
         target = runtime(control_transport=ZendureTransport.CLOUD_MQTT.value)
 
@@ -399,6 +457,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_stale_local_mqtt_never_falls_back(self):
         target = legacy_runtime()
+        target._local_handover_complete = True
         target._local_transport.device_states[DEVICE].last_message_at = (
             NOW - timedelta(minutes=5)
         )
