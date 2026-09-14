@@ -208,7 +208,7 @@ class LegacyImportForecastAdapter:
 
         point_start = self._parse_and_normalize(start)
         point_end = self._parse_and_normalize(end)
-        if not self._valid_future_interval(point_start, point_end, now):
+        if not self._valid_relevant_interval(point_start, point_end, now):
             return None
 
         return _PendingPoint(
@@ -317,7 +317,7 @@ class LegacyImportForecastAdapter:
                 else:
                     point_end = point.start + fallback_duration
 
-            if not self._valid_future_interval(point.start, point_end, now):
+            if not self._valid_relevant_interval(point.start, point_end, now):
                 continue
 
             interval = (point.start, point_end)
@@ -354,10 +354,16 @@ class LegacyImportForecastAdapter:
             return value.replace(tzinfo=self.default_timezone)
         return value.astimezone(self.default_timezone)
 
-    @staticmethod
-    def _valid_future_interval(
+    def _valid_relevant_interval(
+        self,
         start: datetime | None,
         end: datetime | None,
         now: datetime,
     ) -> bool:
-        return bool(start and end and end > start and end > now)
+        """Retain the complete local current day plus future intervals."""
+
+        local_now = now.astimezone(self.default_timezone)
+        day_start = datetime.combine(
+            local_now.date(), datetime.min.time(), tzinfo=self.default_timezone
+        )
+        return bool(start and end and end > start and end > day_start)

@@ -25,6 +25,7 @@ from .sources import (
     PriceSourceStatus,
     StaticPriceSource,
 )
+from .statistics import DailyPriceStatistics, daily_price_statistics
 
 __all__ = [
     "ForecastAdapter",
@@ -47,4 +48,6 @@ __all__ = [
     "PriceSourceReading",
     "PriceSourceStatus",
     "StaticPriceSource",
+    "DailyPriceStatistics",
+    "daily_price_statistics",
 ]

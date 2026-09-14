@@ -20,6 +20,7 @@ from custom_components.battery_smartflow_ai.market_price import (  # noqa: E402
     MarketPrice,
     MarketPriceDirection,
     MarketPriceForecast,
+    MarketPricePoint,
     MarketPriceValidity,
     planning_price_points,
 )
@@ -33,6 +34,35 @@ from test_dev9_scenarios import (  # noqa: E402
 
 
 class MarketPricePlanningContractTests(unittest.TestCase):
+    def test_planning_excludes_retained_current_day_history(self) -> None:
+        past = MarketPricePoint(
+            start=NOW - timedelta(hours=2),
+            end=NOW - timedelta(hours=1),
+            price=0.10,
+        )
+        future = MarketPricePoint(
+            start=NOW,
+            end=NOW + timedelta(hours=1),
+            price=0.30,
+        )
+        market = MarketPrice(
+            direction=MarketPriceDirection.IMPORT,
+            current_price=0.30,
+            currency="EUR",
+            unit="EUR/kWh",
+            timestamp=NOW,
+            source="test.history",
+            validity=MarketPriceValidity.VALID,
+            is_dynamic=True,
+            is_fallback=False,
+            forecast=MarketPriceForecast(points=(past, future), timestamp=NOW),
+        )
+
+        slots = planning_price_points(market)
+
+        self.assertEqual(len(slots), 4)
+        self.assertTrue(all(slot.start >= NOW for slot in slots))
+
     def test_decision_context_has_only_canonical_market_price_inputs(self) -> None:
         field_names = {field.name for field in fields(DecisionContext)}
 

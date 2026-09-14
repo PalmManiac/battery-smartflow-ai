@@ -29,6 +29,11 @@ def planning_price_points(market_price: MarketPrice | None) -> list[MarketPriceP
     slots: list[MarketPricePoint] = []
     seen: set[tuple] = set()
     for point in sorted(market_price.forecast.points, key=lambda item: item.start):
+        if (
+            market_price.timestamp is not None
+            and point.end <= market_price.timestamp
+        ):
+            continue
         cursor = point.start
         while cursor + PLANNING_SLOT_DURATION <= point.end:
             slot_end = cursor + PLANNING_SLOT_DURATION

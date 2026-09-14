@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time, tzinfo
 from math import isfinite
 from typing import Any, Mapping
 
@@ -143,11 +143,17 @@ class EnergyAccumulator:
 
     STATE_VERSION = 1
 
-    def __init__(self, *, max_interval_seconds: float = 300.0) -> None:
+    def __init__(
+        self,
+        *,
+        max_interval_seconds: float = 300.0,
+        day_timezone: tzinfo = UTC,
+    ) -> None:
         maximum = float(max_interval_seconds)
         if not isfinite(maximum) or maximum <= 0.0:
             raise ValueError("max_interval_seconds must be finite and positive")
         self._max_interval_seconds = maximum
+        self._day_timezone = day_timezone
         self._last_sample_at: datetime | None = None
         self._day: date | None = None
         self._daily = EconomicEnergyFlows()
@@ -166,7 +172,7 @@ class EnergyAccumulator:
 
         if self._last_sample_at is None:
             self._last_sample_at = sampled_at
-            self._ensure_day(sampled_at.date())
+            self._ensure_day(sampled_at.astimezone(self._day_timezone).date())
             return self._result(status="baseline")
 
         elapsed = (sampled_at - self._last_sample_at).total_seconds()
@@ -182,27 +188,36 @@ class EnergyAccumulator:
         # the lifetime value keeps the full interval while the new daily bucket
         # receives only the part after midnight. A limited long gap is assigned
         # only to the current day and never backfilled across downtime.
-        if previous.date() != sampled_at.date() and accounted == elapsed:
+        previous_local = previous.astimezone(self._day_timezone)
+        sampled_local = sampled_at.astimezone(self._day_timezone)
+        crossed_local_midnight = previous_local.date() != sampled_local.date()
+        if crossed_local_midnight and accounted == elapsed:
             midnight = datetime.combine(
-                sampled_at.date(), time.min, tzinfo=sampled_at.tzinfo
+                sampled_local.date(), time.min, tzinfo=self._day_timezone
             )
             previous_day_seconds = max(
-                0.0, (midnight - previous).total_seconds()
+                0.0,
+                (
+                    midnight.astimezone(UTC) - previous.astimezone(UTC)
+                ).total_seconds(),
             )
             current_day_seconds = max(
-                0.0, (sampled_at - midnight).total_seconds()
+                0.0,
+                (
+                    sampled_at.astimezone(UTC) - midnight.astimezone(UTC)
+                ).total_seconds(),
             )
             previous_energy = power.to_energy(previous_day_seconds)
             current_energy = power.to_energy(current_day_seconds)
-            self._ensure_day(previous.date())
+            self._ensure_day(previous_local.date())
             self._daily = self._add_flows(self._daily, previous_energy)
             self._total = self._add_flows(self._total, previous_energy)
-            self._ensure_day(sampled_at.date())
+            self._ensure_day(sampled_local.date())
             self._daily = self._add_flows(self._daily, current_energy)
             self._total = self._add_flows(self._total, current_energy)
             energy = self._add_flows(previous_energy, current_energy)
         else:
-            self._ensure_day(sampled_at.date())
+            self._ensure_day(sampled_local.date())
             energy = power.to_energy(accounted)
             self._daily = self._add_flows(self._daily, energy)
             self._total = self._add_flows(self._total, energy)
@@ -211,7 +226,7 @@ class EnergyAccumulator:
             energy=energy,
             daily_energy=(
                 current_energy
-                if previous.date() != sampled_at.date() and accounted == elapsed
+                if crossed_local_midnight and accounted == elapsed
                 else energy
             ),
             elapsed_seconds=elapsed,
@@ -248,10 +263,14 @@ class EnergyAccumulator:
         raw: Mapping[str, Any] | None,
         *,
         max_interval_seconds: float = 300.0,
+        day_timezone: tzinfo = UTC,
     ) -> EnergyAccumulator:
         """Restore totals but require a fresh post-restart time baseline."""
 
-        accumulator = cls(max_interval_seconds=max_interval_seconds)
+        accumulator = cls(
+            max_interval_seconds=max_interval_seconds,
+            day_timezone=day_timezone,
+        )
         if not isinstance(raw, Mapping) or raw.get("version") != cls.STATE_VERSION:
             return accumulator
         try:
@@ -260,7 +279,10 @@ class EnergyAccumulator:
             accumulator._daily = cls._flows_from_state(raw.get("daily"))
             accumulator._total = cls._flows_from_state(raw.get("total"))
         except (TypeError, ValueError):
-            return cls(max_interval_seconds=max_interval_seconds)
+            return cls(
+                max_interval_seconds=max_interval_seconds,
+                day_timezone=day_timezone,
+            )
 
         # Deliberately ignore persisted last_sample_at. Accounting the gap from
         # shutdown until the first new reading would invent energy after restart.
