@@ -116,12 +116,7 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(transport.state, ConnectionState.CONNECTED)
         self.assertEqual(
             self.sessions[0].subscriptions,
-            (
-                "/product-a/main-1/#",
-                "/product-b/main-2/#",
-                "iot/product-a/main-1/#",
-                "iot/product-b/main-2/#",
-            ),
+            ("#",),
         )
         self.assertEqual(
             [(product, device) for product, device, _message, _timestamp in self.sessions[0].state_requests],
