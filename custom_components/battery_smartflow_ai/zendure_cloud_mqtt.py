@@ -259,7 +259,16 @@ class ZendureCloudMqttTransport:
 
     @property
     def topics(self) -> tuple[str, ...]:
-        """Return broad read-only subscriptions without guessing properties."""
+        """Receive every topic authorized for the Zendure Cloud account."""
+
+        # Legacy products do not consistently publish below the ZenSDK-style
+        # product/device paths.  The account-scoped credentials and broker ACL
+        # remain the security boundary; routing below still accepts state only
+        # for devices returned by Zendure discovery.
+        return ("#",)
+
+    def _device_topics(self) -> tuple[str, ...]:
+        """Return device-scoped topics for transports without account ACLs."""
 
         topics: set[str] = set()
         for device_id, _candidate_id, product_id in self._routes:
@@ -276,7 +285,7 @@ class ZendureCloudMqttTransport:
 
         if self._state not in {ConnectionState.DISCONNECTED, ConnectionState.STOPPED}:
             return
-        if not self.topics:
+        if not self._routes:
             raise CloudMqttError("no_routable_devices")
         self._loop = asyncio.get_running_loop()
         self._stopping = False

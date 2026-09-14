@@ -104,6 +104,12 @@ class PahoLocalMqttSession(PahoReadOnlyMqttSession):
 class ZendureLocalMqttTransport(ZendureCloudMqttTransport):
     """Reuse hardened MQTT lifecycle while retaining a distinct local adapter."""
 
+    @property
+    def topics(self) -> tuple[str, ...]:
+        """Keep subscriptions narrow on the user's shared local broker."""
+
+        return self._device_topics()
+
     def __init__(
         self,
         bootstrap: ZendureCloudBootstrap,
