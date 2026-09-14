@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0-rc17")
+        self.assertEqual(manifest["version"], "5.0.0-rc18")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -76,6 +76,8 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         )
         self.assertIn("ZENSDK_POLL_INTERVAL = 5.0", runtime)
         self.assertIn("ZENSDK_MAX_RETRY_INTERVAL = 60.0", runtime)
+        self.assertIn("use_assigned_client_id=True", runtime)
+        self.assertIn("await self._advance_local_handover()", runtime)
 
     def test_secret_is_not_exposed_by_sensor_or_diagnostic_surfaces(self) -> None:
         runtime = (COMPONENT / "native_zendure_runtime.py").read_text(

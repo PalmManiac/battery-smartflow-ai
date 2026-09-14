@@ -1669,6 +1669,7 @@ SENSORS += (
         options=[
             "disabled_zha_active",
             "native_transport_not_ready",
+            "native_local_handover_cloud_active",
             "native_cloud_mqtt_active",
             "native_zensdk_active",
             "native_local_mqtt_active",

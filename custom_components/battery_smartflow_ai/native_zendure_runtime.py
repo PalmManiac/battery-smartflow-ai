@@ -172,6 +172,11 @@ class NativeZendureRuntime:
         self._energy_accumulators: dict[str, NativeEnergyAccumulator] = {}
         self._switching_counts: dict[str, int] = {}
         self._last_energy_modes: dict[str, str] = {}
+        # A Local MQTT selection starts from the proven Cloud path.  Cloud may
+        # temporarily retain read/write authority until the physical Legacy
+        # device has supplied fresh local telemetry once.  After that first
+        # confirmed handover, Cloud can never silently regain authority.
+        self._local_handover_complete = False
 
     @property
     def configured(self) -> bool:
@@ -620,6 +625,18 @@ class NativeZendureRuntime:
                     if self._selected_local_transport() is not None
                     else None
                 ),
+                "local_handover": {
+                    "required": self._selected_local_transport()
+                    is ZendureTransport.LOCAL_MQTT,
+                    "complete": self._local_handover_complete,
+                    "cloud_bootstrap_active": (
+                        self._selected_local_transport()
+                        is ZendureTransport.LOCAL_MQTT
+                        and not self._local_handover_complete
+                        and self._active_control_transport()
+                        is ZendureTransport.CLOUD_MQTT
+                    ),
+                },
                 "selected_device": self._selected_device,
                 "calibration_information": self._calibration_diagnostics(),
                 "message_count": self._processed_messages,
@@ -807,7 +824,7 @@ class NativeZendureRuntime:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_state_not_fresh"
                 ))
-            selection = self._selected_control_transport(source_device)
+            selection = self._effective_control_transport(source_device)
             control_transport = selection.transport
             self._transport_router.select(
                 self._selected_device,
@@ -985,9 +1002,10 @@ class NativeZendureRuntime:
             self._record_zensdk_cycle(zensdk)
             self._transport = ZendureCloudMqttTransport(
                 bootstrap,
-                use_assigned_client_id=(
-                    self._configured_transport is ZendureTransport.CLOUD_MQTT
-                ),
+                # Zendure routes account Cloud telemetry only to the assigned
+                # client identity.  Local selections still need that proven
+                # Cloud session while their Legacy handover is pending.
+                use_assigned_client_id=True,
             )
             if self._local_mqtt_credentials is not None:
                 candidate = ZendureLocalMqttTransport(
@@ -1048,6 +1066,7 @@ class NativeZendureRuntime:
                 loop = asyncio.get_running_loop()
                 await self._async_poll_zensdk(now_monotonic=loop.time())
                 self._refresh_snapshots()
+                await self._advance_local_handover()
                 self._notify()
                 await asyncio.sleep(1.0)
         except asyncio.CancelledError:
@@ -1291,7 +1310,7 @@ class NativeZendureRuntime:
                 reason="selected_device_missing",
             )
             return
-        selection = self._selected_control_transport(device)
+        selection = self._effective_control_transport(device)
         self._transport_router.select(self._selected_device, selection.transport)
         ready = bool(
             selection.transport is not None
@@ -1461,8 +1480,14 @@ class NativeZendureRuntime:
                 self._selected_device
             )
             last = local_state.last_message_at if local_state is not None else None
+            properties = (
+                getattr(local_state, "property_updated_at", None)
+                if local_state is not None
+                else None
+            )
             return bool(
                 last is not None
+                and properties
                 and 0 <= (datetime.now(timezone.utc) - last).total_seconds()
                 <= ZENSDK_MAX_DATA_AGE
             )
@@ -1475,8 +1500,14 @@ class NativeZendureRuntime:
                 return False
             cloud_state = self._transport.device_states.get(self._selected_device)
             last = cloud_state.last_message_at if cloud_state is not None else None
+            properties = (
+                getattr(cloud_state, "property_updated_at", None)
+                if cloud_state is not None
+                else None
+            )
             return bool(
                 last is not None
+                and properties
                 and 0 <= (datetime.now(timezone.utc) - last).total_seconds()
                 <= ZENSDK_MAX_DATA_AGE
             )
@@ -1490,10 +1521,55 @@ class NativeZendureRuntime:
             return None
         return self._selected_control_transport(device).transport
 
-    def _active_control_transport(self) -> ZendureTransport | None:
-        """Return the configured path only after current telemetry confirms it."""
+    def _effective_control_transport(self, device: MainDevice):
+        """Keep Cloud authoritative until a selected Local path is proven."""
 
-        transport = self._selected_local_transport()
+        configured = self._selected_control_transport(device)
+        if configured.transport is not ZendureTransport.LOCAL_MQTT:
+            return configured
+        if self._control_transport_ready(ZendureTransport.LOCAL_MQTT):
+            return configured
+        if (
+            not self._local_handover_complete
+            and self._control_transport_ready(ZendureTransport.CLOUD_MQTT)
+        ):
+            from .native_transport_router import AutomaticTransportDecision
+
+            return AutomaticTransportDecision(
+                ZendureTransport.CLOUD_MQTT,
+                "local_handover_cloud_bootstrap",
+            )
+        return configured
+
+    async def _advance_local_handover(self) -> None:
+        """Commit Local ownership once and retire the account Cloud reader."""
+
+        if self._local_handover_complete or self._selected_device is None:
+            return
+        device = self._inventory.devices.get(self._selected_device)
+        if (
+            device is None
+            or self._selected_control_transport(device).transport
+            is not ZendureTransport.LOCAL_MQTT
+            or not self._control_transport_ready(ZendureTransport.LOCAL_MQTT)
+        ):
+            return
+        self._local_handover_complete = True
+        if (
+            self._transport is not None
+            and self._transport.state is ConnectionState.CONNECTED
+        ):
+            await self._transport.async_stop()
+
+    def _active_control_transport(self) -> ZendureTransport | None:
+        """Return the sole path holding current confirmed write authority."""
+
+        if self._selected_device is None:
+            return None
+        device = self._inventory.devices.get(self._selected_device)
+        if device is None:
+            return None
+        transport = self._effective_control_transport(device).transport
         return transport if (
             transport is not None and self._control_transport_ready(transport)
         ) else None
@@ -1520,8 +1596,16 @@ class NativeZendureRuntime:
         )
 
     def _control_sensor_state(self) -> str:
-        transport = self._selected_local_transport()
-        if transport is not None and not self._control_transport_ready(transport):
+        configured = self._selected_local_transport()
+        active = self._active_control_transport()
+        if (
+            configured is ZendureTransport.LOCAL_MQTT
+            and active is ZendureTransport.CLOUD_MQTT
+            and not self._local_handover_complete
+        ):
+            return "native_local_handover_cloud_active"
+        transport = active
+        if transport is None:
             return "native_transport_not_ready"
         if transport is ZendureTransport.ZENSDK:
             return "native_zensdk_active"
