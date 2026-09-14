@@ -480,7 +480,10 @@ class ZendureCloudMqttTransport:
         candidate_id, pack_id = self._route_message(topic, parsed)
         known_topic = (
             topic.endswith("/properties/report")
+            or topic.endswith("/properties/read/reply")
             or topic.endswith("/properties/energy")
+            or topic.endswith("/event/error")
+            or topic.endswith("/event/device")
             or topic.endswith("/state")
         )
         message = CloudMqttMessage(
@@ -496,8 +499,10 @@ class ZendureCloudMqttTransport:
             retained=retained,
         )
         self._messages.append(message)
-        self._last_message_at = received_at
-        if candidate_id is not None:
+        state_message = is_zendure_state_message(message)
+        if state_message:
+            self._last_message_at = received_at
+        if candidate_id is not None and state_message:
             state = self._devices[candidate_id]
             state.last_message_at = received_at
             for name in _property_names(parsed):
@@ -521,6 +526,31 @@ class ZendureCloudMqttTransport:
             if device_id in segments or device_id in payload_ids:
                 return candidate_id, _pack_identity(parsed, device_id)
         return None, _pack_identity(parsed, None)
+
+
+def is_zendure_state_message(message: CloudMqttMessage) -> bool:
+    """Return whether a packet can prove current device state.
+
+    Broad Cloud subscriptions also receive our own reads and writes. Keep
+    those packets for diagnostics, but never let command echoes refresh state
+    or become sensor values.
+    """
+
+    topic = message.topic.rstrip("/")
+    if topic.endswith(
+        ("/properties/read", "/properties/write", "/function/invoke")
+    ):
+        return False
+    if topic.endswith(("/event/error", "/event/device")):
+        return True
+    if message.known_topic:
+        return True
+    payload = message.parsed_payload
+    if not isinstance(payload, Mapping):
+        return False
+    return isinstance(payload.get("properties"), Mapping) or isinstance(
+        payload.get("packData"), list
+    )
 
 
 def _parse_payload(payload: bytes) -> tuple[Any, str]:
