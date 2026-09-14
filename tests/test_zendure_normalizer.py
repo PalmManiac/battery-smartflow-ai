@@ -202,6 +202,17 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             result.unknown_pack_properties, ("futurePackProperty",)
         )
 
+    async def test_command_echo_cannot_become_reported_device_state(self):
+        normalizer = ZendureCloudNormalizer(self.bootstrap)
+        result = normalizer.apply(
+            report(
+                self.at,
+                {"properties": {"minSoc": 100, "socSet": 1000}},
+                topic="properties/write",
+            )
+        )
+        self.assertIsNone(result)
+
     async def test_incremental_update_preserves_previous_values_and_valid_zero(self):
         normalizer = ZendureCloudNormalizer(self.bootstrap)
         normalizer.apply(report(self.at, self.full_payload()))
@@ -315,7 +326,9 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             now=after_window,
         )
 
-        self.assertFalse(result.state.protection_active.valid)
+        self.assertIsNone(result)
+        snapshot = normalizer.snapshot("cloud_mqtt:device-1", now=after_window)
+        self.assertFalse(snapshot.state.protection_active.valid)
 
     async def test_missing_invalid_unsupported_stale_and_offline_are_distinct(self):
         system_id = "cloud_mqtt:device-1"

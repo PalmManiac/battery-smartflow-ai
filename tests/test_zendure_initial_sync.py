@@ -216,6 +216,26 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.completion_reason, "hard_timeout")
         self.assertEqual(len(result.messages), 1)
 
+    async def test_command_echo_is_exported_but_cannot_complete_sync(self):
+        recorder = self.recorder()
+        recorder.observe_message(
+            CloudMqttMessage(
+                received_at=self.time.clock(),
+                topic="iot/product-a/real-device-1/properties/write",
+                payload=b"{}",
+                parsed_payload={"properties": {"minSoc": 100}},
+                payload_format="json",
+                device_candidate_id="cloud_mqtt:real-device-1",
+                pack_id=None,
+                known_topic=False,
+                session_number=1,
+            )
+        )
+        self.time.advance(3)
+        self.assertIsNone(recorder.completion())
+        self.time.advance(7)
+        self.assertEqual(recorder.completion(), (False, "hard_timeout"))
+
     async def test_cloud_completion_ignores_successful_zensdk_fallback(self):
         recorder = self.recorder(
             completion_transport="cloud_mqtt",

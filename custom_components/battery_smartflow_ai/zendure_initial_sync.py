@@ -18,6 +18,7 @@ from .zendure_cloud_mqtt import (
     CloudMqttMessage,
     ConnectionState,
     ZendureCloudMqttTransport,
+    is_zendure_state_message,
 )
 from .zendure_privacy import ZendureDiagnosticSanitizer
 from .zendure_zensdk import ZenSdkReadAttempt
@@ -186,8 +187,11 @@ class ZendureInitialSyncRecorder:
             novel = True
         self._seen_properties.update(properties)
         completion_message = (
-            self._completion_transport is None
-            or message.transport == self._completion_transport
+            is_zendure_state_message(message)
+            and (
+                self._completion_transport is None
+                or message.transport == self._completion_transport
+            )
         )
         completion_novel = False
         if completion_message:

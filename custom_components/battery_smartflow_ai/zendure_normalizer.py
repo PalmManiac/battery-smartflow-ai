@@ -18,7 +18,7 @@ from .core.models import (
     ZendureTransport,
 )
 from .zendure_cloud import ZendureCloudBootstrap
-from .zendure_cloud_mqtt import CloudMqttMessage
+from .zendure_cloud_mqtt import CloudMqttMessage, is_zendure_state_message
 from .zendure_device_matrix import resolve_zendure_device
 from .zendure_hems_activity import HemsActivityDiagnostic, HemsActivityTracker
 
@@ -338,6 +338,8 @@ class ZendureCloudNormalizer:
         *,
         now: datetime | None = None,
     ) -> NormalizationResult | None:
+        if not is_zendure_state_message(message):
+            return None
         system_id = message.device_candidate_id
         if system_id is None or system_id not in self._models:
             return None

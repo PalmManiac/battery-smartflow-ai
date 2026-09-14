@@ -168,6 +168,24 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             transport.device_states["cloud_mqtt:main-1"].last_message_at
         )
 
+    async def test_command_echo_is_retained_but_never_refreshes_device_state(self):
+        transport = ZendureCloudMqttTransport(
+            self.data, session_factory=self.factory, clock=lambda: self.now
+        )
+        await transport.async_start()
+        self.sessions[0].emit(
+            "iot/product-a/main-1/properties/write",
+            json.dumps({"properties": {"minSoc": 100, "socSet": 1000}}).encode(),
+        )
+        await asyncio.sleep(0)
+        self.assertEqual(len(transport.messages), 1)
+        self.assertFalse(transport.messages[0].known_topic)
+        self.assertIsNone(transport.last_message_at)
+        state = transport.device_states["cloud_mqtt:main-1"]
+        self.assertIsNone(state.last_message_at)
+        self.assertEqual(state.property_updated_at, {})
+        await transport.async_stop()
+
     async def test_routes_pack_and_payload_device_identity(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory)
         await transport.async_start()
