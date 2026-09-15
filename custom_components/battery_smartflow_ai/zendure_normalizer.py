@@ -23,7 +23,11 @@ from .zendure_device_matrix import resolve_zendure_device
 from .zendure_hems_activity import HemsActivityDiagnostic, HemsActivityTracker
 
 
-DEFAULT_STALE_AFTER_SECONDS = 30.0
+# Legacy devices such as Hyper 2000 split one logical state across several
+# report groups. Field evidence shows healthy groups can be more than 40
+# seconds apart. Transport readiness remains independently fail-closed at 30
+# seconds, while measurements get enough time to bridge the normal cadence.
+DEFAULT_STALE_AFTER_SECONDS = 90.0
 
 
 class MappingScope(StrEnum):

@@ -171,20 +171,28 @@ class ZendureLegacyCloudBridge:
             connection.connected = success
             if success:
                 connection.session.subscribe(
-                    (f"iot/{product_id}/{device_id}/#",)
+                    (
+                        f"/{product_id}/{device_id}/#",
+                        f"iot/{product_id}/{device_id}/#",
+                    )
                 )
 
         def on_disconnect(_reason: str | None) -> None:
             connection.connected = False
 
         def on_message(topic: str, payload: bytes, _retained: bool) -> None:
-            if topic.startswith("iot/"):
-                marker = (topic, payload)
-                self._cloud_to_local[marker] += 1
-                if not self._publish_local(topic, payload):
-                    self._cloud_to_local[marker] -= 1
-                    if self._cloud_to_local[marker] <= 0:
-                        del self._cloud_to_local[marker]
+            prefixes = (
+                f"/{product_id}/{device_id}/",
+                f"iot/{product_id}/{device_id}/",
+            )
+            if not topic.startswith(prefixes):
+                return
+            marker = (topic, payload)
+            self._cloud_to_local[marker] += 1
+            if not self._publish_local(topic, payload):
+                self._cloud_to_local[marker] -= 1
+                if self._cloud_to_local[marker] <= 0:
+                    del self._cloud_to_local[marker]
 
         session.set_callbacks(on_connect, on_disconnect, on_message)
         await asyncio.to_thread(session.connect)
