@@ -132,13 +132,40 @@ class ZendureLegacyTests(unittest.IsolatedAsyncioTestCase):
         session = FakeCloudSession.instances[-1]
         self.assertEqual(
             session.subscriptions,
-            ("iot/legacy-product/legacy-1/#",),
+            (
+                "/legacy-product/legacy-1/#",
+                "iot/legacy-product/legacy-1/#",
+            ),
         )
         self.assertTrue(bridge.forward_local(topic, payload))
         self.assertTrue(session.published[-1][1]["isHA"])
 
         session.on_message(topic, payload, False)
         self.assertEqual(local[-1], (topic, payload))
+        self.assertFalse(bridge.forward_local(topic, payload))
+        await bridge.async_stop()
+
+    async def test_bridge_relays_slash_prefixed_cloud_state_reply(self):
+        data = await legacy_bootstrap()
+        local = []
+        bridge = ZendureLegacyCloudBridge(
+            data,
+            lambda topic, payload: local.append((topic, payload)) or True,
+            session_factory=FakeCloudSession,
+        )
+        await bridge.async_start()
+        bridge.forward_local(
+            "iot/legacy-product/legacy-1/properties/read",
+            b'{"properties":["getAll"]}',
+        )
+        await asyncio.sleep(0)
+        session = FakeCloudSession.instances[-1]
+        topic = "/legacy-product/legacy-1/properties/report"
+        payload = json.dumps({"properties": {"electricLevel": 54}}).encode()
+
+        session.on_message(topic, payload, False)
+
+        self.assertEqual(local, [(topic, payload)])
         self.assertFalse(bridge.forward_local(topic, payload))
         await bridge.async_stop()
 

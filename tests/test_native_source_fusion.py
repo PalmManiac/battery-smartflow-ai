@@ -106,7 +106,7 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
 
     def test_fresh_cloud_value_replaces_stale_zensdk_value(self):
         self.fusion.apply(report(self.now, {"electricLevel": 40}, transport="zensdk"))
-        later = self.now + timedelta(seconds=31)
+        later = self.now + timedelta(seconds=91)
         state = self.fusion.apply(
             report(later, {"electricLevel": 42}, transport="cloud_mqtt")
         ).state
