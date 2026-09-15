@@ -118,6 +118,42 @@ class DebugExporterTests(unittest.TestCase):
             "cloud_mqtt:debug_device_01",
         )
 
+    def test_export_sanitizes_native_runtime_snapshot(self) -> None:
+        package = self.package()
+        package.native_zendure = {
+            "selected_device": "cloud_mqtt:private-device-key",
+            "devices": {
+                "private-device-key": {
+                    "device_id": "private-device-key",
+                    "serial_number": "PRIVATE-SERIAL-123",
+                }
+            },
+            "local_mqtt": {
+                "broker": "mqtt://192.0.2.44:1883",
+                "username": "private-user",
+                "password": "private-password",
+            },
+            "native_control": "enabled",
+        }
+
+        result = export_debug_package(
+            package,
+            config_directory=self.config_directory,
+        )
+        text = result.path.read_text(encoding="utf-8")
+        data = json.loads(text)
+
+        self.assertNotIn("private-device-key", text)
+        self.assertNotIn("PRIVATE-SERIAL-123", text)
+        self.assertNotIn("192.0.2.44", text)
+        self.assertNotIn("private-user", text)
+        self.assertNotIn("private-password", text)
+        self.assertEqual(data["native_zendure"]["native_control"], "enabled")
+        self.assertEqual(
+            data["native_zendure"]["selected_device"],
+            "cloud_mqtt:ZD_DEVICE_A1",
+        )
+
     def test_filename_does_not_repeat_untrusted_version_text(self) -> None:
         result = export_debug_package(
             self.package(version="../4.4.0 test"),
