@@ -82,6 +82,13 @@ class FailedStateRequestSession(FakeSession):
         raise CloudMqttError("state_request_failed")
 
 
+class WildcardRejectedSession(FakeSession):
+    def subscribe(self, topics):
+        if topics == ("#",):
+            raise CloudMqttError("subscribe_failed")
+        self.subscriptions = topics
+
+
 class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.sessions = []
@@ -135,6 +142,28 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         )
         await transport.async_stop()
         self.assertTrue(self.sessions[0].disconnected)
+
+    async def test_wildcard_rejection_falls_back_to_device_topics(self):
+        sessions = []
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=lambda credentials: (
+                sessions.append(WildcardRejectedSession(credentials)) or sessions[-1]
+            ),
+            clock=lambda: self.now,
+        )
+        await transport.async_start()
+        self.assertEqual(transport.state, ConnectionState.CONNECTED)
+        self.assertEqual(
+            sessions[0].subscriptions,
+            (
+                "/product-a/main-1/#",
+                "/product-b/main-2/#",
+                "iot/product-a/main-1/#",
+                "iot/product-b/main-2/#",
+            ),
+        )
+        await transport.async_stop()
 
     async def test_initial_incremental_unknown_and_invalid_payloads_are_retained(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory, clock=lambda: self.now)

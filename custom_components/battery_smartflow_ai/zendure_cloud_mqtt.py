@@ -169,6 +169,7 @@ class ZendureCloudMqttTransport:
             "socket_family": "unknown",
             "connect_packet_sent": False,
         }
+        self._subscribed_topics: tuple[str, ...] = ()
         self._verification = NativeCommandVerificationManager()
         self._command_adapter: ZendureCloudCommandAdapter | None = None
         self._command_lock = asyncio.Lock()
@@ -388,7 +389,20 @@ class ZendureCloudMqttTransport:
         if self._session is None:
             return
         try:
-            self._session.subscribe(self.topics)
+            requested_topics = self.topics
+            try:
+                self._session.subscribe(requested_topics)
+            except CloudMqttError:
+                fallback_topics = self._device_topics()
+                if requested_topics != ("#",) or not fallback_topics:
+                    raise
+                _LOGGER.warning(
+                    "Zendure Cloud MQTT wildcard subscription unavailable; "
+                    "falling back to device-scoped topics"
+                )
+                self._session.subscribe(fallback_topics)
+                requested_topics = fallback_topics
+            self._subscribed_topics = requested_topics
             for device_id, _candidate_id, product_id in self._routes:
                 if product_id is None:
                     continue
@@ -410,7 +424,7 @@ class ZendureCloudMqttTransport:
         self._connected.set()
         _LOGGER.info(
             "Zendure Cloud MQTT connected; subscribed to %d state topics",
-            len(self.topics),
+            len(self._subscribed_topics),
         )
 
     def _on_disconnect(self, reason: str | None) -> None:
