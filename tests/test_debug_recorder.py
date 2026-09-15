@@ -108,6 +108,33 @@ class DebugRecorderTests(unittest.TestCase):
         )
         self.assertFalse(self.recorder.is_active)
 
+    def test_zero_sample_package_retains_latest_native_runtime_snapshot(self) -> None:
+        self.recorder.start(
+            duration_minutes=10,
+            now=self.start,
+            native_zendure={
+                "status": "starting",
+                "selected_device": "cloud_mqtt:private-device-key",
+            },
+        )
+        self.recorder.update_native_zendure(
+            {
+                "status": "local_handover",
+                "message_count": 6,
+                "local_handover": {"complete": False},
+                "broker": "mqtt://private-broker.example:1883",
+            }
+        )
+
+        package = self.recorder.stop(now=self.start + timedelta(minutes=1))
+
+        assert package is not None
+        result = package.as_dict()
+        self.assertEqual(result["summary"]["captured_sample_count"], 0)
+        self.assertEqual(result["native_zendure"]["status"], "local_handover")
+        self.assertEqual(result["native_zendure"]["message_count"], 6)
+        self.assertEqual(result["native_zendure"]["broker"], "[REDACTED]")
+
     def test_sample_arriving_at_end_is_not_recorded(self) -> None:
         self.recorder.start(duration_minutes=10, now=self.start)
 

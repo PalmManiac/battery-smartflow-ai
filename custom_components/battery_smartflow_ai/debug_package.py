@@ -91,6 +91,7 @@ class DebugPackage:
     season_mode: str | None = None
     config: Mapping[str, Any] = field(default_factory=dict)
     profile: Mapping[str, Any] = field(default_factory=dict)
+    native_zendure: Mapping[str, Any] = field(default_factory=dict)
     samples: list[DebugSample] = field(default_factory=list)
     summary: Mapping[str, Any] = field(default_factory=dict)
     warnings: list[Any] = field(default_factory=list)
@@ -120,6 +121,7 @@ class DebugPackage:
             },
             "config": self.config,
             "profile": self.profile,
+            "native_zendure": self.native_zendure,
             "samples": [sample.as_dict() for sample in self.samples],
             "summary": self.summary,
             "warnings": self.warnings,

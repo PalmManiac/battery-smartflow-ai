@@ -1871,6 +1871,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 },
             },
             profile=self._get_active_profile(),
+            native_zendure=self._debug_native_zendure_snapshot(),
         )
         self._debug_last_error = None
         await self.async_request_refresh()
@@ -1878,6 +1879,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_stop_debug_recording(self) -> None:
         """Stop the active debug recording and write its JSON package."""
 
+        self._debug_recorder.update_native_zendure(
+            self._debug_native_zendure_snapshot()
+        )
         package = self._debug_recorder.stop(now=self._clock.utc_now())
         if package is not None:
             await self._async_export_debug_package(package)
@@ -1893,6 +1897,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if not self._debug_recorder.is_active:
             return
+        self._debug_recorder.update_native_zendure(
+            self._debug_native_zendure_snapshot()
+        )
         package = self._debug_recorder.record(
             build_debug_sample(
                 timestamp=now,
@@ -1907,6 +1914,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # Queue one follow-up refresh after an automatic completion so HA
             # publishes the inactive state and exported path immediately.
             self.hass.async_create_task(self.async_request_refresh())
+
+    def _debug_native_zendure_snapshot(self) -> dict[str, Any]:
+        """Return the current native runtime diagnostics for a debug package."""
+
+        native = getattr(self, "native_zendure", None)
+        diagnostic_data = getattr(native, "diagnostic_data", None)
+        if not callable(diagnostic_data):
+            return {}
+        try:
+            data = diagnostic_data()
+        except Exception:  # pragma: no cover - defensive diagnostic boundary
+            _LOGGER.exception("Could not capture native Zendure debug diagnostics")
+            return {"status": "diagnostics_unavailable"}
+        return dict(data) if isinstance(data, Mapping) else {}
 
     def _attr(self, entity_id: str | None, attr: str) -> Any:
         if not entity_id:
@@ -3837,6 +3858,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> dict[str, Any]:
         """Stop the active command and expose a deterministic safe-idle state."""
 
+        self._debug_recorder.update_native_zendure(
+            self._debug_native_zendure_snapshot()
+        )
         package = self._debug_recorder.tick(now=self._clock.utc_now())
         if package is not None:
             await self._async_export_debug_package(package)

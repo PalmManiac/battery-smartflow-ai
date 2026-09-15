@@ -35,6 +35,7 @@ class DebugPackageTests(unittest.TestCase):
             season_mode="summer",
             config={"important_options": {"soc_min": 12}},
             profile={"max_charge_w": 2400},
+            native_zendure={"status": "connected"},
             samples=[
                 DebugSample(
                     timestamp=self.start,
@@ -52,12 +53,21 @@ class DebugPackageTests(unittest.TestCase):
         self.assertTrue(encoded)
         self.assertEqual(
             list(result),
-            ["meta", "config", "profile", "samples", "summary", "warnings"],
+            [
+                "meta",
+                "config",
+                "profile",
+                "native_zendure",
+                "samples",
+                "summary",
+                "warnings",
+            ],
         )
         self.assertEqual(result["meta"]["schema"], DEBUG_SCHEMA_NAME)
         self.assertEqual(result["meta"]["schema_version"], DEBUG_SCHEMA_VERSION)
         self.assertEqual(result["meta"]["recording_start"], "2026-08-09T10:00:00Z")
         self.assertEqual(result["samples"][0]["raw_values"]["soc"], 42.5)
+        self.assertEqual(result["native_zendure"]["status"], "connected")
 
     def test_secret_filter_is_recursive_and_does_not_mutate_input(self) -> None:
         source = {

@@ -54,6 +54,7 @@ class DebugRecorder:
         self._season_mode: str | None = None
         self._config: Mapping[str, Any] = {}
         self._profile: Mapping[str, Any] = {}
+        self._native_zendure: Mapping[str, Any] = {}
 
     @property
     def is_active(self) -> bool:
@@ -83,6 +84,7 @@ class DebugRecorder:
         season_mode: str | None = None,
         config: Mapping[str, Any] | None = None,
         profile: Mapping[str, Any] | None = None,
+        native_zendure: Mapping[str, Any] | None = None,
     ) -> DebugRecorderStatus:
         """Start a fresh recording with one of the supported durations."""
 
@@ -104,7 +106,15 @@ class DebugRecorder:
         self._season_mode = season_mode
         self._config = redact_secrets(config or {})
         self._profile = redact_secrets(profile or {})
+        self._native_zendure = redact_secrets(native_zendure or {})
         return self.status
+
+    def update_native_zendure(self, diagnostics: Mapping[str, Any]) -> None:
+        """Retain the latest privacy-safe native runtime snapshot while active."""
+
+        if not self._active:
+            return
+        self._native_zendure = redact_secrets(diagnostics)
 
     def record(self, sample: DebugSample, *, now: datetime) -> DebugPackage | None:
         """Capture a sample or auto-stop when the configured end is reached."""
@@ -164,6 +174,7 @@ class DebugRecorder:
             season_mode=self._season_mode,
             config=self._config,
             profile=self._profile,
+            native_zendure=self._native_zendure,
             samples=list(self._samples),
             summary={
                 "stop_reason": stop_reason,
@@ -179,4 +190,5 @@ class DebugRecorder:
         self._samples.clear()
         self._captured_sample_count = 0
         self._dropped_sample_count = 0
+        self._native_zendure = {}
         return package
