@@ -1047,14 +1047,7 @@ class NativeZendureRuntime:
             )
             self._capture_path = str(exported.path)
             self._consume_captured_messages(capture.messages)
-            if capture.completion_reason not in {
-                "initial_sync_quiet",
-                "hard_timeout",
-            } and not (
-                self._selected_local_transport() is ZendureTransport.LOCAL_MQTT
-                and self._local_transport is not None
-                and self._local_transport.state is ConnectionState.CONNECTED
-            ):
+            if self._capture_failure_is_fatal(capture.completion_reason):
                 self._error = capture.completion_reason
                 self._set_status(STATUS_ERROR)
                 return
@@ -1085,6 +1078,23 @@ class NativeZendureRuntime:
                 await self._transport.async_stop()
             if self._local_transport is not None:
                 await self._local_transport.async_stop()
+
+    def _capture_failure_is_fatal(self, reason: str) -> bool:
+        """Keep a proven local transport alive when Cloud observation fails."""
+
+        if reason in {"initial_sync_quiet", "hard_timeout"}:
+            return False
+        if (
+            self._selected_local_transport() is ZendureTransport.LOCAL_MQTT
+            and self._local_transport is not None
+            and self._local_transport.state is ConnectionState.CONNECTED
+        ):
+            return False
+        return not (
+            self._configured_transport is ZendureTransport.ZENSDK
+            and self._selected_device is not None
+            and self._selected_device in self._zensdk_last_success
+        )
 
     async def _post_json(self, url: str, **kwargs: Any) -> _JsonPayloadResponse:
         session = async_get_clientsession(self._hass)

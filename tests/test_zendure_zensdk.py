@@ -561,6 +561,32 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         target._schedule_zensdk_poll("failing", 190.0)
         self.assertEqual(target._zensdk_poll_delay["failing"], 5.0)
 
+    def test_cloud_capture_failure_is_nonfatal_after_selected_zensdk_success(self):
+        target = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device="selected",
+            notify=lambda: None,
+            control_transport="zensdk",
+        )
+        target._zensdk_last_result["selected"] = "success"
+        target._zensdk_last_success["selected"] = datetime.now(timezone.utc)
+
+        self.assertFalse(target._capture_failure_is_fatal("subscribe_failed"))
+        target._initialize_zensdk_schedule(100.0)
+        self.assertEqual(target._zensdk_next_poll["selected"], 105.0)
+
+    def test_cloud_capture_failure_remains_fatal_without_selected_zensdk_success(self):
+        target = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device="selected",
+            notify=lambda: None,
+            control_transport="zensdk",
+        )
+
+        self.assertTrue(target._capture_failure_is_fatal("subscribe_failed"))
+
 
 if __name__ == "__main__":
     unittest.main()
