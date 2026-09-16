@@ -2,8 +2,9 @@
 
 **Language:** [Deutsch](anleitung.md) | English
 
-> Applies to Battery SmartFlow AI V4.6.0 and later
-> Last content update: August 25, 2026
+> V5 first-time setup: current as of 5.0.0-rc24 (September 2026). The detailed
+> feature chapters also retain information for installations using existing
+> Home Assistant entities.
 
 **Intelligent, economical and stable control for Zendure SolarFlow systems in Home Assistant**
 
@@ -11,6 +12,7 @@
 
 ## Table of Contents
 
+* [V5 quick start: connect Zendure directly](#v5-quick-start-connect-zendure-directly)
 * [Chapter 1 – What does Battery SmartFlow AI do?](#chapter-1--what-does-battery-smartflow-ai-do)
 * [Chapter 2 – Mandatory Requirements](#chapter-2--mandatory-requirements)
 * [Chapter 3 – Installation](#chapter-3--installation)
@@ -23,6 +25,80 @@
 * [Chapter 10 – Best Practices](#chapter-10--best-practices--recommended-settings)
 * [Appendix 1 - Device Profile Parameters](#appendix-1--device-profile-parameters)
 * [Appendix 2 – Important Diagnostic Values for Support](#appendix-2--important-diagnostic-values-for-support)
+
+---
+
+# V5 quick start: connect Zendure directly
+
+V5 can discover a Zendure system, expose its measurements as Home Assistant
+devices and entities, and control it without Z-HA once setup succeeds. **Z-HA is
+not required** for this path. The existing-HA-entities path remains available
+as an alternative. One main system is currently selected for control; detected
+battery packs appear as related devices.
+
+> [!IMPORTANT]
+> These screenshots show a SolarFlow 2400 AC with two battery packs. Other
+> models and communication paths may need additional setup. Never run two
+> integrations or app automations as simultaneous controllers of one device.
+
+1. **Install and restart.** Install the desired V5 version through HACS and
+   restart Home Assistant. Release candidates are prereleases; you may need to
+   select one explicitly in HACS.
+2. **Choose a connection path.** Go to *Settings → Devices & services → Add
+   integration → Battery SmartFlow AI* and choose **Connect Zendure directly**.
+   **Use existing HA entities** is the alternative for existing sensors and
+   controls, for example from Z-HA.
+
+   ![V5: choose direct Zendure or existing Home Assistant entities](images/v5_setup_01_connection_choice.png)
+
+3. **Sign in with the Zendure app token.** Enter the app token. It is stored as
+   a secret, not exposed as a readable sensor or diagnostic value. This is the
+   app token, not your MQTT broker password.
+
+   ![V5: protected Zendure app-token entry](images/v5_setup_02_app_token.png)
+
+4. **Confirm the device and communication path.** Select the correct main
+   device, especially if you have several identical models. Use the serial
+   number or device name when Zendure supplies one. Available paths depend on
+   the model: newer devices use ZenSDK; Legacy devices may use Cloud or Local
+   MQTT. *Local MQTT* requires your **own local broker** details. If a Legacy
+   device is already configured for that broker, leave the option to configure
+   the device again off; use it only when provisioning is needed. Cloud MQTT
+   needs no local broker but does require an internet connection.
+5. **Complete the remaining system settings.** Select your grid-power source
+   and optional electricity-price and solar-forecast sources. On the direct
+   path, V5 obtains the device profile, available hardware sensors, battery
+   packs and capacity from device data when available. You do not have to
+   select Z-HA entities or enter a manual pack count for these values. A
+   reliable grid sensor remains important for accurate power regulation.
+6. **Optionally name devices and assign areas.** Home Assistant then displays
+   the control device, economics device, main Zendure device and detected
+   packs. Area assignment can be skipped and changed later.
+
+   ![V5: name discovered devices and assign areas](images/v5_setup_03_assign_devices.png)
+
+7. **Check incoming data.** Under *Settings → Devices & services → Battery
+   SmartFlow AI*, the main device and packs should appear. Check that SoC and
+   power readings update and inspect the communication path in diagnostics.
+   Device and entity counts vary by model and available data.
+
+   ![V5: control, economics, main device and two battery packs after setup](images/v5_setup_04_device_overview.png)
+
+If readings are missing, BSFAI stays safely idle. First check the app token,
+selected device, communication path and actual data reception. The *Zendure
+initial-sync JSON* and a time-limited BSFAI debug recording can help with
+support; review both files for personal information before sharing them. Do
+not enable native control alongside active Z-HA regulation.
+
+## Upgrade from V4.7.4 to V5
+
+Create a Home Assistant backup before updating. An existing V4 entry initially
+retains its existing-entities path; native control is **not enabled
+automatically**. First confirm that the previous setup still works after the
+restart. To switch to direct control later, open **Configure → Native Zendure**,
+confirm the app token, main device and communication path, and ensure Z-HA is
+not controlling the same device. Then verify incoming data before testing
+regulation. An upgrade is different from the new installation shown above.
 
 ---
 
@@ -135,8 +211,9 @@ Battery SmartFlow AI is not intended to switch as much as possible, but rather:
 
 In order for Battery SmartFlow AI to work correctly and stably, certain settings must be observed.
 
-The integration takes full control of the Zendure system.
-Parallel or conflicting controls lead to instability.
+The integration controls the selected Zendure system. Parallel or conflicting
+controllers lead to instability. **Z-HA is not a prerequisite** for V5's direct
+connection path.
 
 > [!IMPORTANT]
 > If the system does not work as expected, the prerequisites in this chapter should first be checked.
@@ -174,22 +251,24 @@ Battery SmartFlow AI requires the cleanest possible hardware configuration witho
 
 ---
 
-## 2️⃣ Zendure Home Assistant integration
+## 2️⃣ Zendure communication and a single controller
 
-The following settings are required:
+With **Connect Zendure directly**, BSFAI discovers the device itself. Z-HA is
+not installed or required for this path. If you already use Z-HA, disable its
+regulation or the integration before BSFAI takes over native control. Do not
+delete Z-HA prematurely if you want a reversible migration.
 
-* Energy export: **Allowed**
-* the P1 sensor may be selected during initial Z-HA setup
-* afterwards, set Z-HA Manager operating mode to **OFF** so Z-HA does not
-  regulate in parallel with BSFAI
-* no parallel automations that change AC mode or power limits
+With **Use existing HA entities**, measurements and controls come from another
+integration such as Z-HA. Verify that those entities receive fresh values. If
+using Z-HA, set its Manager operating mode to **OFF** and avoid other
+automations that change AC mode or power limits.
 
-![Z-HA Manager with operating mode Off](images/zha_manager.png)
+![Z-HA Manager with operating mode Off – only for the existing-entities path](images/zha_manager.png)
 
 The screenshot uses a German interface; `Betriebsmodus: Aus` means `Operating
 mode: Off`.
 
-Incorrect settings can lead to:
+Parallel control can lead to:
 
 * Discharge terminations
 * blocked AC modes
@@ -345,7 +424,12 @@ After installation, Battery SmartFlow AI is set up via Home Assistant:
 Settings → Devices & services → Add integration → Battery SmartFlow AI
 ```
 
-An example of the integration entry:
+The illustrated **native V5 first-time setup** is in the
+[V5 quick start](#v5-quick-start-connect-zendure-directly). Sections 4.1 through
+4.6 below primarily describe the alternative **existing HA entities** path.
+Their older screenshots do not show the native V5 setup dialog.
+
+An example of an older integration entry:
 
 ![Integration entry](images/config_00_config.png)
 
@@ -356,6 +440,11 @@ An example of the integration entry:
 ---
 
 ## 4.1 Device profile & basic data
+
+> [!NOTE]
+> This section applies to **Use existing HA entities**. On the direct Zendure
+> path, the device profile, SoC, hardware power readings and pack data come
+> from device discovery when the model supplies them.
 
 ![Basic configuration](images/config_01_basic.png)
 
@@ -400,12 +489,10 @@ PV connection. They therefore use the neutral rule vote of the
 SF2400AC, each with their own confirmed performance limits.
 
 > [!WARNING]
-> Practical use is currently possible with the new 3000 and 4000 models
-> may still be limited by a firmware problem. A token connection to
-> Z-HA can come about without the device subsequently having current data
-> delivers. Entities created via MQTT are not a reliable alternative,
-> because this way is no longer supported by Zendure and is not reliable
-> is updated.
+> A discovered device name alone does not prove that data is arriving.
+> Check fresh SoC and power readings and the selected communication path for
+> every model. BSFAI cannot regulate safely without current data; neither a
+> device profile nor a merely created MQTT entity replaces that check.
 
 ---
 
@@ -1944,7 +2031,10 @@ Lower protection limit.
 
 ## Number of battery packs
 
-Used together with packing capacity for total capacity.
+On the direct V5 path, the pack count comes from device data rather than a
+manual configuration field. It contributes to planning together with detected
+capacity. Older configuration values may still matter on the existing-entities
+path.
 
 ---
 
@@ -2006,21 +2096,24 @@ Using debug mode is described in [Chapter 7.3](#73-debug-mode).
 
 # Chapter 7 – Editing Settings
 
-The settings area only contains options that are known during normal operation
-should be changed by the user.
+The settings area contains options that users may change during normal
+operation. Device-specific regulation values are managed by the selected
+profile. Older saved profile overrides remain for compatibility but are not
+presented in the normal settings dialog.
 
-Device-specific values for charging and discharging control are automatically carried out
-manages the selected device profile. Profile customizations already saved
-Older versions are retained for compatibility reasons, but are not
-more offered in the settings dialog.
+V5 offers four options areas:
 
-Since V4.4, the settings dialog is divided into three areas:
+![Older settings menu with debug mode](images/config_07_settings_menu.png)
 
-![Settings areas with debug mode](images/config_07_settings_menu.png)
+* **General** – regularly needed system settings
+* **Expert mode** – advanced planning and protection features
+* **Native Zendure** – reopen app-token, device and communication settings,
+  for example after changing accounts; a stored token appears only as a masked
+  placeholder
+* **Debug mode** – time-limited recording for troubleshooting and support
 
-* **General** – basic, regularly required settings
-* **expert mode** – advanced planning and protection functions
-* **debug mode** – time-limited recording for troubleshooting and support purposes only
+The screenshot above shows the older V4 menu. On the direct V5 path, the app
+token is already part of the first-time setup flow.
 
 ---
 
@@ -2598,25 +2691,21 @@ Typical optimizations:
 
 # 8.8 Notes on SolarFlow 3000/4000 Mix
 
-The profiles of the new mix devices are fully selectable in V4.3.0 and their
-Confirmed AC/off-grid limits are technically taken into account. The
-However, data provision lies outside of Battery SmartFlow AI.
+The Mix profiles account for their respective AC and off-grid limits. A
+recognized profile does not prove that measurements are current. The
+existing-entities path requires fresh source entities; the direct V5 path
+requires fresh device data on the selected communication path.
 
-Currently a token connection of the devices to Z-HA can appear successful,
-although no current measurement and control data due to a firmware problem
-be delivered. In this case, Battery SmartFlow AI cannot function despite the correct profile
-not work.
-
-If you have a support request for these models, you should check them first
-will:
+For support with these models, first check:
 
 * exact model name
 * installed firmware version
-* whether the Z-HA entities actually continuously deliver new values
+* whether Z-HA entities on the existing-entities path receive new values
+* whether native Zendure messages arrive on the direct V5 path
 * whether SoC, battery power, AC mode and charge and discharge limit are available
 
-MQTT entities alone are not considered reliable evidence because this way
-is no longer supported by Zendure and is not reliably updated.
+A created MQTT entity alone is not proof of current data. Fresh values and a
+valid SoC are what matter.
 
 ---
 
@@ -2822,13 +2911,11 @@ effect.
 
 ## 9.10 SolarFlow 3000/4000 Mix does not provide data
 
-If the token connection to Z-HA is successful, but the entities are not current
-Deliver values, this is probably the known firmware problem at the moment
-models. The device profile in Battery SmartFlow AI may be missing source data
-not replace.
-
-Check the model, firmware version and the timestamps or status changes of the
-Z-HA entities. MQTT is not a reliably supported fallback solution.
+First identify the active setup path. On the existing-entities path, Z-HA or
+other source entities must provide fresh SoC and power readings. On the direct
+V5 path, check the communication path, last data reception and native Zendure
+message count. Note the model and firmware version for support. A device
+profile cannot replace missing measurements.
 
 ---
 
