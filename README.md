@@ -31,6 +31,28 @@ Battery SmartFlow AI ist ein privates Freizeitprojekt. Wenn dir die Integration 
 
 ---
 
+# Battery SmartFlow AI becomes independent
+
+With V5, supported Zendure systems can be connected **directly**: BSFAI
+discovers the main device and battery packs, creates their Home Assistant
+entities and controls the selected system without requiring Z-HA. The existing
+HA-entity path remains available for users who prefer it or need it for their
+hardware. One main system is currently controlled at a time.
+
+On a SolarFlow 2400 AC, a controlled first-device ZenSDK write/readback test
+measured a **1.528 s median response**, compared with **2.994 s through
+Z-HA**—up to **49% shorter measured latency and response time** in that test.
+This is a path-specific measurement, not a guaranteed speedup for every model,
+network or normal control cycle. Local MQTT and Cloud MQTT require their own
+device-specific validation.
+See the [measurement method and limitations](docs/architecture/native-transport-metrics-v5.0.0.md#controlled-sf2400ac-baseline).
+
+V5 is currently a **release candidate**. Start with the illustrated
+[V5 quick start](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
+or the [German guide](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
+
+---
+
 # 🌍 Language
 
 * 🇬🇧 English
@@ -142,21 +164,23 @@ In the Zendure app:
 
 ---
 
-## 2️⃣ Zendure Home Assistant integration
+## 2️⃣ Choose one Zendure control path
 
-The following settings are mandatory:
+**Direct Zendure connection (V5):** Z-HA is not required. Enter the Zendure
+app token, select the device and confirm a communication path available for
+that model. ZenSDK, Local MQTT and Cloud MQTT are distinct paths; Local MQTT
+for Legacy devices requires your own broker details and, if the device is not
+already provisioned, additional setup. Check that fresh SoC and power data
+arrive before relying on control.
 
-* The P1 sensor may be selected during initial Z-HA setup
-* Energy export: **Allowed**
-* Afterwards: Z-HA Manager → Operating mode **OFF**, so Z-HA does not regulate
-  in parallel with BSFAI
+**Existing HA entities:** Use sensors and controls supplied by another
+integration, such as Z-HA. Verify that they update. If Z-HA is used, set its
+Manager operating mode to **OFF** so it does not regulate in parallel with
+BSFAI. Do not let other automations change the same AC mode or power limits.
 
-<img src="docs/images/zha_manager.png" width="350">
+<img src="docs/images/zha_manager.png" width="350" alt="Z-HA Manager set to Off for the existing-entities path">
 
-The screenshot uses a German interface; `Betriebsmodus: Aus` corresponds to
-`Operating mode: Off`.
-
-Incorrect settings may lead to:
+Parallel controllers may lead to:
 
 * Blocked AC modes
 * Discharge interruptions
@@ -229,28 +253,20 @@ After installation:
 
 ---
 
-## 1️⃣ Main configuration
+## 1️⃣ Choose the setup path
 
-<img src="docs/images/config_00_config.png" width="750">
+<img src="docs/images/v5_setup_01_connection_choice.png" width="610" alt="V5 first-time setup: direct Zendure connection or existing HA entities">
 
-Here you select:
+* **Connect Zendure directly:** enter the app token, choose the main device
+  and communication path, then configure external grid, price and forecast
+  inputs. V5 derives the profile and available battery-pack data from the
+  device when provided; Z-HA sensors are not required.
+* **Use existing HA entities:** select the profile, SoC, power and control
+  entities supplied by another integration. The older configuration
+  screenshots and field-by-field explanations in the guide apply to this path.
 
-* Device profile
-* Battery SoC sensor
-* Battery AC power sensor
-* PV power sensor
-* Native battery PV power sensor (optional, for directly connected modules)
-* Electricity price (optional)
-* Price history / forecast (optional)
-* PV forecast today / tomorrow (optional)
-* Zendure AC mode
-* Charge & discharge entities
-* Grid mode
-* Additional battery charge/discharge sensors (optional)
-* Off-grid / island socket sensors (optional)
-* SoC limit status sensor (optional)
-
-📖 Detailed explanations can be found in the **manual**.
+Home Assistant then offers to name and assign the detected devices. See the
+[illustrated V5 setup](docs/user-guide.md#v5-quick-start-connect-zendure-directly).
 
 ---
 
@@ -288,11 +304,12 @@ The unified power regulation is the mandatory command path for all installations
 
 ---
 
-## 5️⃣ Off-grid / island socket configuration
+## 5️⃣ Off-grid / island socket configuration (existing-entities path)
 
 <img src="docs/images/conf_06_offgrid.png" width="700">
 
-For Zendure systems with an off-grid / island socket, optional sensors can be configured:
+For the existing-entities path, optional sensors can be configured for systems
+with an off-grid / island socket:
 
 * Off-grid power
 * Off-grid mode
@@ -581,6 +598,30 @@ For detailed setup, screenshots, examples, FAQ and troubleshooting, see:
 
 ---
 
+# Battery SmartFlow AI wird unabhängig
+
+Mit V5 lassen sich unterstützte Zendure-Systeme **direkt** verbinden: BSFAI
+erkennt Hauptgerät und Akku-Packs, legt ihre Home-Assistant-Entitäten an und
+steuert das ausgewählte System ohne Z-HA. Der Weg über vorhandene HA-Entitäten
+bleibt als Alternative bestehen. Aktuell wird jeweils ein Hauptsystem
+gesteuert.
+
+Bei einem kontrollierten ZenSDK-Schreib-/Rücklesetest mit einem SolarFlow 2400
+AC lag die gemessene Reaktionszeit im Median bei **1,528 s statt 2,994 s über
+Z-HA** – in diesem Test **bis zu 49 % kürzere Latenz- und Reaktionszeit**.
+Das ist ein Ergebnis für dieses Gerät und diesen Messweg, keine allgemeine
+Geschwindigkeitsgarantie für jedes Modell, Netzwerk oder jeden Regelzyklus.
+Lokales MQTT und Cloud MQTT müssen je Gerät gesondert bewertet werden.
+Messaufbau und Grenzen stehen in der
+[technischen Messnotiz](docs/architecture/native-transport-metrics-v5.0.0.md#controlled-sf2400ac-baseline).
+
+V5 ist derzeit ein **Release Candidate**. Der bebilderte
+[V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
+und der [englische User Guide](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
+führen durch die neue Ersteinrichtung.
+
+---
+
 ## Was macht diese Integration?
 
 **Battery SmartFlow AI** steuert dein Zendure SolarFlow System automatisch – basierend auf:
@@ -683,18 +724,24 @@ In der Zendure App:
 
 ---
 
-## 2️⃣ Zendure Home Assistant Integration
+## 2️⃣ Einen Zendure-Steuerungsweg wählen
 
-Folgende Einstellungen sind zwingend erforderlich:
+**Zendure direkt verbinden (V5):** Z-HA wird nicht benötigt. Gib den Zendure-
+App-Token ein, wähle das Gerät und bestätige einen für das Modell verfügbaren
+Kommunikationsweg. ZenSDK, lokales MQTT und Cloud MQTT sind unterschiedliche
+Wege. Legacy-Geräte benötigen für lokales MQTT die Daten des eigenen Brokers
+und gegebenenfalls eine einmalige Geräteeinrichtung. Prüfe vor dem Regelbetrieb,
+ob SoC und Leistung aktuell eintreffen.
 
-* Bei der Ersteinrichtung von Z-HA darf der P1-Sensor ausgewählt werden
-* Energie-Export: **Erlaubt**
-* Anschließend: Z-HA-Manager → Betriebsmodus **AUS**, damit Z-HA nicht parallel
-  zu BSFAI regelt
+**Vorhandene HA-Entitäten verwenden:** Sensoren und Regler kommen von einer
+anderen Integration, zum Beispiel Z-HA. Prüfe ihre Aktualisierung. Falls
+Z-HA verwendet wird, stelle seinen Manager-Betriebsmodus auf **AUS**, damit
+er nicht parallel zu BSFAI regelt. Weitere Automationen dürfen nicht denselben
+AC-Modus oder dieselben Leistungsgrenzen ändern.
 
-<img src="docs/images/zha_manager.png" width="350">
+<img src="docs/images/zha_manager.png" width="350" alt="Z-HA-Manager AUS beim Entitäten-Weg">
 
-Falsche Einstellungen können führen zu:
+Parallele Regler können führen zu:
 
 * Blockierten AC-Modi
 * Entladeabbrüchen
@@ -768,28 +815,21 @@ Nach der Installation:
 
 ---
 
-## 1️⃣ Hauptkonfiguration
+## 1️⃣ Einrichtungsweg wählen
 
-<img src="docs/images/config_00_config.png" width="750">
+<img src="docs/images/v5_setup_01_connection_choice.png" width="610" alt="V5-Ersteinrichtung: Zendure direkt oder vorhandene HA-Entitäten">
 
-Hier werden ausgewählt:
+* **Zendure direkt verbinden:** App-Token eingeben, Hauptgerät und
+  Kommunikationsweg wählen, anschließend externe Netz-, Preis- und
+  Prognosequellen konfigurieren. V5 übernimmt Profil und verfügbare Akku-Pack-
+  Daten aus dem Gerät, soweit diese geliefert werden; Z-HA-Sensoren sind nicht
+  nötig.
+* **Vorhandene HA-Entitäten verwenden:** Profil, SoC, Leistung und Steuer-
+  Entitäten aus einer anderen Integration auswählen. Die älteren Konfigurations-
+  Screenshots und Felderklärungen in der Anleitung gelten für diesen Weg.
 
-* Geräteprofil
-* Batterie-SoC Sensor
-* Batterie-AC-Leistungssensor
-* PV-Leistungssensor
-* Nativer PV-Leistungssensor des Batteriesystems (optional, für direkt angeschlossene Module)
-* Strompreis (optional)
-* Preisverlauf / Preisprognose (optional)
-* PV-Prognose heute / morgen (optional)
-* Zendure AC-Modus
-* Lade- & Entlade-Entitäten
-* Netzmodus
-* Zusatzakku Lade-/Entladesensoren (optional)
-* Off-Grid-/Inselsteckdosen-Sensoren (optional)
-* SoC-Limit Statussensor (optional)
-
-📖 Detaillierte Erklärungen findest du in der **Anleitung**.
+Anschließend bietet Home Assistant das Benennen und Zuordnen der erkannten
+Geräte an. Siehe den [bebilderten V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
 
 ---
 
@@ -828,11 +868,12 @@ verbindlich aktiv und muss nicht mehr gesondert eingeschaltet werden.
 
 ---
 
-## 5️⃣ Off-Grid-/Inselsteckdosen-Konfiguration
+## 5️⃣ Off-Grid-/Inselsteckdosen-Konfiguration (Entitäten-Weg)
 
 <img src="docs/images/conf_06_offgrid.png" width="700">
 
-Für Zendure-Systeme mit Off-Grid-/Inselsteckdose können optionale Sensoren konfiguriert werden:
+Beim Entitäten-Weg können für Zendure-Systeme mit Off-Grid-/Inselsteckdose
+optionale Sensoren konfiguriert werden:
 
 * Off-Grid-Leistung
 * Off-Grid-Modus

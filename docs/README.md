@@ -1,79 +1,35 @@
-# Battery SmartFlow AI
+# Battery SmartFlow AI – Dokumentation
 
-**Intelligente, preis-, PV- und lastbasierte Steuerung für Zendure SolarFlow Systeme in Home Assistant**
+Battery SmartFlow AI steuert unterstützte Zendure-Batteriesysteme in Home
+Assistant anhand von PV-Erzeugung, Hausverbrauch, Ladezustand und optionalen
+Strompreisen sowie PV-Prognosen.
 
----
+## Battery SmartFlow AI wird unabhängig
 
-## 🇩🇪 Deutsch
+Seit V5 kann BSFAI ein Zendure-System direkt erkennen und steuern. Hauptgerät
+und Akku-Packs erscheinen als eigene Home-Assistant-Geräte; Z-HA ist für diesen
+Weg nicht mehr erforderlich. Der bisherige Weg über vorhandene HA-Entitäten
+bleibt verfügbar. Aktuell wird ein Hauptsystem zur Steuerung ausgewählt.
 
-## Überblick
+Die konkrete Daten- und Steuerverbindung hängt vom Modell ab: ZenSDK,
+lokales MQTT oder Cloud MQTT. Bei allen Wegen gilt: Nur ein Regler darf
+gleichzeitig Befehle an dasselbe Gerät senden.
 
-**Battery SmartFlow AI** ist eine Home-Assistant-Integration zur **stabilen, wirtschaftlichen und transparenten** Steuerung von **Zendure SolarFlow** Batteriesystemen.
+## Einstieg
 
-Ab **Version 1.4.x** kombiniert die Integration:
+- [Installation über HACS](installation.md)
+- [Deutsche Anleitung mit bebildertem V5-Schnellstart](anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
+- [English user guide with illustrated V5 quick start](user-guide.md#v5-quick-start-connect-zendure-directly)
+- [Wirtschaft & Preise im Dashboard](dashboard-wirtschaft-preise.md)
 
-- ☀️ **PV-Erzeugung**
-- 🏠 **Hauslast (realer Gesamtverbrauch)**
-- 🔋 **Batterie-SoC**
-- 💶 **Dynamische Strompreise (optional, inkl. intelligenter Vorplanung)**
+V5 ist derzeit ein Release Candidate. Bei einer bestehenden V4-Installation
+solltest du vor dem Umstieg ein Home-Assistant-Backup erstellen und die
+Ersteinrichtung mit einem eindeutigen Steuerungsweg durchführen. Fehlen
+aktuelle Akku-Daten, bleibt BSFAI aus Sicherheitsgründen im Leerlauf.
 
-zu **kontextbasierten Lade- und Entladeentscheidungen**, die **stabil**, **vorhersehbar** und **praxisnah** funktionieren.
+## Support und Mitwirkung
 
-👉 Ziel ist **nicht maximale Aktivität**, sondern **maximaler Nutzen**:
-- Laden, wenn es wirtschaftlich sinnvoll ist
-- Entladen, wenn Netzbezug vermieden werden kann
-- Stillstand, wenn keine Verbesserung möglich ist
-
----
-
-## Warum diese Integration?
-
-Viele bestehende Lösungen arbeiten mit:
-- festen Zeitplänen
-- starren Preisgrenzen
-- simplen Wenn-Dann-Regeln
-- instabilen Umschaltlogiken (Laden ↔ Entladen)
-
-**Zendure SmartFlow AI** verfolgt bewusst einen anderen Ansatz:
-
-> **Kontext statt Regeln.**
-
-Jede Entscheidung basiert auf der **aktuellen Gesamtsituation**:
-- Wie hoch ist die reale Hauslast?
-- Gibt es Netzbezug oder Einspeisung?
-- Wie voll ist der Akku?
-- Wie teuer ist Strom **jetzt** – und **in Kürze**?
-
----
-
-## Grundprinzip (die „KI“)
-
-Die Integration bewertet zyklisch:
-
-- PV-Leistung
-- Hauslast (Netzbezug + Eigenverbrauch)
-- Netzdefizit / Einspeiseüberschuss
-- Batterie-SoC
-- aktuellen Strompreis (optional)
-
-Daraus ergeben sich drei mögliche Aktionen:
-- 🔌 **Laden**
-- 🔋 **Entladen**
-- ⏸️ **Nichts tun**
-
-Die Logik ist **bewusst erklärbar**:
-- Keine unnötigen Aktionen
-- Keine hektischen Richtungswechsel
-- Sicherheit & Wirtschaftlichkeit haben Vorrang
-
----
-
-## Support & Mitwirkung
-
-- GitHub Issues für Bugs & Feature-Wünsche
-- Pull Requests willkommen
-- Community-Projekt
-
----
-
-**Zendure SmartFlow AI – erklärbar, stabil, wirtschaftlich.**
+Fehler und Funktionswünsche gehören in die
+[GitHub-Issues](https://github.com/PalmManiac/battery-smartflow-ai/issues);
+Erfahrungen mit noch wenig getesteten Modellen helfen besonders. Teile
+Debug-Dateien erst nach einer Prüfung auf persönliche Informationen.

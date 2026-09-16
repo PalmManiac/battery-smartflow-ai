@@ -1,6 +1,7 @@
 * [Startseite](README.md)
 * [Installation](installation.md)
+* [V5-Schnellstart](anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
 * [Anleitung](anleitung.md)
+* [V5 Quick Start](user-guide.md#v5-quick-start-connect-zendure-directly)
 * [User Guide](user-guide.md)
-* [Dashboard](dashboard.md)
 * [Dashboard Wirtschaft & Preise](dashboard-wirtschaft-preise.md)

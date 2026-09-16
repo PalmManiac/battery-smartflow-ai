@@ -2,8 +2,9 @@
 
 **Sprache:** Deutsch | [English](user-guide.md)
 
-> Gültig ab Battery SmartFlow AI V4.6.0
-> Letzte inhaltliche Aktualisierung: 25. August 2026
+> V5-Ersteinrichtung: Stand 5.0.0-rc24 (September 2026). Die ausführlichen
+> Funktionskapitel enthalten weiterhin Hinweise für Installationen mit
+> vorhandenen Home-Assistant-Entitäten.
 
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
 
@@ -11,6 +12,7 @@
 
 ## Inhaltsverzeichnis
 
+* [V5-Schnellstart: Zendure direkt verbinden](#v5-schnellstart-zendure-direkt-verbinden)
 * [Kapitel 1 – Was macht Battery SmartFlow AI?](#kapitel-1--was-macht-battery-smartflow-ai)
 * [Kapitel 2 – Zwingende Voraussetzungen](#kapitel-2--zwingende-voraussetzungen)
 * [Kapitel 3 – Installation](#kapitel-3--installation)
@@ -23,6 +25,89 @@
 * [Kapitel 10 – Best Practices](#kapitel-10--best-practices--empfohlene-einstellungen)
 * [Anhang 1 – Geräteprofil-Parameter](#anhang-1--geräteprofil-parameter)
 * [Anhang 2 – Wichtige Diagnosewerte für Support](#anhang-2--wichtige-diagnosewerte-für-support)
+
+---
+
+# V5-Schnellstart: Zendure direkt verbinden
+
+V5 kann ein Zendure-System selbst erkennen, seine Messwerte als Home-Assistant-
+Geräte und -Entitäten bereitstellen und es – nach erfolgreicher Einrichtung –
+ohne Z-HA steuern. Für diesen Weg ist **Z-HA nicht erforderlich**. Der bisherige
+Weg über vorhandene HA-Entitäten bleibt als Alternative erhalten. Aktuell wird
+ein Hauptsystem zur Steuerung ausgewählt; erkannte Akku-Packs erscheinen als
+zugehörige Geräte.
+
+> [!IMPORTANT]
+> Das hier gezeigte Beispiel ist ein SolarFlow 2400 AC mit zwei Akku-Packs.
+> Andere Modelle und Kommunikationswege können zusätzliche Einrichtungsschritte
+> benötigen. Betreibe nie zwei Integrationen oder App-Automationen als
+> gleichzeitige Regler für dasselbe Gerät.
+
+1. **Installieren und neu starten.** Installiere die gewünschte V5-Version über
+   HACS und starte Home Assistant neu. Release Candidates sind Vorabversionen;
+   wähle sie in HACS gegebenenfalls ausdrücklich aus.
+2. **Verbindungsweg wählen.** Unter *Einstellungen → Geräte & Dienste →
+   Integration hinzufügen → Battery SmartFlow AI* wähle **Zendure direkt
+   verbinden**. **Vorhandene HA-Entitäten verwenden** ist der alternative Weg
+   für bereits angelegte Sensoren und Regler, etwa über Z-HA.
+
+   ![V5: Zendure direkt verbinden oder vorhandene HA-Entitäten verwenden](images/v5_setup_01_connection_choice.png)
+
+3. **Mit der Zendure-App verbinden.** Gib den App-Token ein. Der Token wird als
+   Geheimnis gespeichert und nicht als lesbarer Sensor oder Diagnosewert
+   ausgegeben. Verwende hier den App-Token, nicht das Passwort deines
+   MQTT-Brokers.
+
+   ![V5: geschützte Eingabe des Zendure-App-Tokens](images/v5_setup_02_app_token.png)
+
+4. **Gerät und Kommunikationsweg bestätigen.** Wähle das richtige Hauptgerät,
+   insbesondere wenn mehrere gleiche Modelle gefunden werden. Seriennummer
+   oder Gerätename helfen bei der Zuordnung, soweit Zendure sie liefert. Die
+   verfügbaren Wege hängen vom Modell ab: neuere Geräte nutzen ZenSDK,
+   Legacy-Geräte können Cloud oder lokales MQTT verwenden. Für *lokales MQTT*
+   werden die Daten des **eigenen lokalen Brokers** benötigt. Ist ein
+   Legacy-Gerät bereits dafür eingerichtet, lasse die Option zur erneuten
+   Gerätekonfiguration aus; diese ist nur bei einer notwendigen Neueinrichtung
+   gedacht. Cloud-MQTT funktioniert ohne lokalen Broker, benötigt aber eine
+   Internetverbindung.
+5. **Übrige Anlagenangaben ergänzen.** Wähle deine Netzleistungsmessung sowie
+   optionale Preis- und PV-Prognosequellen. V5 erkennt beim direkten Weg
+   Geräteprofil, verfügbare Hardware-Sensoren, Akku-Packs und deren Kapazität
+   aus den Gerätedaten. Diese Werte müssen nicht mehr als Z-HA-Entitäten oder
+   manuelle Pack-Anzahl eingetragen werden. Ein zuverlässiger Netzsensor ist
+   für die genaue Leistungsregelung weiterhin wichtig.
+6. **Geräte optional benennen und einem Bereich zuordnen.** Der folgende
+   Home-Assistant-Dialog zeigt das Steuerungsgerät, das Wirtschaftsgerät, das
+   Hauptgerät und die erkannten Packs. Die Bereichszuordnung kann übersprungen
+   und später geändert werden.
+
+   ![V5: erkannte Geräte benennen und Bereichen zuordnen](images/v5_setup_03_assign_devices.png)
+
+7. **Datenempfang prüfen.** Unter *Einstellungen → Geräte & Dienste → Battery
+   SmartFlow AI* sollten Hauptgerät und Packs erscheinen. Prüfe, ob SoC und
+   Leistungswerte aktuell werden und welcher Kommunikationsweg in der Diagnose
+   steht. Die Zahl der Geräte und Entitäten ist modell- und datenabhängig.
+
+   ![V5: Steuerung, Wirtschaft, Hauptgerät und zwei Akku-Packs nach der Einrichtung](images/v5_setup_04_device_overview.png)
+
+Wenn Messwerte fehlen, bleibt BSFAI aus Sicherheitsgründen im Leerlauf. Prüfe
+zuerst App-Token, Geräteauswahl, Kommunikationsweg und den tatsächlichen
+Datenempfang. Für Support können das *Zendure-Initial-Sync-JSON* und eine
+zeitlich begrenzte BSFAI-Debug-Aufzeichnung hilfreich sein; prüfe beide Dateien
+vor dem Teilen auf persönliche Daten. Schalte die native Steuerung nicht
+parallel zu einer aktiven Z-HA-Regelung ein.
+
+## Upgrade von V4.7.4 auf V5
+
+Erstelle vor dem Update ein Home-Assistant-Backup. Ein bestehender V4-Eintrag
+bleibt beim Versionswechsel zunächst auf dem bisherigen Entitäten-Weg; die
+native Steuerung wird **nicht automatisch** eingeschaltet. Prüfe zuerst, ob
+der alte Betrieb nach dem Neustart weiterläuft. Wenn du anschließend auf den
+direkten Weg wechseln möchtest, öffne **Konfigurieren → Natives Zendure**,
+bestätige App-Token, Hauptgerät und Kommunikationsweg und sorge dafür, dass
+Z-HA nicht gleichzeitig dasselbe Gerät regelt. Erst dann Datenempfang und
+Regelung getrennt prüfen. Ein Upgrade ist nicht dasselbe wie die oben gezeigte
+Neuinstallation.
 
 ---
 
@@ -135,8 +220,9 @@ Battery SmartFlow AI soll nicht möglichst viel schalten, sondern:
 
 Damit Battery SmartFlow AI korrekt und stabil arbeiten kann, müssen bestimmte Einstellungen zwingend beachtet werden.
 
-Die Integration übernimmt die vollständige Steuerung des Zendure-Systems.
-Parallele oder widersprüchliche Steuerungen führen zu Instabilität.
+Die Integration übernimmt die Steuerung des ausgewählten Zendure-Systems.
+Parallele oder widersprüchliche Steuerungen führen zu Instabilität. Z-HA ist
+beim direkten V5-Weg **keine Voraussetzung**.
 
 > [!IMPORTANT]
 > Wenn das System nicht wie erwartet arbeitet, sollten zuerst die Voraussetzungen in diesem Kapitel geprüft werden.
@@ -174,19 +260,23 @@ Battery SmartFlow AI benötigt eine möglichst saubere Hardwarekonfiguration ohn
 
 ---
 
-## 2️⃣ Zendure Home-Assistant Integration
+## 2️⃣ Zendure-Kommunikation und eindeutige Steuerung
 
-Folgende Einstellungen sind erforderlich:
+Bei **Zendure direkt verbinden** erkennt BSFAI das Gerät selbst. Z-HA wird
+dafür nicht installiert oder benötigt. Falls Z-HA bereits vorhanden ist,
+deaktiviere dessen Regelung beziehungsweise die Integration, bevor BSFAI die
+native Steuerung übernimmt; lösche Z-HA für einen reversiblen Umstieg nicht
+vorschnell.
 
-* Energie-Export: **Erlaubt**
-* bei der Ersteinrichtung von Z-HA darf der P1-Sensor ausgewählt werden
-* anschließend im Z-HA-Manager den Betriebsmodus auf **AUS** stellen, damit Z-HA
-  nicht selbst parallel zu BSFAI regelt
-* keine parallelen Automationen, die AC-Modus oder Leistungsgrenzen verändern
+Bei **Vorhandene HA-Entitäten verwenden** stammen Messwerte und Regler aus
+einer anderen Integration, beispielsweise Z-HA. Prüfe, dass diese Entitäten
+aktuelle Werte liefern. Falls Z-HA verwendet wird, stelle seinen Manager-
+Betriebsmodus auf **AUS** und lasse keine weiteren Automationen AC-Modus oder
+Leistungsgrenzen ändern.
 
-![Z-HA-Manager mit Betriebsmodus AUS](images/zha_manager.png)
+![Z-HA-Manager mit Betriebsmodus AUS – nur für den Entitäten-Weg](images/zha_manager.png)
 
-Falsche Einstellungen können führen zu:
+Parallele Steuerung kann führen zu:
 
 * Entladeabbrüchen
 * blockierten AC-Modi
@@ -344,7 +434,13 @@ Nach der Installation wird Battery SmartFlow AI über Home Assistant eingerichte
 Einstellungen → Geräte & Dienste → Integration hinzufügen → Battery SmartFlow AI
 ```
 
-Ein Beispiel für den Integrationseintrag:
+Die bebilderte **native V5-Ersteinrichtung** steht im
+[V5-Schnellstart](#v5-schnellstart-zendure-direkt-verbinden). Die Abschnitte 4.1
+bis 4.6 unten erläutern vor allem die alternative Konfiguration über
+**vorhandene HA-Entitäten**. Deren ältere Screenshots zeigen nicht den nativen
+V5-Einrichtungsdialog.
+
+Ein Beispiel für einen älteren Integrationseintrag:
 
 ![Integrationseintrag](images/config_00_config.png)
 
@@ -355,6 +451,11 @@ Ein Beispiel für den Integrationseintrag:
 ---
 
 ## 4.1 Geräteprofil & Basisdaten
+
+> [!NOTE]
+> Dieser Abschnitt gilt für **Vorhandene HA-Entitäten verwenden**. Beim
+> direkten Zendure-Weg kommen Profil, SoC, Hardwareleistung sowie Pack-Daten
+> aus der Geräteerkennung, soweit das Modell sie liefert.
 
 ![Basis-Konfiguration](images/config_01_basic.png)
 
@@ -399,12 +500,11 @@ PV-Anschluss. Sie verwenden deshalb die neutrale Regelabstimmung des
 SF2400AC, jeweils mit ihren bestätigten eigenen Leistungsgrenzen.
 
 > [!WARNING]
-> Bei den neuen 3000er- und 4000er-Modellen kann die praktische Nutzung derzeit
-> noch durch ein Firmwareproblem eingeschränkt sein. Eine Token-Verbindung zu
-> Z-HA kann zustande kommen, ohne dass das Gerät anschließend aktuelle Daten
-> liefert. Über MQTT angelegte Entitäten sind keine verlässliche Alternative,
-> da dieser Weg von Zendure nicht mehr unterstützt und nicht zuverlässig
-> aktualisiert wird.
+> Ein erkannter Gerätename allein beweist noch keinen laufenden Datenempfang.
+> Prüfe bei jedem Modell aktuelle SoC- und Leistungswerte sowie den gewählten
+> Kommunikationsweg. Bei fehlenden Daten kann BSFAI nicht sicher regeln;
+> weder das Geräteprofil noch eine bloß angelegte MQTT-Entität ersetzt diese
+> Prüfung.
 
 ---
 
@@ -1944,7 +2044,10 @@ Untere Schutzgrenze.
 
 ## Anzahl Akku-Packs
 
-Wird zusammen mit der Packkapazität für die Gesamtkapazität verwendet.
+Beim direkten V5-Weg wird die Pack-Anzahl aus den Gerätedaten ermittelt und
+nicht als manuelle Konfigurationsangabe abgefragt. Der Wert dient zusammen mit
+der erkannten Kapazität der Planung. Beim Entitäten-Weg können ältere
+Konfigurationswerte weiterhin relevant sein.
 
 ---
 
@@ -2016,13 +2119,19 @@ das ausgewählte Geräteprofil verwaltet. Bereits gespeicherte Profilanpassungen
 älterer Versionen bleiben aus Kompatibilitätsgründen erhalten, werden aber nicht
 mehr im Einstellungsdialog angeboten.
 
-Der Einstellungsdialog ist seit V4.4 in drei Bereiche gegliedert:
+Der V5-Einstellungsdialog enthält vier Bereiche:
 
-![Einstellungsbereiche mit Debug-Modus](images/config_07_settings_menu.png)
+![Älterer Einstellungsdialog mit Debug-Modus](images/config_07_settings_menu.png)
 
 * **Allgemein** – grundlegende, regelmäßig benötigte Einstellungen
 * **Expertenmodus** – erweiterte Planungs- und Schutzfunktionen
+* **Natives Zendure** – App-Token oder Geräte-/Kommunikationsauswahl erneut
+  öffnen, etwa nach einem Kontowechsel; ein gespeicherter Token erscheint nur
+  als verdeckter Platzhalter
 * **Debug-Modus** – zeitlich begrenzte Aufzeichnung nur für Fehlersuche und Support
+
+Der Screenshot zeigt noch die ältere V4-Menüansicht. Die Erstkonfiguration
+des App-Tokens erfolgt beim direkten V5-Weg bereits im Einrichtungsdialog.
 
 ---
 
@@ -2609,25 +2718,22 @@ Typische Optimierungen:
 
 # 8.8 Hinweise zu SolarFlow 3000/4000 Mix
 
-Die Profile der neuen Mix-Geräte sind in V4.3.0 vollständig auswählbar und ihre
-bestätigten AC-/Off-Grid-Grenzen werden technisch berücksichtigt. Die
-Datenbereitstellung liegt jedoch außerhalb von Battery SmartFlow AI.
-
-Derzeit kann eine Token-Verbindung der Geräte zu Z-HA erfolgreich erscheinen,
-obwohl wegen eines Firmwareproblems keine aktuellen Mess- und Steuerdaten
-geliefert werden. In diesem Fall kann Battery SmartFlow AI trotz korrektem Profil
-nicht arbeiten.
+Die Mix-Profile berücksichtigen ihre jeweiligen AC-/Off-Grid-Grenzen. Ein
+erkanntes Profil sagt aber noch nichts über aktuelle Messwerte aus. Beim
+Entitäten-Weg müssen die Quellentitäten Daten liefern; beim direkten V5-Weg
+muss der ausgewählte Kommunikationsweg aktuelle Gerätedaten liefern.
 
 Bei einer Support-Anfrage zu diesen Modellen sollten deshalb zuerst geprüft
 werden:
 
 * genaue Modellbezeichnung
 * installierte Firmware-Version
-* ob die Z-HA-Entitäten tatsächlich laufend neue Werte liefern
+* ob die Z-HA-Entitäten beim Entitäten-Weg tatsächlich neue Werte liefern
+* ob beim direkten V5-Weg aktuelle native Zendure-Nachrichten eintreffen
 * ob SoC, Batterieleistung, AC-Modus sowie Lade- und Entladegrenze verfügbar sind
 
-MQTT-Entitäten allein gelten nicht als zuverlässiger Nachweis, weil dieser Weg
-von Zendure nicht mehr unterstützt und nicht verlässlich aktualisiert wird.
+Eine angelegte MQTT-Entität allein ist noch kein Nachweis für aktuelle Daten;
+maßgeblich sind frische Werte und ein gültiger SoC.
 
 ---
 
@@ -2833,13 +2939,11 @@ bleiben maßgeblich.
 
 ## 9.10 SolarFlow 3000/4000 Mix liefert keine Daten
 
-Wenn die Token-Verbindung zu Z-HA gelingt, die Entitäten aber keine aktuellen
-Werte liefern, liegt derzeit wahrscheinlich das bekannte Firmwareproblem dieser
-Modelle vor. Das Geräteprofil in Battery SmartFlow AI kann fehlende Quelldaten
-nicht ersetzen.
-
-Prüfe Modell, Firmware-Version und die Zeitstempel bzw. Zustandsänderungen der
-Z-HA-Entitäten. MQTT ist keine zuverlässig unterstützte Ausweichlösung.
+Prüfe zuerst, welcher Einrichtungsweg aktiv ist. Beim Entitäten-Weg müssen die
+Z-HA- oder anderen Quellentitäten aktuelle SoC- und Leistungswerte liefern.
+Beim direkten V5-Weg prüfe Kommunikationsweg, letzten Datenempfang und native
+Zendure-Nachrichten. Notiere Modell und Firmware-Version für den Support.
+Ein Geräteprofil ersetzt keine fehlenden Messwerte.
 
 ---
 
