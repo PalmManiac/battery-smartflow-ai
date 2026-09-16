@@ -29,7 +29,7 @@ class DebugIntegrationContractTests(unittest.TestCase):
             and isinstance(node.value, ast.Constant)
         )
 
-        self.assertEqual(manifest_version, "5.0.0-rc22")
+        self.assertEqual(manifest_version, "5.0.0-rc23")
         self.assertEqual(runtime_version, manifest_version)
 
     def test_services_expose_only_supported_durations(self) -> None:
@@ -71,6 +71,24 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn("async_get_config_entry_diagnostics", diagnostics)
         self.assertIn("debug_last_package_path", diagnostics)
         self.assertIn("self.hass.async_create_task(self.async_request_refresh())", coordinator)
+
+    def test_native_debug_snapshot_type_guard_imports_mapping(self) -> None:
+        tree = ast.parse((COMPONENT / "coordinator.py").read_text(encoding="utf-8"))
+        imported = {
+            alias.name
+            for node in tree.body
+            if isinstance(node, ast.ImportFrom) and node.module == "typing"
+            for alias in node.names
+        }
+        snapshot = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_debug_native_zendure_snapshot"
+        )
+
+        self.assertIn("isinstance(data, Mapping)", ast.unparse(snapshot))
+        self.assertIn("Mapping", imported)
 
     def test_options_menu_exposes_non_persistent_debug_controls(self) -> None:
         source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
