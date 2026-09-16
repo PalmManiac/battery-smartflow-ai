@@ -17,7 +17,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         manifest = json.loads(
             (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["version"], "5.0.0-rc23")
+        self.assertEqual(manifest["version"], "5.0.0-rc24")
         self.assertIn("paho-mqtt==2.1.0", manifest["requirements"])
 
     def test_options_flow_uses_a_password_field_and_never_suggests_token(self) -> None:
@@ -103,13 +103,39 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         )
         config = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
         self.assertIn("class NativeZendureHardwareSensor", sensor)
-        self.assertIn("via_device_id=parent_device_id", sensor)
-        self.assertNotIn("via_device=native_main_device_identifier", sensor)
+        self.assertIn("via_device=(DOMAIN, entry.entry_id)", sensor)
+        self.assertIn("via_device=native_main_device_identifier(parent_public_id)", sensor)
+        self.assertNotIn("via_device_id=", sensor)
         self.assertIn('return DOMAIN, f"native_zendure_{public_id}"', identity)
         self.assertIn("coordinator.native_zendure.hardware_overview()", sensor)
         self.assertIn("coordinator.async_add_listener", sensor)
         self.assertNotIn("native_hardware_soc_pct", config)
         self.assertNotIn("native_hardware_charge_power_w", config)
+
+    def test_safe_idle_capacity_reason_is_a_translated_enum_state(self) -> None:
+        constants = ast.parse((COMPONENT / "const.py").read_text(encoding="utf-8"))
+        enum_names = {"DECISION_REASON_ENUMS"}
+        for node in constants.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            if not any(
+                isinstance(target, ast.Name) and target.id in enum_names
+                for target in node.targets
+            ):
+                continue
+            self.assertIn("native_capacity_unavailable", ast.literal_eval(node.value))
+        sensor_source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        self.assertIn("options=STRATEGIC_REASON_ENUMS", sensor_source)
+        self.assertIn(
+            'STRATEGIC_REASON_ENUMS = [*STRATEGY_REASON_ENUMS, "native_capacity_unavailable"]',
+            (COMPONENT / "const.py").read_text(encoding="utf-8"),
+        )
+
+        for filename in ("strings.json", "de.json", "en.json", "fr.json", "nl.json"):
+            path = COMPONENT / (filename if filename == "strings.json" else f"translations/{filename}")
+            sensors = json.loads(path.read_text(encoding="utf-8"))["entity"]["sensor"]
+            for key in ("decision_reason", "strategic_reason"):
+                self.assertIn("native_capacity_unavailable", sensors[key]["state"])
 
     def test_serial_is_device_metadata_but_not_part_of_entity_identity(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")

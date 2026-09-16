@@ -38,7 +38,7 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "5.0.0-rc23"
+INTEGRATION_VERSION = "5.0.0-rc24"
 
 # V5 native Zendure discovery is observation-only in the first development
 # build. The App Token is account discovery material and must never be copied
@@ -523,6 +523,8 @@ STRATEGY_REASON_ENUMS = [
     "price_based_discharge",
 ]
 
+STRATEGIC_REASON_ENUMS = [*STRATEGY_REASON_ENUMS, "native_capacity_unavailable"]
+
 DECISION_REASON_ENUMS = [
     "standby",
     "state_idle",
@@ -573,6 +575,7 @@ DECISION_REASON_ENUMS = [
     "pv_charge_blocked_by_discharge_protection",
     "learned_charge_window_deadline_too_close_start_now",
     "soc_invalid",
+    "native_capacity_unavailable",
     "grid_sensor_invalid",
     "soc_limits_invalid",
     "power_limits_invalid",
