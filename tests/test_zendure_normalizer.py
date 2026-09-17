@@ -44,7 +44,7 @@ class Response:
         return self.value
 
 
-async def make_bootstrap():
+async def make_bootstrap(primary_model="SolarFlow2400AC"):
     token = b64encode(b"https://api.example.com.app-secret").decode()
 
     async def post(*_args, **_kwargs):
@@ -57,7 +57,7 @@ async def make_bootstrap():
                         {
                             "deviceKey": "device-1",
                             "productKey": "product-1",
-                            "productModel": "SolarFlow2400AC",
+                            "productModel": primary_model,
                             "deviceName": "Primary",
                             "online": True,
                         },
@@ -365,6 +365,28 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(offline.state.soc_pct.value, 55.0)
         self.assertEqual(offline.state.soc_pct.validity, ValueValidity.OFFLINE)
         self.assertFalse(offline.state.online.value)
+
+    async def test_hyper_cloud_display_values_bridge_grouped_reports(self):
+        """Legacy Cloud groups must not flash unavailable between reports."""
+
+        bootstrap = await make_bootstrap("Hyper 2000")
+        normalizer = ZendureCloudNormalizer(bootstrap)
+        normalizer.apply(
+            report(self.at, {"properties": {"electricLevel": 55}})
+        )
+
+        between_groups = normalizer.snapshot(
+            "cloud_mqtt:device-1",
+            now=self.at + timedelta(seconds=179),
+        )
+        self.assertTrue(between_groups.state.soc_pct.valid)
+        self.assertEqual(between_groups.state.soc_pct.value, 55.0)
+
+        expired = normalizer.snapshot(
+            "cloud_mqtt:device-1",
+            now=self.at + timedelta(seconds=181),
+        )
+        self.assertEqual(expired.state.soc_pct.validity, ValueValidity.STALE)
 
     async def test_out_of_range_and_non_finite_values_are_invalid(self):
         normalizer = ZendureCloudNormalizer(self.bootstrap)

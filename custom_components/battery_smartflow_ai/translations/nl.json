@@ -133,7 +133,7 @@
           "native_zendure_local_mqtt_password": "Lokaal MQTT-wachtwoord"
         },
         "data_description": {
-          "native_zendure_selected_device": "Er wordt precies één hoofdsysteem geselecteerd; packs kunnen niet afzonderlijk worden bestuurd. BSFAI bepaalt ZenSDK of Local MQTT aan de hand van de geverifieerde modelfamilie.", "native_zendure_control_transport": "Cloud werkt na accountdetectie. De aanbevolen lokale verbinding wordt pas gebruikt nadat actuele gegevens zijn ontvangen.",
+          "native_zendure_selected_device": "Er wordt precies één hoofdsysteem geselecteerd; packs kunnen niet afzonderlijk worden bestuurd. BSFAI bepaalt ZenSDK of Local MQTT aan de hand van de geverifieerde modelfamilie.",
           "native_zendure_control_transport": "Cloud werkt na accountdetectie. De aanbevolen lokale verbinding wordt pas gebruikt nadat actuele gegevens zijn ontvangen.",
           "native_zendure_control_enabled": "Zet BSFAI-opdrachten expliciet over van Z-HA-entiteiten naar het lokale transport van het model.",
           "native_zendure_local_mqtt_server": "Alleen getoond voor een geverifieerde Legacy-familie. Het apparaat moet al naar deze broker publiceren.",
@@ -360,7 +360,7 @@
     }
   },
   "selector": {
-    "zendure_transport": {"options": {"cloud_mqtt": "Cloud", "local_mqtt": "Lokaal (aanbevolen)", "zensdk": "ZenSDK (aanbevolen)"}},
+    "zendure_transport": {"options": {"cloud_mqtt": "Cloud (aanbevolen voor Legacy)", "local_mqtt": "Lokale MQTT (geavanceerd)", "zensdk": "ZenSDK (aanbevolen)"}},
     "grid_mode": {
       "options": {
         "none": "Geen netsensor",

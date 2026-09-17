@@ -46,6 +46,18 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertNotIn("CONF_NATIVE_ZENDURE_CONTROL_ENABLED", schema)
         self.assertIn("options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True", source)
 
+    def test_legacy_installations_without_a_stored_choice_start_on_cloud(self) -> None:
+        source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
+        schema = source[
+            source.index("def _native_device_schema"):
+            source.index("def _native_device_summary")
+        ]
+        self.assertIn(
+            "if inherited is ZendureTransport.LOCAL_MQTT:\n                inherited = None",
+            schema,
+        )
+        self.assertIn("else ZendureTransport.CLOUD_MQTT.value", schema)
+
     def test_legacy_local_setup_never_creates_a_broker_user(self) -> None:
         source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
         legacy = (COMPONENT / "zendure_legacy.py").read_text(encoding="utf-8")
