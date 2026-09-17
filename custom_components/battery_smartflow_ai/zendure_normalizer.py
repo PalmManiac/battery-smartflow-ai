@@ -23,11 +23,17 @@ from .zendure_device_matrix import resolve_zendure_device
 from .zendure_hems_activity import HemsActivityDiagnostic, HemsActivityTracker
 
 
-# Legacy devices such as Hyper 2000 split one logical state across several
-# report groups. Field evidence shows healthy groups can be more than 40
-# seconds apart. Transport readiness remains independently fail-closed at 30
-# seconds, while measurements get enough time to bridge the normal cadence.
+# Zendure systems normally report individual property groups close enough for
+# a short visual freshness window.  The Legacy Hyper 2000 and Hub 2000 use a
+# much slower, grouped Cloud cadence: field reports show valid groups arriving
+# only after the generic window has expired.  Keep their *display* values long
+# enough to bridge that cadence.  Native command eligibility remains
+# independently fail-closed at 30 seconds in ``native_zendure_runtime``.
 DEFAULT_STALE_AFTER_SECONDS = 90.0
+LEGACY_GROUPED_REPORT_STALE_AFTER_SECONDS = 180.0
+_LEGACY_GROUPED_REPORT_MODELS = frozenset(
+    {"hyper2000", "hub2000", "solarflowhub2000"}
+)
 
 
 class MappingScope(StrEnum):
@@ -486,7 +492,9 @@ class ZendureCloudNormalizer:
         supported = self._supported_device_targets.get(system_id, frozenset())
 
         def device_value(target: str) -> MeasuredValue[Any]:
-            return self._value(values, target, supported, online, current)
+            return self._value(
+                values, target, supported, online, current, system_id
+            )
 
         direct_hems = device_value("hems_active")
         hems_active = (
@@ -540,7 +548,12 @@ class ZendureCloudNormalizer:
             protection_active=_device_protection_state(
                 fault_code=device_value("fault_code"),
                 is_error=self._value(
-                    values, "is_error", frozenset({"is_error"}), online, current
+                    values,
+                    "is_error",
+                    frozenset({"is_error"}),
+                    online,
+                    current,
+                    system_id,
                 ),
             ),
             heating_active=device_value("heating_active"),
@@ -549,8 +562,18 @@ class ZendureCloudNormalizer:
             last_message_at=self._last_message[system_id],
             packs=packs,
             offgrid_power_w=device_value("offgrid_power_w"),
-            diagnostics={key: self._value(values, key, frozenset(RAW_MAIN_DIAGNOSTICS), online, current)
-                         for key in RAW_MAIN_DIAGNOSTICS if key in values},
+            diagnostics={
+                key: self._value(
+                    values,
+                    key,
+                    frozenset(RAW_MAIN_DIAGNOSTICS),
+                    online,
+                    current,
+                    system_id,
+                )
+                for key in RAW_MAIN_DIAGNOSTICS
+                if key in values
+            },
         )
         return NormalizationResult(
             state,
@@ -651,7 +674,7 @@ class ZendureCloudNormalizer:
 
         def value(target: str) -> MeasuredValue[Any]:
             return self._value(
-                accumulator.values, target, supported, online, now
+                accumulator.values, target, supported, online, now, system_id
             )
 
         return NeutralPackState(
@@ -682,6 +705,7 @@ class ZendureCloudNormalizer:
         supported: frozenset[str],
         online: bool | None,
         now: datetime,
+        system_id: str,
     ) -> MeasuredValue[Any]:
         if target not in supported:
             return MeasuredValue.absent(ValueValidity.UNSUPPORTED)
@@ -698,10 +722,26 @@ class ZendureCloudNormalizer:
             validity = ValueValidity.OFFLINE
         elif (
             validity is ValueValidity.VALID
-            and (now - observed.observed_at).total_seconds() > self._stale_after
+            and (now - observed.observed_at).total_seconds()
+            > self._stale_after_for(system_id)
         ):
             validity = ValueValidity.STALE
         return MeasuredValue(observed.value, validity, observed.observed_at)
+
+    def _stale_after_for(self, system_id: str) -> float:
+        """Return the presentation freshness window for one model family."""
+
+        model_key = "".join(
+            character
+            for character in str(self._models.get(system_id, "")).casefold()
+            if character.isalnum()
+        )
+        if model_key in _LEGACY_GROUPED_REPORT_MODELS:
+            return max(
+                self._stale_after,
+                LEGACY_GROUPED_REPORT_STALE_AFTER_SECONDS,
+            )
+        return self._stale_after
 
 
 def _fault_block(*values):

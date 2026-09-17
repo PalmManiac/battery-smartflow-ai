@@ -133,7 +133,7 @@
           "native_zendure_local_mqtt_password": "Mot de passe MQTT local"
         },
         "data_description": {
-          "native_zendure_selected_device": "Un seul système principal est sélectionné ; les packs ne peuvent pas être contrôlés séparément. BSFAI détermine ZenSDK ou Local MQTT à partir de la famille de modèles vérifiée.", "native_zendure_control_transport": "Le Cloud fonctionne après la détection du compte. La connexion locale recommandée sera utilisée uniquement après réception de données valides.",
+          "native_zendure_selected_device": "Un seul système principal est sélectionné ; les packs ne peuvent pas être contrôlés séparément. BSFAI détermine ZenSDK ou Local MQTT à partir de la famille de modèles vérifiée.",
           "native_zendure_control_transport": "Le Cloud fonctionne après la détection du compte. La connexion locale recommandée n’est utilisée qu’après réception de données valides.",
           "native_zendure_control_enabled": "Transfère explicitement les commandes BSFAI des entités Z-HA vers le transport local du modèle.",
           "native_zendure_local_mqtt_server": "Affiché uniquement pour une famille Legacy vérifiée. L’appareil doit déjà publier vers ce broker.",
@@ -360,7 +360,7 @@
     }
   },
   "selector": {
-    "zendure_transport": {"options": {"cloud_mqtt": "Cloud", "local_mqtt": "Local (recommandé)", "zensdk": "ZenSDK (recommandé)"}},
+    "zendure_transport": {"options": {"cloud_mqtt": "Cloud (recommandé pour Legacy)", "local_mqtt": "MQTT local (avancé)", "zensdk": "ZenSDK (recommandé)"}},
     "grid_mode": {
       "options": {
         "none": "Aucun capteur réseau",

@@ -1251,6 +1251,12 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 if stored_options is not None and selected_item is not None
                 else None
             )
+            # Legacy Local MQTT is usable only after the physical device has
+            # accepted its broker configuration and publishes fresh properties
+            # there. Older entries have no explicit choice, so start them on
+            # the reliable Cloud path instead of silently selecting Local.
+            if inherited is ZendureTransport.LOCAL_MQTT:
+                inherited = None
             stored_transport = (
                 inherited.value
                 if inherited is not None
