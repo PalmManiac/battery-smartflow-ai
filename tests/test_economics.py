@@ -48,6 +48,7 @@ def test_engine_calculates_central_values_and_weighted_averages() -> None:
             grid_export_kwh=3.0,
             battery_to_home_kwh=1.5,
             battery_to_grid_kwh=0.5,
+            native_pv_to_home_kwh=2.0,
         ),
         import_price=_price(MarketPriceDirection.IMPORT, 0.30),
         export_price=_price(MarketPriceDirection.EXPORT, 0.10),
@@ -58,6 +59,7 @@ def test_engine_calculates_central_values_and_weighted_averages() -> None:
             pv_to_battery_kwh=2.0,
             grid_export_kwh=1.0,
             battery_to_home_kwh=0.5,
+            native_pv_to_home_kwh=1.0,
         ),
         import_price=_price(MarketPriceDirection.IMPORT, 0.60),
         export_price=_price(MarketPriceDirection.EXPORT, 0.20),
@@ -73,6 +75,7 @@ def test_engine_calculates_central_values_and_weighted_averages() -> None:
     assert result.average_pv_opportunity_value == pytest.approx(1 / 6)
     assert result.average_export_price == pytest.approx(0.125)
     assert result.average_battery_discharge_value == pytest.approx(0.32)
+    assert result.average_native_pv_to_home_return == pytest.approx(0.40)
     assert result.as_dict()["currency"] == "EUR"
     assert engine.total_snapshot() == result
 
@@ -89,6 +92,7 @@ def test_daily_reset_preserves_total_values() -> None:
 
     assert engine.daily_snapshot().grid_charge_cost == 0.0
     assert engine.daily_snapshot().average_grid_charge_price is None
+    assert engine.daily_snapshot().average_native_pv_to_home_return is None
     assert engine.total_snapshot().grid_charge_cost == pytest.approx(0.25)
 
 

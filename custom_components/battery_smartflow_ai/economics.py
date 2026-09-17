@@ -371,6 +371,7 @@ class EconomicsSnapshot:
     average_pv_opportunity_value: float | None
     average_export_price: float | None
     average_battery_discharge_value: float | None
+    average_native_pv_to_home_return: float | None
 
     def as_dict(self) -> dict[str, Any]:
         """Return stable result data without adding calculation logic to sensors."""
@@ -390,6 +391,7 @@ class _EconomicsTotals:
     battery_discharge_value: float = 0.0
     avoided_grid_import_cost: float = 0.0
     battery_benefit: float = 0.0
+    native_pv_to_home_kwh: float = 0.0
     native_pv_self_consumption_value: float = 0.0
 
 
@@ -465,6 +467,7 @@ class EconomicsEngine:
             totals.battery_discharge_value += battery_discharge_value
             totals.avoided_grid_import_cost += avoided_cost
             totals.battery_benefit += battery_benefit
+            totals.native_pv_to_home_kwh += flows.native_pv_to_home_kwh
             totals.native_pv_self_consumption_value += (
                 flows.native_pv_to_home_kwh * import_value
             )
@@ -625,6 +628,10 @@ class EconomicsEngine:
             average_battery_discharge_value=self._average(
                 totals.battery_discharge_value, totals.battery_discharge_kwh
             ),
+            average_native_pv_to_home_return=self._average(
+                totals.native_pv_self_consumption_value,
+                totals.native_pv_to_home_kwh,
+            ),
         )
 
     @staticmethod
@@ -661,6 +668,7 @@ class EconomicsEngine:
         avoided_cost = flows.battery_to_home_kwh * import_value
         totals.battery_discharge_value += avoided_cost
         totals.avoided_grid_import_cost += avoided_cost
+        totals.native_pv_to_home_kwh += flows.native_pv_to_home_kwh
         totals.native_pv_self_consumption_value += (
             flows.native_pv_to_home_kwh * import_value
         )

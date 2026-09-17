@@ -5356,6 +5356,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economics_average_battery_discharge_value": (
                     economics_total_snapshot.average_battery_discharge_value
                 ),
+                "economics_average_native_pv_to_home_return": (
+                    economics_total_snapshot.average_native_pv_to_home_return
+                ),
                 "economics_total_economic_efficiency_pct": (
                     self._economics_engine.total_economic_efficiency_pct()
                 ),
@@ -5368,6 +5371,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "economics_total_native_pv_to_home_kwh",
                     "economics_daily_native_pv_self_consumption_value",
                     "economics_total_native_pv_self_consumption_value",
+                    "economics_average_native_pv_to_home_return",
                 ):
                     economics_runtime_values[key] = None
 
