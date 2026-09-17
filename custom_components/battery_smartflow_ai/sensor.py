@@ -1879,6 +1879,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 via_device_id=_device_id_for_identifiers(
                     coordinator.hass,
                     {(DOMAIN, entry.entry_id)},
+                    entry.entry_id,
                 ),
             )
         else:
@@ -1910,6 +1911,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 via_device_id=_device_id_for_identifiers(
                     coordinator.hass,
                     native_main_device_identifier(parent_public_id),
+                    entry.entry_id,
                 ),
             )
 
@@ -2042,12 +2044,19 @@ def _battery_pack_label(language: str | None) -> str:
     }.get(language, "Battery Pack")
 
 
-def _device_id_for_identifiers(hass: HomeAssistant, identifiers):
+def _device_id_for_identifiers(
+    hass: HomeAssistant,
+    identifiers,
+    config_entry_id: str,
+):
     """Resolve a registered parent device for Home Assistant's current API."""
 
     identifier = next(iter(identifiers), None)
     device = (
-        dr.async_get(hass).async_get_device_by_identifier(identifier)
+        dr.async_get(hass).async_get_device_by_identifier(
+            identifier,
+            config_entry_id,
+        )
         if identifier is not None
         else None
     )
@@ -2091,6 +2100,7 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 via_device_id=_device_id_for_identifiers(
                     coordinator.hass,
                     {(DOMAIN, entry.entry_id)},
+                    entry.entry_id,
                 ),
             )
         else:

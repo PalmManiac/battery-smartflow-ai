@@ -117,7 +117,10 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn("class NativeZendureHardwareSensor", sensor)
         self.assertIn("via_device_id=integration_device.id", sensor)
         self.assertIn("via_device_id=_device_id_for_identifiers", sensor)
-        self.assertIn("async_get_device_by_identifier", sensor)
+        self.assertIn(
+            "async_get_device_by_identifier(\n            identifier,\n            config_entry_id,",
+            sensor,
+        )
         self.assertNotIn("via_device=", sensor)
         self.assertIn('return DOMAIN, f"native_zendure_{public_id}"', identity)
         self.assertIn("coordinator.native_zendure.hardware_overview()", sensor)
