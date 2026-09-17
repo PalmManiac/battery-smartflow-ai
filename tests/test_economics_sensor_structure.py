@@ -32,6 +32,7 @@ PRICE_KEYS = {
     "economics_average_pv_opportunity_value",
     "economics_average_export_price",
     "economics_average_battery_discharge_value",
+    "economics_average_native_pv_to_home_return",
 }
 EFFICIENCY_KEYS = {"economics_total_economic_efficiency_pct"}
 MIGRATED_KEYS = {
@@ -78,7 +79,7 @@ def test_all_new_economics_sensors_use_the_virtual_device() -> None:
         *EFFICIENCY_KEYS,
     }
 
-    assert len(expected) == 29
+    assert len(expected) == 30
     for key in expected:
         assert key in descriptions
         assert _source(descriptions[key]["economics_device"]) == "True"

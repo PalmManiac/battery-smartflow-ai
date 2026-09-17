@@ -966,6 +966,7 @@
       "economics_average_pv_opportunity_value": {"name": "Prix – Valeur d’opportunité PV moyenne"},
       "economics_average_export_price": {"name": "Prix – Tarif d’injection moyen"},
       "economics_average_battery_discharge_value": {"name": "Prix – Valeur moyenne de décharge batterie"},
+      "economics_average_native_pv_to_home_return": {"name": "Prix – Valeur moyenne du PV natif vers la maison"},
       "strategy_state": {
         "name": "État de la stratégie",
         "state": {

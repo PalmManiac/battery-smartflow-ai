@@ -966,6 +966,7 @@
       "economics_average_pv_opportunity_value": {"name": "Prijzen – Gem. PV-opportuniteitswaarde"},
       "economics_average_export_price": {"name": "Prijzen – Gem. terugleverprijs"},
       "economics_average_battery_discharge_value": {"name": "Prijzen – Gem. waarde batterijontlading"},
+      "economics_average_native_pv_to_home_return": {"name": "Prijzen – Gem. waarde eigen PV direct naar huis"},
       "strategy_state": {
         "name": "Strategiestatus",
         "state": {

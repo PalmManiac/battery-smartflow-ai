@@ -48,6 +48,7 @@ def test_engine_calculates_central_values_and_weighted_averages() -> None:
             grid_export_kwh=3.0,
             battery_to_home_kwh=1.5,
             battery_to_grid_kwh=0.5,
+            native_pv_to_home_kwh=2.0,
         ),
         import_price=_price(MarketPriceDirection.IMPORT, 0.30),
         export_price=_price(MarketPriceDirection.EXPORT, 0.10),
@@ -58,6 +59,7 @@ def test_engine_calculates_central_values_and_weighted_averages() -> None:
             pv_to_battery_kwh=2.0,
             grid_export_kwh=1.0,
             battery_to_home_kwh=0.5,
+            native_pv_to_home_kwh=1.0,
         ),
         import_price=_price(MarketPriceDirection.IMPORT, 0.60),
         export_price=_price(MarketPriceDirection.EXPORT, 0.20),
@@ -73,6 +75,7 @@ def test_engine_calculates_central_values_and_weighted_averages() -> None:
     assert result.average_pv_opportunity_value == pytest.approx(1 / 6)
     assert result.average_export_price == pytest.approx(0.125)
     assert result.average_battery_discharge_value == pytest.approx(0.32)
+    assert result.average_native_pv_to_home_return == pytest.approx(0.40)
     assert result.as_dict()["currency"] == "EUR"
     assert engine.total_snapshot() == result
 
@@ -89,7 +92,32 @@ def test_daily_reset_preserves_total_values() -> None:
 
     assert engine.daily_snapshot().grid_charge_cost == 0.0
     assert engine.daily_snapshot().average_grid_charge_price is None
+    assert engine.daily_snapshot().average_native_pv_to_home_return is None
     assert engine.total_snapshot().grid_charge_cost == pytest.approx(0.25)
+
+
+def test_native_pv_return_can_seed_existing_energy_totals() -> None:
+    engine = EconomicsEngine(currency="EUR")
+    engine.record(
+        flows=EconomicEnergyFlows(native_pv_to_home_kwh=3.0),
+        import_price=_price(MarketPriceDirection.IMPORT, 0.40),
+        export_price=_price(MarketPriceDirection.EXPORT, 0.08),
+    )
+    old_state = engine.to_state()
+    old_state["daily"].pop("native_pv_to_home_kwh")
+    old_state["total"].pop("native_pv_to_home_kwh")
+    restored = EconomicsEngine.from_state(old_state, currency="EUR")
+
+    # States persisted before this sensor contain the monetary value, but not
+    # its energy denominator. The coordinator seeds it from EnergyAccumulator.
+    restored.seed_native_pv_to_home_energy(daily_kwh=3.0, total_kwh=3.0)
+
+    assert restored.daily_snapshot().average_native_pv_to_home_return == (
+        pytest.approx(0.40)
+    )
+    assert restored.total_snapshot().average_native_pv_to_home_return == (
+        pytest.approx(0.40)
+    )
 
 
 def test_negative_prices_remain_valid_economic_values() -> None:

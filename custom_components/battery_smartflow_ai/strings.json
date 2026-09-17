@@ -1032,6 +1032,7 @@
       "economics_average_pv_opportunity_value": {"name": "Prices – Avg. PV opportunity value"},
       "economics_average_export_price": {"name": "Prices – Avg. export price"},
       "economics_average_battery_discharge_value": {"name": "Prices – Avg. battery discharge value"},
+      "economics_average_native_pv_to_home_return": {"name": "Prices – Avg. PV to Home Return"},
       "strategy_state": {
         "name": "Strategy state",
         "state": {
