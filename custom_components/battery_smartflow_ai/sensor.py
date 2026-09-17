@@ -118,6 +118,7 @@ ECONOMICS_PRICE_SENSOR_KEYS = frozenset(
         "economics_average_pv_opportunity_value",
         "economics_average_export_price",
         "economics_average_battery_discharge_value",
+        "economics_average_native_pv_to_home_return",
     }
 )
 
@@ -1460,6 +1461,14 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         runtime_key="economics_average_battery_discharge_value",
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-arrow-down-outline",
+        economics_device=True,
+    ),
+    ZendureSensorEntityDescription(
+        key="economics_average_native_pv_to_home_return",
+        translation_key="economics_average_native_pv_to_home_return",
+        runtime_key="economics_average_native_pv_to_home_return",
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:solar-power-variant",
         economics_device=True,
     ),
 

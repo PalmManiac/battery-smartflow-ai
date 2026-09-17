@@ -681,6 +681,23 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist.get("economics_money_state"),
                 currency=self.price_currency.code,
             )
+            money_state = self._persist.get("economics_money_state")
+            has_native_pv_energy = (
+                isinstance(money_state, Mapping)
+                and isinstance(money_state.get("daily"), Mapping)
+                and isinstance(money_state.get("total"), Mapping)
+                and "native_pv_to_home_kwh" in money_state["daily"]
+                and "native_pv_to_home_kwh" in money_state["total"]
+            )
+            if not has_native_pv_energy:
+                try:
+                    energy_snapshot = self._energy_accumulator.snapshot()
+                    self._economics_engine.seed_native_pv_to_home_energy(
+                        daily_kwh=energy_snapshot.daily.native_pv_to_home_kwh,
+                        total_kwh=energy_snapshot.total.native_pv_to_home_kwh,
+                    )
+                except RuntimeError:
+                    pass
         elif load_result.error:
             _LOGGER.warning(
                 "Persistent state load skipped (%s): %s",
@@ -5356,6 +5373,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economics_average_battery_discharge_value": (
                     economics_total_snapshot.average_battery_discharge_value
                 ),
+                "economics_average_native_pv_to_home_return": (
+                    economics_total_snapshot.average_native_pv_to_home_return
+                ),
                 "economics_total_economic_efficiency_pct": (
                     self._economics_engine.total_economic_efficiency_pct()
                 ),
@@ -5368,6 +5388,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "economics_total_native_pv_to_home_kwh",
                     "economics_daily_native_pv_self_consumption_value",
                     "economics_total_native_pv_self_consumption_value",
+                    "economics_average_native_pv_to_home_return",
                 ):
                     economics_runtime_values[key] = None
 
