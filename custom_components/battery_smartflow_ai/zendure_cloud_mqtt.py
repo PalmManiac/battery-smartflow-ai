@@ -157,6 +157,7 @@ class ZendureCloudMqttTransport:
         self._connected = asyncio.Event()
         self._connect_failure: str | None = None
         self._stopping = False
+        self._disconnect_reported = False
         self._reconnect_task: asyncio.Task[None] | None = None
         self._session_number = 0
         self._request_message_id = 0
@@ -422,6 +423,9 @@ class ZendureCloudMqttTransport:
             return
         self._state = ConnectionState.CONNECTED
         self._connected.set()
+        if self._disconnect_reported:
+            _LOGGER.info("Zendure Cloud MQTT reconnected")
+        self._disconnect_reported = False
         _LOGGER.info(
             "Zendure Cloud MQTT connected; subscribed to %d state topics",
             len(self._subscribed_topics),
@@ -435,6 +439,21 @@ class ZendureCloudMqttTransport:
         if self._stopping:
             return
         safe = ZendureDiagnosticSanitizer().sanitize(reason or "unknown")
+        if bool(getattr(self._session, "manages_reconnect", False)):
+            # Paho's network loop already owns reconnection for this session.
+            # Starting our own replacement session here races that loop, can
+            # multiply broker connections, and produces a warning per retry.
+            self._state = ConnectionState.RECONNECTING
+            if not self._disconnect_reported:
+                _LOGGER.warning(
+                    "Zendure Cloud MQTT disconnected; waiting for broker "
+                    "reconnect: %s",
+                    safe,
+                )
+                self._disconnect_reported = True
+            else:
+                _LOGGER.debug("Zendure Cloud MQTT still disconnected: %s", safe)
+            return
         _LOGGER.warning("Zendure Cloud MQTT disconnected: %s", safe)
         self._schedule_reconnect()
 
@@ -654,6 +673,10 @@ def _online_value(value: Any) -> bool | None:
 class PahoReadOnlyMqttSession:
     """Paho session exposing only typed state and property operations."""
 
+    # ``loop_start`` reconnects an asynchronous Paho client itself.  The
+    # transport must not create a competing replacement session on disconnect.
+    manages_reconnect = True
+
     def __init__(self, credentials: CloudMqttCredentials) -> None:
         try:
             import paho.mqtt.client as mqtt
@@ -672,6 +695,7 @@ class PahoReadOnlyMqttSession:
             protocol=mqtt.MQTTv31,
         )
         self._client.username_pw_set(credentials.username, credentials.password)
+        self._client.reconnect_delay_set(min_delay=5, max_delay=60)
         if self._tls:
             self._client.tls_set(cert_reqs=ssl.CERT_REQUIRED)
         self._on_connect: ConnectCallback | None = None

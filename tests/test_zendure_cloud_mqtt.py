@@ -273,6 +273,32 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(self.sessions[0].state_requests), 2)
         self.assertEqual(len(self.sessions[1].state_requests), 2)
 
+    async def test_paho_managed_reconnect_does_not_create_competing_session(self):
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=self.factory,
+            reconnect_delays=(0.0,),
+        )
+        await transport.async_start()
+        session = self.sessions[0]
+        session.manages_reconnect = True
+
+        with self.assertLogs(
+            "custom_components.battery_smartflow_ai.zendure_cloud_mqtt",
+            level="WARNING",
+        ) as logs:
+            session.drop()
+            session.on_disconnect("network lost")
+            await asyncio.sleep(0)
+
+        self.assertEqual(len(self.sessions), 1)
+        self.assertEqual(transport.state, ConnectionState.RECONNECTING)
+        self.assertEqual(len(logs.output), 1)
+        session.on_connect(True, None)
+        await asyncio.sleep(0)
+        self.assertEqual(transport.state, ConnectionState.CONNECTED)
+        await transport.async_stop()
+
     async def test_credentials_do_not_appear_in_logs_or_representations(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory)
         with self.assertLogs("custom_components.battery_smartflow_ai.zendure_cloud_mqtt", level="INFO") as logs:
