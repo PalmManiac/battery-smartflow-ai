@@ -8,6 +8,7 @@ from typing import Literal
 
 from homeassistant.util import dt as dt_util
 
+from .const import DEFAULT_PEAK_FACTOR
 from .forecast import ForecastSummary
 from .market_price import MarketPrice, MarketPricePoint, planning_price_points
 from .price_math import peak_threshold
@@ -840,6 +841,7 @@ def choose_deadline(
     now: datetime,
     price_points: list[MarketPricePoint],
     forecast: ForecastSummary | None,
+    peak_factor: float = DEFAULT_PEAK_FACTOR,
 ) -> tuple[datetime, str]:
     """Choose one active planning deadline.
 
@@ -859,7 +861,11 @@ def choose_deadline(
 
     if remaining_prices:
         prices = [float(p.price) for p in remaining_prices]
-        learned_peak_threshold = peak_threshold(prices, 1.35)
+        # The learned planner and the decision engine must agree on what is a
+        # relevant peak.  A hard-coded factor here could miss a user-configured
+        # evening peak, defer the deadline until the next morning and therefore
+        # select a cheap window *after* that peak instead of charging beforehand.
+        learned_peak_threshold = peak_threshold(prices, peak_factor)
 
         peak_candidates = [
             p for p in remaining_prices
@@ -1043,6 +1049,7 @@ def build_learned_charge_plan(
     current_effective_charge_cap_w: float,
     learned_typical_charge_power_w: float | None = None,
     force_active: bool = False,
+    peak_factor: float = DEFAULT_PEAK_FACTOR,
 ) -> LearnedChargePlan:
     """Build a complete learned charge plan summary.
 
@@ -1066,6 +1073,7 @@ def build_learned_charge_plan(
         now=now,
         price_points=price_points,
         forecast=forecast,
+        peak_factor=peak_factor,
     )
 
     expected_kwh = expected_consumption_until(
