@@ -309,7 +309,7 @@ NATIVE_MAIN_SENSORS += (
     NativeHardwareSensorDescription(
         key="available_energy_kwh", translation_key="native_hardware_available_energy",
         measurement_key="available_energy_kwh", native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.ENERGY,
         suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
@@ -366,7 +366,7 @@ NATIVE_MAIN_SENSORS += (
     NativeHardwareSensorDescription(
         key="capacity_kwh", translation_key="native_hardware_capacity_kwh", measurement_key="capacity_kwh",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
-        device_class=SensorDeviceClass.ENERGY, state_class=SensorStateClass.MEASUREMENT,
+        device_class=SensorDeviceClass.ENERGY,
         suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
@@ -1772,7 +1772,7 @@ async def async_setup_entry(
 
     coordinator = hass.data[DOMAIN][entry.entry_id]
     device_registry = dr.async_get(hass)
-    device_registry.async_get_or_create(
+    integration_device = device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
         identifiers={(DOMAIN, entry.entry_id)},
     )
@@ -1800,7 +1800,7 @@ async def async_setup_entry(
                 model=system.model or "Unknown Zendure system",
                 serial_number=system.serial_number,
                 sw_version=str(firmware) if firmware is not None else None,
-                via_device=(DOMAIN, entry.entry_id),
+                via_device_id=integration_device.id,
             )
             for description in NATIVE_MAIN_SENSORS:
                 key = ("main", system.public_id, description.key)
@@ -1876,7 +1876,10 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 model=(item.model or "Unknown Zendure system") if item else None,
                 serial_number=item.serial_number if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
-                via_device=(DOMAIN, entry.entry_id),
+                via_device_id=_device_id_for_identifiers(
+                    coordinator.hass,
+                    {(DOMAIN, entry.entry_id)},
+                ),
             )
         else:
             firmware = _measured_value(getattr(item, "firmware", None))
@@ -1904,7 +1907,10 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 model=(item.pack_model or "Unknown battery pack") if item else None,
                 serial_number=item.serial_number if item else None,
                 sw_version=str(firmware) if firmware is not None else None,
-                via_device=native_main_device_identifier(parent_public_id),
+                via_device_id=_device_id_for_identifiers(
+                    coordinator.hass,
+                    native_main_device_identifier(parent_public_id),
+                ),
             )
 
     def _parent_system(self):
@@ -2036,6 +2042,18 @@ def _battery_pack_label(language: str | None) -> str:
     }.get(language, "Battery Pack")
 
 
+def _device_id_for_identifiers(hass: HomeAssistant, identifiers):
+    """Resolve a registered parent device for Home Assistant's current API."""
+
+    identifier = next(iter(identifiers), None)
+    device = (
+        dr.async_get(hass).async_get_device_by_identifier(identifier)
+        if identifier is not None
+        else None
+    )
+    return device.id if device is not None else None
+
+
 class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
 
@@ -2070,7 +2088,10 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 manufacturer=INTEGRATION_MANUFACTURER,
                 model=virtual_device_model(coordinator.hass.config.language),
                 sw_version=INTEGRATION_VERSION,
-                via_device=(DOMAIN, entry.entry_id),
+                via_device_id=_device_id_for_identifiers(
+                    coordinator.hass,
+                    {(DOMAIN, entry.entry_id)},
+                ),
             )
         else:
             self._attr_device_info = DeviceInfo(
