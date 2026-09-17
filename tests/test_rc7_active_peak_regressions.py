@@ -78,6 +78,33 @@ class Rc7ActivePeakRegressionTests(unittest.TestCase):
             datetime(2026, 8, 26, 11, 45, tzinfo=timezone.utc),
         )
 
+    def test_configured_peak_factor_keeps_pre_peak_charge_window(self) -> None:
+        """A configured evening peak must not be deferred to the night slot."""
+
+        now = datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc)
+        start = now
+        prices = [
+            MarketPricePoint(
+                start=start + timedelta(minutes=15 * index),
+                end=start + timedelta(minutes=15 * (index + 1)),
+                price=0.2386 if index < 20 else 0.3047,
+            )
+            for index in range(44)
+        ]
+
+        deadline, reason = choose_deadline(
+            now=now,
+            price_points=prices,
+            forecast=None,
+            peak_factor=1.1,
+        )
+
+        self.assertEqual(reason, DEADLINE_REASON_BEFORE_PEAK_WINDOW)
+        self.assertEqual(
+            deadline,
+            datetime(2026, 9, 16, 17, 0, tzinfo=timezone.utc),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

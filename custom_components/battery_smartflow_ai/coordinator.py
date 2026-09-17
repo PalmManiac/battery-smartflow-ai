@@ -4418,6 +4418,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 current_effective_charge_cap_w=float(max_charge),
                 learned_typical_charge_power_w=learned_charge_power,
                 force_active=False,
+                peak_factor=peak_factor,
             )
 
             season = self._season_detection(
