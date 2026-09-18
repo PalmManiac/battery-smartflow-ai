@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 from types import MappingProxyType
 from typing import Mapping
@@ -20,6 +20,36 @@ from .core.models import (
     ValueValidity,
     ZendureTransport,
 )
+
+
+# Legacy firmware publishes its state in sparse groups. Keep already reported
+# display values visible while the device is still sending other valid
+# telemetry, matching the five-minute liveness window used by Z-HA. This is
+# presentation-only: the native runtime continues to require each safety value
+# itself to be fresh before it can affect control.
+LEGACY_DISPLAY_RETENTION_SECONDS = 300.0
+
+
+def legacy_display_retains_stale_value(
+    parent: MainSystemOverview | None,
+    measured: MeasuredValue | None,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Return whether a stale Legacy value remains suitable for display."""
+
+    if (
+        parent is None
+        or measured is None
+        or measured.validity is not ValueValidity.STALE
+        or ZendureTransport.LOCAL_MQTT not in parent.available_transports
+        or parent.last_message_at is None
+    ):
+        return False
+    current = now or datetime.now(timezone.utc)
+    observed = parent.last_message_at.astimezone(timezone.utc)
+    age_seconds = (current.astimezone(timezone.utc) - observed).total_seconds()
+    return 0.0 <= age_seconds <= LEGACY_DISPLAY_RETENTION_SECONDS
 
 
 @dataclass(frozen=True, slots=True)

@@ -128,6 +128,18 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertNotIn("native_hardware_soc_pct", config)
         self.assertNotIn("native_hardware_charge_power_w", config)
 
+    def test_legacy_display_retention_does_not_change_runtime_freshness(self) -> None:
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        overview = (COMPONENT / "native_device_overview.py").read_text(
+            encoding="utf-8"
+        )
+        runtime = (COMPONENT / "native_zendure_runtime.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("legacy_display_retains_stale_value(parent, measured)", sensor)
+        self.assertIn("LEGACY_DISPLAY_RETENTION_SECONDS = 300.0", overview)
+        self.assertIn("maximum_age_seconds: float = 30.0", runtime)
+
     def test_safe_idle_capacity_reason_is_a_translated_enum_state(self) -> None:
         constants = ast.parse((COMPONENT / "const.py").read_text(encoding="utf-8"))
         enum_names = {"DECISION_REASON_ENUMS"}
