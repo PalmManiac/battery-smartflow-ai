@@ -55,6 +55,7 @@ from .const import (
     AUTOMATIC_WEIGHTING_ENUMS,
 )
 from .device_profiles import DEVICE_PROFILES
+from .native_device_overview import legacy_display_retains_stale_value
 from .core.full_charge_maintenance import (
     MaintenanceBlockReason,
     MaintenanceState,
@@ -1930,6 +1931,23 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 return system
         return None
 
+    def _measurement_available_for_display(self, measured) -> bool:
+        parent = self._parent_system() if self._kind == "pack" else self._item()
+        return bool(
+            measured is not None
+            and (
+                measured.valid
+                or legacy_display_retains_stale_value(parent, measured)
+            )
+        )
+
+    def _measurement_value_for_display(self, measured):
+        return (
+            measured.value
+            if self._measurement_available_for_display(measured)
+            else None
+        )
+
     def _item(self):
         for system in self.coordinator.native_zendure.hardware_overview():
             if self._kind == "main" and system.public_id == self._public_id:
@@ -1990,9 +2008,9 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 and item.selected_transport.value == "zensdk"
             ):
                 return True
-            return bool(measured is not None and measured.valid)
+            return self._measurement_available_for_display(measured)
         if description.source == "firmware":
-            return bool(item.firmware.valid)
+            return self._measurement_available_for_display(item.firmware)
         if description.source == "product_id":
             return item.product_id is not None
         if description.source == "profile":
@@ -2017,9 +2035,9 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 and item.selected_transport.value == "zensdk"
             ):
                 return 1
-            return _measured_value(measured)
+            return self._measurement_value_for_display(measured)
         if source == "firmware":
-            return _measured_value(item.firmware)
+            return self._measurement_value_for_display(item.firmware)
         if source == "product_id":
             return item.product_id
         if source == "profile":
