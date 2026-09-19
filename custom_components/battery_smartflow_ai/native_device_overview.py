@@ -9,7 +9,11 @@ from types import MappingProxyType
 from typing import Mapping
 from .native_capacity import native_capacity, pack_capacity_kwh, resolve_pack_profile
 from .native_statistics import derived_statistics
-from .zendure_device_matrix import resolve_zendure_device
+from .zendure_device_matrix import (
+    VerificationLevel,
+    ZENDURE_DEVICE_MATRIX,
+    resolve_zendure_device,
+)
 
 from .core.models import (
     DeviceControlState,
@@ -42,7 +46,7 @@ def legacy_display_retains_stale_value(
         parent is None
         or measured is None
         or measured.validity is not ValueValidity.STALE
-        or ZendureTransport.LOCAL_MQTT not in parent.available_transports
+        or not _is_sparse_legacy_family(parent)
         or parent.last_message_at is None
     ):
         return False
@@ -50,6 +54,24 @@ def legacy_display_retains_stale_value(
     observed = parent.last_message_at.astimezone(timezone.utc)
     age_seconds = (current.astimezone(timezone.utc) - observed).total_seconds()
     return 0.0 <= age_seconds <= LEGACY_DISPLAY_RETENTION_SECONDS
+
+
+def _is_sparse_legacy_family(parent: MainSystemOverview) -> bool:
+    """Identify Legacy hardware independently of its selected transport.
+
+    A Legacy device may correctly run through Cloud MQTT while its local MQTT
+    capability remains merely optional. ``available_transports`` therefore
+    describes the active control path and is not an identity capability set.
+    """
+
+    entry = ZENDURE_DEVICE_MATRIX.get(parent.profile_key or "")
+    return bool(
+        entry is not None
+        and entry.transport(ZendureTransport.LOCAL_MQTT).read
+        is VerificationLevel.VERIFIED
+        and entry.transport(ZendureTransport.ZENSDK).read
+        is VerificationLevel.UNSUPPORTED
+    )
 
 
 @dataclass(frozen=True, slots=True)
