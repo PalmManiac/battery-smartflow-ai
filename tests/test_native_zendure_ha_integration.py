@@ -108,6 +108,12 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             source.index("coordinator.native_zendure.start()"),
         )
 
+    def test_soc_outliers_cannot_reset_persistent_trade_accounting(self) -> None:
+        source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+        self.assertIn("evaluate_soc_for_accounting(", source)
+        self.assertIn("soc=accounting_soc", source)
+        self.assertIn('"soc_accounting_status": soc_accounting.status', source)
+
     def test_native_hardware_is_exposed_as_child_devices_not_config_inputs(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
         identity = (COMPONENT / "native_registry_identity.py").read_text(

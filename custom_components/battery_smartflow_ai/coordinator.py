@@ -14,6 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from .ac_mode_options import canonical_ac_mode, resolve_ac_mode_option
 from .ai_status import map_ai_status
+from .soc_plausibility import evaluate_soc_for_accounting
 from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
@@ -489,6 +490,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "trade_cycle_below_soc_min": False,
             "trade_soc_min_reset_count": 0,
             "prev_soc": None,
+            "soc_accounting_last_accepted_at": None,
+            "soc_outlier_pending_soc": None,
+            "soc_outlier_pending_count": 0,
+            "soc_outlier_status": "not_observed",
             "pending_charge_price_evidence": None,
 
             "avg_charge_price": None,
@@ -4038,18 +4043,59 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     raw_values={"capacity_status": native_runtime.selected_capacity().reason},
                 )
 
-            prev_soc = self._persist.get("prev_soc")
-            delta_kwh = 0.0
-
-            if prev_soc is not None and battery_capacity_kwh > 0:
-                soc_delta_pct = soc - prev_soc
-                delta_kwh = battery_capacity_kwh * (soc_delta_pct / 100.0)
-
-            self._persist["prev_soc"] = soc
-
             profile = self._get_active_profile()
             device_capabilities = self._device_profile.capabilities
-            
+
+            previous_soc = _to_float(self._persist.get("prev_soc"), None)
+            previous_soc_at = None
+            try:
+                previous_soc_at = dt_util.parse_datetime(
+                    str(self._persist.get("soc_accounting_last_accepted_at") or "")
+                )
+                if previous_soc_at is not None:
+                    previous_soc_at = dt_util.as_utc(previous_soc_at)
+            except (TypeError, ValueError):
+                previous_soc_at = None
+
+            soc_accounting = evaluate_soc_for_accounting(
+                raw_soc=soc,
+                previous_soc=previous_soc,
+                previous_at=previous_soc_at,
+                now=now,
+                capacity_kwh=battery_capacity_kwh,
+                max_charge_w=float(
+                    profile.get("MAX_INPUT_W", DEFAULT_MAX_CHARGE)
+                    or DEFAULT_MAX_CHARGE
+                ),
+                max_discharge_w=float(
+                    profile.get("MAX_OUTPUT_W", DEFAULT_MAX_DISCHARGE)
+                    or DEFAULT_MAX_DISCHARGE
+                ),
+                pending_soc=_to_float(
+                    self._persist.get("soc_outlier_pending_soc"), None
+                ),
+                pending_count=int(
+                    self._persist.get("soc_outlier_pending_count", 0) or 0
+                ),
+            )
+            accounting_soc = float(soc_accounting.accounting_soc)
+            self._persist["soc_outlier_status"] = soc_accounting.status
+            self._persist["soc_outlier_pending_soc"] = soc_accounting.pending_soc
+            self._persist["soc_outlier_pending_count"] = soc_accounting.pending_count
+
+            delta_kwh = 0.0
+            if (
+                soc_accounting.accepted
+                and previous_soc is not None
+                and battery_capacity_kwh > 0
+            ):
+                delta_kwh = battery_capacity_kwh * (
+                    (accounting_soc - previous_soc) / 100.0
+                )
+            if soc_accounting.accepted:
+                self._persist["prev_soc"] = accounting_soc
+                self._persist["soc_accounting_last_accepted_at"] = now.isoformat()
+
             export_market_price = self._get_export_market_price(now)
             feed_in_tariff = float(
                 export_market_price.current_price
@@ -4518,7 +4564,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 trade_soc_min_reset_count,
                 trade_cycle_below_soc_min,
             ) = trade_soc_min_reset_state(
-                soc=float(soc),
+                soc=accounting_soc,
                 soc_min=float(soc_min),
                 previous_count=int(
                     self._persist.get("trade_soc_min_reset_count", 0) or 0
@@ -6620,6 +6666,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             details = {
                 **maintenance_status,
                 "soc": soc,
+                "soc_accounting_value": accounting_soc,
+                "soc_accounting_status": soc_accounting.status,
+                "soc_accounting_outlier_pending_soc": soc_accounting.pending_soc,
+                "soc_accounting_outlier_pending_count": soc_accounting.pending_count,
                 "pv_w": pv_w,
                 "pv_sensor_valid": bool(pv_sensor_valid),
                 "native_pv_w": native_pv_w,
