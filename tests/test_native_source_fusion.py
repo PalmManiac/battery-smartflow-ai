@@ -14,8 +14,8 @@ bootstrap()
 
 from custom_components.battery_smartflow_ai.core.models import ValueValidity, ZendureTransport  # noqa: E402
 from custom_components.battery_smartflow_ai.native_source_fusion import NativeSourceFusion  # noqa: E402
-from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudClient  # noqa: E402
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import CloudMqttMessage  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import ZendureCloudClient  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import CloudMqttMessage  # noqa: E402
 
 
 class Response:

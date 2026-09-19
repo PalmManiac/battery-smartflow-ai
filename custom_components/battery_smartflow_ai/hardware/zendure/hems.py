@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TypeVar
 
-from .core.models import HemsStatus, MeasuredValue, ValueValidity, ZendureTransport
-from .zendure_device_matrix import VerificationLevel
+from ...core.models import HemsStatus, MeasuredValue, ValueValidity, ZendureTransport
+from .device_matrix import VerificationLevel
 
 
 @dataclass(frozen=True, slots=True)

@@ -83,9 +83,9 @@ from .native_config_ui import (
     resolve_app_token_input,
 )
 from .price_currency import price_input_profile, resolve_price_currency
-from .zendure_cloud import ZendureCloudClient, ZendureCloudError
-from .zendure_device_matrix import preferred_local_transport, resolve_zendure_device
-from .zendure_legacy import (
+from .hardware.zendure.cloud import ZendureCloudClient, ZendureCloudError
+from .hardware.zendure.device_matrix import preferred_local_transport, resolve_zendure_device
+from .hardware.zendure.legacy import (
     async_provision_legacy_device,
     legacy_provisioning_default,
 )

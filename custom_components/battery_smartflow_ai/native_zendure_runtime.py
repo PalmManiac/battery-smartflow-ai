@@ -44,41 +44,41 @@ from .native_transport_router import (
     NativeTransportRouter,
     automatic_control_transport,
 )
-from .zendure_cloud import ZendureCloudClient
-from .zendure_cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
-from .zendure_cloud_mqtt_commands import CloudCommandStatus
-from .zendure_device_matrix import (
+from .hardware.zendure.cloud import ZendureCloudClient
+from .hardware.zendure.cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
+from .hardware.zendure.cloud_mqtt_commands import CloudCommandStatus
+from .hardware.zendure.device_matrix import (
     VerificationLevel,
     preferred_local_transport,
     resolve_zendure_device,
 )
-from .zendure_first_write import (
+from .hardware.zendure.first_write import (
     NativeWriteVerification,
     PropertyReadback,
     TransportWriteResult,
     async_verify_reversible_write,
 )
-from .zendure_hems import ZendureHemsCommandGate
-from .zendure_initial_sync import (
+from .hardware.zendure.hems import ZendureHemsCommandGate
+from .hardware.zendure.initial_sync import (
     async_capture_initial_sync,
     export_initial_sync_capture,
 )
-from .zendure_local_mqtt import (
+from .hardware.zendure.local_mqtt import (
     LocalMqttCredentials,
     ZendureLocalMqttTransport,
 )
-from .zendure_local_mqtt_commands import LocalMqttCommandStatus
+from .hardware.zendure.local_mqtt_commands import LocalMqttCommandStatus
 from .native_source_fusion import NativeSourceFusion
 from .native_capacity import native_capacity
 from .native_statistics import NativeEnergyAccumulator
 from .soc_plausibility import evaluate_soc_for_accounting
-from .zendure_privacy import ZendureDiagnosticSanitizer
-from .zendure_zensdk import (
+from .hardware.zendure.privacy import ZendureDiagnosticSanitizer
+from .hardware.zendure.zensdk import (
     ZenSdkReadResult,
     async_read_zensdk_reports,
     async_write_zensdk_property,
 )
-from .zendure_zensdk_commands import (
+from .hardware.zendure.zensdk_commands import (
     ZendureZenSdkCommandAdapter,
     ZenSdkCommandStatus,
 )

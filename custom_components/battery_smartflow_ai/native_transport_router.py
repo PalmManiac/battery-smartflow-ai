@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .core.models import MainDevice, ZendureTransport
-from .zendure_device_matrix import preferred_local_transport
+from .hardware.zendure.device_matrix import preferred_local_transport
 
 NativeTransportSender = Callable[[Any], Awaitable[Any]]
 

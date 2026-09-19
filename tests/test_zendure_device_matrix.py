@@ -17,7 +17,7 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
 from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E402
     DEVICE_PROFILE_MODELS,
 )
-from custom_components.battery_smartflow_ai.zendure_device_matrix import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (  # noqa: E402
     VerificationLevel,
     ZENDURE_DEVICE_MATRIX,
     preferred_local_transport,

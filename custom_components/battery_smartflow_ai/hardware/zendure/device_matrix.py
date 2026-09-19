@@ -8,8 +8,8 @@ import re
 from types import MappingProxyType
 from typing import Mapping
 
-from .core.models import DeviceProfile, NativeDeviceIdentity, ZendureTransport
-from .device_profiles import DEVICE_PROFILE_MODELS
+from ...core.models import DeviceProfile, NativeDeviceIdentity, ZendureTransport
+from ...device_profiles import DEVICE_PROFILE_MODELS
 
 
 class VerificationLevel(StrEnum):

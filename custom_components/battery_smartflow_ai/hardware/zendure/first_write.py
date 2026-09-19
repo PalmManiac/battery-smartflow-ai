@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Awaitable, Callable
 
-from .native_device_command_gate import NativeCommandContext, NativeCommandRequest, NativeDeviceCommandGate
-from .native_command_verification import (
+from ...native_device_command_gate import NativeCommandContext, NativeCommandRequest, NativeDeviceCommandGate
+from ...native_command_verification import (
     EffectStatus,
     NativeCommandVerificationManager,
     ReadbackPolicy,

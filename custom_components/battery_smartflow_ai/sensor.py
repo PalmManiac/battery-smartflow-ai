@@ -393,7 +393,7 @@ NATIVE_MAIN_SENSORS += (
 )
 
 # Raw properties stay disabled diagnostics until the user needs them; no guessed enums.
-from .zendure_normalizer import RAW_MAIN_DIAGNOSTICS
+from .hardware.zendure.normalizer import RAW_MAIN_DIAGNOSTICS
 
 NATIVE_MAIN_SENSORS += tuple(
     NativeHardwareSensorDescription(

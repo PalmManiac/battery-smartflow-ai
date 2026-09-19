@@ -17,13 +17,13 @@ import time
 from typing import Any, Awaitable, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
-from .core.models import (
+from ...core.models import (
     DeviceInventory,
     DiscoveryCandidate,
     NativeDeviceIdentity,
     ZendureTransport,
 )
-from .zendure_device_matrix import resolve_zendure_device
+from .device_matrix import resolve_zendure_device
 
 
 DEVICE_LIST_PATH = "/api/ha/deviceList"

@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import Any, Mapping
 
 from .core.models import BindingState, DiscoveryCandidate
-from .zendure_device_matrix import resolve_zendure_device
+from .hardware.zendure.device_matrix import resolve_zendure_device
 
 V5_MIGRATION_SCHEMA = 1
 

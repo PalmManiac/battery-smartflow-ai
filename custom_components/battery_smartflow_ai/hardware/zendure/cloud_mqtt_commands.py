@@ -8,11 +8,11 @@ from enum import StrEnum
 import math
 from typing import Callable, Mapping, Protocol
 
-from .core.models import ZendureTransport
-from .native_command_verification import NativeCommandVerificationManager, ReadbackPolicy
-from .native_device_command_gate import AuthorizedNativeCommand
-from .zendure_cloud import ZendureCloudBootstrap
-from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
+from ...core.models import ZendureTransport
+from ...native_command_verification import NativeCommandVerificationManager, ReadbackPolicy
+from ...native_device_command_gate import AuthorizedNativeCommand
+from .cloud import ZendureCloudBootstrap
+from .device_matrix import VerificationLevel, resolve_zendure_device
 
 
 class CloudCommandStatus(StrEnum):

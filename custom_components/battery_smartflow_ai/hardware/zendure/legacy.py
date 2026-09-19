@@ -9,8 +9,8 @@ import hashlib
 import json
 from typing import Any, Callable, Mapping
 
-from .zendure_cloud import CloudMqttCredentials, ZendureCloudBootstrap
-from .zendure_cloud_mqtt import PahoReadOnlyMqttSession
+from .cloud import CloudMqttCredentials, ZendureCloudBootstrap
+from .cloud_mqtt import PahoReadOnlyMqttSession
 
 LEGACY_BLE_COMMAND_CHARACTERISTIC = "0000c304-0000-1000-8000-00805f9b34fb"
 
@@ -57,8 +57,8 @@ def legacy_provisioning_default(stored_transport: object | None) -> bool:
 
 
 def _legacy_routes(bootstrap: ZendureCloudBootstrap) -> tuple[tuple[str, str], ...]:
-    from .core.models import ZendureTransport
-    from .zendure_device_matrix import preferred_local_transport
+    from ...core.models import ZendureTransport
+    from .device_matrix import preferred_local_transport
 
     routes = []
     for item in bootstrap.devices:

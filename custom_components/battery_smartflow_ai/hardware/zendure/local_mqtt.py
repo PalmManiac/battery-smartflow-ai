@@ -9,25 +9,25 @@ import secrets
 from dataclasses import dataclass, field, replace
 from urllib.parse import urlparse
 
-from .core.models import ZendureTransport
-from .native_device_command_gate import AuthorizedNativeCommand
-from .zendure_cloud import (
+from ...core.models import ZendureTransport
+from ...native_device_command_gate import AuthorizedNativeCommand
+from .cloud import (
     CloudMqttCredentials,
     ZendureCloudBootstrap,
 )
-from .zendure_cloud_mqtt import (
+from .cloud_mqtt import (
     ConnectionState,
     PahoReadOnlyMqttSession,
     ZendureCloudMqttTransport,
 )
-from .zendure_device_matrix import preferred_local_transport
-from .zendure_local_mqtt_commands import (
+from .device_matrix import preferred_local_transport
+from .local_mqtt_commands import (
     LocalMqttCommandResult,
     LocalMqttCommandStatus,
     LocalMqttInvocation,
     ZendureLocalMqttCommandAdapter,
 )
-from .zendure_legacy import ZendureLegacyCloudBridge
+from .legacy import ZendureLegacyCloudBridge
 
 _LOGGER = logging.getLogger(__name__)
 

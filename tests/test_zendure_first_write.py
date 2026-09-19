@@ -10,7 +10,7 @@ from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.zendure_first_write import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.first_write import (  # noqa: E402
     NativeWriteStatus,
     PropertyReadback,
     TransportWriteResult,

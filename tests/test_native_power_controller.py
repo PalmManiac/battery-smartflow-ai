@@ -38,21 +38,21 @@ from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # n
     NativeZendureRuntime,
     _maintenance_pack_conflict,
 )
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     ConnectionState,  # noqa: E402
 )
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt_commands import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt_commands import (  # noqa: E402
     CloudCommandResult,
     CloudCommandStatus,
 )
-from custom_components.battery_smartflow_ai.zendure_device_matrix import (
+from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (
     VerificationLevel,  # noqa: E402
 )
-from custom_components.battery_smartflow_ai.zendure_local_mqtt_commands import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.local_mqtt_commands import (  # noqa: E402
     LocalMqttCommandResult,
     LocalMqttCommandStatus,
 )
-from custom_components.battery_smartflow_ai.zendure_zensdk_commands import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.zensdk_commands import (  # noqa: E402
     ZenSdkCommandResult,
     ZenSdkCommandStatus,
 )

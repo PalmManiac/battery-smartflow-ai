@@ -8,7 +8,7 @@ from support import bootstrap
 bootstrap()
 
 from custom_components.battery_smartflow_ai.core.models import ValueValidity  # noqa: E402
-from custom_components.battery_smartflow_ai.zendure_hems_activity import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.hems_activity import (  # noqa: E402
     HEMS_ACTIVITY_SOURCE,
     HemsActivityTracker,
 )

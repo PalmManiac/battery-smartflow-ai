@@ -11,10 +11,10 @@ import re
 from typing import Any, Awaitable, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
-from .core.models import ZendureTransport
-from .zendure_cloud import ZendureCloudBootstrap
-from .zendure_cloud_mqtt import CloudMqttMessage
-from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
+from ...core.models import ZendureTransport
+from .cloud import ZendureCloudBootstrap
+from .cloud_mqtt import CloudMqttMessage
+from .device_matrix import VerificationLevel, resolve_zendure_device
 
 
 ZENSDK_REPORT_PATH = "/properties/report"

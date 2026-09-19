@@ -23,10 +23,10 @@ from custom_components.battery_smartflow_ai.native_command_verification import (
 from custom_components.battery_smartflow_ai.native_device_command_gate import (  # noqa: E402
     AuthorizedNativeCommand,
 )
-from custom_components.battery_smartflow_ai.zendure_cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.zendure_zensdk_commands import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.zensdk_commands import (  # noqa: E402
     ZenSdkCommandStatus,
     ZendureZenSdkCommandAdapter,
     map_zensdk_command,

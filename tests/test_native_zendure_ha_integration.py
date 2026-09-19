@@ -60,7 +60,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
 
     def test_legacy_local_setup_never_creates_a_broker_user(self) -> None:
         source = (COMPONENT / "config_flow.py").read_text(encoding="utf-8")
-        legacy = (COMPONENT / "zendure_legacy.py").read_text(encoding="utf-8")
+        legacy = (COMPONENT / "hardware" / "zendure" / "legacy.py").read_text(encoding="utf-8")
         self.assertIn("legacy_provisioning_default", source)
         self.assertIn("async_provision_legacy_device", source)
         self.assertNotIn("async_ensure_legacy_mqtt_users", source + legacy)
@@ -70,7 +70,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         runtime = (COMPONENT / "native_zendure_runtime.py").read_text(
             encoding="utf-8"
         )
-        mqtt = (COMPONENT / "zendure_cloud_mqtt.py").read_text(encoding="utf-8")
+        mqtt = (COMPONENT / "hardware" / "zendure" / "cloud_mqtt.py").read_text(encoding="utf-8")
         self.assertIn("coordinator.native_zendure.start()", setup)
         self.assertNotIn("await coordinator.native_zendure.start()", setup)
         self.assertNotIn("publish(", runtime)
