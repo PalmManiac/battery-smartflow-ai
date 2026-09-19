@@ -2,7 +2,7 @@
 
 **Language:** [Deutsch](anleitung.md) | English
 
-> V5 first-time setup: current as of 5.0.0-rc24 (September 2026). The detailed
+> V5 first-time setup: current as of 5.0.0-rc30 (September 2026). The detailed
 > feature chapters also retain information for installations using existing
 > Home Assistant entities.
 

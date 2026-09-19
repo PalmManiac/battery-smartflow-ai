@@ -2,7 +2,7 @@
 
 **Sprache:** Deutsch | [English](user-guide.md)
 
-> V5-Ersteinrichtung: Stand 5.0.0-rc24 (September 2026). Die ausführlichen
+> V5-Ersteinrichtung: Stand 5.0.0-rc30 (September 2026). Die ausführlichen
 > Funktionskapitel enthalten weiterhin Hinweise für Installationen mit
 > vorhandenen Home-Assistant-Entitäten.
 
