@@ -471,7 +471,7 @@
     },
     "sensor": {
       "native_zendure_status": {"name": "Native Zendure test status", "state": {"disabled": "Not configured", "discovering": "Discovering devices", "connecting": "Connecting", "capturing": "Capturing initial data", "observing": "Observation active", "error": "Error"}},
-      "native_zendure_control": {"name": "Native Zendure control", "state": {"disabled_zha_active": "Disabled – Z-HA remains active", "native_transport_not_ready": "Selected path is not receiving current data", "native_local_handover_cloud_active": "Cloud active – preparing Local MQTT", "native_cloud_mqtt_active": "Enabled – Cloud active", "native_zensdk_active": "Enabled – local ZenSDK active", "native_local_mqtt_active": "Enabled – Local MQTT active", "native_local_unsupported": "Blocked – no verified local transport"}},
+      "native_zendure_control": {"name": "Native Zendure control", "state": {"disabled_zha_active": "Disabled", "native_transport_not_ready": "No data", "native_local_handover_cloud_active": "Cloud", "native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Local", "native_local_unsupported": "Not supported"}},
       "native_zendure_device_count": {"name": "Native Zendure devices found"},
       "native_zendure_message_count": {"name": "Native Zendure messages received"},
       "native_zendure_last_message": {"name": "Last native Zendure message"},
