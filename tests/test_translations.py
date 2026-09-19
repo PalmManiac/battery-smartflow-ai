@@ -254,6 +254,15 @@ class TranslationCoverageTests(unittest.TestCase):
         self.assertEqual(strings.pop("title"), "Battery SmartFlow AI")
         self.assertEqual(strings, load_json(TRANSLATIONS / "en.json"))
 
+    def test_native_control_active_paths_use_compact_labels(self) -> None:
+        expected = {
+            "de": {"native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Lokal"},
+            "en": {"native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Local"},
+        }
+        for language, labels in expected.items():
+            states = load_json(TRANSLATIONS / f"{language}.json")["entity"]["sensor"]["native_zendure_control"]["state"]
+            self.assertEqual({key: states[key] for key in labels}, labels)
+
     def test_entity_translation_keys_match_the_code(self) -> None:
         files = [COMPONENT / "strings.json", *(TRANSLATIONS / f"{lang}.json" for lang in LANGUAGES)]
         for platform in ("sensor", "number", "select"):
