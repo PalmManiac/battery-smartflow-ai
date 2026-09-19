@@ -69,7 +69,9 @@ from .zendure_local_mqtt import (
 )
 from .zendure_local_mqtt_commands import LocalMqttCommandStatus
 from .native_source_fusion import NativeSourceFusion
+from .native_capacity import native_capacity
 from .native_statistics import NativeEnergyAccumulator
+from .soc_plausibility import evaluate_soc_for_accounting
 from .zendure_privacy import ZendureDiagnosticSanitizer
 from .zendure_zensdk import (
     ZenSdkReadResult,
@@ -172,6 +174,10 @@ class NativeZendureRuntime:
         self._energy_accumulators: dict[str, NativeEnergyAccumulator] = {}
         self._switching_counts: dict[str, int] = {}
         self._last_energy_modes: dict[str, str] = {}
+        self._available_energy_soc: dict[str, float] = {}
+        self._available_energy_soc_at: dict[str, datetime] = {}
+        self._available_energy_pending_soc: dict[str, float] = {}
+        self._available_energy_pending_count: dict[str, int] = {}
         # A Local MQTT selection starts from the proven Cloud path.  Cloud may
         # temporarily retain read/write authority until the physical Legacy
         # device has supplied fresh local telemetry once.  After that first
@@ -531,11 +537,32 @@ class NativeZendureRuntime:
             mode = values.get("last_mode")
             if mode in {"idle", "charge", "discharge"}:
                 self._last_energy_modes[str(system_id)] = str(mode)
+            try:
+                available_soc = values.get("available_energy_soc_pct")
+                if available_soc is not None:
+                    self._available_energy_soc[str(system_id)] = float(available_soc)
+                observed_at = values.get("available_energy_soc_at")
+                if observed_at:
+                    self._available_energy_soc_at[str(system_id)] = datetime.fromisoformat(
+                        str(observed_at)
+                    )
+                pending_soc = values.get("available_energy_pending_soc_pct")
+                if pending_soc is not None:
+                    self._available_energy_pending_soc[str(system_id)] = float(pending_soc)
+                self._available_energy_pending_count[str(system_id)] = max(
+                    0, int(values.get("available_energy_pending_count", 0) or 0)
+                )
+            except (TypeError, ValueError):
+                continue
 
     def statistics_state(self) -> dict[str, dict[str, Any]]:
         """Return the persistable native statistics and their quality metadata."""
 
-        system_ids = set(self._energy_accumulators) | set(self._switching_counts)
+        system_ids = (
+            set(self._energy_accumulators)
+            | set(self._switching_counts)
+            | set(self._available_energy_soc)
+        )
         result: dict[str, dict[str, Any]] = {}
         for system_id in system_ids:
             accumulator = self._energy_accumulators.get(
@@ -545,6 +572,16 @@ class NativeZendureRuntime:
                 **accumulator.as_dict(),
                 "switching_count": int(self._switching_counts.get(system_id, 0)),
                 "last_mode": self._last_energy_modes.get(system_id),
+                "available_energy_soc_pct": self._available_energy_soc.get(system_id),
+                "available_energy_soc_at": (
+                    self._available_energy_soc_at[system_id].isoformat()
+                    if system_id in self._available_energy_soc_at
+                    else None
+                ),
+                "available_energy_pending_soc_pct": self._available_energy_pending_soc.get(system_id),
+                "available_energy_pending_count": int(
+                    self._available_energy_pending_count.get(system_id, 0)
+                ),
             }
         return result
 
@@ -552,6 +589,7 @@ class NativeZendureRuntime:
         """Integrate valid native power samples without bridging telemetry gaps."""
 
         timestamp = getattr(state, "last_message_at", None)
+        self._update_available_energy_soc(state, timestamp)
         charge = _numeric_value(getattr(state, "charge_power_w", None))
         discharge = _numeric_value(getattr(state, "discharge_power_w", None))
         pv_power = _numeric_value(getattr(state, "pv_power_w", None))
@@ -581,6 +619,37 @@ class NativeZendureRuntime:
                 self._switching_counts.get(system_id, 0) + 1
             )
         self._last_energy_modes[system_id] = mode
+
+    def _update_available_energy_soc(self, state: Any, timestamp: datetime | None) -> None:
+        """Retain a confirmed SoC only for the derived available-energy display."""
+
+        raw_soc = _numeric_value(getattr(state, "soc_pct", None))
+        if raw_soc is None or timestamp is None:
+            return
+        system_id = str(state.system_id)
+        device = self._inventory.devices.get(system_id)
+        identity = device.native_identities[0] if device and device.native_identities else None
+        profile = resolve_zendure_device(identity) if identity is not None else None
+        capabilities = profile.profile.capabilities if profile is not None else None
+        decision = evaluate_soc_for_accounting(
+            raw_soc=raw_soc,
+            previous_soc=self._available_energy_soc.get(system_id),
+            previous_at=self._available_energy_soc_at.get(system_id),
+            now=timestamp,
+            capacity_kwh=native_capacity(state).capacity_kwh or 0.0,
+            max_charge_w=(capabilities.max_input_w if capabilities else 0.0),
+            max_discharge_w=(capabilities.max_output_w if capabilities else 0.0),
+            pending_soc=self._available_energy_pending_soc.get(system_id),
+            pending_count=self._available_energy_pending_count.get(system_id, 0),
+        )
+        self._available_energy_soc[system_id] = decision.accounting_soc
+        if decision.accepted:
+            self._available_energy_soc_at[system_id] = timestamp
+        if decision.pending_soc is None:
+            self._available_energy_pending_soc.pop(system_id, None)
+        else:
+            self._available_energy_pending_soc[system_id] = decision.pending_soc
+        self._available_energy_pending_count[system_id] = decision.pending_count
 
     def _hardware_control_state(self) -> DeviceControlState:
         """Describe readiness separately from the current strategy decision."""

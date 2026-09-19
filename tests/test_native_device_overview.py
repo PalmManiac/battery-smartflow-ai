@@ -60,6 +60,23 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertEqual(item.measurements["switching_count"].value, 7)
         self.assertTrue(item.measurements["switching_count_is_estimate"].value)
 
+    def test_available_energy_uses_confirmed_soc_during_a_raw_soc_outlier(self):
+        main = MainDevice("main-secret", "System", model="SolarFlow 2400 AC")
+        pack = observed_pack("F123", main.system_id)
+        state = SimpleNamespace(
+            packs=(pack,),
+            soc_pct=measured(0.0),
+            last_message_at=datetime(2026, 9, 19, tzinfo=timezone.utc),
+        )
+
+        item = build_native_device_overview(
+            DeviceInventory(devices=(main,)),
+            {main.system_id: state},
+            statistics={main.system_id: {"available_energy_soc_pct": 50.0}},
+        )[0]
+
+        self.assertEqual(item.measurements["available_energy_kwh"].value, 1.44)
+
     def test_recognized_native_identity_supplies_missing_profile_key(self):
         identity = NativeDeviceIdentity(
             ZendureTransport.ZENSDK,
