@@ -21,10 +21,10 @@ aiohttp_module.async_get_clientsession = lambda _hass: None
 sys.modules.setdefault("homeassistant.helpers", helpers_module)
 sys.modules.setdefault("homeassistant.helpers.aiohttp_client", aiohttp_module)
 
-from custom_components.battery_smartflow_ai.zendure_cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.zendure_zensdk import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (  # noqa: E402
     ZenSdkReadAttempt,
     ZenSdkReadResult,
     _candidate_addresses,
@@ -32,7 +32,7 @@ from custom_components.battery_smartflow_ai.zendure_zensdk import (  # noqa: E40
     async_write_zensdk_property,
     async_write_zensdk_properties,
 )
-from custom_components.battery_smartflow_ai.zendure_normalizer import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (  # noqa: E402
     ZendureCloudNormalizer,
 )
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402

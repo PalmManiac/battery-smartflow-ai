@@ -9,7 +9,7 @@ from types import MappingProxyType
 from typing import Mapping
 from .native_capacity import native_capacity, pack_capacity_kwh, resolve_pack_profile
 from .native_statistics import derived_statistics
-from .zendure_device_matrix import (
+from .hardware.zendure.device_matrix import (
     VerificationLevel,
     ZENDURE_DEVICE_MATRIX,
     resolve_zendure_device,

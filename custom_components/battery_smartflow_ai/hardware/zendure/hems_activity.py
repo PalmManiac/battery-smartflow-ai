@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from .core.models import MeasuredValue, ValueValidity
+from ...core.models import MeasuredValue, ValueValidity
 
 
 HEMS_ACTIVITY_TIMEOUT_SECONDS = 60.0

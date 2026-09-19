@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Mapping
 
 from .core.clock import SystemClock
-from .zendure_privacy import sanitize_zendure_diagnostics
+from .hardware.zendure.privacy import sanitize_zendure_diagnostics
 
 
 DEBUG_SCHEMA_NAME = "battery_smartflow_ai.debug"

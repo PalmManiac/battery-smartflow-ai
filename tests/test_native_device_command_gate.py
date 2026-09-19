@@ -26,12 +26,12 @@ from custom_components.battery_smartflow_ai.native_device_command_gate import ( 
     NativeGateStatus,
     NativeLimitInputs,
 )
-from custom_components.battery_smartflow_ai.zendure_device_matrix import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (  # noqa: E402
     TransportCapability,
     VerificationLevel,
     ZENDURE_DEVICE_MATRIX,
 )
-from custom_components.battery_smartflow_ai.zendure_hems import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.hems import (  # noqa: E402
     ZendureHemsCommandGate,
 )
 

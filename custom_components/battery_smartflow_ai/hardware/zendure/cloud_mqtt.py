@@ -22,11 +22,11 @@ import ssl
 from typing import Any, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
-from .zendure_cloud import CloudMqttCredentials, ZendureCloudBootstrap
-from .zendure_privacy import ZendureDiagnosticSanitizer
-from .native_command_verification import NativeCommandVerificationManager
-from .native_device_command_gate import AuthorizedNativeCommand
-from .zendure_cloud_mqtt_commands import (
+from .cloud import CloudMqttCredentials, ZendureCloudBootstrap
+from .privacy import ZendureDiagnosticSanitizer
+from ...native_command_verification import NativeCommandVerificationManager
+from ...native_device_command_gate import AuthorizedNativeCommand
+from .cloud_mqtt_commands import (
     CloudCommandResult,
     CloudCommandStatus,
     CloudPropertyWrite,

@@ -13,10 +13,10 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     ValueValidity,
     ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.zendure_device_matrix import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (  # noqa: E402
     VerificationLevel,
 )
-from custom_components.battery_smartflow_ai.zendure_hems import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.hems import (  # noqa: E402
     HemsCommandResult,
     ZendureHemsCommandGate,
 )

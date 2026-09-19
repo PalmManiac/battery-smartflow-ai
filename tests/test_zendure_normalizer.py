@@ -19,19 +19,19 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     ValueValidity,
     ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.zendure_cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (  # noqa: E402
     CloudMqttMessage,
 )
-from custom_components.battery_smartflow_ai.zendure_normalizer import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (  # noqa: E402
     MAIN_PROPERTY_MAPPINGS,
     PACK_PROPERTY_MAPPINGS,
     MappingScope,
     ZendureCloudNormalizer,
 )
-from custom_components.battery_smartflow_ai.zendure_initial_sync import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.initial_sync import (  # noqa: E402
     ZendureInitialSyncRecorder,
 )
 

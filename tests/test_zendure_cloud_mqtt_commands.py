@@ -13,8 +13,8 @@ from custom_components.battery_smartflow_ai.native_command_verification import (
     NativeCommandVerificationManager,
 )
 from custom_components.battery_smartflow_ai.native_device_command_gate import AuthorizedNativeCommand
-from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudClient
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt_commands import (
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import ZendureCloudClient
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt_commands import (
     CloudCommandStatus,
     ZendureCloudCommandAdapter,
     map_cloud_command,

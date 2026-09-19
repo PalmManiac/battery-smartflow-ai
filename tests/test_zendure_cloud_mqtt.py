@@ -11,8 +11,8 @@ from pathlib import Path
 import socket
 import unittest
 
-from custom_components.battery_smartflow_ai.zendure_cloud import ZendureCloudClient
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import ZendureCloudClient
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     CloudMqttError,
     ConnectionState,
     PahoReadOnlyMqttSession,
@@ -26,7 +26,7 @@ from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (
     _safe_peer_scope,
     _safe_socket_family,
 )
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt_commands import CloudPropertyWrite
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt_commands import CloudPropertyWrite
 
 
 class Response:
@@ -284,7 +284,7 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         session.manages_reconnect = True
 
         with self.assertLogs(
-            "custom_components.battery_smartflow_ai.zendure_cloud_mqtt",
+            "custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt",
             level="WARNING",
         ) as logs:
             session.drop()
@@ -301,7 +301,7 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_credentials_do_not_appear_in_logs_or_representations(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory)
-        with self.assertLogs("custom_components.battery_smartflow_ai.zendure_cloud_mqtt", level="INFO") as logs:
+        with self.assertLogs("custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt", level="INFO") as logs:
             await transport.async_start()
         text = " ".join(logs.output) + repr(transport) + repr(self.data)
         for secret in ("secret-client", "secret-user", "secret-pass", "broker.example"):
@@ -310,7 +310,7 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_disconnect_reason_is_sanitized(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory, reconnect_delays=(10.0,))
         await transport.async_start()
-        with self.assertLogs("custom_components.battery_smartflow_ai.zendure_cloud_mqtt", level="WARNING") as logs:
+        with self.assertLogs("custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt", level="WARNING") as logs:
             self.sessions[0].on_disconnect("username=secret-user password=secret-pass mqtts://broker.example:8883")
             await asyncio.sleep(0)
         text = " ".join(logs.output)
@@ -385,7 +385,7 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             Path(__file__).resolve().parents[1]
             / "custom_components"
             / "battery_smartflow_ai"
-            / "zendure_cloud_mqtt.py"
+            / "hardware" / "zendure" / "cloud_mqtt.py"
         ).read_text(encoding="utf-8")
         self.assertIn("protocol=mqtt.MQTTv31", source)
         self.assertIn("clean_session=False", source)

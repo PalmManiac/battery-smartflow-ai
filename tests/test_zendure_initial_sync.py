@@ -13,20 +13,20 @@ from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.zendure_cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.zendure_cloud_mqtt import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (  # noqa: E402
     CloudMqttMessage,
     ConnectionState,
 )
-from custom_components.battery_smartflow_ai.zendure_initial_sync import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.initial_sync import (  # noqa: E402
     InitialSyncExportError,
     ZendureInitialSyncRecorder,
     async_capture_initial_sync,
     export_initial_sync_capture,
 )
-from custom_components.battery_smartflow_ai.zendure_zensdk import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (  # noqa: E402
     ZenSdkReadAttempt,
 )
 

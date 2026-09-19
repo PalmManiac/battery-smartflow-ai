@@ -8,14 +8,14 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Any, Callable, Mapping, Protocol
 
-from .core.models import ZendureTransport
-from .native_command_verification import (
+from ...core.models import ZendureTransport
+from ...native_command_verification import (
     NativeCommandVerificationManager,
     ReadbackPolicy,
 )
-from .native_device_command_gate import AuthorizedNativeCommand
-from .zendure_cloud import ZendureCloudBootstrap
-from .zendure_device_matrix import VerificationLevel, resolve_zendure_device
+from ...native_device_command_gate import AuthorizedNativeCommand
+from .cloud import ZendureCloudBootstrap
+from .device_matrix import VerificationLevel, resolve_zendure_device
 
 
 class LocalMqttCommandStatus(StrEnum):

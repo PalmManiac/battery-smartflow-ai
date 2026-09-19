@@ -8,7 +8,7 @@ from enum import StrEnum
 import math
 from typing import Any, Callable, Mapping
 
-from .core.models import (
+from ...core.models import (
     DeviceOperatingMode,
     MeasuredValue,
     NeutralDeviceState,
@@ -17,10 +17,10 @@ from .core.models import (
     ValueValidity,
     ZendureTransport,
 )
-from .zendure_cloud import ZendureCloudBootstrap
-from .zendure_cloud_mqtt import CloudMqttMessage, is_zendure_state_message
-from .zendure_device_matrix import resolve_zendure_device
-from .zendure_hems_activity import HemsActivityDiagnostic, HemsActivityTracker
+from .cloud import ZendureCloudBootstrap
+from .cloud_mqtt import CloudMqttMessage, is_zendure_state_message
+from .device_matrix import resolve_zendure_device
+from .hems_activity import HemsActivityDiagnostic, HemsActivityTracker
 
 
 # Zendure systems normally report individual property groups close enough for

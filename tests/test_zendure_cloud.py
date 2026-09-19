@@ -11,7 +11,7 @@ from support import bootstrap
 bootstrap()
 
 from custom_components.battery_smartflow_ai.core.models import DeviceInventory  # noqa: E402
-from custom_components.battery_smartflow_ai.zendure_cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
     ZendureCloudError,
     parse_app_token,

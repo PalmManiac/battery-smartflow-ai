@@ -9,7 +9,7 @@ from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.zendure_privacy import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.privacy import (  # noqa: E402
     REDACTED,
     ZendureDiagnosticSanitizer,
     sanitize_zendure_diagnostics,

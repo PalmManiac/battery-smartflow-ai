@@ -11,10 +11,10 @@ from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.zendure_cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.zendure_legacy import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.legacy import (  # noqa: E402
     ZendureLegacyCloudBridge,
     legacy_ble_commands,
     legacy_device_password,

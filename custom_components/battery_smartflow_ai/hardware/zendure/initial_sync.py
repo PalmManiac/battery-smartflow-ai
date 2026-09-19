@@ -13,15 +13,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
-from .zendure_cloud import ZendureCloudBootstrap
-from .zendure_cloud_mqtt import (
+from .cloud import ZendureCloudBootstrap
+from .cloud_mqtt import (
     CloudMqttMessage,
     ConnectionState,
     ZendureCloudMqttTransport,
     is_zendure_state_message,
 )
-from .zendure_privacy import ZendureDiagnosticSanitizer
-from .zendure_zensdk import ZenSdkReadAttempt
+from .privacy import ZendureDiagnosticSanitizer
+from .zensdk import ZenSdkReadAttempt
 
 SCHEMA = "battery_smartflow_ai.zendure_initial_sync"
 SCHEMA_VERSION = 1
@@ -508,7 +508,7 @@ def _property_paths(value: Any) -> set[str]:
 def _summary_property_items(value: Any) -> list[tuple[str, Any, str]]:
     """Expose mapper coverage without dropping unknown main or pack fields."""
 
-    from .zendure_normalizer import (  # avoid coupling the raw recorder at import
+    from .normalizer import (  # avoid coupling the raw recorder at import
         MAIN_PROPERTY_MAPPINGS,
         PACK_PROPERTY_MAPPINGS,
     )

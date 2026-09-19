@@ -19,12 +19,12 @@ from .core.models import (
     ValueValidity,
     ZendureTransport,
 )
-from .zendure_device_matrix import (
+from .hardware.zendure.device_matrix import (
     VerificationLevel,
     ZendureDeviceMatrixEntry,
     resolve_zendure_device,
 )
-from .zendure_hems import ZendureHemsCommandGate
+from .hardware.zendure.hems import ZendureHemsCommandGate
 
 
 class NativeGateStatus(StrEnum):

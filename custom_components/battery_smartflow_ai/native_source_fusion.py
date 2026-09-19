@@ -18,10 +18,10 @@ from .native_read_source import (
     SelectedMeasurement,
     SourceMeasurement,
 )
-from .zendure_cloud import ZendureCloudBootstrap
-from .zendure_cloud_mqtt import CloudMqttMessage
-from .zendure_hems_activity import HemsActivityDiagnostic
-from .zendure_normalizer import (
+from .hardware.zendure.cloud import ZendureCloudBootstrap
+from .hardware.zendure.cloud_mqtt import CloudMqttMessage
+from .hardware.zendure.hems_activity import HemsActivityDiagnostic
+from .hardware.zendure.normalizer import (
     MAIN_PROPERTY_MAPPINGS,
     PACK_PROPERTY_MAPPINGS,
     NormalizationResult,
