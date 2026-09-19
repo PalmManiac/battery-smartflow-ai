@@ -168,10 +168,12 @@ In the Zendure app:
 
 **Direct Zendure connection (V5):** Z-HA is not required. Enter the Zendure
 app token, select the device and confirm a communication path available for
-that model. ZenSDK, Local MQTT and Cloud MQTT are distinct paths; Local MQTT
-for Legacy devices requires your own broker details and, if the device is not
-already provisioned, additional setup. Check that fresh SoC and power data
-arrive before relying on control.
+that model. Start with the path suggested by BSFAI; for Legacy devices that is
+normally **Cloud**. ZenSDK, Local MQTT and Cloud MQTT are distinct paths.
+Local MQTT is for a device deliberately connected to your own local broker and
+may require device provisioning. Check that fresh SoC and power data arrive
+before relying on control. The detailed decision guide is part of the
+[V5 quick start](docs/user-guide.md#v5-quick-start-connect-zendure-directly).
 
 **Existing HA entities:** Use sensors and controls supplied by another
 integration, such as Z-HA. Verify that they update. If Z-HA is used, set its
@@ -264,6 +266,10 @@ After installation:
 * **Use existing HA entities:** select the profile, SoC, power and control
   entities supplied by another integration. The older configuration
   screenshots and field-by-field explanations in the guide apply to this path.
+
+The native connection can later be reopened through **Configure → Native
+Zendure** to replace an app token or review the main device and communication
+path. A stored token remains masked.
 
 Home Assistant then offers to name and assign the detected devices. See the
 [illustrated V5 setup](docs/user-guide.md#v5-quick-start-connect-zendure-directly).
@@ -728,10 +734,13 @@ In der Zendure App:
 
 **Zendure direkt verbinden (V5):** Z-HA wird nicht benötigt. Gib den Zendure-
 App-Token ein, wähle das Gerät und bestätige einen für das Modell verfügbaren
-Kommunikationsweg. ZenSDK, lokales MQTT und Cloud MQTT sind unterschiedliche
-Wege. Legacy-Geräte benötigen für lokales MQTT die Daten des eigenen Brokers
-und gegebenenfalls eine einmalige Geräteeinrichtung. Prüfe vor dem Regelbetrieb,
-ob SoC und Leistung aktuell eintreffen.
+Kommunikationsweg. Starte mit der von BSFAI vorgeschlagenen Auswahl; bei
+Legacy-Geräten ist das in der Regel **Cloud**. ZenSDK, lokales MQTT und Cloud
+MQTT sind unterschiedliche Wege. Lokales MQTT ist für Geräte gedacht, die
+bewusst mit dem eigenen lokalen Broker verbunden werden, und kann eine
+Geräteeinrichtung erfordern. Prüfe vor dem Regelbetrieb, ob SoC und Leistung
+aktuell eintreffen. Die ausführliche Einordnung steht im
+[V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
 
 **Vorhandene HA-Entitäten verwenden:** Sensoren und Regler kommen von einer
 anderen Integration, zum Beispiel Z-HA. Prüfe ihre Aktualisierung. Falls
@@ -827,6 +836,10 @@ Nach der Installation:
 * **Vorhandene HA-Entitäten verwenden:** Profil, SoC, Leistung und Steuer-
   Entitäten aus einer anderen Integration auswählen. Die älteren Konfigurations-
   Screenshots und Felderklärungen in der Anleitung gelten für diesen Weg.
+
+Die native Verbindung kann später über **Konfigurieren → Natives Zendure**
+erneut geöffnet werden, etwa um App-Token, Hauptgerät oder Kommunikationsweg
+zu prüfen oder zu ändern. Ein gespeicherter Token bleibt dabei verdeckt.
 
 Anschließend bietet Home Assistant das Benennen und Zuordnen der erkannten
 Geräte an. Siehe den [bebilderten V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).

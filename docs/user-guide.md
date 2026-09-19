@@ -60,11 +60,22 @@ battery packs appear as related devices.
 4. **Confirm the device and communication path.** Select the correct main
    device, especially if you have several identical models. Use the serial
    number or device name when Zendure supplies one. Available paths depend on
-   the model: newer devices use ZenSDK; Legacy devices may use Cloud or Local
-   MQTT. *Local MQTT* requires your **own local broker** details. If a Legacy
-   device is already configured for that broker, leave the option to configure
-   the device again off; use it only when provisioning is needed. Cloud MQTT
-   needs no local broker but does require an internet connection.
+   the model. The BSFAI suggestion is the intended starting point; for Legacy
+   devices this is normally **Cloud**. Only switch to *Local MQTT* when your
+   device is already deliberately connected to your local broker or you intend
+   to set up that path.
+
+   | Communication path | When to use it | Requirement |
+   | --- | --- | --- |
+   | **Cloud** | Recommended starting point for Legacy devices and the simplest first data check | Internet connection; no local broker |
+   | **ZenSDK** | Supported newer devices with direct local access | ZenSDK support offered by the device |
+   | **Local MQTT** | Already locally configured Legacy hardware, or a deliberately configured own broker | Credentials for your **own local MQTT broker** |
+
+   Broker credentials do not create a new user on your broker. They are sent to
+   the Zendure device so that it can connect to your already working broker
+   itself. If a Legacy device is already configured for that broker, leave the
+   option to configure the device again off; use it only when provisioning is
+   required. Cloud needs no local broker, but depends on internet access.
 5. **Complete the remaining system settings.** Select your grid-power source
    and optional electricity-price and solar-forecast sources. On the direct
    path, V5 obtains the device profile, available hardware sensors, battery
@@ -84,6 +95,23 @@ battery packs appear as related devices.
 
    ![V5: control, economics, main device and two battery packs after setup](images/v5_setup_04_device_overview.png)
 
+### Before the first control test
+
+Check these four points before allowing BSFAI to regulate for the first time:
+
+1. SoC and charge or discharge power visibly update.
+2. The displayed communication path matches your selection.
+3. Zendure app automations and other Home Assistant automations do not change
+   the same AC mode or power limits.
+4. If Z-HA is still installed, its Manager operating mode is **OFF**, or it is
+   no longer active as a controller for this system.
+
+You can reopen the native connection at any time through *Settings → Devices &
+services → Battery SmartFlow AI → Configure → Native Zendure*. There you can
+review or replace the app token, main device and communication path after an
+account change, device change or while troubleshooting. A stored token is only
+shown as a masked placeholder.
+
 If readings are missing, BSFAI stays safely idle. First check the app token,
 selected device, communication path and actual data reception. The *Zendure
 initial-sync JSON* and a time-limited BSFAI debug recording can help with
@@ -94,11 +122,18 @@ not enable native control alongside active Z-HA regulation.
 
 Create a Home Assistant backup before updating. An existing V4 entry initially
 retains its existing-entities path; native control is **not enabled
-automatically**. First confirm that the previous setup still works after the
-restart. To switch to direct control later, open **Configure → Native Zendure**,
-confirm the app token, main device and communication path, and ensure Z-HA is
-not controlling the same device. Then verify incoming data before testing
-regulation. An upgrade is different from the new installation shown above.
+automatically**. The upgrade is deliberately reversible:
+
+1. Update BSFAI and restart Home Assistant.
+2. First confirm that the existing-entities path still works.
+3. To move to the direct connection, open **Configure → Native Zendure**, enter
+   the app token and confirm the main device and communication path.
+4. First verify incoming data, then disable parallel Z-HA regulation before the
+   first control test.
+
+An upgrade is different from the new installation shown above. Do not delete
+Z-HA prematurely: prepare the migration in parallel and only hand over control
+after data reception has been confirmed.
 
 ---
 

@@ -63,13 +63,24 @@ zugehörige Geräte.
 4. **Gerät und Kommunikationsweg bestätigen.** Wähle das richtige Hauptgerät,
    insbesondere wenn mehrere gleiche Modelle gefunden werden. Seriennummer
    oder Gerätename helfen bei der Zuordnung, soweit Zendure sie liefert. Die
-   verfügbaren Wege hängen vom Modell ab: neuere Geräte nutzen ZenSDK,
-   Legacy-Geräte können Cloud oder lokales MQTT verwenden. Für *lokales MQTT*
-   werden die Daten des **eigenen lokalen Brokers** benötigt. Ist ein
-   Legacy-Gerät bereits dafür eingerichtet, lasse die Option zur erneuten
-   Gerätekonfiguration aus; diese ist nur bei einer notwendigen Neueinrichtung
-   gedacht. Cloud-MQTT funktioniert ohne lokalen Broker, benötigt aber eine
-   Internetverbindung.
+   verfügbaren Wege hängen vom Modell ab. Als Startpunkt ist die von BSFAI
+   vorgeschlagene Auswahl vorgesehen; bei Legacy-Geräten ist dies in der Regel
+   **Cloud**. Wechsle erst auf *lokales MQTT*, wenn dein Gerät bereits bewusst
+   mit deinem lokalen Broker eingerichtet ist oder du diesen Weg gezielt
+   einrichten möchtest.
+
+   | Kommunikationsweg | Wann sinnvoll | Voraussetzung |
+   | --- | --- | --- |
+   | **Cloud** | Empfohlener Start für Legacy-Geräte und der einfachste Weg zur ersten Datenprüfung | Internetzugang, kein lokaler Broker |
+   | **ZenSDK** | Unterstützte neuere Geräte mit direktem lokalen Zugriff | Vom Gerät angebotene ZenSDK-Unterstützung |
+   | **Lokales MQTT** | Bereits lokal eingerichtete Legacy-Hardware oder bewusst eingerichteter eigener Broker | Zugangsdaten des **eigenen lokalen MQTT-Brokers** |
+
+   Die Broker-Zugangsdaten richten keinen neuen Benutzer auf deinem Broker ein.
+   Sie werden an das Zendure-Gerät übermittelt, damit es sich selbst mit deinem
+   bereits funktionierenden Broker verbinden kann. Ist ein Legacy-Gerät bereits
+   dafür eingerichtet, lasse die Option zur erneuten Gerätekonfiguration aus;
+   sie ist nur für eine notwendige Neueinrichtung gedacht. Cloud benötigt keinen
+   lokalen Broker, ist aber von der Internetverbindung abhängig.
 5. **Übrige Anlagenangaben ergänzen.** Wähle deine Netzleistungsmessung sowie
    optionale Preis- und PV-Prognosequellen. V5 erkennt beim direkten Weg
    Geräteprofil, verfügbare Hardware-Sensoren, Akku-Packs und deren Kapazität
@@ -90,6 +101,23 @@ zugehörige Geräte.
 
    ![V5: Steuerung, Wirtschaft, Hauptgerät und zwei Akku-Packs nach der Einrichtung](images/v5_setup_04_device_overview.png)
 
+### Vor dem ersten Regeltest
+
+Prüfe diese vier Punkte, bevor BSFAI erstmals aktiv regeln soll:
+
+1. Der SoC sowie Lade- oder Entladeleistung aktualisieren sich sichtbar.
+2. Der angezeigte Kommunikationsweg entspricht deiner Auswahl.
+3. Zendure-App-Automationen und weitere Home-Assistant-Automationen ändern
+   nicht denselben AC-Modus oder dieselben Leistungsgrenzen.
+4. Falls Z-HA noch installiert ist, ist dessen Manager-Betriebsmodus **AUS**
+   oder Z-HA ist für dieses System nicht mehr als Regler aktiv.
+
+Die native Verbindung kann jederzeit über *Einstellungen → Geräte & Dienste →
+Battery SmartFlow AI → Konfigurieren → Natives Zendure* erneut geöffnet werden.
+Dort lassen sich App-Token, Hauptgerät und Kommunikationsweg nach einem
+Kontowechsel, Gerätewechsel oder zur Fehlersuche neu prüfen. Ein gespeicherter
+Token erscheint dabei nur verdeckt, kann aber ersetzt werden.
+
 Wenn Messwerte fehlen, bleibt BSFAI aus Sicherheitsgründen im Leerlauf. Prüfe
 zuerst App-Token, Geräteauswahl, Kommunikationsweg und den tatsächlichen
 Datenempfang. Für Support können das *Zendure-Initial-Sync-JSON* und eine
@@ -101,13 +129,20 @@ parallel zu einer aktiven Z-HA-Regelung ein.
 
 Erstelle vor dem Update ein Home-Assistant-Backup. Ein bestehender V4-Eintrag
 bleibt beim Versionswechsel zunächst auf dem bisherigen Entitäten-Weg; die
-native Steuerung wird **nicht automatisch** eingeschaltet. Prüfe zuerst, ob
-der alte Betrieb nach dem Neustart weiterläuft. Wenn du anschließend auf den
-direkten Weg wechseln möchtest, öffne **Konfigurieren → Natives Zendure**,
-bestätige App-Token, Hauptgerät und Kommunikationsweg und sorge dafür, dass
-Z-HA nicht gleichzeitig dasselbe Gerät regelt. Erst dann Datenempfang und
-Regelung getrennt prüfen. Ein Upgrade ist nicht dasselbe wie die oben gezeigte
-Neuinstallation.
+native Steuerung wird **nicht automatisch** eingeschaltet. Das Upgrade ist
+damit absichtlich reversibel:
+
+1. Aktualisiere BSFAI und starte Home Assistant neu.
+2. Prüfe zuerst, ob der bisherige Entitäten-Weg weiterläuft.
+3. Wenn du auf die direkte Verbindung umsteigen möchtest, öffne
+   **Konfigurieren → Natives Zendure**, hinterlege den App-Token und bestätige
+   Hauptgerät sowie Kommunikationsweg.
+4. Prüfe erst den laufenden Datenempfang und deaktiviere anschließend die
+   parallele Z-HA-Regelung, bevor du den ersten Regeltest machst.
+
+Ein Upgrade ist nicht dasselbe wie die oben gezeigte Neuinstallation. Lösche
+Z-HA nicht vorschnell: Die Umstellung kann zunächst parallel vorbereitet und
+erst nach bestätigtem Datenempfang als Steuerweg übernommen werden.
 
 ---
 
