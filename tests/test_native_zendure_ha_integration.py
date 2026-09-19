@@ -114,6 +114,13 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn("soc=accounting_soc", source)
         self.assertIn('"soc_accounting_status": soc_accounting.status', source)
 
+    def test_available_energy_retains_confirmed_soc_during_one_outlier(self) -> None:
+        runtime = (COMPONENT / "native_zendure_runtime.py").read_text(encoding="utf-8")
+        overview = (COMPONENT / "native_device_overview.py").read_text(encoding="utf-8")
+        self.assertIn("def _update_available_energy_soc", runtime)
+        self.assertIn("evaluate_soc_for_accounting(", runtime)
+        self.assertIn('system_statistics.get("available_energy_soc_pct")', overview)
+
     def test_native_hardware_is_exposed_as_child_devices_not_config_inputs(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
         identity = (COMPONENT / "native_registry_identity.py").read_text(
