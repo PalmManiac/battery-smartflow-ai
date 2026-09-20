@@ -2,7 +2,7 @@
 
 **Language:** [Deutsch](anleitung.md) | English
 
-> V5 first-time setup: current as of 5.0.0-rc30 (September 2026). The detailed
+> V5 first-time setup: current as of 5.0.0 (September 2026). The detailed
 > feature chapters also retain information for installations using existing
 > Home Assistant entities.
 
@@ -41,9 +41,8 @@ battery packs appear as related devices.
 > models and communication paths may need additional setup. Never run two
 > integrations or app automations as simultaneous controllers of one device.
 
-1. **Install and restart.** Install the desired V5 version through HACS and
-   restart Home Assistant. Release candidates are prereleases; you may need to
-   select one explicitly in HACS.
+1. **Install and restart.** Install the current stable V5 release through HACS
+   and restart Home Assistant.
 2. **Choose a connection path.** Go to *Settings → Devices & services → Add
    integration → Battery SmartFlow AI* and choose **Connect Zendure directly**.
    **Use existing HA entities** is the alternative for existing sensors and

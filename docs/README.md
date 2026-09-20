@@ -22,7 +22,7 @@ gleichzeitig Befehle an dasselbe Gerät senden.
 - [English user guide with illustrated V5 quick start](user-guide.md#v5-quick-start-connect-zendure-directly)
 - [Wirtschaft & Preise im Dashboard](dashboard-wirtschaft-preise.md)
 
-V5 ist derzeit ein Release Candidate. Bei einer bestehenden V4-Installation
+V5 ist jetzt die aktuelle stabile Version. Bei einer bestehenden V4-Installation
 solltest du vor dem Umstieg ein Home-Assistant-Backup erstellen und die
 Ersteinrichtung mit einem eindeutigen Steuerungsweg durchführen. Fehlen
 aktuelle Akku-Daten, bleibt BSFAI aus Sicherheitsgründen im Leerlauf.

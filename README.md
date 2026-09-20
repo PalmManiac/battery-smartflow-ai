@@ -47,7 +47,7 @@ network or normal control cycle. Local MQTT and Cloud MQTT require their own
 device-specific validation.
 See the [measurement method and limitations](docs/architecture/native-transport-metrics-v5.0.0.md#controlled-sf2400ac-baseline).
 
-V5 is currently a **release candidate**. Start with the illustrated
+V5 is now the **current stable release**. Start with the illustrated
 [V5 quick start](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
 or the [German guide](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
 
@@ -621,7 +621,7 @@ Lokales MQTT und Cloud MQTT müssen je Gerät gesondert bewertet werden.
 Messaufbau und Grenzen stehen in der
 [technischen Messnotiz](docs/architecture/native-transport-metrics-v5.0.0.md#controlled-sf2400ac-baseline).
 
-V5 ist derzeit ein **Release Candidate**. Der bebilderte
+V5 ist jetzt die **aktuelle stabile Version**. Der bebilderte
 [V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
 und der [englische User Guide](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
 führen durch die neue Ersteinrichtung.

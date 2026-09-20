@@ -2,7 +2,7 @@
 
 **Sprache:** Deutsch | [English](user-guide.md)
 
-> V5-Ersteinrichtung: Stand 5.0.0-rc30 (September 2026). Die ausführlichen
+> V5-Ersteinrichtung: Stand 5.0.0 (September 2026). Die ausführlichen
 > Funktionskapitel enthalten weiterhin Hinweise für Installationen mit
 > vorhandenen Home-Assistant-Entitäten.
 
@@ -43,9 +43,8 @@ zugehörige Geräte.
 > benötigen. Betreibe nie zwei Integrationen oder App-Automationen als
 > gleichzeitige Regler für dasselbe Gerät.
 
-1. **Installieren und neu starten.** Installiere die gewünschte V5-Version über
-   HACS und starte Home Assistant neu. Release Candidates sind Vorabversionen;
-   wähle sie in HACS gegebenenfalls ausdrücklich aus.
+1. **Installieren und neu starten.** Installiere die aktuelle stabile
+   V5-Version über HACS und starte Home Assistant neu.
 2. **Verbindungsweg wählen.** Unter *Einstellungen → Geräte & Dienste →
    Integration hinzufügen → Battery SmartFlow AI* wähle **Zendure direkt
    verbinden**. **Vorhandene HA-Entitäten verwenden** ist der alternative Weg

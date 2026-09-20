@@ -9,9 +9,7 @@
    Falls sie nicht gefunden wird, füge
    `https://github.com/PalmManiac/battery-smartflow-ai` als benutzerdefiniertes
    Repository vom Typ **Integration** hinzu.
-3. Solange V5 noch als Vorabversion veröffentlicht wird, wähle in HACS
-   gegebenenfalls ausdrücklich den aktuellen Release Candidate aus;
-   Vorabversionen werden nicht immer automatisch angeboten.
+3. Installiere in HACS die aktuelle stabile Version von Battery SmartFlow AI.
 4. Starte Home Assistant neu und öffne **Einstellungen → Geräte & Dienste →
    Integration hinzufügen → Battery SmartFlow AI**.
 5. Wähle **Zendure direkt verbinden** oder **Vorhandene HA-Entitäten verwenden**.
