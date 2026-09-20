@@ -385,6 +385,11 @@ class ZendureCloudNormalizer:
                     self._unknown_main[system_id],
                     observed_at,
                 )
+                self._invalidate_legacy_zero_battery_voltage(
+                    system_id,
+                    properties,
+                    observed_at,
+                )
             self._apply_packs(system_id, payload.get("packData"), observed_at)
         if (
             message.topic.endswith("/properties/energy")
@@ -597,6 +602,39 @@ class ZendureCloudNormalizer:
             destination[mapping.target] = _normalize(
                 mapping, raw_value, observed_at
             )
+
+    def _invalidate_legacy_zero_battery_voltage(
+        self,
+        system_id: str,
+        properties: Mapping[str, Any],
+        observed_at: datetime,
+    ) -> None:
+        """Do not present the Hyper's zero sentinel as a physical voltage.
+
+        Hyper 2000 Cloud reports use ``BatVolt: 0`` while the device is online
+        and otherwise reporting healthy measurements.  A battery voltage of
+        zero is not a usable measurement in that state, so it must remain
+        unavailable rather than be displayed as ``0.00 V``.
+        """
+
+        raw_voltage = properties.get("BatVolt")
+        model_key = "".join(
+            character
+            for character in str(self._models.get(system_id, "")).casefold()
+            if character.isalnum()
+        )
+        if (
+            model_key not in _LEGACY_GROUPED_REPORT_MODELS
+            or isinstance(raw_voltage, bool)
+            or not isinstance(raw_voltage, (int, float))
+            or float(raw_voltage) != 0.0
+        ):
+            return
+        self._device_values[system_id]["battery_voltage_v"] = _Observed(
+            None,
+            ValueValidity.UNAVAILABLE,
+            observed_at,
+        )
 
     def _apply_packs(
         self,

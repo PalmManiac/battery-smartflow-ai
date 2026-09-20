@@ -7,7 +7,12 @@ from datetime import datetime, timezone
 import hashlib
 from types import MappingProxyType
 from typing import Mapping
-from .native_capacity import native_capacity, pack_capacity_kwh, resolve_pack_profile
+from .native_capacity import (
+    native_capacity,
+    native_inventory_capacity,
+    pack_capacity_kwh,
+    resolve_pack_profile,
+)
 from .native_statistics import derived_statistics
 from .hardware.zendure.device_matrix import (
     VerificationLevel,
@@ -64,7 +69,13 @@ def _is_sparse_legacy_family(parent: MainSystemOverview) -> bool:
     describes the active control path and is not an identity capability set.
     """
 
-    entry = ZENDURE_DEVICE_MATRIX.get(parent.profile_key or "")
+    return _is_sparse_legacy_profile(parent.profile_key)
+
+
+def _is_sparse_legacy_profile(profile_key: str | None) -> bool:
+    """Return whether a profile publishes Cloud state in sparse groups."""
+
+    entry = ZENDURE_DEVICE_MATRIX.get(profile_key or "")
     return bool(
         entry is not None
         and entry.transport(ZendureTransport.LOCAL_MQTT).read
@@ -138,6 +149,18 @@ def build_native_device_overview(
         public_id = _public_id("DEVICE", system_id)
         identity = device.native_identities[0] if device.native_identities else None
         matrix_entry = resolve_zendure_device(identity) if identity else None
+        profile_key = device.profile_key or (
+            matrix_entry.profile_key if matrix_entry else None
+        )
+        sparse_legacy = _is_sparse_legacy_profile(profile_key)
+        control_capacity = native_capacity(state)
+        inventory_capacity = native_inventory_capacity(state)
+        display_capacity = _display_capacity(
+            control_capacity,
+            inventory_capacity,
+            state,
+            sparse_legacy=sparse_legacy,
+        )
         packs = []
         state_packs = {item.pack_id: item for item in state.packs} if state else {}
         for pack_id, pack_identity in sorted(inventory.packs.items()):
@@ -171,14 +194,25 @@ def build_native_device_overview(
                             "fault_code": observed.fault_code,
                             "protection_active": observed.protection_active,
                             "pack_type": observed.pack_type,
-                            "cell_delta_v": _difference(observed.cell_max_v, observed.cell_min_v),
-                            "power_w": _difference(observed.discharge_power_w, observed.charge_power_w),
+                            "cell_delta_v": _difference(
+                                observed.cell_max_v,
+                                observed.cell_min_v,
+                                retain_stale=sparse_legacy,
+                            ),
+                            "power_w": _difference(
+                                observed.discharge_power_w,
+                                observed.charge_power_w,
+                                retain_stale=sparse_legacy,
+                            ),
                             "capacity_kwh": _optional_value(pack_capacity_kwh(
                                 observed.serial_number,
                                 observed.pack_type.value if observed.pack_type.valid else None,
                             )),
                             "status": _pack_status(observed.state_code),
-                            "heating_active": _boolean_status(_measurement(observed, "heating_active")),
+                            "heating_active": _boolean_status(
+                                _measurement(observed, "heating_active"),
+                                retain_stale=sparse_legacy,
+                            ),
                         }
                     ),
                     last_message_at=observed.last_message_at,
@@ -216,12 +250,19 @@ def build_native_device_overview(
                             "offgrid_power_w",
                         )
                     }, **dict(getattr(state, "diagnostics", {})),
-                     "pack_count": _optional_value(native_capacity(state).pack_count),
-                     "capacity_kwh": _optional_value(native_capacity(state).capacity_kwh),
-                     "power_w": _difference(_measurement(state, "discharge_power_w"), _measurement(state, "charge_power_w")),
+                     "pack_count": _optional_value(control_capacity.pack_count),
+                     "capacity_kwh": display_capacity,
+                     "power_w": _difference(
+                         _measurement(state, "discharge_power_w"),
+                         _measurement(state, "charge_power_w"),
+                         retain_stale=sparse_legacy,
+                     ),
                      "hardware_soc_min": _measurement(getattr(state, "setpoints", None), "min_soc_pct"),
                      "hardware_soc_max": _measurement(getattr(state, "setpoints", None), "max_soc_pct"),
-                     "heating_active": _boolean_status(_measurement(state, "heating_active")),
+                     "heating_active": _boolean_status(
+                         _measurement(state, "heating_active"),
+                         retain_stale=sparse_legacy,
+                     ),
                      "switching_count": _first_valid(
                          _diagnostic_measurement(state, "switching_count"),
                          _optional_value(system_statistics.get("switching_count")),
@@ -239,14 +280,14 @@ def build_native_device_overview(
                      "pv_energy_kwh": _optional_value(
                          system_statistics.get("pv_energy_kwh")
                      ),
-                     "available_energy_kwh": _optional_value(derived_statistics(
+                     "available_energy_kwh": _derived_available_energy(
                          soc_pct=system_statistics.get("available_energy_soc_pct")
                          if system_statistics.get("available_energy_soc_pct") is not None
                          else _measurement(state, "soc_pct").value if _measurement(state, "soc_pct").valid else None,
-                         capacity_kwh=native_capacity(state).capacity_kwh,
+                         capacity=display_capacity,
                          charged_kwh=system_statistics.get("charged_kwh"),
                          discharged_kwh=system_statistics.get("discharged_kwh"),
-                     ).available_energy_kwh),
+                     ),
                      "roundtrip_efficiency_pct": _optional_value(derived_statistics(
                          soc_pct=None, capacity_kwh=None,
                          charged_kwh=system_statistics.get("charged_kwh"),
@@ -255,10 +296,7 @@ def build_native_device_overview(
                     }
                 ),
                 product_id=identity.product_id if identity else None,
-                profile_key=(
-                    device.profile_key
-                    or (matrix_entry.profile_key if matrix_entry else None)
-                ),
+                profile_key=profile_key,
                 control_state=device.control_state,
                 control_enabled=device.control_state in {
                     DeviceControlState.ENABLED,
@@ -309,18 +347,88 @@ def _first_valid(primary, fallback):
     return primary if primary.valid else fallback
 
 
-def _difference(left, right):
+def _difference(left, right, *, retain_stale: bool = False):
     if not left.valid or not right.valid:
+        if (
+            retain_stale
+            and left.value is not None
+            and right.value is not None
+            and left.validity in {ValueValidity.VALID, ValueValidity.STALE}
+            and right.validity in {ValueValidity.VALID, ValueValidity.STALE}
+        ):
+            observed_at = min(
+                (
+                    value.observed_at
+                    for value in (left, right)
+                    if value.observed_at is not None
+                ),
+                default=None,
+            )
+            return MeasuredValue(
+                round(float(left.value) - float(right.value), 3),
+                ValueValidity.STALE,
+                observed_at,
+            )
         return MeasuredValue.absent(ValueValidity.UNAVAILABLE)
     return MeasuredValue.available(round(float(left.value) - float(right.value), 3))
+
+
+def _display_capacity(
+    control_capacity,
+    inventory_capacity,
+    state,
+    *,
+    sparse_legacy: bool,
+):
+    if control_capacity.capacity_kwh is not None:
+        return MeasuredValue.available(control_capacity.capacity_kwh)
+    if sparse_legacy and inventory_capacity.capacity_kwh is not None:
+        return MeasuredValue(
+            inventory_capacity.capacity_kwh,
+            ValueValidity.STALE,
+            getattr(state, "last_message_at", None),
+        )
+    return MeasuredValue.absent(ValueValidity.UNKNOWN)
+
+
+def _derived_available_energy(
+    *,
+    soc_pct,
+    capacity,
+    charged_kwh,
+    discharged_kwh,
+):
+    value = derived_statistics(
+        soc_pct=soc_pct,
+        capacity_kwh=capacity.value if capacity.value is not None else None,
+        charged_kwh=charged_kwh,
+        discharged_kwh=discharged_kwh,
+    ).available_energy_kwh
+    if value is None:
+        return MeasuredValue.absent(ValueValidity.UNKNOWN)
+    if capacity.validity is ValueValidity.STALE:
+        return MeasuredValue(value, ValueValidity.STALE, capacity.observed_at)
+    return MeasuredValue.available(value)
 
 
 def _pack_status(value):
     return _optional_value({0: "idle", 1: "charge", 2: "discharge"}.get(value.value) if value.valid else None)
 
 
-def _boolean_status(value):
-    return _optional_value(("on" if value.value else "off") if value.valid else None)
+def _boolean_status(value, *, retain_stale: bool = False):
+    if value.valid:
+        return MeasuredValue.available("on" if value.value else "off")
+    if (
+        retain_stale
+        and value.value is not None
+        and value.validity is ValueValidity.STALE
+    ):
+        return MeasuredValue(
+            "on" if value.value else "off",
+            ValueValidity.STALE,
+            value.observed_at,
+        )
+    return MeasuredValue.absent(ValueValidity.UNKNOWN)
 
 
 def _pack_model(

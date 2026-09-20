@@ -10,7 +10,7 @@ bootstrap()
 
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     BatteryPackIdentity, DeviceControlState, DeviceInventory, HemsStatus, MainDevice,
-    MeasuredValue, NativeDeviceIdentity, ZendureTransport,
+    MeasuredValue, NativeDeviceIdentity, ValueValidity, ZendureTransport,
 )
 from custom_components.battery_smartflow_ai.native_device_overview import (  # noqa: E402
     build_native_device_overview,
@@ -38,6 +38,47 @@ def observed_pack(pack_id, parent):
 
 
 class NativeDeviceOverviewTests(unittest.TestCase):
+    def test_sparse_legacy_keeps_confirmed_inventory_for_display_only(self):
+        identity = NativeDeviceIdentity(
+            ZendureTransport.CLOUD_MQTT,
+            device_id="hyper-secret",
+            product_model="Hyper 2000",
+        )
+        main = MainDevice(
+            "main-secret",
+            "Hyper",
+            model="Hyper 2000",
+            native_identities=(identity,),
+        )
+        pack = observed_pack("C04E-test", main.system_id)
+        pack.soc_pct = MeasuredValue.absent(ValueValidity.STALE)
+        state = SimpleNamespace(
+            packs=(pack,),
+            soc_pct=measured(84.0),
+            charge_power_w=MeasuredValue(153.0, ValueValidity.STALE),
+            discharge_power_w=MeasuredValue(0.0, ValueValidity.STALE),
+            heating_active=MeasuredValue(False, ValueValidity.STALE),
+            last_message_at=datetime(2026, 9, 20, tzinfo=timezone.utc),
+        )
+
+        item = build_native_device_overview(
+            DeviceInventory(devices=(main,)), {main.system_id: state}
+        )[0]
+
+        self.assertEqual(item.measurements["capacity_kwh"].value, 1.92)
+        self.assertEqual(
+            item.measurements["capacity_kwh"].validity, ValueValidity.STALE
+        )
+        self.assertAlmostEqual(
+            item.measurements["available_energy_kwh"].value, 1.61, places=2
+        )
+        self.assertEqual(item.measurements["power_w"].value, -153.0)
+        self.assertEqual(item.measurements["power_w"].validity, ValueValidity.STALE)
+        self.assertEqual(item.measurements["heating_active"].value, "off")
+        self.assertEqual(
+            item.measurements["heating_active"].validity, ValueValidity.STALE
+        )
+
     def test_persisted_native_statistics_feed_energy_and_efficiency_sensors(self):
         main = MainDevice("main-secret", "System")
         item = build_native_device_overview(
