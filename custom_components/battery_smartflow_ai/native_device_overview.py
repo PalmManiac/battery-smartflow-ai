@@ -209,7 +209,10 @@ def build_native_device_overview(
                                 observed.pack_type.value if observed.pack_type.valid else None,
                             )),
                             "status": _pack_status(observed.state_code),
-                            "heating_active": _boolean_status(_measurement(observed, "heating_active")),
+                            "heating_active": _boolean_status(
+                                _measurement(observed, "heating_active"),
+                                retain_stale=sparse_legacy,
+                            ),
                         }
                     ),
                     last_message_at=observed.last_message_at,
@@ -256,7 +259,10 @@ def build_native_device_overview(
                      ),
                      "hardware_soc_min": _measurement(getattr(state, "setpoints", None), "min_soc_pct"),
                      "hardware_soc_max": _measurement(getattr(state, "setpoints", None), "max_soc_pct"),
-                     "heating_active": _boolean_status(_measurement(state, "heating_active")),
+                     "heating_active": _boolean_status(
+                         _measurement(state, "heating_active"),
+                         retain_stale=sparse_legacy,
+                     ),
                      "switching_count": _first_valid(
                          _diagnostic_measurement(state, "switching_count"),
                          _optional_value(system_statistics.get("switching_count")),
@@ -409,8 +415,20 @@ def _pack_status(value):
     return _optional_value({0: "idle", 1: "charge", 2: "discharge"}.get(value.value) if value.valid else None)
 
 
-def _boolean_status(value):
-    return _optional_value(("on" if value.value else "off") if value.valid else None)
+def _boolean_status(value, *, retain_stale: bool = False):
+    if value.valid:
+        return MeasuredValue.available("on" if value.value else "off")
+    if (
+        retain_stale
+        and value.value is not None
+        and value.validity is ValueValidity.STALE
+    ):
+        return MeasuredValue(
+            "on" if value.value else "off",
+            ValueValidity.STALE,
+            value.observed_at,
+        )
+    return MeasuredValue.absent(ValueValidity.UNKNOWN)
 
 
 def _pack_model(

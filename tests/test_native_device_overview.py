@@ -57,6 +57,7 @@ class NativeDeviceOverviewTests(unittest.TestCase):
             soc_pct=measured(84.0),
             charge_power_w=MeasuredValue(153.0, ValueValidity.STALE),
             discharge_power_w=MeasuredValue(0.0, ValueValidity.STALE),
+            heating_active=MeasuredValue(False, ValueValidity.STALE),
             last_message_at=datetime(2026, 9, 20, tzinfo=timezone.utc),
         )
 
@@ -73,6 +74,10 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         )
         self.assertEqual(item.measurements["power_w"].value, -153.0)
         self.assertEqual(item.measurements["power_w"].validity, ValueValidity.STALE)
+        self.assertEqual(item.measurements["heating_active"].value, "off")
+        self.assertEqual(
+            item.measurements["heating_active"].validity, ValueValidity.STALE
+        )
 
     def test_persisted_native_statistics_feed_energy_and_efficiency_sensors(self):
         main = MainDevice("main-secret", "System")
