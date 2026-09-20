@@ -100,3 +100,27 @@ def native_capacity(state: NeutralDeviceState | None, expected_count: int | None
             return NativeCapacity(len(packs), None, "unknown_pack_profile")
         total += capacity
     return NativeCapacity(len(packs), round(total, 3), "pack_profiles")
+
+
+def native_inventory_capacity(state: NeutralDeviceState | None) -> NativeCapacity:
+    """Return only a confirmed nominal pack inventory for presentation.
+
+    Legacy Cloud devices publish pack SoC in sparse groups.  Their previously
+    confirmed serial inventory remains useful to display nominal capacity even
+    while the next grouped pack report is pending.  This intentionally does
+    not replace :func:`native_capacity`, whose fresh SoC requirement remains
+    the safety boundary for control calculations.
+    """
+
+    if state is None or not state.packs:
+        return NativeCapacity(None, None, "inventory_pending")
+    total = 0.0
+    for pack in state.packs:
+        capacity = pack_capacity_kwh(
+            pack.serial_number,
+            pack.pack_type.value if pack.pack_type.valid else None,
+        )
+        if capacity is None:
+            return NativeCapacity(len(state.packs), None, "unknown_pack_profile")
+        total += capacity
+    return NativeCapacity(len(state.packs), round(total, 3), "pack_inventory")

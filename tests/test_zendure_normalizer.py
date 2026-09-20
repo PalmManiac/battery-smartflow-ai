@@ -231,6 +231,20 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             self.at,
         )
 
+    async def test_hyper_zero_battery_voltage_is_unavailable_not_zero_volts(self):
+        normalizer = ZendureCloudNormalizer(
+            await make_bootstrap(primary_model="Hyper 2000")
+        )
+        result = normalizer.apply(
+            report(self.at, {"properties": {"BatVolt": 0}})
+        )
+        self.assertFalse(result.state.battery_voltage_v.valid)
+        self.assertIsNone(result.state.battery_voltage_v.value)
+        self.assertEqual(
+            result.state.battery_voltage_v.validity,
+            ValueValidity.UNAVAILABLE,
+        )
+
     async def test_explicit_no_error_overrides_nonzero_zensdk_fault_level(self):
         """SF2400AC faultLevel=2 is no protection block when is_error=0."""
         result = ZendureCloudNormalizer(self.bootstrap).apply(
