@@ -90,7 +90,7 @@ def output_command(value=301):
 
 
 class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
-    async def test_output_is_one_complete_directional_post(self):
+    async def test_running_output_adjustment_writes_only_output_limit(self):
         data = await make_bootstrap()
         calls = []
         manager = NativeCommandVerificationManager()
@@ -105,23 +105,34 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         result = await adapter.execute(authorized(output_command()))
 
         self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
-        self.assertEqual(result.writes_sent, 4)
+        self.assertEqual(result.writes_sent, 1)
         self.assertEqual(result.requests_sent, 1)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], "http://192.168.1.44/properties/write")
         self.assertEqual(calls[0][1]["json"], {
             "sn": "serial-real-1",
-            "properties": {
-                "smartMode": 1,
-                "acMode": 2,
-                "outputLimit": 301,
-                "inputLimit": 0,
-            },
+            "properties": {"outputLimit": 301},
             "id": 1,
         })
         tracked = manager.active_for(DEVICE, "outputLimit")
         self.assertIsNotNone(tracked)
         self.assertEqual(tracked.status, CommandVerificationStatus.TRANSPORT_OK)
+
+    async def test_output_start_remains_one_complete_directional_post(self):
+        data = await make_bootstrap()
+        command = output_command()
+        command.should_write_mode = True
+
+        mapped = map_zensdk_command(
+            authorized(command), data, first_request_id=1
+        )
+
+        self.assertEqual(mapped.properties, {
+            "smartMode": 1,
+            "acMode": 2,
+            "outputLimit": 301,
+            "inputLimit": 0,
+        })
 
     async def test_input_is_one_complete_directional_post(self):
         data = await make_bootstrap()
@@ -230,7 +241,7 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.http_status, 503)
         self.assertEqual(result.requests_sent, 1)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(len(result.verification_ids), 4)
+        self.assertEqual(len(result.verification_ids), 1)
         for command_id in result.verification_ids:
             tracked = manager.get(command_id)
             self.assertEqual(
