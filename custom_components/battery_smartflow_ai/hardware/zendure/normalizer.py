@@ -242,7 +242,7 @@ RAW_MAIN_DIAGNOSTICS = (
     "acStatus", "aiState", "batCalTime", "bindstate", "dataReady", "dcStatus",
     "factoryModeState", "gridStandard", "gridState", "IOTState", "is_error",
     "LCNState", "localAPIEnable", "net", "OldMode", "OTAState", "phaseSwitch",
-    "pvStatus", "rssi", "smartMode", "socStatus", "socCompSwitch", "writeRsp",
+    "pvStatus", "rssi", "wifiState", "smartMode", "socStatus", "socCompSwitch", "writeRsp",
     "packNum", "solarPower1", "solarPower2", "solarPower3", "solarPower4",
     "solarPower5", "solarPower6", "PowerCycle",
 )
