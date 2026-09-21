@@ -13,6 +13,7 @@ bootstrap()
 from custom_components.battery_smartflow_ai.diagnostic_values import (  # noqa: E402
     safe_diagnostic_sensor_value,
     smart_mode_state,
+    zendure_documented_status_state,
 )
 
 
@@ -69,6 +70,29 @@ class SensorDiagnosticsV470Tests(unittest.TestCase):
         for unknown in (None, True, False, 2, "unexpected"):
             with self.subTest(value=unknown):
                 self.assertEqual(smart_mode_state(unknown), "unknown")
+
+    def test_documented_zendure_statuses_are_translated_without_guessing(self) -> None:
+        cases = {
+            ("dataReady", 0): "not_ready",
+            ("dataReady", 1): "ready",
+            ("gridState", 0): "disconnected",
+            ("gridState", 1): "connected",
+            ("pvStatus", 0): "inactive",
+            ("pvStatus", 1): "active",
+            ("socStatus", 0): "normal",
+            ("socStatus", 1): "calibrating",
+            ("pass", 1): "active",
+            ("reverseState", 0): "inactive",
+            ("gridOffMode", 2): "disabled",
+            ("is_error", 0): "no_error",
+            ("is_error", 1): "error",
+        }
+        for (key, value), expected in cases.items():
+            with self.subTest(key=key, value=value):
+                self.assertEqual(zendure_documented_status_state(key, value), expected)
+        for key, value in (("dataReady", 2), ("gridState", True), ("unknown", 0)):
+            with self.subTest(key=key, value=value):
+                self.assertEqual(zendure_documented_status_state(key, value), "unknown")
 
     def test_sensor_unique_id_formula_is_unchanged(self) -> None:
         source = (PACKAGE_ROOT / "sensor.py").read_text(encoding="utf-8")
