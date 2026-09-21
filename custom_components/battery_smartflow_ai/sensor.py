@@ -61,7 +61,12 @@ from .core.full_charge_maintenance import (
     MaintenanceState,
     MaintenanceWindow,
 )
-from .diagnostic_values import safe_diagnostic_sensor_value, smart_mode_state
+from .diagnostic_values import (
+    safe_diagnostic_sensor_value,
+    smart_mode_state,
+    zendure_documented_status_state,
+)
+from .hardware.zendure.normalizer import RAW_MAIN_DIAGNOSTICS
 from .native_registry_identity import (
     native_hardware_unique_id,
     native_main_device_identifier,
@@ -398,16 +403,58 @@ NATIVE_MAIN_SENSORS += (
     ),
 )
 
-# Raw properties stay disabled diagnostics until the user needs them; no guessed enums.
-from .hardware.zendure.normalizer import RAW_MAIN_DIAGNOSTICS
+_DOCUMENTED_ZENDURE_STATUS_SENSORS = (
+    ("dataReady", "native_hardware_data_ready", ["not_ready", "ready", "unknown"]),
+    (
+        "gridState",
+        "native_hardware_grid_connection",
+        ["disconnected", "connected", "unknown"],
+    ),
+    ("pvStatus", "native_hardware_pv_status", ["inactive", "active", "unknown"]),
+    (
+        "socStatus",
+        "native_hardware_soc_calibration",
+        ["normal", "calibrating", "unknown"],
+    ),
+    ("pass", "native_hardware_passthrough", ["inactive", "active", "unknown"]),
+    (
+        "reverseState",
+        "native_hardware_reverse_flow",
+        ["inactive", "active", "unknown"],
+    ),
+    (
+        "gridOffMode",
+        "native_hardware_offgrid_mode",
+        ["standard", "economic", "disabled", "unknown"],
+    ),
+    ("is_error", "native_hardware_error_status", ["no_error", "error", "unknown"]),
+)
+_DOCUMENTED_ZENDURE_STATUS_KEYS = frozenset(
+    item[0] for item in _DOCUMENTED_ZENDURE_STATUS_SENSORS
+)
 
+NATIVE_MAIN_SENSORS += tuple(
+    NativeHardwareSensorDescription(
+        key=key,
+        translation_key=translation_key,
+        measurement_key=key,
+        device_class=SensorDeviceClass.ENUM,
+        options=options,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    )
+    for key, translation_key, options in _DOCUMENTED_ZENDURE_STATUS_SENSORS
+)
+
+# Raw properties stay disabled diagnostics until the user needs them; no guessed enums.
 NATIVE_MAIN_SENSORS += tuple(
     NativeHardwareSensorDescription(
         key=key, name=key, measurement_key=key,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-    ) for key in RAW_MAIN_DIAGNOSTICS if key not in {"smartMode", "wifiState"}
+    ) for key in RAW_MAIN_DIAGNOSTICS
+    if key not in {"smartMode", "wifiState", *_DOCUMENTED_ZENDURE_STATUS_KEYS}
 )
 
 NATIVE_PACK_SENSORS = (
@@ -2042,6 +2089,14 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 if raw_value == 0:
                     return "disconnected"
                 return "unknown"
+            if (
+                self.entity_description.measurement_key
+                in _DOCUMENTED_ZENDURE_STATUS_KEYS
+            ):
+                return zendure_documented_status_state(
+                    self.entity_description.measurement_key,
+                    _measured_value(measured),
+                )
             if (
                 self.entity_description.measurement_key == "localAPIEnable"
                 and (measured is None or not measured.valid)
