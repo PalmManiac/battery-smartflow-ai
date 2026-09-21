@@ -29,7 +29,7 @@ class ZenSdkCommandStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class ZenSdkCommandWrite:
-    """One atomic directional command plus its readback contracts."""
+    """One approved ZenSDK write set plus its readback contracts."""
 
     properties: Mapping[str, int]
     request_id: int
@@ -53,7 +53,7 @@ def map_zensdk_command(
     *,
     first_request_id: int,
 ) -> ZenSdkCommandWrite:
-    """Map a neutral direction into the atomic group used by ZenSDK."""
+    """Map a neutral command without needlessly rewriting the direction."""
 
     if not isinstance(authorized, AuthorizedNativeCommand):
         raise ValueError("gate_authorization_required")
@@ -80,12 +80,20 @@ def map_zensdk_command(
 
     command = authorized.command
     requested: dict[str, int] = {}
-    directional_write = any((
-        command.should_write_mode,
-        command.should_write_input,
-        command.should_write_output,
-    ))
-    if directional_write:
+    # Direction changes, charging updates and an explicit stop must reach the
+    # device as one complete state.  A running discharge, on the other hand,
+    # can safely adjust only ``outputLimit``.  Repeating ``smartMode`` and
+    # ``acMode`` for every output correction makes some devices reprocess the
+    # direction and can cause unnecessary relay activity.
+    complete_directional_write = (
+        command.should_write_mode
+        or command.should_write_input
+        or (
+            command.should_write_output
+            and _whole_watts(command.output_limit_w) == 0
+        )
+    )
+    if complete_directional_write:
         input_w = _whole_watts(command.input_limit_w)
         output_w = _whole_watts(command.output_limit_w)
         active_w = input_w if command.ac_mode == "input" else output_w
@@ -95,6 +103,8 @@ def map_zensdk_command(
             "outputLimit": 0 if command.ac_mode == "input" else output_w,
             "inputLimit": input_w if command.ac_mode == "input" else 0,
         })
+    elif command.should_write_output:
+        requested["outputLimit"] = _whole_watts(command.output_limit_w)
     if command.should_write_min_soc:
         requested["minSoc"] = _soc_tenths(command.min_soc_pct)
     if command.should_write_max_soc:
@@ -131,7 +141,7 @@ class ZendureZenSdkCommandAdapter:
     async def execute(
         self, authorized: AuthorizedNativeCommand
     ) -> ZenSdkCommandResult:
-        """POST one complete approved group; never retry or fall back."""
+        """POST one approved write set; never retry or fall back."""
 
         now = self._clock()
         try:
@@ -168,7 +178,7 @@ class ZendureZenSdkCommandAdapter:
         for _property_name, _value, command_id in prepared:
             self._verification.sent(command_id, at=self._clock())
         # The id belongs to an attempted request, even after an ambiguous
-        # timeout. The complete group is deliberately never split or retried.
+        # timeout. A request is never retried or split after it is sent.
         self._request_id = write.request_id
         outcome = await async_write_zensdk_properties(
             self._bootstrap,
