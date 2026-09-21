@@ -303,6 +303,12 @@ NATIVE_MAIN_SENSORS = (
 
 NATIVE_MAIN_SENSORS += (
     NativeHardwareSensorDescription(
+        key="wifi_status", name="Wi-Fi status",
+        measurement_key="wifiState", device_class=SensorDeviceClass.ENUM,
+        options=["connected", "disconnected", "unknown"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
         key="rssi", translation_key="native_hardware_rssi", measurement_key="rssi",
         native_unit_of_measurement="dBm", device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
@@ -401,7 +407,7 @@ NATIVE_MAIN_SENSORS += tuple(
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-    ) for key in RAW_MAIN_DIAGNOSTICS if key != "smartMode"
+    ) for key in RAW_MAIN_DIAGNOSTICS if key not in {"smartMode", "wifiState"}
 )
 
 NATIVE_PACK_SENSORS = (
@@ -2029,6 +2035,13 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             measured = item.measurements.get(self.entity_description.measurement_key)
             if self.entity_description.measurement_key == "smartMode":
                 return smart_mode_state(_measured_value(measured))
+            if self.entity_description.measurement_key == "wifiState":
+                raw_value = _measured_value(measured)
+                if raw_value == 1:
+                    return "connected"
+                if raw_value == 0:
+                    return "disconnected"
+                return "unknown"
             if (
                 self.entity_description.measurement_key == "localAPIEnable"
                 and (measured is None or not measured.valid)

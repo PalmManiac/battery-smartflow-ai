@@ -451,8 +451,11 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
     async def test_mapping_contract_records_units_scale_sign_type_and_scope(self):
         min_soc = MAIN_PROPERTY_MAPPINGS["minSoc"]
         current = PACK_PROPERTY_MAPPINGS["batcur"]
+        wifi_state = MAIN_PROPERTY_MAPPINGS["wifiState"]
         self.assertEqual(min_soc.target, "min_soc_pct")
         self.assertEqual(min_soc.scale, 0.1)
+        self.assertEqual(wifi_state.target, "wifiState")
+        self.assertEqual(wifi_state.scope, MappingScope.MAIN)
         self.assertEqual(min_soc.scope, MappingScope.MAIN)
         self.assertEqual(current.raw_types, (int,))
         self.assertEqual(current.raw_unit, "0.1 A signed16")
