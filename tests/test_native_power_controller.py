@@ -27,6 +27,7 @@ from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     MeasuredValue,
     NativeDeviceIdentity,
     ReportedDeviceSetpoints,
+    ValueValidity,
     ZendureTransport,
 )
 from custom_components.battery_smartflow_ai.native_command_verification import (  # noqa: E402
@@ -65,9 +66,16 @@ def measured(value):
     return MeasuredValue.available(value, observed_at=NOW)
 
 
-def state(*, input_w=0, output_w=0, charge_w=0, discharge_w=0, hems=False):
+def state(
+    *, input_w=0, output_w=0, charge_w=0, discharge_w=0, hems=False,
+    online=True,
+):
     return SimpleNamespace(
-        online=measured(True),
+        online=(
+            measured(online)
+            if online is not None
+            else MeasuredValue.absent(ValueValidity.UNKNOWN)
+        ),
         soc_pct=measured(80),
         protection_active=measured(False),
         hems_active=measured(hems),
@@ -713,15 +721,15 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
         self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
 
-    async def test_stale_online_or_protection_state_still_blocks_commands(self):
-        for field in ("online", "protection_active"):
+    async def test_stale_soc_or_protection_state_still_blocks_commands(self):
+        for field in ("soc_pct", "protection_active"):
             with self.subTest(field=field):
                 current = state(output_w=250, discharge_w=0)
                 setattr(
                     current,
                     field,
                     MeasuredValue.available(
-                        field == "online",
+                        False,
                         observed_at=NOW - timedelta(minutes=5),
                     ),
                 )
@@ -735,6 +743,15 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
                 self.assertEqual(result.reason, "native_state_not_fresh")
                 self.assertEqual(target._zensdk_command_adapter.commands, [])
+
+    def test_fresh_local_telemetry_does_not_require_online_marker(self):
+        """Hyper Legacy MQTT can deliver fresh telemetry without online state."""
+
+        target = runtime(current_state=state(
+            online=None,
+        ))
+
+        self.assertIs(target.selected_device_state(), target._states[DEVICE])
 
     async def test_last_dispatch_reason_is_visible_without_identity(self):
         target = runtime(current_state=state(output_w=250, discharge_w=250))

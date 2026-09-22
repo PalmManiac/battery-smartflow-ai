@@ -1782,7 +1782,7 @@ def _numeric_value(measured: Any) -> float | None:
 
 
 def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> bool:
-    """Require fresh device safety data; HEMS freshness has its own gate.
+    """Require fresh control-safety data; HEMS freshness has its own gate.
 
     The HEMS activity fallback deliberately keeps the timestamp of the last
     observed activity.  Once its quiet confirmation window has elapsed that
@@ -1791,8 +1791,14 @@ def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> boo
     it here as well would permanently suppress otherwise safe commands.
     """
 
+    # The legacy Local MQTT protocol does not publish an explicit online flag.
+    # Its transport state can therefore be ``unknown`` even while fresh, valid
+    # SoC and protection telemetry is arriving.  Requiring that optional flag
+    # would turn such a healthy device into ``soc_invalid``.  A recent SoC and
+    # protection state are the actual safety prerequisites; their timestamps
+    # also prove that the device is still communicating.
     now = datetime.now(timezone.utc)
-    required = (state.online, state.protection_active)
+    required = (state.soc_pct, state.protection_active)
     return all(
         item.valid
         and item.observed_at is not None
