@@ -28,6 +28,7 @@ from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # n
 from custom_components.battery_smartflow_ai.hardware.zendure.local_mqtt import (  # noqa: E402
     LocalMqttCredentials,
     ZendureLocalMqttTransport,
+    _LEGACY_PERIODIC_REFRESH_SECONDS,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.local_mqtt_commands import (  # noqa: E402
     LocalMqttCommandStatus,
@@ -155,6 +156,11 @@ class FakeBridge:
 
 
 class LocalMqttTests(unittest.IsolatedAsyncioTestCase):
+    def test_periodic_legacy_refresh_stays_inside_native_safety_window(self):
+        """A quiet legacy device must refresh before native state expires."""
+        self.assertEqual(_LEGACY_PERIODIC_REFRESH_SECONDS, 15.0)
+        self.assertLess(_LEGACY_PERIODIC_REFRESH_SECONDS, 30.0)
+
     async def test_bridge_uses_cloud_bootstrap_not_local_broker(self):
         data = await discovered()
         transport = ZendureLocalMqttTransport(

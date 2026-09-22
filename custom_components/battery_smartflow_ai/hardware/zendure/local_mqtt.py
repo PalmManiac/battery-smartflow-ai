@@ -32,7 +32,11 @@ from .legacy import ZendureLegacyCloudBridge
 _LOGGER = logging.getLogger(__name__)
 
 _LEGACY_INITIAL_REFRESH_SECONDS = 5.0
-_LEGACY_PERIODIC_REFRESH_SECONDS = 60.0
+# Legacy devices commonly send one state burst after ``getAll`` and then stay
+# silent.  Keep the next request comfortably inside the native 30-second
+# safety-freshness window so a healthy device never alternates between ready
+# and safe idle merely because it is event-driven.
+_LEGACY_PERIODIC_REFRESH_SECONDS = 15.0
 
 
 @dataclass(frozen=True, slots=True, repr=False)
