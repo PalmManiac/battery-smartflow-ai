@@ -2531,15 +2531,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         native = getattr(self, "native_zendure", None)
         if native is not None and native.control_enabled:
             state = native.selected_device_state()
-            if state is None or not state.soc_pct.valid:
+            if state is None:
                 return None
-            lower = state.setpoints.min_soc_pct
-            upper = state.setpoints.max_soc_pct
-            if upper.valid and state.soc_pct.value >= upper.value:
-                return 1
-            if lower.valid and state.soc_pct.value <= lower.value:
-                return 2
-            return 0 if lower.valid and upper.valid else None
+            # ``socLimit`` is the device-reported SoC-limit state.  Do not
+            # infer it from the current SoC and the configured minSoc/socSet:
+            # those are setpoints, whereas socLimit tells us whether the BMS
+            # is actually blocking charge or discharge right now.
+            measured = state.diagnostics.get("socLimit")
+            if measured is None or not measured.valid:
+                return None
+            value = _to_float(measured.value, None)
+            if value is None or value not in (0, 1, 2):
+                return None
+            return int(value)
         if not self.entities.soc_limit:
             return None
         raw = self._state(self.entities.soc_limit)

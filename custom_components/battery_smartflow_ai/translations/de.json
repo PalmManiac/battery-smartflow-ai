@@ -755,9 +755,9 @@
         }
       },
       "soc_limit_status": {
-        "name": "SoC-Limit Status",
+        "name": "Hardware-SoC-Begrenzungsstatus",
         "state": {
-          "not_configured": "Kein SoC-Limit Sensor konfiguriert",
+          "not_configured": "Hardware-SoC-Begrenzung nicht verfügbar",
           "no_limit": "Kein Limit aktiv",
           "upper_limit_active": "Oberes SoC-Limit aktiv (Laden gesperrt)",
           "lower_limit_active": "Unteres SoC-Limit aktiv (Entladen gesperrt)"
