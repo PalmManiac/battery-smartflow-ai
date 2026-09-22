@@ -755,9 +755,9 @@
         }
       },
       "soc_limit_status": {
-        "name": "SoC-limietstatus",
+        "name": "Hardware SoC-limietstatus",
         "state": {
-          "not_configured": "Geen SoC-limietsensor geconfigureerd",
+          "not_configured": "Hardware SoC-limietstatus niet beschikbaar",
           "no_limit": "Geen limiet actief",
           "upper_limit_active": "Bovenste SoC-limiet actief (laden geblokkeerd)",
           "lower_limit_active": "Onderste SoC-limiet actief (ontladen geblokkeerd)"

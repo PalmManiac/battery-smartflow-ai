@@ -821,9 +821,9 @@
         }
       },
       "soc_limit_status": {
-        "name": "SoC limit status",
+        "name": "Hardware SoC limit status",
         "state": {
-          "not_configured": "No SoC limit sensor configured",
+          "not_configured": "Hardware SoC limit state unavailable",
           "no_limit": "No limit active",
           "upper_limit_active": "Upper SoC limit active (charging blocked)",
           "lower_limit_active": "Lower SoC limit active (discharging blocked)"

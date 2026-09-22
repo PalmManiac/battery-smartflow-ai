@@ -119,6 +119,7 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
                 "inverseMaxPower": 1800,
                 "minSoc": 100,
                 "socSet": 930,
+                "socLimit": 1,
                 "hemsState": 0,
                 "faultLevel": 0,
                 "heatState": 0,
@@ -179,6 +180,8 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.setpoints.output_limit_w.value, 0.0)
         self.assertEqual(state.setpoints.min_soc_pct.value, 10.0)
         self.assertEqual(state.setpoints.max_soc_pct.value, 93.0)
+        self.assertEqual(state.diagnostics["socLimit"].value, 1)
+        self.assertTrue(state.diagnostics["socLimit"].valid)
         self.assertFalse(state.hems_active.value)
         self.assertAlmostEqual(state.temperature_c.value, 22.95)
         self.assertEqual(state.battery_voltage_v.value, 49.53)

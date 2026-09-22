@@ -755,9 +755,9 @@
         }
       },
       "soc_limit_status": {
-        "name": "État limite SoC",
+        "name": "État de limite SoC matériel",
         "state": {
-          "not_configured": "Aucun capteur de limite SoC configuré",
+          "not_configured": "État de limite SoC matériel indisponible",
           "no_limit": "Aucune limite active",
           "upper_limit_active": "Limite SoC supérieure active (charge bloquée)",
           "lower_limit_active": "Limite SoC inférieure active (décharge bloquée)"
