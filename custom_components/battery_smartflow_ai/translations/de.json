@@ -978,6 +978,7 @@
       "economics_total_native_pv_to_home_kwh": {"name": "Energie seit Start – Native PV direkt ins Haus"},
       "economics_average_grid_charge_price": {"name": "Preise – Ø Netzladepreis"},
       "economics_average_pv_opportunity_value": {"name": "Preise – Ø PV-Opportunitätswert"},
+      "economics_average_battery_charge_price": {"name": "Preise – Ø Akku-Ladepreis (Netz + PV)"},
       "economics_average_export_price": {"name": "Preise – Ø Einspeisevergütung"},
       "economics_average_battery_discharge_value": {"name": "Preise – Ø Wert der Batterieentladung"},
       "economics_average_native_pv_to_home_return": {"name": "Preise – Ø Wert Native PV direkt ins Haus"},

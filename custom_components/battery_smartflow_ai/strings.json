@@ -1044,6 +1044,7 @@
       "economics_total_native_pv_to_home_kwh": {"name": "Energy since start – Native PV to home"},
       "economics_average_grid_charge_price": {"name": "Prices – Avg. grid charging price"},
       "economics_average_pv_opportunity_value": {"name": "Prices – Avg. PV opportunity value"},
+      "economics_average_battery_charge_price": {"name": "Prices – Avg. battery charge price (grid + PV)"},
       "economics_average_export_price": {"name": "Prices – Avg. export price"},
       "economics_average_battery_discharge_value": {"name": "Prices – Avg. battery discharge value"},
       "economics_average_native_pv_to_home_return": {"name": "Prices – Avg. PV to Home Return"},

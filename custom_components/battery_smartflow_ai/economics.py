@@ -369,6 +369,7 @@ class EconomicsSnapshot:
     native_pv_self_consumption_value: float
     average_grid_charge_price: float | None
     average_pv_opportunity_value: float | None
+    average_battery_charge_price: float | None
     average_export_price: float | None
     average_battery_discharge_value: float | None
     average_native_pv_to_home_return: float | None
@@ -634,6 +635,10 @@ class EconomicsEngine:
             ),
             average_pv_opportunity_value=self._average(
                 totals.pv_opportunity_cost, totals.pv_charge_kwh
+            ),
+            average_battery_charge_price=self._average(
+                totals.grid_charge_cost + totals.pv_opportunity_cost,
+                totals.grid_charge_kwh + totals.pv_charge_kwh,
             ),
             average_export_price=self._average(
                 totals.export_revenue, totals.export_kwh

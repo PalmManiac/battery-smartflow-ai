@@ -115,12 +115,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
         <div class="reading-grid">
           ${this._reading(entities, "Grid charging price", ["economics_average_grid_charge_price", "avg. grid charging price", "ø netzladepreis"])}
           ${this._reading(entities, "PV opportunity value", ["economics_average_pv_opportunity_value", "avg. pv opportunity value", "ø pv-opportunitätswert"])}
+          ${this._reading(entities, "Blended battery charge price", ["economics_average_battery_charge_price", "avg. battery charge price", "ø akku-ladepreis"])}
           ${this._reading(entities, "Export price", ["economics_average_export_price", "avg. export price", "ø einspeisepreis"])}
           ${this._reading(entities, "Battery discharge value", ["economics_average_battery_discharge_value", "avg. battery discharge value", "ø wert der batterieentladung"])}
           ${this._reading(entities, "Native PV to home return", ["economics_average_native_pv_to_home_return", "avg. pv to home return", "ø wert native pv direkt ins haus"])}
           ${this._reading(entities, "Economic efficiency", ["economics_total_economic_efficiency_pct", "economic efficiency", "wirtschaftlichkeit"])}
         </div>
-        <p class="explain">Grid charging, PV opportunity, and export values are kept separate here. The blended battery acquisition price will be added when its dedicated sensor is implemented.</p>
+        <p class="explain">The blended battery charge price is weighted by the recorded grid- and PV-charged energy. Grid charging cost and the PV opportunity value use the same cost ledger as the separate price sensors.</p>
       </section>`;
   }
 
