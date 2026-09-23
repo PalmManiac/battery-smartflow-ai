@@ -5418,6 +5418,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economics_average_pv_opportunity_value": (
                     economics_total_snapshot.average_pv_opportunity_value
                 ),
+                "economics_average_battery_charge_price": (
+                    economics_total_snapshot.average_battery_charge_price
+                ),
                 "economics_average_export_price": (
                     economics_total_snapshot.average_export_price
                 ),
