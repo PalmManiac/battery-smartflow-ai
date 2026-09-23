@@ -22,6 +22,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._view = "overview";
     this._renderQueued = false;
+    this._openDetailId = null;
   }
 
   _scheduleRender() {
@@ -60,12 +61,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
-  }
-
-  _sourceLabel(entity) {
-    return entity && entity.attributes.friendly_name
-      ? entity.attributes.friendly_name
-      : this._t("home_assistant_sensor");
   }
 
   _t(key) {
@@ -143,7 +138,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _reading(entities, title, terms, hint = "") {
     const entity = this._find(entities, terms);
-    return `<article class="reading"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong><small>${this._escape(hint || (entity ? this._sourceLabel(entity) : this._t("unavailable")))}</small></article>`;
+    return `<article class="reading"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${!entity ? `<small>${this._escape(hint || this._t("unavailable"))}</small>` : ""}</article>`;
   }
 
   _forecastStatus(entities) {
@@ -205,8 +200,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         value = `${watts.toLocaleString(locale, { maximumFractionDigits: 1 })} W`;
       }
     }
-    const source = entity ? this._sourceLabel(entity) : (hint || this._t("source_unavailable"));
-    return `<article class="reading power-reading"><span>${this._escape(title)}</span><strong>${this._escape(value)}</strong><small>${this._escape(source)}</small></article>`;
+    return `<article class="reading power-reading"><span>${this._escape(title)}</span><strong>${this._escape(value)}</strong>${!entity ? `<small>${this._escape(hint || this._t("source_unavailable"))}</small>` : ""}</article>`;
   }
 
   _livePowerView(entities) {
@@ -377,13 +371,30 @@ class BatterySmartFlowDashboard extends HTMLElement {
     });
   }
 
-  _detailRows(entities, limit = 5) {
+  _detailLabel(entity, systemName = "", packNumber = null) {
+    let label = entity.attributes.friendly_name || this._t("telemetry");
+    const knownSystem = systemName || (this._currentSystems || [])
+      .map((system) => system.name)
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+      .find((name) => label.toLowerCase().startsWith(name.toLowerCase()));
+    const prefix = String(knownSystem || "").trim();
+    if (prefix && label.toLowerCase().startsWith(prefix.toLowerCase())) {
+      label = label.slice(prefix.length).replace(/^\s*[-–—:·|]?\s*/, "");
+    }
+    if (packNumber) {
+      label = label.replace(new RegExp(`^(?:battery|batterie)[ -]?pack\\s*0*${packNumber}\\s*[-–—:·|]?\\s*`, "i"), "");
+    }
+    return label.trim() || this._t("telemetry");
+  }
+
+  _detailRows(entities, limit = 5, systemName = "", packNumber = null) {
     const preferred = /(soc|ladezustand|power|leistung|temperatur|temperature|status|transport|firmware|kapazität|capacity)/i;
     const ordered = [...entities].sort((a, b) => {
       return Number(preferred.test(this._label(b))) - Number(preferred.test(this._label(a)));
     });
     return ordered.slice(0, limit).map((entity) =>
-      `<div class="detail-row"><span>${this._escape(this._label(entity))}</span><strong>${this._escape(this._value(entity))}</strong></div>`
+      `<div class="detail-row"><span>${this._escape(this._detailLabel(entity, systemName, packNumber))}</span><strong>${this._escape(this._value(entity))}</strong></div>`
     ).join("");
   }
 
@@ -400,7 +411,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const selectCards = selects.map((entity) => {
       const isMode = entity.entity_id.endsWith("_ai_mode");
       const labels = this._controlOptionLabels();
-      return `<article class="control-card"><label for="control-${this._escape(entity.entity_id)}">${this._escape(this._label(entity))}</label><select id="control-${this._escape(entity.entity_id)}" data-control-select="${this._escape(entity.entity_id)}">${(entity.attributes.options || []).map((option) => `<option value="${this._escape(option)}" ${option === entity.state ? "selected" : ""}>${this._escape(labels[option] || option)}</option>`).join("")}</select><button class="apply" data-apply-select="${this._escape(entity.entity_id)}">${this._escape(this._t("apply"))}</button>${isMode && entity.state === "manual" ? `<small>${this._escape(this._t("manual_action_hint"))}</small>` : ""}</article>`;
+      return `<article class="control-card"><label for="control-${this._escape(entity.entity_id)}">${this._escape(this._controlLabel(entity))}</label><select id="control-${this._escape(entity.entity_id)}" data-control-select="${this._escape(entity.entity_id)}">${(entity.attributes.options || []).map((option) => `<option value="${this._escape(option)}" ${option === entity.state ? "selected" : ""}>${this._escape(labels[option] || option)}</option>`).join("")}</select><button class="apply" data-apply-select="${this._escape(entity.entity_id)}">${this._escape(this._t("apply"))}</button>${isMode && entity.state === "manual" ? `<small>${this._escape(this._t("manual_action_hint"))}</small>` : ""}</article>`;
     }).join("");
     const groupFor = (entity) => {
       const name = `${entity.entity_id} ${this._label(entity)}`.toLowerCase();
@@ -432,13 +443,18 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return translations;
   }
 
+  _controlLabel(entity) {
+    const label = this._label(entity);
+    return label.replace(/^Battery SmartFlow AI\s*[–—-]\s*Steuerung\s*&\s*Planung\s*/i, "").trim() || label;
+  }
+
   _numberControlCard(entity) {
     const value = Number(entity.state);
     const min = Number(entity.attributes.min);
     const max = Number(entity.attributes.max);
     const step = Number(entity.attributes.step);
     if (!Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max)) return "";
-    return `<article class="control-card"><label for="control-${this._escape(entity.entity_id)}">${this._escape(this._label(entity))}</label><div class="number-control"><input id="control-${this._escape(entity.entity_id)}" type="number" data-control-number="${this._escape(entity.entity_id)}" value="${value}" min="${min}" max="${max}" step="${Number.isFinite(step) && step > 0 ? step : 1}"><span>${this._escape(entity.attributes.unit_of_measurement || "")}</span></div><small>${this._escape(this._t("allowed_range"))}: ${min}–${max}${entity.attributes.unit_of_measurement ? ` ${this._escape(entity.attributes.unit_of_measurement)}` : ""}</small><button class="apply" data-apply-number="${this._escape(entity.entity_id)}">${this._escape(this._t("apply"))}</button></article>`;
+    return `<article class="control-card"><label for="control-${this._escape(entity.entity_id)}">${this._escape(this._controlLabel(entity))}</label><div class="number-control"><input id="control-${this._escape(entity.entity_id)}" type="number" data-control-number="${this._escape(entity.entity_id)}" value="${value}" min="${min}" max="${max}" step="${Number.isFinite(step) && step > 0 ? step : 1}"><span>${this._escape(entity.attributes.unit_of_measurement || "")}</span></div><small>${this._escape(this._t("allowed_range"))}: ${min}–${max}${entity.attributes.unit_of_measurement ? ` ${this._escape(entity.attributes.unit_of_measurement)}` : ""}</small><button class="apply" data-apply-number="${this._escape(entity.entity_id)}">${this._escape(this._t("apply"))}</button></article>`;
   }
 
   _applyControl(service, entityId, data) {
@@ -465,7 +481,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (!entity || ["unknown", "unavailable"].includes(entity.state)) {
       entity = this._find(this._entities(), fallbackTerms);
     }
-    return `<article class="metric"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong><small>${this._escape(entity ? this._sourceLabel(entity) : this._t("waiting_entity"))}</small></article>`;
+    return `<article class="metric"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${!entity ? `<small>${this._escape(this._t("waiting_entity"))}</small>` : ""}</article>`;
   }
 
   _overviewMetrics(entities) {
@@ -486,8 +502,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
       return `<section class="metric-group"><h3>${this._escape(source.name || this._t("system"))}</h3><div class="metric-grid">${cards.join("")}</div></section>`;
     }).filter(Boolean);
 
-    const price = this._find(entities, ["price_now", "current electricity price", "strompreis aktuell", "preis jetzt"]);
-    if (price) groups.push(`<section class="metric-group"><h3>${this._escape(this._t("shared_metrics"))}</h3><div class="metric-grid">${this._metricCard(this._t("current_price"), price.entity_id)}</div></section>`);
     if (groups.length) return groups.join("");
 
     const metrics = [
@@ -495,7 +509,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
       [this._t("pv_power"), ["pv power", "pv-leistung", "solar power", "solarleis"]],
       [this._t("battery_power"), ["batterieleistung", "battery power", "charge power"]],
       [this._t("grid_power"), ["netz-leistung", "grid power", "netzbezug"]],
-      [this._t("current_price"), ["current electricity price", "strompreis aktuell", "preis jetzt"]],
     ];
     return metrics.map(([title, terms]) => {
       const entity = this._find(entities, terms);
@@ -509,6 +522,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const cards = this._overviewMetrics(entities);
 
     const systems = this._nativeSystems(entities);
+    this._currentSystems = systems;
     const packCount = systems.reduce((count, system) => count + (system.packs || []).length, 0);
     const lastUpdated = entities.reduce((latest, entity) => {
       const stamp = Date.parse(entity.last_updated || "");
@@ -533,7 +547,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
               const packNumber = index + 1;
               const detailId = `pack-details-${systemIndex}-${packNumber}`;
               const packEntities = this._deviceEntities(entities, system.name, packNumber);
-              const packRows = this._detailRows(packEntities);
+              const packRows = this._detailRows(packEntities, 5, system.name, packNumber);
               return `<article class="pack-card"><div class="pack-head"><div><strong>↳ ${this._escape(this._t("battery_pack"))} ${packNumber}</strong><small>${this._escape(pack.model || this._t("zendure_pack"))}</small></div><button class="details-toggle" type="button" data-details-toggle="${detailId}" aria-controls="${detailId}" aria-expanded="false">${this._escape(this._t("details"))}</button></div><aside class="hover-details" id="${detailId}"><h3>${this._escape(this._t("battery_pack"))} ${packNumber}</h3>${packRows || `<div class="detail-row"><span>${this._escape(this._t("telemetry"))}</span><strong>${this._escape(this._t("unavailable"))}</strong></div>`}</aside></article>`;
             }).join("");
             const systemDetailId = `system-details-${systemIndex}`;
@@ -557,6 +571,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
         @media(max-width:520px){.flow-row{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr) minmax(0,.7fr);gap:6px}.flow-node{padding:8px 7px}.flow-node strong{font-size:12px;overflow-wrap:anywhere}.flow-label{font-size:10px}.flow-direction{gap:4px}.flow-direction>span{font-size:16px}.flow-value{font-size:12px}}@media(max-width:360px){.flow-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.flow-route{grid-column:1 / -1}.flow-value{grid-column:2;text-align:right}}
         .forecast-source-hint{max-width:70%;text-align:right;line-height:1.4;overflow-wrap:anywhere}.forecast-day-chart{display:grid;gap:12px}.forecast-bar-row{display:grid;grid-template-columns:minmax(52px,.65fr) minmax(70px,2fr) minmax(72px,.85fr);gap:9px;align-items:center;font-size:12px}.forecast-bar-row>span{color:#c3c7ca}.forecast-bar-row>strong{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.forecast-bar-track{height:11px;background:#30353a;border-radius:999px;overflow:hidden}.forecast-bar-track i{display:block;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.forecast-bar-row.unavailable .forecast-bar-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.forecast-bar-row.unavailable .forecast-bar-track i{display:none}
         @media(max-width:520px){.forecast-bar-row{grid-template-columns:minmax(0,.6fr) minmax(0,1fr) minmax(0,.8fr);gap:6px;font-size:11px}.forecast-bar-row>span,.forecast-bar-row>strong{overflow-wrap:anywhere}}
+        @media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:none}}
+        .system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block!important}
       </style>
       <main class="shell">
         <header><div><h1>Battery SmartFlow AI</h1><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
@@ -565,6 +581,18 @@ class BatterySmartFlowDashboard extends HTMLElement {
         ${activeContent}
         <p class="footer">${this._escape(this._t("footer"))}</p>
       </main>`;
+    if (this._openDetailId) {
+      const openButton = [...this.shadowRoot.querySelectorAll("[data-details-toggle]")]
+        .find((button) => button.dataset.detailsToggle === this._openDetailId);
+      if (openButton) {
+        const openCard = openButton.closest(".system-card, .pack-card");
+        openCard?.classList.add("details-open");
+        openButton.setAttribute("aria-expanded", "true");
+        openButton.textContent = this._t("hide_details");
+      } else {
+        this._openDetailId = null;
+      }
+    }
     this.shadowRoot.querySelectorAll("[data-view]").forEach((button) => {
       button.addEventListener("click", () => {
         this._view = button.dataset.view;
@@ -596,6 +624,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const card = button.closest(".system-card, .pack-card");
         if (!details || !card) return;
         const open = card.classList.toggle("details-open");
+        this._openDetailId = open ? button.dataset.detailsToggle : null;
         if (open) {
           this.shadowRoot.querySelectorAll(".details-open").forEach((otherCard) => {
             if (otherCard === card) return;
