@@ -19,6 +19,7 @@ except ModuleNotFoundError as err:
 # Integration meta
 # ==================================================
 DOMAIN = "battery_smartflow_ai"
+CONF_HEMS_DASHBOARD_ENABLED = "hems_dashboard_enabled"
 
 INTEGRATION_NAME = "Battery SmartFlow AI"
 

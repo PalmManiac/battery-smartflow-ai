@@ -7,6 +7,7 @@ from homeassistant import config_entries
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_HEMS_DASHBOARD_ENABLED,
     CONF_AC_MODE_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
@@ -987,7 +988,33 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         )
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general", "expert", "native_zendure", "debug"],
+            menu_options=["general", "expert", "dashboard", "native_zendure", "debug"],
+        )
+
+    async def async_step_dashboard(self, user_input: dict[str, Any] | None = None):
+        """Configure the optional standalone HEMS dashboard."""
+
+        if user_input is not None:
+            options = dict(self.config_entry.options)
+            options[CONF_HEMS_DASHBOARD_ENABLED] = bool(
+                user_input.get(CONF_HEMS_DASHBOARD_ENABLED, False)
+            )
+            return self.async_create_entry(title="", data=options)
+
+        return self.async_show_form(
+            step_id="dashboard",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_HEMS_DASHBOARD_ENABLED,
+                        default=bool(
+                            self.config_entry.options.get(
+                                CONF_HEMS_DASHBOARD_ENABLED, False
+                            )
+                        ),
+                    ): selector.BooleanSelector(),
+                }
+            ),
         )
 
     async def async_step_native_zendure(
