@@ -57,6 +57,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       pv_battery: ["PV → Akku", "PV → battery"], grid_battery: ["Netz → Akku", "Grid → battery"], battery_home: ["Akku → Haus", "Battery → home"], battery_grid: ["Akku → Netz", "Battery → grid"], native_pv_home: ["Native PV → Haus", "Native PV → home"], grid_export: ["Netzeinspeisung", "Grid export"],
       node_pv: ["PV", "PV"], node_native_pv: ["Native PV", "Native PV"], node_grid: ["Netz", "Grid"], node_battery: ["Akku", "Battery"], node_home: ["Haus", "Home"], node_site: ["Anlage", "Site"], source: ["Quelle", "Source"], destination: ["Ziel", "Destination"], relative_flow_scale: ["Balken relativ zum größten dargestellten Tagesfluss", "Bars are relative to the largest daily flow shown"],
       usable_3h: ["Nutzbar · nächste 3 Stunden", "Usable · next 3 hours"], usable_6h: ["Nutzbar · nächste 6 Stunden", "Usable · next 6 hours"], usable_today: ["Nutzbar · Rest des Tages", "Usable · rest of today"], gross_today: ["Brutto · Rest des Tages", "Gross · rest of today"], usable_tomorrow: ["Nutzbar · morgen", "Usable · tomorrow"], gross_tomorrow: ["Brutto · morgen", "Gross · tomorrow"],
+      gross_amount: ["Brutto", "Gross"], usable_amount: ["Nutzbar", "Usable"], forecast_not_configured: ["Keine Prognosequelle konfiguriert", "No forecast source configured"], forecast_unavailable: ["Prognosedaten derzeit nicht verfügbar", "Forecast data is currently unavailable"],
       forecast_explain: ["Die nutzbare Prognose berücksichtigt die Planungsannahmen von BSFAI. Die Bruttowerte zeigen die importierte Prognose vor dieser Reduktion.", "Usable forecast reflects BSFAI's planning assumptions. Gross values show the imported forecast before that reduction."], economics_today: ["Wirtschaftlichkeit heute", "Today's economics"], daily_costs: ["Tageswerte und Kosten", "Daily value and costs"], battery_benefit: ["Akku-Nutzen", "Battery benefit"], avoided_import: ["Vermiedene Netzbezugskosten", "Avoided grid import"], grid_charge_cost: ["Netzladekosten", "Grid charging cost"], pv_opportunity_cost: ["PV-Opportunitätskosten", "PV opportunity cost"], export_revenue: ["Einspeiseerlös", "Export revenue"], self_consumption_value: ["Wert nativer PV-Eigenverbrauch", "Native PV self-consumption value"], average_values: ["Durchschnittliche Ist-Werte", "Average realized values"], ledger_based: ["Basierend auf dem BSFAI-Energie- und Kostenbuch", "Based on BSFAI's energy and cost ledger"], grid_charge_price: ["Netzladepreis", "Grid charging price"], pv_opportunity_value: ["PV-Opportunitätswert", "PV opportunity value"], blended_charge_price: ["Gewichteter Akku-Ladepreis", "Blended battery charge price"], export_price: ["Einspeisepreis", "Export price"], discharge_value: ["Wert der Akkuentladung", "Battery discharge value"], native_pv_return: ["Ertrag native PV direkt ins Haus", "Native PV to home return"], efficiency: ["Wirtschaftlicher Wirkungsgrad", "Economic efficiency"],
       blended_explain: ["Der gewichtete Akku-Ladepreis berücksichtigt die verbuchte Netz- und PV-Ladeenergie. Netzladekosten und PV-Opportunitätswert stammen aus demselben Kostenbuch wie die separaten Preissensoren.", "The blended battery charge price is weighted by recorded grid- and PV-charged energy. Grid charging cost and PV opportunity value use the same cost ledger as the separate price sensors."],
       operating_mode: ["Betriebsart", "Operating mode"], existing_selects: ["Vorhandene BSFAI-Auswahl-Entitäten", "Existing BSFAI select entities"], no_selects: ["Keine BSFAI-Auswahl für Betriebsart oder manuelle Aktion gefunden.", "No BSFAI mode or manual-action select entities were found."], settings: ["BSFAI-Einstellungen", "BSFAI settings"], saved_ha: ["Änderungen werden über Home-Assistant-Zahlen-Entitäten gespeichert", "Changes are saved through Home Assistant number entities"], no_numbers: ["Keine BSFAI-Zahlenregler gefunden.", "No BSFAI number settings were found."],
@@ -91,6 +92,39 @@ class BatterySmartFlowDashboard extends HTMLElement {
   _reading(entities, title, terms, hint = "") {
     const entity = this._find(entities, terms);
     return `<article class="reading"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong><small>${this._escape(hint || (entity ? this._label(entity) : this._t("unavailable")))}</small></article>`;
+  }
+
+  _forecastStatus(entities) {
+    const entity = this._find(entities, ["forecast_status"]);
+    return entity && !["unknown", "unavailable"].includes(entity.state) ? entity.state : "unavailable";
+  }
+
+  _forecastReading(entities, title, terms, forecastStatus) {
+    if (forecastStatus !== "available") {
+      const message = forecastStatus === "not_configured" ? "forecast_not_configured" : "forecast_unavailable";
+      return `<article class="reading"><span>${this._escape(title)}</span><strong>—</strong><small>${this._escape(this._t(message))}</small></article>`;
+    }
+    return this._reading(entities, title, terms);
+  }
+
+  _forecastComparison(entities, title, usableTerms, grossTerms, maxValue, forecastStatus) {
+    const readValue = (terms) => {
+      if (forecastStatus !== "available") return null;
+      const entity = this._find(entities, terms);
+      if (!entity || ["unknown", "unavailable"].includes(entity.state)) return null;
+      const value = Number(entity.state);
+      return Number.isFinite(value) ? Math.max(0, value) : null;
+    };
+    const rows = [
+      [this._t("gross_amount"), grossTerms],
+      [this._t("usable_amount"), usableTerms],
+    ].map(([label, terms]) => {
+      const value = readValue(terms);
+      const width = value === null || maxValue <= 0 ? 0 : Math.min(100, value / maxValue * 100);
+      const displayValue = value === null ? "—" : `${value.toLocaleString(this._hass && this._hass.locale ? this._hass.locale.language : undefined, { maximumFractionDigits: 2 })} kWh`;
+      return `<div class="forecast-bar-row ${value === null ? "unavailable" : ""}"><span>${this._escape(label)}</span><div class="forecast-bar-track"><i style="width:${width}%"></i></div><strong>${this._escape(displayValue)}</strong></div>`;
+    }).join("");
+    return `<div class="forecast-group"><h3>${this._escape(title)}</h3><div class="forecast-day-chart">${rows}</div></div>`;
   }
 
   _flowRow(entities, title, terms, width, source, destination) {
@@ -153,6 +187,18 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _energyView(entities) {
+    const forecastStatus = this._forecastStatus(entities);
+    const grossTodayTerms = [["forecast_gross_remaining_today_kwh"], ["gross pv forecast remaining today"], ["pv-prognose brutto", "rest heute"]];
+    const usableTodayTerms = [["forecast_remaining_today_kwh"], ["usable pv forecast remaining today"], ["nutzbare pv-prognose", "rest heute"]];
+    const grossTomorrowTerms = [["forecast_gross_tomorrow_kwh"], ["gross pv forecast tomorrow"], ["pv-prognose brutto", "morgen"]];
+    const usableTomorrowTerms = [["forecast_tomorrow_kwh"], ["usable pv forecast tomorrow"], ["nutzbare pv-prognose", "morgen"]];
+    const forecastValues = [grossTodayTerms, usableTodayTerms, grossTomorrowTerms, usableTomorrowTerms].map((terms) => {
+      if (forecastStatus !== "available") return null;
+      const entity = this._find(entities, terms);
+      const value = entity && !["unknown", "unavailable"].includes(entity.state) ? Number(entity.state) : NaN;
+      return Number.isFinite(value) ? Math.max(0, value) : null;
+    }).filter((value) => value !== null);
+    const forecastMax = Math.max(...forecastValues, 0);
     const flowSpecs = [
       [this._t("pv_battery"), ["economics_daily_pv_to_battery_kwh", "pv to battery", "pv zur batterie"], "node_pv", "node_battery"],
       [this._t("grid_battery"), ["economics_daily_grid_to_battery_kwh", "grid to battery", "netz zur batterie"], "node_grid", "node_battery"],
@@ -181,19 +227,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
       <section class="section"><div class="section-head"><h2>${this._escape(this._t("solar_forecast"))}</h2><small>${this._escape(this._t("forecast_compare"))}</small></div>
         <div class="forecast-groups">
           <div class="forecast-group"><h3>${this._escape(this._t("near_term"))}</h3><div class="reading-grid">
-            ${this._reading(entities, this._t("usable_3h"), [["forecast_next_3h_kwh"], ["usable pv forecast next 3 hours"], ["nutzbare pv-prognose", "nächste 3 stunden"]])}
-            ${this._reading(entities, this._t("usable_6h"), [["forecast_next_6h_kwh"], ["usable pv forecast next 6 hours"], ["nutzbare pv-prognose", "nächste 6 stunden"]])}
+            ${this._forecastReading(entities, this._t("usable_3h"), [["forecast_next_3h_kwh"], ["usable pv forecast next 3 hours"], ["nutzbare pv-prognose", "nächste 3 stunden"]], forecastStatus)}
+            ${this._forecastReading(entities, this._t("usable_6h"), [["forecast_next_6h_kwh"], ["usable pv forecast next 6 hours"], ["nutzbare pv-prognose", "nächste 6 stunden"]], forecastStatus)}
           </div></div>
-          <div class="forecast-group"><h3>${this._escape(this._t("forecast_today"))}</h3><div class="reading-grid">
-            ${this._reading(entities, this._t("usable_today"), [["forecast_remaining_today_kwh"], ["usable pv forecast remaining today"], ["nutzbare pv-prognose", "rest heute"]])}
-            ${this._reading(entities, this._t("gross_today"), [["forecast_gross_remaining_today_kwh"], ["gross pv forecast remaining today"], ["pv-prognose brutto", "rest heute"]])}
-          </div></div>
-          <div class="forecast-group"><h3>${this._escape(this._t("forecast_tomorrow"))}</h3><div class="reading-grid">
-            ${this._reading(entities, this._t("usable_tomorrow"), [["forecast_tomorrow_kwh"], ["usable pv forecast tomorrow"], ["nutzbare pv-prognose", "morgen"]])}
-            ${this._reading(entities, this._t("gross_tomorrow"), [["forecast_gross_tomorrow_kwh"], ["gross pv forecast tomorrow"], ["pv-prognose brutto", "morgen"]])}
-          </div></div>
+          ${this._forecastComparison(entities, this._t("forecast_today"), usableTodayTerms, grossTodayTerms, forecastMax, forecastStatus)}
+          ${this._forecastComparison(entities, this._t("forecast_tomorrow"), usableTomorrowTerms, grossTomorrowTerms, forecastMax, forecastStatus)}
         </div>
-        <p class="explain">${this._escape(this._t("forecast_explain"))}</p>
+        <p class="explain">${this._escape(forecastStatus === "available" ? this._t("forecast_explain") : this._t(forecastStatus === "not_configured" ? "forecast_not_configured" : "forecast_unavailable"))}</p>
       </section>`;
   }
 
@@ -425,6 +465,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
         @media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.topology{grid-template-columns:1fr}.link{height:20px;width:1px;margin:auto}}@media(max-width:520px){header{align-items:flex-start;flex-direction:column}.metrics{grid-template-columns:1fr 1fr}.systems{grid-template-columns:1fr}.metric{padding:13px}.section{padding:15px}}
         .flow-grid{display:grid;gap:9px;margin-top:10px}.flow-row{display:grid;grid-template-columns:minmax(85px,.8fr) minmax(110px,1.6fr) minmax(85px,.8fr) minmax(80px,.6fr);gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.flow-node{min-width:0;padding:9px 11px;border:1px solid #41464b;border-radius:9px;background:#272b2f}.flow-node small{display:block;color:var(--muted);font-size:10px}.flow-node strong{display:block;margin-top:3px;font-size:13px}.flow-route{min-width:0;display:flex;flex-direction:column;gap:5px}.flow-label{color:#c3c7ca;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.flow-direction{display:flex;align-items:center;gap:8px;color:var(--cyan)}.flow-direction>span{font-size:20px;line-height:1}.flow-track{height:8px;flex:1;background:#30353a;border-radius:999px;overflow:hidden}.flow-track i{display:block;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.flow-route.unavailable .flow-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.flow-route.unavailable .flow-track i{display:none}.flow-value{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.flow-scale{color:var(--muted)}
         @media(max-width:520px){.flow-row{grid-template-columns:minmax(60px,1fr) minmax(55px,1.2fr) minmax(60px,1fr) minmax(55px,.7fr);gap:6px}.flow-node{padding:8px 7px}.flow-node strong{font-size:12px}.flow-label{font-size:10px}.flow-direction{gap:4px}.flow-direction>span{font-size:16px}.flow-value{font-size:12px}}
+        .forecast-day-chart{display:grid;gap:12px}.forecast-bar-row{display:grid;grid-template-columns:minmax(52px,.65fr) minmax(70px,2fr) minmax(72px,.85fr);gap:9px;align-items:center;font-size:12px}.forecast-bar-row>span{color:#c3c7ca}.forecast-bar-row>strong{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.forecast-bar-track{height:11px;background:#30353a;border-radius:999px;overflow:hidden}.forecast-bar-track i{display:block;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.forecast-bar-row.unavailable .forecast-bar-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.forecast-bar-row.unavailable .forecast-bar-track i{display:none}
+        @media(max-width:520px){.forecast-bar-row{grid-template-columns:minmax(46px,.6fr) minmax(55px,1fr) minmax(68px,.8fr);gap:6px;font-size:11px}}
       </style>
       <main class="shell">
         <header><div><h1>Battery SmartFlow AI</h1><p class="sub">${this._escape(this._t("subtitle"))}</p></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
