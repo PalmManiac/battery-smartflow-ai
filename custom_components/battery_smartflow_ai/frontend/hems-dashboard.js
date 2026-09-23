@@ -53,7 +53,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       flows_today: ["Energieflüsse heute", "Today's energy flows"], ledger: ["Gemessenes BSFAI-Energiebuch", "Measured BSFAI energy ledger"], solar_forecast: ["Solarprognose", "Solar forecast"], forecast_compare: ["Brutto-Prognose und nutzbarer Rest", "Gross forecast versus usable remainder"],
       near_term: ["Nächste Stunden · nutzbar", "Next few hours · usable"], forecast_today: ["Heute · Brutto und nutzbar", "Today · gross and usable"], forecast_tomorrow: ["Morgen · Brutto und nutzbar", "Tomorrow · gross and usable"],
       power_now: ["Momentanleistung", "Instantaneous power"], power_note: ["Live-Messwerte · Watt (W)", "Live readings · watts (W)"], daily_energy_note: ["Aufsummierte Energiemengen heute · Kilowattstunden (kWh)", "Accumulated energy today · kilowatt-hours (kWh)"], grid_net: ["Netzleistung (Bezug + / Einspeisung −)", "Grid power (import + / export −)"], grid_import: ["Netzbezug", "Grid import"], grid_export: ["Netzeinspeisung", "Grid export"], pv_source: ["PV-Leistung", "PV power"], native_pv_source: ["Native PV-Leistung", "Native PV power"], offgrid_source: ["Off-Grid-Ausgang", "Off-grid output"], house_load_source: ["Hauslast", "House load"], battery_source: ["Akku-Leistung", "Battery power"],
-      source_unavailable: ["Quelle nicht verfügbar", "Source unavailable"], no_power_readings: ["Keine konfigurierten oder nativen Leistungswerte gefunden.", "No configured or native power readings found."], per_system: ["Je System", "Per system"],
+      source_unavailable: ["Quelle nicht verfügbar", "Source unavailable"], no_power_readings: ["Keine konfigurierten oder nativen Leistungswerte gefunden.", "No configured or native power readings found."], per_system: ["Je System", "Per system"], shared_metrics: ["Gemeinsamer Wert", "Shared value"],
       pv_battery: ["PV → Akku", "PV → battery"], grid_battery: ["Netz → Akku", "Grid → battery"], battery_home: ["Akku → Haus", "Battery → home"], battery_grid: ["Akku → Netz", "Battery → grid"], native_pv_home: ["Native PV → Haus", "Native PV → home"], grid_export: ["Netzeinspeisung", "Grid export"],
       usable_3h: ["Nutzbar · nächste 3 Stunden", "Usable · next 3 hours"], usable_6h: ["Nutzbar · nächste 6 Stunden", "Usable · next 6 hours"], usable_today: ["Nutzbar · Rest des Tages", "Usable · rest of today"], gross_today: ["Brutto · Rest des Tages", "Gross · rest of today"], usable_tomorrow: ["Nutzbar · morgen", "Usable · tomorrow"], gross_tomorrow: ["Brutto · morgen", "Gross · tomorrow"],
       forecast_explain: ["Die nutzbare Prognose berücksichtigt die Planungsannahmen von BSFAI. Die Bruttowerte zeigen die importierte Prognose vor dieser Reduktion.", "Usable forecast reflects BSFAI's planning assumptions. Gross values show the imported forecast before that reduction."], economics_today: ["Wirtschaftlichkeit heute", "Today's economics"], daily_costs: ["Tageswerte und Kosten", "Daily value and costs"], battery_benefit: ["Akku-Nutzen", "Battery benefit"], avoided_import: ["Vermiedene Netzbezugskosten", "Avoided grid import"], grid_charge_cost: ["Netzladekosten", "Grid charging cost"], pv_opportunity_cost: ["PV-Opportunitätskosten", "PV opportunity cost"], export_revenue: ["Einspeiseerlös", "Export revenue"], self_consumption_value: ["Wert nativer PV-Eigenverbrauch", "Native PV self-consumption value"], average_values: ["Durchschnittliche Ist-Werte", "Average realized values"], ledger_based: ["Basierend auf dem BSFAI-Energie- und Kostenbuch", "Based on BSFAI's energy and cost ledger"], grid_charge_price: ["Netzladepreis", "Grid charging price"], pv_opportunity_value: ["PV-Opportunitätswert", "PV opportunity value"], blended_charge_price: ["Gewichteter Akku-Ladepreis", "Blended battery charge price"], export_price: ["Einspeisepreis", "Export price"], discharge_value: ["Wert der Akkuentladung", "Battery discharge value"], native_pv_return: ["Ertrag native PV direkt ins Haus", "Native PV to home return"], efficiency: ["Wirtschaftlicher Wirkungsgrad", "Economic efficiency"],
@@ -329,9 +329,33 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }, 1800);
   }
 
-  _render() {
-    if (!this.shadowRoot || !this._hass) return;
-    const entities = this._entities();
+  _metricCard(title, entityId) {
+    const entity = entityId && this._hass && this._hass.states[entityId];
+    return `<article class="metric"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong><small>${this._escape(entity ? this._label(entity) : this._t("waiting_entity"))}</small></article>`;
+  }
+
+  _overviewMetrics(entities) {
+    const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
+    const groups = sources.map((source) => {
+      const cards = [];
+      if (source.soc) cards.push(this._metricCard(this._t("battery"), source.soc));
+      if (source.pv) cards.push(this._metricCard(this._t("pv_power"), source.pv));
+      if (source.native_pv) cards.push(this._metricCard(this._t("native_pv_source"), source.native_pv));
+      if (source.battery_power) cards.push(this._metricCard(this._t("battery_power"), source.battery_power));
+      if (source.grid_power) cards.push(this._metricCard(this._t("grid_power"), source.grid_power));
+      else {
+        if (source.grid_import) cards.push(this._metricCard(this._t("grid_import"), source.grid_import));
+        if (source.grid_export) cards.push(this._metricCard(this._t("grid_export"), source.grid_export));
+      }
+      if (source.offgrid_power) cards.push(this._metricCard(this._t("offgrid_source"), source.offgrid_power));
+      if (!cards.length) return "";
+      return `<section class="metric-group"><h3>${this._escape(source.name || this._t("system"))}</h3><div class="metric-grid">${cards.join("")}</div></section>`;
+    }).filter(Boolean);
+
+    const price = this._find(entities, ["current electricity price", "strompreis aktuell", "preis jetzt"]);
+    if (price) groups.push(`<section class="metric-group"><h3>${this._escape(this._t("shared_metrics"))}</h3><div class="metric-grid">${this._metricCard(this._t("current_price"), price.entity_id)}</div></section>`);
+    if (groups.length) return groups.join("");
+
     const metrics = [
       [this._t("battery"), ["ladezustand", "soc", "battery level"]],
       [this._t("pv_power"), ["pv power", "pv-leistung", "solar power", "solarleis"]],
@@ -339,10 +363,16 @@ class BatterySmartFlowDashboard extends HTMLElement {
       [this._t("grid_power"), ["netz-leistung", "grid power", "netzbezug"]],
       [this._t("current_price"), ["current electricity price", "strompreis aktuell", "preis jetzt"]],
     ];
-    const cards = metrics.map(([title, terms]) => {
+    return metrics.map(([title, terms]) => {
       const entity = this._find(entities, terms);
-      return `<article class="metric"><span>${title}</span><strong>${this._escape(this._value(entity))}</strong><small>${this._escape(entity ? this._label(entity) : this._t("waiting_entity"))}</small></article>`;
+      return this._metricCard(title, entity && entity.entity_id);
     }).join("");
+  }
+
+  _render() {
+    if (!this.shadowRoot || !this._hass) return;
+    const entities = this._entities();
+    const cards = this._overviewMetrics(entities);
 
     const systems = this._nativeSystems(entities);
     const packCount = systems.reduce((count, system) => count + (system.packs || []).length, 0);
@@ -385,12 +415,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .section{background:#1b1e21;border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.section h2{font-size:17px;margin:0}.section-head small,.muted{color:var(--muted)}
         nav{display:flex;gap:8px;margin:8px 0 18px;border-bottom:1px solid var(--line);padding-bottom:12px}.tab{border:1px solid #41464b;background:#25292d;color:#c4c8cc;border-radius:8px;padding:9px 15px;font:inherit;cursor:pointer}.tab.active{border-color:#2388ad;background:#183847;color:#e5f8fc}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.metric{min-height:125px;padding:18px;border:1px solid #41464b;border-top:3px solid var(--cyan);border-radius:11px;background:#292d31;display:flex;flex-direction:column;gap:11px}.metric:nth-child(2){border-top-color:var(--green)}.metric:nth-child(3){border-top-color:var(--amber)}.metric span{font-size:11px;letter-spacing:.11em;color:#b1b5b9}.metric strong{font-size:clamp(21px,2vw,30px);font-variant-numeric:tabular-nums}.metric small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .reading-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.reading{min-height:105px;padding:15px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:8px}.reading span{color:#bdc2c6;font-size:12px}.reading strong{font-size:22px;font-variant-numeric:tabular-nums}.reading small{color:var(--muted);line-height:1.35}.forecast-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}.forecast-group{padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428}.forecast-group h3{font-size:13px;color:#c7cbd0;margin:0 0 10px}.forecast-group .reading{min-height:92px;padding:12px}.forecast-group .reading-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.flow-grid{display:grid;gap:8px}.flow-row{display:grid;grid-template-columns:minmax(130px,1fr) 3fr minmax(85px,.7fr);gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.flow-row span{color:#c3c7ca}.flow-row strong{text-align:right;font-variant-numeric:tabular-nums}.flow-track{height:9px;background:#30353a;border-radius:999px;overflow:hidden}.flow-track i{display:block;width:48%;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.explain{color:var(--muted);font-size:12px;line-height:1.5;margin:14px 0 0}.subsection{margin-top:18px}.subsection h3{font-size:14px;color:#c7cbd0;margin:0 0 10px}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:11px}.control-card{padding:14px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:10px}.control-card label{font-size:13px;color:#d1d5d8}.control-card select,.control-card input{width:100%;background:#171a1d;color:#eef0f1;border:1px solid #4b535a;border-radius:7px;padding:10px;font:inherit}.number-control{display:flex;align-items:center;gap:8px}.number-control span{color:var(--muted);min-width:30px}.control-card small{color:var(--muted);font-size:11px}.apply{align-self:flex-end;border:1px solid #247b9b;background:#153746;color:#dff8ff;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer}.apply:disabled{opacity:.65;cursor:wait}
+        .metric-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}.metric-group{padding:13px;border:1px solid #343a40;border-radius:11px;background:#202428}.metric-group h3{font-size:13px;color:#c7cbd0;margin:0 0 10px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}.metric-grid .metric{min-height:108px;padding:15px}.metric-grid .metric:nth-child(2){border-top-color:var(--green)}.metric-grid .metric:nth-child(3){border-top-color:var(--amber)}
         .systems{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}.system-card{position:relative;padding:17px;background:#172b3a;border:1px solid #2476a8;border-left:4px solid var(--cyan);border-radius:11px}.system-head,.pack-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.system-head strong,.pack-head strong{font-size:16px}.system-head small,.pack-head small,.device-meta{display:block;color:#b7c4ce;margin-top:6px}.system-actions{display:flex;align-items:center;gap:8px}.status{border:1px solid #40604c;background:#20352a;color:#a8e5ba;border-radius:999px;padding:5px 9px;font-size:11px;white-space:nowrap}.status.offline{border-color:#744849;background:#3a2526;color:#f2aaaa}.packs{margin:15px 0 0 14px;padding-left:16px;border-left:1px solid #388ebc;display:grid;gap:9px}.pack-card{position:relative;padding:12px;background:#202b35;border:1px solid #475563;border-radius:9px}.pack-card strong{display:block}.pack-card small{display:block;color:#aeb8c1;margin-top:5px}.details-toggle{border:1px solid #3f6578;background:#1a3442;color:#d9f5fb;border-radius:7px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}.details-toggle:hover,.details-toggle:focus-visible{border-color:var(--cyan);outline:none}.hover-details{display:none;position:absolute;z-index:5;left:12px;top:calc(100% + 9px);width:min(380px,calc(100vw - 56px));padding:14px;background:#f7f8fa;color:#20242a;border:1px solid #d7dce2;border-radius:10px;box-shadow:0 12px 35px #0008}.system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block}@media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:block}}.hover-details h3{margin:0 0 9px;font-size:14px}.detail-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}.detail-row span{color:#59616a}.detail-row strong{text-align:right}.empty{color:var(--muted);padding:18px;border:1px dashed #485058;border-radius:10px}.inventory{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}.entity{display:flex;justify-content:space-between;gap:12px;padding:11px 12px;border-bottom:1px solid #34383d}.entity span{color:#c2c6ca}.entity strong{font-weight:550;text-align:right;font-variant-numeric:tabular-nums}.footer{color:#858c92;font-size:12px;margin:16px 2px}
         @media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.topology{grid-template-columns:1fr}.link{height:20px;width:1px;margin:auto}}@media(max-width:520px){header{align-items:flex-start;flex-direction:column}.metrics{grid-template-columns:1fr 1fr}.systems{grid-template-columns:1fr}.metric{padding:13px}.section{padding:15px}}
       </style>
       <main class="shell">
         <header><div><h1>Battery SmartFlow AI</h1><p class="sub">${this._escape(this._t("subtitle"))}</p></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
-        <section class="section"><div class="section-head"><h2>${this._escape(this._t("energy_overview"))}</h2><small>${this._escape(this._t("live_values"))}</small></div><div class="metrics">${cards}</div></section>
+        <section class="section"><div class="section-head"><h2>${this._escape(this._t("energy_overview"))}</h2><small>${this._escape(this._t("live_values"))}</small></div><div class="metric-groups">${cards}</div></section>
         <nav aria-label="${this._escape(this._t("dashboard_views"))}"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">${this._escape(this._t("overview"))}</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">${this._escape(this._t("energy"))}</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">${this._escape(this._t("economics"))}</button><button class="tab ${this._view === "controls" ? "active" : ""}" data-view="controls">${this._escape(this._t("controls"))}</button></nav>
         ${activeContent}
         <p class="footer">${this._escape(this._t("footer"))}</p>

@@ -9,6 +9,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 
 from .const import (
+    CONF_BATTERY_AC_POWER_ENTITY,
     CONF_GRID_EXPORT_ENTITY,
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_POWER_ENTITY,
@@ -16,6 +17,7 @@ from .const import (
     CONF_NATIVE_PV_ENTITY,
     CONF_OFFGRID_POWER_ENTITY,
     CONF_PV_ENTITY,
+    CONF_SOC_ENTITY,
     DOMAIN,
 )
 
@@ -50,8 +52,13 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         data = entry.data
         sources = {
             "name": entry.title,
+            "soc": data.get(CONF_SOC_ENTITY),
             "pv": data.get(CONF_PV_ENTITY),
             "native_pv": data.get(CONF_NATIVE_PV_ENTITY),
+            "battery_power": (
+                entry.options.get(CONF_BATTERY_AC_POWER_ENTITY)
+                or data.get(CONF_BATTERY_AC_POWER_ENTITY)
+            ),
             "grid_power": data.get(CONF_GRID_POWER_ENTITY),
             "grid_import": data.get(CONF_GRID_IMPORT_ENTITY),
             "grid_export": data.get(CONF_GRID_EXPORT_ENTITY),
@@ -73,7 +80,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="SmartFlow",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=8",
+        module_url=f"{_PANEL_URL}?v=9",
         config={"title": "Battery SmartFlow AI", "power_sources": power_sources},
         require_admin=False,
         handle_safe_area=True,
