@@ -96,6 +96,27 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return label.replace(/[\s·:–—-]+$/, "") || original;
   }
 
+  _systemSignalEntities(entities) {
+    const registry = (this._hass && this._hass.entities) || {};
+    const hardwareIds = new Set();
+    (this._currentSystems || []).forEach((system) => {
+      this._deviceEntities(entities, system.name, null).forEach((entity) => {
+        hardwareIds.add(entity.entity_id);
+      });
+      (system.packs || []).forEach((_, index) => {
+        this._deviceEntities(entities, system.name, index + 1).forEach((entity) => {
+          hardwareIds.add(entity.entity_id);
+        });
+      });
+    });
+
+    return entities.filter((entity) => {
+      if (!entity.entity_id.startsWith("sensor.")) return false;
+      const registryEntry = registry[entity.entity_id];
+      return registryEntry?.platform === "battery_smartflow_ai" && !hardwareIds.has(entity.entity_id);
+    });
+  }
+
   _searchText(value) {
     return String(value || "")
       .normalize("NFD")
@@ -108,6 +129,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
   _t(key) {
     const locale = this._hass && this._hass.locale ? this._hass.locale.language : "";
     const german = String(locale || "").toLowerCase().startsWith("de");
+    if (key === "additional_signals") {
+      return german ? "zusätzliche Status- und Diagnosesensoren" : "additional status and diagnostic sensors";
+    }
     const labels = {
       overview: ["Übersicht", "Overview"], energy: ["Energie & Prognose", "Energy & forecast"], economics: ["Wirtschaftlichkeit", "Economics"], controls: ["Steuerung", "Controls"],
       subtitle: ["Energiefluss, Speicher und Systemstatus", "Energy flow, storage and system status"], live: ["LIVE · aktualisiert", "LIVE · updated"], energy_overview: ["Energieübersicht", "Energy overview"], live_values: ["Aktuelle Home-Assistant-Werte", "Live Home Assistant values"],
@@ -184,7 +208,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _forecastStatus(entities) {
-    const entity = this._find(entities, ["forecast_status"]);
+    const entity = this._find(entities, ["forecast_status", "prognose status"]);
     return entity && !["unknown", "unavailable"].includes(entity.state) ? entity.state : "unavailable";
   }
 
@@ -571,6 +595,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
     const systems = this._nativeSystems(entities);
     this._currentSystems = systems;
+    const systemSignals = this._systemSignalEntities(entities);
     const packCount = systems.reduce((count, system) => count + (system.packs || []).length, 0);
     const lastUpdated = entities.reduce((latest, entity) => {
       const stamp = Date.parse(entity.last_updated || "");
@@ -601,7 +626,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
             const systemDetailId = `system-details-${systemIndex}`;
             return `<article class="system-card"><div class="system-head"><div><strong>${this._escape(system.name || this._t("system"))}</strong><small>${this._escape(system.model || system.profile || this._t("zendure_hardware"))}</small></div><div class="system-actions"><span class="status ${system.online ? "" : "offline"}">${this._escape(this._t(system.online ? "online" : "offline"))}</span><button class="details-toggle" type="button" data-details-toggle="${systemDetailId}" aria-controls="${systemDetailId}" aria-expanded="false">${this._escape(this._t("details"))}</button></div></div><div class="device-meta">${this._escape(system.transport || this._t("unknown_path"))} · ${this._escape(system.status || this._t("unknown_status"))}</div><div class="packs">${packCards || `<div class="device-meta">${this._escape(this._t("no_packs"))}</div>`}</div><aside class="hover-details" id="${systemDetailId}"><h3>${this._escape(system.name || this._t("system"))}</h3>${systemDetails}${this._detailRows(systemEntities)}</aside></article>`;
           }).join("")}</div>` : `<div class="empty">${this._escape(this._t("native_empty"))}</div>`}
-        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${entities.length} ${this._escape(this._t("matching_entities"))}</small></div><div class="inventory signal-grid">${entities.slice(0, 40).map((entity) => `<div class="entity signal-entity"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(this._value(entity))}">${this._escape(this._value(entity))}</strong></div>`).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
+        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${systemSignals.length} ${this._escape(this._t("additional_signals"))}</small></div><div class="inventory signal-grid">${systemSignals.map((entity) => `<div class="entity signal-entity"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(this._value(entity))}">${this._escape(this._value(entity))}</strong></div>`).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -621,6 +646,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         @media(max-width:520px){.forecast-bar-row{grid-template-columns:minmax(0,.6fr) minmax(0,1fr) minmax(0,.8fr);gap:6px;font-size:11px}.forecast-bar-row>span,.forecast-bar-row>strong{overflow-wrap:anywhere}}
         @media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:none}}
         .system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block!important}
+        .signal-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))}.signal-entity{grid-template-columns:minmax(0,1fr) minmax(8rem,35%);align-items:center}.signal-value{max-width:none;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
       </style>
       <main class="shell">
         <header><div><h1>Battery SmartFlow AI</h1><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
