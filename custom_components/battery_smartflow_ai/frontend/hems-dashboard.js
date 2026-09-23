@@ -12,6 +12,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._render();
   }
 
+  set panel(panel) {
+    this._panel = panel;
+    this._render();
+  }
+
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
@@ -46,6 +51,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
       subtitle: ["Energiefluss, Speicher und Systemstatus", "Energy flow, storage and system status"], live: ["LIVE · aktualisiert", "LIVE · updated"], energy_overview: ["Energieübersicht", "Energy overview"], live_values: ["Aktuelle Home-Assistant-Werte", "Live Home Assistant values"],
       battery: ["AKKU", "BATTERY"], pv_power: ["PV-LEISTUNG", "PV POWER"], battery_power: ["AKKULEISTUNG", "BATTERY POWER"], grid_power: ["NETZLEISTUNG", "GRID POWER"], current_price: ["AKTUELLER PREIS", "CURRENT PRICE"], waiting_entity: ["Warte auf passenden Sensor", "Waiting for matching entity"], no_data: ["Noch keine Daten", "No data yet"],
       flows_today: ["Energieflüsse heute", "Today's energy flows"], ledger: ["Gemessenes BSFAI-Energiebuch", "Measured BSFAI energy ledger"], solar_forecast: ["Solarprognose", "Solar forecast"], forecast_compare: ["Brutto-Prognose und nutzbarer Rest", "Gross forecast versus usable remainder"],
+      power_now: ["Momentanleistung", "Instantaneous power"], power_note: ["Live-Messwerte · Watt (W)", "Live readings · watts (W)"], daily_energy_note: ["Aufsummierte Energiemengen heute · Kilowattstunden (kWh)", "Accumulated energy today · kilowatt-hours (kWh)"], grid_net: ["Netzleistung (Bezug + / Einspeisung −)", "Grid power (import + / export −)"], grid_import: ["Netzbezug", "Grid import"], grid_export: ["Netzeinspeisung", "Grid export"], pv_source: ["PV-Leistung", "PV power"], native_pv_source: ["Native PV-Leistung", "Native PV power"], offgrid_source: ["Off-Grid-Ausgang", "Off-grid output"], house_load_source: ["Hauslast", "House load"], battery_source: ["Akku-Leistung", "Battery power"],
+      source_unavailable: ["Quelle nicht verfügbar", "Source unavailable"], no_power_readings: ["Keine konfigurierten oder nativen Leistungswerte gefunden.", "No configured or native power readings found."], per_system: ["Je System", "Per system"],
       pv_battery: ["PV → Akku", "PV → battery"], grid_battery: ["Netz → Akku", "Grid → battery"], battery_home: ["Akku → Haus", "Battery → home"], battery_grid: ["Akku → Netz", "Battery → grid"], native_pv_home: ["Native PV → Haus", "Native PV → home"], grid_export: ["Netzeinspeisung", "Grid export"],
       usable_3h: ["Nutzbar · nächste 3 Stunden", "Usable · next 3 hours"], usable_6h: ["Nutzbar · nächste 6 Stunden", "Usable · next 6 hours"], usable_today: ["Nutzbar · Rest des Tages", "Usable · rest of today"], gross_today: ["Brutto · Rest des Tages", "Gross · rest of today"], usable_tomorrow: ["Nutzbar · morgen", "Usable · tomorrow"], gross_tomorrow: ["Brutto · morgen", "Gross · tomorrow"],
       forecast_explain: ["Die nutzbare Prognose berücksichtigt die Planungsannahmen von BSFAI. Die Bruttowerte zeigen die importierte Prognose vor dieser Reduktion.", "Usable forecast reflects BSFAI's planning assumptions. Gross values show the imported forecast before that reduction."], economics_today: ["Wirtschaftlichkeit heute", "Today's economics"], daily_costs: ["Tageswerte und Kosten", "Daily value and costs"], battery_benefit: ["Akku-Nutzen", "Battery benefit"], avoided_import: ["Vermiedene Netzbezugskosten", "Avoided grid import"], grid_charge_cost: ["Netzladekosten", "Grid charging cost"], pv_opportunity_cost: ["PV-Opportunitätskosten", "PV opportunity cost"], export_revenue: ["Einspeiseerlös", "Export revenue"], self_consumption_value: ["Wert nativer PV-Eigenverbrauch", "Native PV self-consumption value"], average_values: ["Durchschnittliche Ist-Werte", "Average realized values"], ledger_based: ["Basierend auf dem BSFAI-Energie- und Kostenbuch", "Based on BSFAI's energy and cost ledger"], grid_charge_price: ["Netzladepreis", "Grid charging price"], pv_opportunity_value: ["PV-Opportunitätswert", "PV opportunity value"], blended_charge_price: ["Gewichteter Akku-Ladepreis", "Blended battery charge price"], export_price: ["Einspeisepreis", "Export price"], discharge_value: ["Wert der Akkuentladung", "Battery discharge value"], native_pv_return: ["Ertrag native PV direkt ins Haus", "Native PV to home return"], efficiency: ["Wirtschaftlicher Wirkungsgrad", "Economic efficiency"],
@@ -89,6 +96,58 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `<div class="flow-row"><span>${this._escape(title)}</span><div class="flow-track"><i style="width:${width}%"></i></div><strong>${this._escape(this._value(entity))}</strong></div>`;
   }
 
+  _powerCard(title, entityId, hint = "") {
+    const entity = entityId && this._hass && this._hass.states[entityId];
+    let value = entity ? this._value(entity) : "— W";
+    if (entity && entity.state !== "unknown" && entity.state !== "unavailable") {
+      const numeric = Number(entity.state);
+      const unit = entity.attributes.unit_of_measurement;
+      const wattFactors = { W: 1, kW: 1000, MW: 1000000, mW: 0.001 };
+      if (Number.isFinite(numeric) && (!unit || Object.prototype.hasOwnProperty.call(wattFactors, unit))) {
+        const watts = numeric * (unit ? wattFactors[unit] : 1);
+        const locale = this._hass && this._hass.locale ? this._hass.locale.language : undefined;
+        value = `${watts.toLocaleString(locale, { maximumFractionDigits: 1 })} W`;
+      }
+    }
+    const source = entity ? this._label(entity) : (hint || entityId || this._t("source_unavailable"));
+    return `<article class="reading power-reading"><span>${this._escape(title)}</span><strong>${this._escape(value)}</strong><small>${this._escape(source)}</small></article>`;
+  }
+
+  _livePowerView(entities) {
+    const cards = [];
+    const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
+    sources.forEach((source) => {
+      const prefix = source.name ? `${source.name} · ` : "";
+      if (source.pv) cards.push(this._powerCard(`${prefix}${this._t("pv_source")}`, source.pv));
+      if (source.native_pv) cards.push(this._powerCard(`${prefix}${this._t("native_pv_source")}`, source.native_pv));
+      if (source.grid_power) cards.push(this._powerCard(`${prefix}${this._t("grid_net")}`, source.grid_power));
+      else {
+        if (source.grid_import) cards.push(this._powerCard(`${prefix}${this._t("grid_import")}`, source.grid_import));
+        if (source.grid_export) cards.push(this._powerCard(`${prefix}${this._t("grid_export")}`, source.grid_export));
+      }
+      if (source.offgrid_power) cards.push(this._powerCard(`${prefix}${this._t("offgrid_source")}`, source.offgrid_power));
+    });
+
+    const houseLoads = entities.filter((entity) => {
+      const search = `${entity.entity_id} ${this._label(entity)}`.toLowerCase();
+      return /house_load|house load|hauslast/.test(search) && entity.attributes.unit_of_measurement === "W";
+    });
+    houseLoads.forEach((entity) => cards.push(this._powerCard(this._t("house_load_source"), entity.entity_id)));
+
+    const systems = this._nativeSystems(entities);
+    systems.forEach((system) => {
+      const systemEntities = this._deviceEntities(entities, system.name, null);
+      const power = systemEntities.find((entity) => /batterieleistung|battery power/.test(this._label(entity).toLowerCase()))
+        || systemEntities.find((entity) => entity.entity_id.toLowerCase().includes("native_hardware_power_w"));
+      const pv = systemEntities.find((entity) => /pv-leistung|pv power/.test(this._label(entity).toLowerCase()))
+        || systemEntities.find((entity) => entity.entity_id.toLowerCase().includes("native_hardware_pv_power_w"));
+      if (power) cards.push(this._powerCard(`${system.name} · ${this._t("battery_source")}`, power.entity_id));
+      if (pv) cards.push(this._powerCard(`${system.name} · ${this._t("pv_source")}`, pv.entity_id));
+    });
+
+    return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("power_now"))}</h2><small>${this._escape(this._t("power_note"))}</small></div><div class="reading-grid">${cards.join("") || `<div class="empty">${this._escape(this._t("no_power_readings"))}</div>`}</div></section>`;
+  }
+
   _energyView(entities) {
     const flowSpecs = [
       [this._t("pv_battery"), ["economics_daily_pv_to_battery_kwh", "pv to battery", "pv zur batterie"]],
@@ -107,7 +166,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
       this._flowRow(entities, title, terms, largestFlow ? Math.round(flowValues[index] / largestFlow * 100) : 0)
     ).join("");
     return `
-      <section class="section"><div class="section-head"><h2>${this._escape(this._t("flows_today"))}</h2><small>${this._escape(this._t("ledger"))}</small></div>
+      ${this._livePowerView(entities)}
+      <section class="section"><div class="section-head"><h2>${this._escape(this._t("flows_today"))}</h2><small>${this._escape(this._t("daily_energy_note"))}</small></div>
         <div class="flow-grid">
           ${flowRows}
         </div>
