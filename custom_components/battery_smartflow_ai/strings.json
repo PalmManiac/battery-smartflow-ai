@@ -268,6 +268,7 @@
         "menu_options": {
           "general": "General",
           "expert": "Expert mode",
+          "dashboard": "HEMS dashboard",
           "native_zendure": "Native Zendure",
           "debug": "Debug mode"
         }
@@ -283,6 +284,11 @@
         "description": "Zendure reported these devices:\n\n{device_summary}\n\nSelect exactly one system and its communication path. Cloud is the recommended starting path for Legacy devices.",
         "data": {"native_zendure_selected_device": "Zendure system", "native_zendure_control_transport": "Communication path", "native_zendure_control_enabled": "Enable native Zendure control", "native_zendure_local_mqtt_server": "Local MQTT server", "native_zendure_local_mqtt_port": "Local MQTT port", "native_zendure_local_mqtt_username": "Local MQTT username", "native_zendure_local_mqtt_password": "Local MQTT password", "native_zendure_legacy_wifi_ssid": "Legacy device Wi-Fi SSID", "native_zendure_legacy_wifi_password": "Legacy device Wi-Fi password", "native_zendure_legacy_provision": "Configure the selected Legacy device now"},
         "data_description": {"native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently. Select a supported communication path for that system.", "native_zendure_control_transport": "Cloud is the recommended starting path for Legacy devices and works immediately after account discovery. Use Local MQTT only after the device itself sends current data to the local broker. ZenSDK remains recommended for supported newer systems.", "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the selected supported communication path.", "native_zendure_local_mqtt_server": "Address sent to the Legacy device over Bluetooth and used by BSFAI.", "native_zendure_local_mqtt_port": "Legacy devices use standard unencrypted port 1883.", "native_zendure_local_mqtt_username": "Broker account used only by BSFAI; BSFAI uses these credentials only for its own broker connection.", "native_zendure_local_mqtt_password": "Keep the dot mask unchanged to reuse the stored password.", "native_zendure_legacy_wifi_ssid": "Required only when configuring a Legacy device over Bluetooth.", "native_zendure_legacy_wifi_password": "Required only for Bluetooth provisioning; the stored value remains masked.", "native_zendure_legacy_provision": "Sends the broker address and Wi-Fi settings over Bluetooth. The device will restart."}
+      },
+      "dashboard": {
+        "title": "HEMS dashboard",
+        "description": "Enable a dedicated Battery SmartFlow AI sidebar panel with a system overview and live status. The panel is off by default.",
+        "data": {"hems_dashboard_enabled": "Show the HEMS dashboard in the sidebar"}
       },
       "general": {
         "title": "Battery SmartFlow AI settings – General",

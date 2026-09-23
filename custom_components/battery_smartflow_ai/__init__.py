@@ -181,6 +181,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.native_zendure.start()
+    from .dashboard import async_update_dashboard_panel
+
+    await async_update_dashboard_panel(hass)
     if hasattr(entry, "async_on_unload") and hasattr(entry, "add_update_listener"):
         entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
@@ -195,6 +198,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             shutdown = getattr(coordinator, "async_shutdown", None)
             if shutdown is not None:
                 await shutdown()
+        from .dashboard import async_update_dashboard_panel
+
+        await async_update_dashboard_panel(hass)
     return unload_ok
 
 
