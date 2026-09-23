@@ -17,6 +17,9 @@ from .const import (
     CONF_NATIVE_PV_ENTITY,
     CONF_OFFGRID_POWER_ENTITY,
     CONF_PV_ENTITY,
+    CONF_PV_FORECAST_CONFIG_ENTRIES,
+    CONF_PV_FORECAST_TODAY_ENTITY,
+    CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_SOC_ENTITY,
     DOMAIN,
 )
@@ -46,10 +49,43 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         return
 
     power_sources = []
+    forecast_sources = []
+    forecast_source_keys = set()
     for entry in entries:
         if entry is None:
             continue
         data = entry.data
+        configured_forecasts = data.get(CONF_PV_FORECAST_CONFIG_ENTRIES, ()) or ()
+        if isinstance(configured_forecasts, str):
+            configured_forecasts = (configured_forecasts,)
+        for forecast_entry_id in configured_forecasts:
+            forecast_entry = hass.config_entries.async_get_entry(forecast_entry_id)
+            if forecast_entry is None:
+                continue
+            label = str(forecast_entry.title or "").strip()
+            key = label.casefold()
+            if label and key not in forecast_source_keys:
+                forecast_source_keys.add(key)
+                forecast_sources.append(label)
+        for forecast_entity_id in (
+            data.get(CONF_PV_FORECAST_TODAY_ENTITY),
+            data.get(CONF_PV_FORECAST_TOMORROW_ENTITY),
+        ):
+            forecast_state = (
+                hass.states.get(forecast_entity_id)
+                if forecast_entity_id
+                else None
+            )
+            label = (
+                forecast_state.attributes.get("friendly_name")
+                if forecast_state is not None
+                else None
+            ) or forecast_entity_id
+            key = str(label).casefold()
+            if label and key not in forecast_source_keys:
+                forecast_source_keys.add(key)
+                forecast_sources.append(str(label))
+
         sources = {
             "name": entry.title,
             "soc": data.get(CONF_SOC_ENTITY),
@@ -80,8 +116,12 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="SmartFlow",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=11",
-        config={"title": "Battery SmartFlow AI", "power_sources": power_sources},
+        module_url=f"{_PANEL_URL}?v=12",
+        config={
+            "title": "Battery SmartFlow AI",
+            "power_sources": power_sources,
+            "forecast_sources": forecast_sources,
+        },
         require_admin=False,
         handle_safe_area=True,
     )
