@@ -230,6 +230,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _powerCard(title, entityId, hint = "") {
+    const displayTitle = title.replace(/^Battery SmartFlow AI\s*[·:–—-]\s*/i, "");
     const entity = entityId && this._hass && this._hass.states[entityId];
     let value = entity ? this._value(entity) : "— W";
     if (entity && entity.state !== "unknown" && entity.state !== "unavailable") {
@@ -242,7 +243,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         value = `${watts.toLocaleString(locale, { maximumFractionDigits: 1 })} W`;
       }
     }
-    return `<article class="reading power-reading"><span>${this._escape(title)}</span><strong>${this._escape(value)}</strong>${!entity ? `<small>${this._escape(hint || this._t("source_unavailable"))}</small>` : ""}</article>`;
+    return `<article class="reading power-reading"><span>${this._escape(displayTitle)}</span><strong>${this._escape(value)}</strong>${!entity ? `<small>${this._escape(hint || this._t("source_unavailable"))}</small>` : ""}</article>`;
   }
 
   _livePowerView(entities) {
