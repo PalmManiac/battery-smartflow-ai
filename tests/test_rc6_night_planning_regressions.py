@@ -16,15 +16,19 @@ bootstrap()
 from custom_components.battery_smartflow_ai.learned_planning import (  # noqa: E402
     actionable_required_charge_energy_kwh,
     build_learned_charge_plan,
+    compute_required_charge_energy_kwh,
     compute_window_slots,
     effective_charge_power_w,
     minimum_actionable_charge_energy_kwh,
     optimize_charge_window,
     requested_charge_power_w,
     required_window_slots,
+    forecast_pv_credit_until,
+    peak_charge_coverage_end,
     LearnedSlotModel,
     LearningReadiness,
 )
+from custom_components.battery_smartflow_ai.forecast import ForecastSummary  # noqa: E402
 from custom_components.battery_smartflow_ai.market_price import (  # noqa: E402
     MarketPrice,
     MarketPriceDirection,
@@ -35,6 +39,67 @@ from custom_components.battery_smartflow_ai.market_price import (  # noqa: E402
 
 
 class Rc6NightPlanningRegressionTests(unittest.TestCase):
+    def test_peak_charge_target_covers_the_full_contiguous_price_peak(self) -> None:
+        now = datetime(2026, 9, 21, 10, 0, tzinfo=timezone.utc)
+        prices = [0.10, 0.10, 0.50, 0.55, 0.10, 0.52]
+        points = [
+            MarketPricePoint(
+                start=now + timedelta(hours=index),
+                end=now + timedelta(hours=index + 1),
+                price=price,
+            )
+            for index, price in enumerate(prices)
+        ]
+
+        coverage_end = peak_charge_coverage_end(
+            now,
+            now + timedelta(hours=2),
+            points,
+            peak_factor=1.0,
+        )
+
+        self.assertEqual(coverage_end, now + timedelta(hours=4))
+
+    def test_forecast_credit_reduces_ac_need_before_price_deadline(self) -> None:
+        now = datetime(2026, 9, 21, 14, 0, tzinfo=timezone.utc)
+        forecast = ForecastSummary(
+            status="available",
+            next_3h_kwh=1.48,
+            next_6h_kwh=2.6,
+            remaining_today_kwh=2.6,
+            pv_outlook="good",
+        )
+        credit = forecast_pv_credit_until(forecast, now, now + timedelta(hours=3))
+        self.assertAlmostEqual(credit, 1.332)
+
+        raw, required = compute_required_charge_energy_kwh(
+            expected_consumption_kwh=1.0,
+            reserve_kwh=0.3,
+            forecast_adjustment=0.0,
+            available_energy_kwh=0.0,
+            max_chargeable_kwh=4.0,
+            forecast_pv_credit_kwh=credit,
+        )
+        self.assertAlmostEqual(raw, -0.032)
+        self.assertEqual(required, 0.0)
+
+    def test_forecast_credit_is_discounted_or_disabled_by_outlook(self) -> None:
+        now = datetime(2026, 9, 21, 14, 0, tzinfo=timezone.utc)
+        forecast = ForecastSummary(
+            status="available",
+            next_3h_kwh=1.48,
+            pv_outlook="mixed",
+        )
+        self.assertAlmostEqual(
+            forecast_pv_credit_until(forecast, now, now + timedelta(hours=3)),
+            0.74,
+        )
+        forecast.pv_outlook = "poor"
+        self.assertEqual(
+            forecast_pv_credit_until(forecast, now, now + timedelta(hours=3)),
+            0.0,
+        )
+
     def _overnight_prices(self) -> list[MarketPricePoint]:
         start = datetime(2026, 8, 25, 23, 0, tzinfo=timezone.utc)
         return [

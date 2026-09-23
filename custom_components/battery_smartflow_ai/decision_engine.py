@@ -652,6 +652,17 @@ class PvHouseLoadPassthroughRule(BaseRule):
         if not bool(ctx.pv_houseload_passthrough_active):
             return None
 
+        # A forecast-adjusted learned plan can identify an uncovered energy
+        # need that must be charged before its price deadline. Do not let the
+        # active passthrough latch mask that planned charge; the normal PV rule
+        # still gets first opportunity to use real surplus below.
+        plan = getattr(ctx, "learned_charge_plan", None)
+        if (
+            engine._learned_planning_has_usable_charge_need(ctx)
+            and str(getattr(plan, "mode", "") or "") == "charge"
+        ):
+            return None
+
         target_w = max(0.0, float(ctx.pv_houseload_passthrough_target_w or 0.0))
         if target_w <= 0.0:
             return None

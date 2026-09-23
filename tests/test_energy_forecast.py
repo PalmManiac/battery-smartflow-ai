@@ -14,6 +14,7 @@ from custom_components.battery_smartflow_ai.const import (  # noqa: E402
     FORECAST_STATUS_UNAVAILABLE,
 )
 from custom_components.battery_smartflow_ai.forecast import (  # noqa: E402
+    _compute_daily_net_energy_for_sensor,
     async_build_forecast_summary,
     async_energy_forecast_sources,
     build_energy_forecast_summary,
@@ -26,6 +27,26 @@ class FixedClock:
 
 
 class EnergyForecastTests(unittest.TestCase):
+    def test_remaining_daily_forecast_ignores_elapsed_intervals(self):
+        intervals = [
+            {"period_start": "2026-09-09T09:00:00+00:00", "pv_estimate": 1.0},
+            {"period_start": "2026-09-09T10:00:00+00:00", "pv_estimate": 1.0},
+            {"period_start": "2026-09-09T11:00:00+00:00", "pv_estimate": 1.0},
+        ]
+        state = SimpleNamespace(attributes={"detailedHourly": intervals})
+        hass = SimpleNamespace(states=SimpleNamespace(get=lambda _entity_id: state))
+
+        remaining = _compute_daily_net_energy_for_sensor(
+            hass=hass,
+            entity_id="sensor.pv_forecast",
+            fallback_state_kwh=3.0,
+            target_date=datetime(2026, 9, 9, tzinfo=timezone.utc).date(),
+            forecast_base_load_w=0.0,
+            now_local=datetime(2026, 9, 9, 10, 30, tzinfo=timezone.utc),
+        )
+
+        self.assertEqual(remaining, 1.5)
+
     def test_multiple_energy_forecasts_are_aggregated_and_windowed(self):
         now = datetime(2026, 9, 9, 10, 30, tzinfo=timezone.utc)
         first = {

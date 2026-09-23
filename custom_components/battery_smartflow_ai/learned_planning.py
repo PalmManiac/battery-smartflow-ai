@@ -149,6 +149,7 @@ class LearnedChargePlan:
     available_battery_energy_kwh: float = 0.0
     reserve_margin_kwh: float = 0.0
     forecast_adjustment_kwh: float = 0.0
+    forecast_pv_credit_kwh: float = 0.0
     raw_required_charge_energy_kwh: float = 0.0
     required_charge_energy_kwh: float = 0.0
     minimum_actionable_charge_energy_kwh: float = 0.0
@@ -160,6 +161,7 @@ class LearnedChargePlan:
     effective_window_minutes: int = 0
 
     planning_deadline: datetime | None = None
+    charge_coverage_end: datetime | None = None
     deadline_reason: str | None = None
 
     optimal_charge_start: datetime | None = None
@@ -600,17 +602,75 @@ def forecast_adjustment_kwh(
     return 0.0
 
 
+def forecast_pv_credit_until(
+    forecast: ForecastSummary | None,
+    now: datetime,
+    deadline: datetime,
+) -> float:
+    """Estimate usable PV surplus before the learned-plan deadline.
+
+    ForecastSummary exposes fixed 3 h / 6 h windows and the remaining-day
+    total, rather than arbitrary windows. For partial windows, scale the
+    corresponding aggregate by the fraction of its horizon. This deliberately
+    keeps the estimate conservative and never credits unavailable forecasts.
+    """
+
+    if forecast is None or str(getattr(forecast, "status", "")) != "available":
+        return 0.0
+
+    confidence = {
+        "good": 0.9,
+        "mixed": 0.5,
+        "poor": 0.0,
+        "unknown": 0.0,
+    }.get(_forecast_outlook(forecast), 0.0)
+    if confidence <= 0.0:
+        return 0.0
+
+    now_local = _as_local(now)
+    deadline_local = _as_local(deadline)
+    horizon_h = max(0.0, (deadline_local - now_local).total_seconds() / 3600.0)
+    if horizon_h <= 0.0:
+        return 0.0
+
+    if horizon_h <= 3.0:
+        forecast_kwh = max(0.0, float(forecast.next_3h_kwh or 0.0)) * horizon_h / 3.0
+    elif horizon_h <= 6.0:
+        forecast_kwh = max(0.0, float(forecast.next_6h_kwh or 0.0)) * horizon_h / 6.0
+    elif deadline_local.date() == now_local.date():
+        remaining_h = max(
+            0.0,
+            (deadline_local.replace(hour=0, minute=0, second=0, microsecond=0)
+             + timedelta(days=1) - now_local).total_seconds() / 3600.0,
+        )
+        forecast_kwh = max(0.0, float(forecast.remaining_today_kwh or 0.0))
+        if remaining_h > 0.0:
+            forecast_kwh *= min(1.0, horizon_h / remaining_h)
+    else:
+        midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+        tomorrow_h = max(0.0, (deadline_local - midnight).total_seconds() / 3600.0)
+        forecast_kwh = max(0.0, float(forecast.remaining_today_kwh or 0.0))
+        forecast_kwh += max(0.0, float(forecast.tomorrow_kwh or 0.0)) * min(
+            1.0,
+            tomorrow_h / 24.0,
+        )
+
+    return max(0.0, forecast_kwh * confidence)
+
+
 def compute_required_charge_energy_kwh(
     expected_consumption_kwh: float,
     reserve_kwh: float,
     forecast_adjustment: float,
     available_energy_kwh: float,
     max_chargeable_kwh: float,
+    forecast_pv_credit_kwh: float = 0.0,
 ) -> tuple[float, float]:
     raw = (
         float(expected_consumption_kwh)
         + float(reserve_kwh)
         + float(forecast_adjustment)
+        - max(0.0, float(forecast_pv_credit_kwh or 0.0))
         - float(available_energy_kwh)
     )
 
@@ -934,6 +994,57 @@ def choose_deadline(
     return fallback, DEADLINE_REASON_DEFAULT_OVERNIGHT_TARGET
 
 
+def peak_charge_coverage_end(
+    now: datetime,
+    deadline: datetime,
+    price_points: list[MarketPricePoint],
+    peak_factor: float = DEFAULT_PEAK_FACTOR,
+) -> datetime:
+    """Return the end of the contiguous peak that starts at the charge deadline.
+
+    The plan must be ready *before* a peak, but its energy target has to cover
+    the household load through that peak, not merely until the first expensive
+    interval begins. If no peak interval covers the selected deadline, preserve
+    the original deadline as the coverage horizon.
+    """
+
+    now_local = _as_local(now)
+    deadline_local = _as_local(deadline)
+    remaining = [point for point in price_points if _as_local(point.end) > now_local]
+    if not remaining:
+        return deadline_local
+
+    threshold = peak_threshold([float(point.price) for point in remaining], peak_factor)
+    peaks = sorted(
+        (
+            point
+            for point in remaining
+            if float(point.price) >= threshold
+        ),
+        key=lambda point: _as_local(point.start),
+    )
+    covering = [
+        point
+        for point in peaks
+        if _as_local(point.start) <= deadline_local < _as_local(point.end)
+    ]
+    if not covering:
+        return deadline_local
+
+    coverage_end = max(_as_local(point.end) for point in covering)
+    changed = True
+    while changed:
+        changed = False
+        for point in peaks:
+            point_start = _as_local(point.start)
+            point_end = _as_local(point.end)
+            if point_start <= coverage_end < point_end:
+                coverage_end = point_end
+                changed = True
+
+    return coverage_end
+
+
 def optimize_charge_window(
     now: datetime,
     deadline: datetime,
@@ -1076,10 +1187,19 @@ def build_learned_charge_plan(
         peak_factor=peak_factor,
     )
 
+    coverage_end = deadline
+    if deadline_reason == DEADLINE_REASON_BEFORE_PEAK_WINDOW:
+        coverage_end = peak_charge_coverage_end(
+            now=now,
+            deadline=deadline,
+            price_points=price_points,
+            peak_factor=peak_factor,
+        )
+
     expected_kwh = expected_consumption_until(
         model=model,
         now=now,
-        deadline=deadline,
+        deadline=coverage_end,
     )
 
     available_kwh = available_battery_energy_kwh(
@@ -1096,6 +1216,11 @@ def build_learned_charge_plan(
 
     reserve_kwh = reserve_margin_kwh(expected_kwh)
     forecast_kwh = forecast_adjustment_kwh(expected_kwh, forecast)
+    forecast_credit_kwh = forecast_pv_credit_until(
+        forecast=forecast,
+        now=now,
+        deadline=deadline,
+    )
 
     raw_required_kwh, required_kwh = compute_required_charge_energy_kwh(
         expected_consumption_kwh=expected_kwh,
@@ -1103,6 +1228,7 @@ def build_learned_charge_plan(
         forecast_adjustment=forecast_kwh,
         available_energy_kwh=available_kwh,
         max_chargeable_kwh=chargeable_kwh,
+        forecast_pv_credit_kwh=forecast_credit_kwh,
     )
     minimum_actionable_kwh = minimum_actionable_charge_energy_kwh(
         total_battery_capacity_kwh,
@@ -1133,6 +1259,7 @@ def build_learned_charge_plan(
             available_battery_energy_kwh=round(available_kwh, 3),
             reserve_margin_kwh=round(reserve_kwh, 3),
             forecast_adjustment_kwh=round(forecast_kwh, 3),
+            forecast_pv_credit_kwh=round(forecast_credit_kwh, 3),
             raw_required_charge_energy_kwh=round(raw_required_kwh, 3),
             required_charge_energy_kwh=0.0,
             minimum_actionable_charge_energy_kwh=round(
@@ -1143,6 +1270,7 @@ def build_learned_charge_plan(
             effective_charge_power_w=round(eff_power_w, 1),
             requested_charge_power_w=0.0,
             planning_deadline=deadline,
+            charge_coverage_end=coverage_end,
             deadline_reason=deadline_reason,
             decision_reason=LEARNED_REASON_NOT_READY if diagnostics_only else LEARNED_REASON_NO_CHARGE_NEEDED,
         )
@@ -1165,6 +1293,7 @@ def build_learned_charge_plan(
             available_battery_energy_kwh=round(available_kwh, 3),
             reserve_margin_kwh=round(reserve_kwh, 3),
             forecast_adjustment_kwh=round(forecast_kwh, 3),
+            forecast_pv_credit_kwh=round(forecast_credit_kwh, 3),
             raw_required_charge_energy_kwh=round(raw_required_kwh, 3),
             required_charge_energy_kwh=round(required_kwh, 3),
             minimum_actionable_charge_energy_kwh=round(
@@ -1177,6 +1306,7 @@ def build_learned_charge_plan(
             effective_window_slots=int(window_slots),
             effective_window_minutes=int(window_minutes),
             planning_deadline=deadline,
+            charge_coverage_end=coverage_end,
             deadline_reason=deadline_reason,
             decision_reason=LEARNED_REASON_NOT_READY,
         )
@@ -1264,6 +1394,7 @@ def build_learned_charge_plan(
         available_battery_energy_kwh=round(available_kwh, 3),
         reserve_margin_kwh=round(reserve_kwh, 3),
         forecast_adjustment_kwh=round(forecast_kwh, 3),
+        forecast_pv_credit_kwh=round(forecast_credit_kwh, 3),
         raw_required_charge_energy_kwh=round(raw_required_kwh, 3),
         required_charge_energy_kwh=round(required_kwh, 3),
         minimum_actionable_charge_energy_kwh=round(
@@ -1276,6 +1407,7 @@ def build_learned_charge_plan(
         effective_window_slots=int(window_slots),
         effective_window_minutes=int(window_minutes),
         planning_deadline=deadline,
+        charge_coverage_end=coverage_end,
         deadline_reason=deadline_reason,
         optimal_charge_start=start,
         optimal_charge_end=end,

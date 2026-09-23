@@ -7500,6 +7500,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "learned_planning_forecast_adjustment_kwh": float(
                     learned_charge_plan.forecast_adjustment_kwh
                 ),
+                "learned_planning_pv_forecast_credit_kwh": float(
+                    learned_charge_plan.forecast_pv_credit_kwh
+                ),
                 "learned_planning_required_charge_energy_kwh": float(
                     learned_charge_plan.required_charge_energy_kwh
                 ),
@@ -7517,6 +7520,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "learned_planning_deadline": self._stable_iso_minute(
                     learned_charge_plan.planning_deadline
+                ),
+                "learned_planning_coverage_end": self._stable_iso_minute(
+                    learned_charge_plan.charge_coverage_end
                 ),
                 "learned_planning_deadline_reason": learned_charge_plan.deadline_reason,
                 "learned_planning_optimal_charge_start": self._stable_iso_minute(

@@ -560,6 +560,9 @@
       "learned_planning_deadline": {
         "name": "Ladeplanung: Deadline"
       },
+      "learned_planning_coverage_end": {
+        "name": "Diagnose: Ende der geplanten Preisspitzen-Abdeckung"
+      },
       "learned_planning_required_charge_energy_kwh": {
         "name": "Ladeplanung: Nachladeenergie"
       },
@@ -610,6 +613,9 @@
       },
       "learned_planning_forecast_adjustment_kwh": {
         "name": "Diagnose: Lernplanung Forecast-Zuschlag"
+      },
+      "learned_planning_pv_forecast_credit_kwh": {
+        "name": "Diagnose: PV-Prognose in Ladeplanung angerechnet"
       },
       "learned_planning_effective_charge_power_w": {
         "name": "Diagnose: Lernplanung effektive Ladeleistung"
@@ -946,7 +952,7 @@
         }
       },
       "avg_charge_price": {
-        "name": "Preise – Ø bisheriger Akku-Ladepreis"
+        "name": "Preise – Ø Akku-Ladepreis (Legacy-SoC-Schätzung)"
       },
       "profit_eur": {
         "name": "Bilanz seit Start – Bisheriger Handelsgewinn"
