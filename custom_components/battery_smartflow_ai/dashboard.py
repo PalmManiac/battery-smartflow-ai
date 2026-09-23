@@ -73,7 +73,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="SmartFlow",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=7",
+        module_url=f"{_PANEL_URL}?v=8",
         config={"title": "Battery SmartFlow AI", "power_sources": power_sources},
         require_admin=False,
         handle_safe_area=True,
