@@ -23,9 +23,41 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._view = "overview";
     this._renderQueued = false;
     this._openDetailId = null;
+    this._pointerActive = false;
+    this._renderDeferred = false;
+    this.shadowRoot.addEventListener("pointerdown", () => {
+      this._pointerActive = true;
+    }, true);
+    this._finishPointer = () => {
+      this._pointerActive = false;
+      if (this._renderDeferred) this._scheduleRender();
+    };
+    this.shadowRoot.addEventListener("click", (event) => {
+      const button = event.composedPath().find((node) => node instanceof Element && node.matches("[data-view]"));
+      if (!button) return;
+      this._view = button.dataset.view;
+      this.shadowRoot.querySelectorAll("[data-view]").forEach((tab) => {
+        tab.classList.toggle("active", tab.dataset.view === this._view);
+      });
+      this._scheduleRender();
+    });
+  }
+
+  connectedCallback() {
+    window.addEventListener("pointerup", this._finishPointer, true);
+    window.addEventListener("pointercancel", this._finishPointer, true);
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener("pointerup", this._finishPointer, true);
+    window.removeEventListener("pointercancel", this._finishPointer, true);
   }
 
   _scheduleRender() {
+    if (this._pointerActive) {
+      this._renderDeferred = true;
+      return;
+    }
     if (this._renderQueued) return;
     this._renderQueued = true;
     requestAnimationFrame(() => {
@@ -52,6 +84,16 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _label(entity) {
     return entity.attributes.friendly_name || entity.entity_id;
+  }
+
+  _signalLabel(entity) {
+    const original = this._label(entity);
+    let label = original
+      .replace(/^Battery SmartFlow AI\s*[–—-]\s*Steuerung\s*&\s*Planung\s*/i, "")
+      .replace(/^SolarFlow 2400 AC\s*/i, "")
+      .trim();
+    label = label.replace(/^Battery-Pack\s*(\d+)\s*/i, "Akku-Pack $1 · ");
+    return label.replace(/[\s·:–—-]+$/, "") || original;
   }
 
   _searchText(value) {
@@ -518,6 +560,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _render() {
     if (!this.shadowRoot || !this._hass) return;
+    if (this._pointerActive) {
+      this._renderDeferred = true;
+      return;
+    }
+    this._renderDeferred = false;
     const entities = this._entities();
     const cards = this._overviewMetrics(entities);
 
@@ -553,7 +600,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
             const systemDetailId = `system-details-${systemIndex}`;
             return `<article class="system-card"><div class="system-head"><div><strong>${this._escape(system.name || this._t("system"))}</strong><small>${this._escape(system.model || system.profile || this._t("zendure_hardware"))}</small></div><div class="system-actions"><span class="status ${system.online ? "" : "offline"}">${this._escape(this._t(system.online ? "online" : "offline"))}</span><button class="details-toggle" type="button" data-details-toggle="${systemDetailId}" aria-controls="${systemDetailId}" aria-expanded="false">${this._escape(this._t("details"))}</button></div></div><div class="device-meta">${this._escape(system.transport || this._t("unknown_path"))} · ${this._escape(system.status || this._t("unknown_status"))}</div><div class="packs">${packCards || `<div class="device-meta">${this._escape(this._t("no_packs"))}</div>`}</div><aside class="hover-details" id="${systemDetailId}"><h3>${this._escape(system.name || this._t("system"))}</h3>${systemDetails}${this._detailRows(systemEntities)}</aside></article>`;
           }).join("")}</div>` : `<div class="empty">${this._escape(this._t("native_empty"))}</div>`}
-        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${entities.length} ${this._escape(this._t("matching_entities"))}</small></div><div class="inventory">${entities.slice(0, 40).map((entity) => `<div class="entity"><span>${this._escape(this._label(entity))}</span><strong>${this._escape(this._value(entity))}</strong></div>`).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
+        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${entities.length} ${this._escape(this._t("matching_entities"))}</small></div><div class="inventory signal-grid">${entities.slice(0, 40).map((entity) => `<div class="entity signal-entity"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(this._value(entity))}">${this._escape(this._value(entity))}</strong></div>`).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -564,7 +611,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         nav{display:flex;gap:8px;margin:8px 0 18px;border-bottom:1px solid var(--line);padding-bottom:12px}.tab{border:1px solid #41464b;background:#25292d;color:#c4c8cc;border-radius:8px;padding:9px 15px;font:inherit;cursor:pointer}.tab.active{border-color:#2388ad;background:#183847;color:#e5f8fc}.tab:focus-visible,.apply:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.metric{min-height:125px;padding:18px;border:1px solid #41464b;border-top:3px solid var(--cyan);border-radius:11px;background:#292d31;display:flex;flex-direction:column;gap:11px}.metric:nth-child(2){border-top-color:var(--green)}.metric:nth-child(3){border-top-color:var(--amber)}.metric span{font-size:11px;letter-spacing:.11em;color:#b1b5b9}.metric strong{font-size:clamp(21px,2vw,30px);font-variant-numeric:tabular-nums}.metric small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .reading-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.reading{min-height:105px;padding:15px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:8px}.reading span{color:#bdc2c6;font-size:12px}.reading strong{font-size:22px;font-variant-numeric:tabular-nums}.reading small{color:var(--muted);line-height:1.35}.forecast-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}.forecast-group{min-width:0;padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428}.forecast-group h3{font-size:13px;color:#c7cbd0;margin:0 0 10px}.forecast-group .reading{min-height:92px;padding:12px}.forecast-group .reading-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.flow-grid{display:grid;gap:8px}.flow-row{display:grid;grid-template-columns:minmax(130px,1fr) 3fr minmax(85px,.7fr);gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.flow-row span{color:#c3c7ca}.flow-row strong{text-align:right;font-variant-numeric:tabular-nums}.flow-track{height:9px;background:#30353a;border-radius:999px;overflow:hidden}.flow-track i{display:block;width:48%;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.explain{color:var(--muted);font-size:12px;line-height:1.5;margin:14px 0 0}.subsection{margin-top:18px}.subsection h3{font-size:14px;color:#c7cbd0;margin:0 0 10px}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:11px}.control-card{min-width:0;padding:14px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:10px}.control-card label{font-size:13px;color:#d1d5d8}.control-card select,.control-card input{width:100%;min-width:0;background:#171a1d;color:#eef0f1;border:1px solid #4b535a;border-radius:7px;padding:10px;font:inherit}.number-control{display:flex;align-items:center;gap:8px}.number-control span{color:var(--muted);min-width:30px}.control-card small{color:var(--muted);font-size:11px}.apply{align-self:flex-end;border:1px solid #247b9b;background:#153746;color:#dff8ff;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer}.apply:disabled{opacity:.65;cursor:wait}
         .metric-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}.metric-group{padding:13px;border:1px solid #343a40;border-radius:11px;background:#202428}.metric-group h3{font-size:13px;color:#c7cbd0;margin:0 0 10px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}.metric-grid .metric{min-height:108px;padding:15px}.metric-grid .metric:nth-child(2){border-top-color:var(--green)}.metric-grid .metric:nth-child(3){border-top-color:var(--amber)}
-        .systems{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}.system-card{min-width:0;position:relative;padding:17px;background:#172b3a;border:1px solid #2476a8;border-left:4px solid var(--cyan);border-radius:11px}.system-head,.pack-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.system-head>div:first-child,.pack-head>div:first-child{min-width:0;overflow-wrap:anywhere}.system-head strong,.pack-head strong{font-size:16px}.system-head small,.pack-head small,.device-meta{display:block;color:#b7c4ce;margin-top:6px}.system-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.status{border:1px solid #40604c;background:#20352a;color:#a8e5ba;border-radius:999px;padding:5px 9px;font-size:11px;white-space:nowrap}.status.offline{border-color:#744849;background:#3a2526;color:#f2aaaa}.packs{margin:15px 0 0 14px;padding-left:16px;border-left:1px solid #388ebc;display:grid;gap:9px}.pack-card{min-width:0;position:relative;padding:12px;background:#202b35;border:1px solid #475563;border-radius:9px}.pack-card strong{display:block}.pack-card small{display:block;color:#aeb8c1;margin-top:5px}.details-toggle{border:1px solid #3f6578;background:#1a3442;color:#d9f5fb;border-radius:7px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}.details-toggle:hover,.details-toggle:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.hover-details{display:none;position:absolute;z-index:5;left:12px;top:calc(100% + 9px);width:min(380px,calc(100vw - 56px));padding:14px;background:#f7f8fa;color:#20242a;border:1px solid #d7dce2;border-radius:10px;box-shadow:0 12px 35px #0008}.system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block}@media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:block}}.hover-details h3{margin:0 0 9px;font-size:14px}.detail-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}.detail-row span{color:#59616a}.detail-row strong{text-align:right;overflow-wrap:anywhere}.empty{color:var(--muted);padding:18px;border:1px dashed #485058;border-radius:10px}.inventory{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:8px}.entity{min-width:0;display:flex;justify-content:space-between;gap:12px;padding:11px 12px;border-bottom:1px solid #34383d}.entity span{color:#c2c6ca;overflow-wrap:anywhere}.entity strong{font-weight:550;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.footer{color:#858c92;font-size:12px;margin:16px 2px}
+        .systems{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}.system-card{min-width:0;position:relative;padding:17px;background:#172b3a;border:1px solid #2476a8;border-left:4px solid var(--cyan);border-radius:11px}.system-head,.pack-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.system-head>div:first-child,.pack-head>div:first-child{min-width:0;overflow-wrap:anywhere}.system-head strong,.pack-head strong{font-size:16px}.system-head small,.pack-head small,.device-meta{display:block;color:#b7c4ce;margin-top:6px}.system-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.status{border:1px solid #40604c;background:#20352a;color:#a8e5ba;border-radius:999px;padding:5px 9px;font-size:11px;white-space:nowrap}.status.offline{border-color:#744849;background:#3a2526;color:#f2aaaa}.packs{margin:15px 0 0 14px;padding-left:16px;border-left:1px solid #388ebc;display:grid;gap:9px}.pack-card{min-width:0;position:relative;padding:12px;background:#202b35;border:1px solid #475563;border-radius:9px}.pack-card strong{display:block}.pack-card small{display:block;color:#aeb8c1;margin-top:5px}.details-toggle{border:1px solid #3f6578;background:#1a3442;color:#d9f5fb;border-radius:7px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}.details-toggle:hover,.details-toggle:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.hover-details{display:none;position:absolute;z-index:5;left:12px;top:calc(100% + 9px);width:min(380px,calc(100vw - 56px));padding:14px;background:#f7f8fa;color:#20242a;border:1px solid #d7dce2;border-radius:10px;box-shadow:0 12px 35px #0008}.system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block}@media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:block}}.hover-details h3{margin:0 0 9px;font-size:14px}.detail-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}.detail-row span{color:#59616a}.detail-row strong{text-align:right;overflow-wrap:anywhere}.empty{color:var(--muted);padding:18px;border:1px dashed #485058;border-radius:10px}.inventory{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:8px}.entity{min-width:0;display:flex;justify-content:space-between;gap:12px;padding:11px 12px;border-bottom:1px solid #34383d}.entity span{color:#c2c6ca;overflow-wrap:anywhere}.entity strong{font-weight:550;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.signal-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}.signal-entity{display:grid;grid-template-columns:minmax(0,1fr) minmax(5rem,auto);align-items:start}.signal-value{max-width:45%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.footer{color:#858c92;font-size:12px;margin:16px 2px}
         .health-summary{border-left:4px solid var(--green)}.health-summary.attention{border-left-color:var(--amber)}.health-state{border:1px solid #40604c;background:#20352a;color:#a8e5ba;border-radius:999px;padding:6px 10px;font-size:12px;white-space:nowrap}.health-summary.attention .health-state{border-color:#78633b;background:#3a3120;color:#f4d78b}.health-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.health-grid article{display:flex;flex-direction:column;gap:7px;padding:12px 14px;background:#25292d;border:1px solid #3a3f44;border-radius:9px}.health-grid small{color:var(--muted)}.health-grid strong{font-size:18px;font-variant-numeric:tabular-nums}
         @media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.topology{grid-template-columns:1fr}.link{height:20px;width:1px;margin:auto}}@media(max-width:520px){header{align-items:flex-start;flex-direction:column}.metrics{grid-template-columns:1fr 1fr}.systems{grid-template-columns:1fr}.health-grid{grid-template-columns:1fr}.section-head{align-items:flex-start;flex-direction:column}.forecast-source-hint{max-width:100%;text-align:left}.hover-details{position:static;width:auto;max-width:100%;margin-top:12px;box-shadow:none}.system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block}.metric{padding:13px}.section{padding:15px}}@media(max-width:360px){nav{gap:5px;overflow-x:auto}.tab{flex:0 0 auto;padding:8px 10px}.metrics{grid-template-columns:1fr}.health-grid{gap:7px}}
         .flow-grid{display:grid;gap:9px;margin-top:10px}.flow-row{display:grid;grid-template-columns:minmax(85px,.8fr) minmax(110px,1.6fr) minmax(85px,.8fr) minmax(80px,.6fr);gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}.flow-node{min-width:0;padding:9px 11px;border:1px solid #41464b;border-radius:9px;background:#272b2f}.flow-node small{display:block;color:var(--muted);font-size:10px}.flow-node strong{display:block;margin-top:3px;font-size:13px}.flow-route{min-width:0;display:flex;flex-direction:column;gap:5px}.flow-label{color:#c3c7ca;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.flow-direction{display:flex;align-items:center;gap:8px;color:var(--cyan)}.flow-direction>span{font-size:20px;line-height:1}.flow-track{height:8px;flex:1;background:#30353a;border-radius:999px;overflow:hidden}.flow-track i{display:block;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.flow-route.unavailable .flow-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.flow-route.unavailable .flow-track i{display:none}.flow-value{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}.flow-scale{color:var(--muted)}
@@ -593,15 +640,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._openDetailId = null;
       }
     }
-    this.shadowRoot.querySelectorAll("[data-view]").forEach((button) => {
-      button.addEventListener("click", () => {
-        this._view = button.dataset.view;
-        this.shadowRoot.querySelectorAll("[data-view]").forEach((tab) => {
-          tab.classList.toggle("active", tab.dataset.view === this._view);
-        });
-        this._scheduleRender();
-      });
-    });
     this.shadowRoot.querySelectorAll("[data-apply-select]").forEach((button) => {
       button.addEventListener("click", () => {
         const entityId = button.dataset.applySelect;
