@@ -31,7 +31,7 @@ _PANEL_PATH = "battery-smartflow-ai"
 _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
-DASHBOARD_VERSION = "1.0.3"
+DASHBOARD_VERSION = "1.0.4"
 
 _DASHBOARD_SENSOR_KEYS = (
     "price_now",
@@ -91,29 +91,32 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             forecast_entry = hass.config_entries.async_get_entry(forecast_entry_id)
             if forecast_entry is None:
                 continue
-            label = str(forecast_entry.title or "").strip()
+            label = str(forecast_entry.title or forecast_entry.domain or "").strip()
+            if label and forecast_entry.domain:
+                label = f"{label} ({forecast_entry.domain})"
             key = label.casefold()
             if label and key not in forecast_source_keys:
                 forecast_source_keys.add(key)
                 forecast_sources.append(label)
-        for forecast_entity_id in (
-            data.get(CONF_PV_FORECAST_TODAY_ENTITY),
-            data.get(CONF_PV_FORECAST_TOMORROW_ENTITY),
-        ):
-            forecast_state = (
-                hass.states.get(forecast_entity_id)
-                if forecast_entity_id
-                else None
-            )
-            label = (
-                forecast_state.attributes.get("friendly_name")
-                if forecast_state is not None
-                else None
-            ) or forecast_entity_id
-            key = str(label).casefold()
-            if label and key not in forecast_source_keys:
-                forecast_source_keys.add(key)
-                forecast_sources.append(str(label))
+        if not configured_forecasts:
+            for forecast_entity_id in (
+                data.get(CONF_PV_FORECAST_TODAY_ENTITY),
+                data.get(CONF_PV_FORECAST_TOMORROW_ENTITY),
+            ):
+                forecast_state = (
+                    hass.states.get(forecast_entity_id)
+                    if forecast_entity_id
+                    else None
+                )
+                label = (
+                    forecast_state.attributes.get("friendly_name")
+                    if forecast_state is not None
+                    else None
+                ) or forecast_entity_id
+                key = str(label).casefold()
+                if label and key not in forecast_source_keys:
+                    forecast_source_keys.add(key)
+                    forecast_sources.append(str(label))
 
         sources = {
             "name": entry.title,
@@ -162,7 +165,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="SmartFlow",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=17",
+            module_url=f"{_PANEL_URL}?v=18",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,

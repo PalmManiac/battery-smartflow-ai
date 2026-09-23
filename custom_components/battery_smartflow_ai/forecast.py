@@ -462,7 +462,7 @@ def build_forecast_summary(
     if any_configured and (not any_found or not any_valid):
         return ForecastSummary(
             status=FORECAST_STATUS_UNAVAILABLE,
-            source_name="Solcast",
+            source_name="Configured Home Assistant forecast sensors",
             pv_outlook=PV_OUTLOOK_UNKNOWN,
         )
 
@@ -513,7 +513,7 @@ def build_forecast_summary(
 
     return ForecastSummary(
         status=FORECAST_STATUS_AVAILABLE,
-        source_name="Solcast",
+        source_name="Configured Home Assistant forecast sensors",
         remaining_today_kwh=round(float(remaining_today_kwh), 3),
         tomorrow_kwh=round(float(tomorrow_kwh_val), 3),
         gross_remaining_today_kwh=round(float(gross_remaining_today_kwh), 3),

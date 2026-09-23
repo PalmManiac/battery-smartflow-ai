@@ -110,7 +110,10 @@ class EnergyForecastApiTests(unittest.IsolatedAsyncioTestCase):
                     "wh_hours": {"2026-09-09T10:00:00+00:00": 1000}
                 }
 
-            return {"forecast_solar": forecast}
+            return {
+                "forecast_solar": forecast,
+                "helios_forecast": forecast,
+            }
 
         websocket.async_get_energy_platforms = get_platforms
         sys.modules["homeassistant.components"] = components
@@ -120,6 +123,9 @@ class EnergyForecastApiTests(unittest.IsolatedAsyncioTestCase):
         entries = {
             "east": SimpleNamespace(
                 entry_id="east", title="East roof", domain="forecast_solar"
+            ),
+            "helios": SimpleNamespace(
+                entry_id="helios", title="Terrassendach", domain="helios_forecast"
             ),
             "broken": SimpleNamespace(
                 entry_id="broken", title="Broken roof", domain="forecast_solar"
@@ -138,8 +144,22 @@ class EnergyForecastApiTests(unittest.IsolatedAsyncioTestCase):
     async def test_lists_only_energy_forecast_config_entries(self):
         options = await async_energy_forecast_sources(self.hass)
         self.assertEqual(
-            [item["value"] for item in options], ["broken", "east"]
+            [item["value"] for item in options], ["broken", "east", "helios"]
         )
+
+    async def test_helios_energy_provider_uses_standard_wh_hours_contract(self):
+        result = await async_build_forecast_summary(
+            self.hass,
+            ("helios",),
+            None,
+            None,
+            forecast_base_load_w=0,
+            clock=FixedClock(),
+        )
+
+        self.assertEqual(result.status, FORECAST_STATUS_AVAILABLE)
+        self.assertEqual(result.gross_remaining_today_kwh, 1.0)
+        self.assertEqual(result.source_name, "Terrassendach")
 
     async def test_one_failed_source_does_not_discard_available_forecast(self):
         result = await async_build_forecast_summary(
