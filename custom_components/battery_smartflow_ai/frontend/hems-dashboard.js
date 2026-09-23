@@ -1,7 +1,9 @@
-/* Battery SmartFlow AI's standalone, read-only HEMS overview panel. */
+/* Battery SmartFlow AI's standalone HEMS dashboard. */
 class BatterySmartFlowDashboard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
+    const active = this.shadowRoot && this.shadowRoot.activeElement;
+    if (active && active.matches("input, select")) return;
     this._render();
   }
 
@@ -154,6 +156,74 @@ class BatterySmartFlowDashboard extends HTMLElement {
     ).join("");
   }
 
+  _controls(entities) {
+    const registry = (this._hass && this._hass.entities) || {};
+    const integrationEntities = Object.values((this._hass && this._hass.states) || {}).filter((entity) => {
+      const id = entity.entity_id.toLowerCase();
+      const registryEntry = registry[entity.entity_id];
+      return id.includes("battery_smartflow_ai") || (registryEntry && registryEntry.platform === "battery_smartflow_ai");
+    });
+    const controls = integrationEntities.filter((entity) => /^(number|select)\./.test(entity.entity_id.toLowerCase()));
+    const selects = controls.filter((entity) => entity.entity_id.startsWith("select."));
+    const numbers = controls.filter((entity) => entity.entity_id.startsWith("number."));
+    const selectCards = selects.map((entity) => {
+      const isMode = entity.entity_id.endsWith("_ai_mode");
+      const labels = this._controlOptionLabels(entity);
+      return `<article class="control-card"><label for="control-${this._escape(entity.entity_id)}">${this._escape(this._label(entity))}</label><select id="control-${this._escape(entity.entity_id)}" data-control-select="${this._escape(entity.entity_id)}">${(entity.attributes.options || []).map((option) => `<option value="${this._escape(option)}" ${option === entity.state ? "selected" : ""}>${this._escape(labels[option] || option)}</option>`).join("")}</select><button class="apply" data-apply-select="${this._escape(entity.entity_id)}">Apply</button>${isMode && entity.state === "manual" ? `<small>Manual action is controlled with the separate action selector.</small>` : ""}</article>`;
+    }).join("");
+    const numberCards = numbers.map((entity) => {
+      const value = Number(entity.state);
+      const min = Number(entity.attributes.min);
+      const max = Number(entity.attributes.max);
+      const step = Number(entity.attributes.step);
+      if (!Number.isFinite(value) || !Number.isFinite(min) || !Number.isFinite(max)) return "";
+      return `<article class="control-card"><label for="control-${this._escape(entity.entity_id)}">${this._escape(this._label(entity))}</label><div class="number-control"><input id="control-${this._escape(entity.entity_id)}" type="number" data-control-number="${this._escape(entity.entity_id)}" value="${value}" min="${min}" max="${max}" step="${Number.isFinite(step) && step > 0 ? step : 1}"><span>${this._escape(entity.attributes.unit_of_measurement || "")}</span></div><small>Allowed range: ${min}–${max}${entity.attributes.unit_of_measurement ? ` ${this._escape(entity.attributes.unit_of_measurement)}` : ""}</small><button class="apply" data-apply-number="${this._escape(entity.entity_id)}">Apply</button></article>`;
+    }).join("");
+    const hardwareLimits = integrationEntities.filter((entity) => {
+      const text = `${entity.entity_id} ${this._label(entity)}`.toLowerCase();
+      return entity.entity_id.startsWith("sensor.") && /hardware.*soc.*(min|minimum|max|maximum)|(soc.*(min|minimum|max|maximum).*hardware)/.test(text);
+    });
+    const hardwareCards = hardwareLimits.map((entity) => `<div class="entity"><span>${this._escape(this._label(entity))}</span><strong>${this._escape(this._value(entity))}</strong></div>`).join("");
+    return `<section class="section"><div class="section-head"><h2>Operating mode</h2><small>Existing BSFAI select entities</small></div><div class="control-grid">${selectCards || `<div class="empty">No BSFAI mode or manual-action select entities were found.</div>`}</div></section>
+      <section class="section"><div class="section-head"><h2>BSFAI settings</h2><small>Changes are saved through Home Assistant number entities</small></div><div class="control-grid">${numberCards || `<div class="empty">No BSFAI number settings were found.</div>`}</div></section>
+      ${hardwareCards ? `<section class="section"><div class="section-head"><h2>Hardware SoC limits</h2><small>Read-only telemetry</small></div><div class="inventory">${hardwareCards}</div><p class="explain">These values are reported by the hardware. BSFAI does not expose a supported write control for these device limits, so they are shown here for reference only.</p></section>` : ""}
+      <p class="explain">Controls use Home Assistant's existing BSFAI entities and services. The dashboard does not write directly to the Zendure hardware.</p>`;
+  }
+
+  _controlOptionLabels(entity) {
+    const locale = this._hass && this._hass.locale ? this._hass.locale.language : "";
+    const german = String(locale || "").toLowerCase().startsWith("de");
+    const translations = {
+      automatic: german ? "Automatik" : "Automatic",
+      summer: german ? "Autarkie" : "Self-sufficient",
+      manual: german ? "Manuell" : "Manual",
+      standby: german ? "Standby" : "Standby",
+      charge: german ? "Laden" : "Charge",
+      discharge: german ? "Entladen" : "Discharge",
+      constant_discharge: german ? "Konstante Entladung" : "Constant discharge",
+    };
+    return translations;
+  }
+
+  _applyControl(service, entityId, data) {
+    const button = this.shadowRoot.querySelector(`[data-apply-${service === "set_value" ? "number" : "select"}="${CSS.escape(entityId)}"]`);
+    if (!button) return;
+    button.disabled = true;
+    button.textContent = "Saving…";
+    const serviceData = Object.assign({ entity_id: entityId }, data);
+    this._hass.callService(service === "set_value" ? "number" : "select", service, serviceData).then(() => {
+      button.textContent = "Saved";
+    }).catch((error) => {
+      button.textContent = "Failed";
+      button.title = String(error);
+    });
+    window.setTimeout(() => {
+      if (!button.isConnected) return;
+      button.disabled = false;
+      button.textContent = "Apply";
+    }, 1800);
+  }
+
   _render() {
     if (!this.shadowRoot || !this._hass) return;
     const entities = this._entities();
@@ -180,6 +250,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
       ? this._energyView(entities)
       : this._view === "economics"
         ? this._economicsView(entities)
+        : this._view === "controls"
+          ? this._controls(entities)
         : `<section class="section"><div class="section-head"><h2>Hardware topology</h2><small>${systems.length} systems · ${packCount} packs</small></div>
           ${systems.length ? `<div class="systems">${systems.map((system) => {
             const systemEntities = this._deviceEntities(entities, system.name, null);
@@ -205,21 +277,37 @@ class BatterySmartFlowDashboard extends HTMLElement {
         header{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:24px}h1{font-size:clamp(24px,3vw,36px);margin:0;font-weight:650;letter-spacing:-.03em}.sub{color:var(--muted);margin:8px 0 0}.badge{border:1px solid #365245;color:#a8e5ba;background:#1e3026;border-radius:999px;padding:9px 14px;font-size:13px;white-space:nowrap}
         .section{background:#1b1e21;border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.section h2{font-size:17px;margin:0}.section-head small,.muted{color:var(--muted)}
         nav{display:flex;gap:8px;margin:8px 0 18px;border-bottom:1px solid var(--line);padding-bottom:12px}.tab{border:1px solid #41464b;background:#25292d;color:#c4c8cc;border-radius:8px;padding:9px 15px;font:inherit;cursor:pointer}.tab.active{border-color:#2388ad;background:#183847;color:#e5f8fc}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.metric{min-height:125px;padding:18px;border:1px solid #41464b;border-top:3px solid var(--cyan);border-radius:11px;background:#292d31;display:flex;flex-direction:column;gap:11px}.metric:nth-child(2){border-top-color:var(--green)}.metric:nth-child(3){border-top-color:var(--amber)}.metric span{font-size:11px;letter-spacing:.11em;color:#b1b5b9}.metric strong{font-size:clamp(21px,2vw,30px);font-variant-numeric:tabular-nums}.metric small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .reading-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.reading{min-height:105px;padding:15px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:8px}.reading span{color:#bdc2c6;font-size:12px}.reading strong{font-size:22px;font-variant-numeric:tabular-nums}.reading small{color:var(--muted);line-height:1.35}.flow-grid{display:grid;gap:8px}.flow-row{display:grid;grid-template-columns:minmax(130px,1fr) 3fr minmax(85px,.7fr);gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.flow-row span{color:#c3c7ca}.flow-row strong{text-align:right;font-variant-numeric:tabular-nums}.flow-track{height:9px;background:#30353a;border-radius:999px;overflow:hidden}.flow-track i{display:block;width:48%;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.explain{color:var(--muted);font-size:12px;line-height:1.5;margin:14px 0 0}
+        .reading-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.reading{min-height:105px;padding:15px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:8px}.reading span{color:#bdc2c6;font-size:12px}.reading strong{font-size:22px;font-variant-numeric:tabular-nums}.reading small{color:var(--muted);line-height:1.35}.flow-grid{display:grid;gap:8px}.flow-row{display:grid;grid-template-columns:minmax(130px,1fr) 3fr minmax(85px,.7fr);gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.flow-row span{color:#c3c7ca}.flow-row strong{text-align:right;font-variant-numeric:tabular-nums}.flow-track{height:9px;background:#30353a;border-radius:999px;overflow:hidden}.flow-track i{display:block;width:48%;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.explain{color:var(--muted);font-size:12px;line-height:1.5;margin:14px 0 0}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:11px}.control-card{padding:14px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:10px}.control-card label{font-size:13px;color:#d1d5d8}.control-card select,.control-card input{width:100%;background:#171a1d;color:#eef0f1;border:1px solid #4b535a;border-radius:7px;padding:10px;font:inherit}.number-control{display:flex;align-items:center;gap:8px}.number-control span{color:var(--muted);min-width:30px}.control-card small{color:var(--muted);font-size:11px}.apply{align-self:flex-end;border:1px solid #247b9b;background:#153746;color:#dff8ff;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer}.apply:disabled{opacity:.65;cursor:wait}
         .systems{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}.system-card{position:relative;padding:17px;background:#172b3a;border:1px solid #2476a8;border-left:4px solid var(--cyan);border-radius:11px}.system-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.system-head strong{font-size:16px}.system-head small,.device-meta{display:block;color:#b7c4ce;margin-top:6px}.status{border:1px solid #40604c;background:#20352a;color:#a8e5ba;border-radius:999px;padding:5px 9px;font-size:11px;white-space:nowrap}.status.offline{border-color:#744849;background:#3a2526;color:#f2aaaa}.packs{margin:15px 0 0 14px;padding-left:16px;border-left:1px solid #388ebc;display:grid;gap:9px}.pack-card{position:relative;padding:12px;background:#202b35;border:1px solid #475563;border-radius:9px}.pack-card strong{display:block}.pack-card small{display:block;color:#aeb8c1;margin-top:5px}.hover-details{display:none;position:absolute;z-index:5;left:calc(100% + 12px);top:0;width:min(330px,70vw);padding:14px;background:#f7f8fa;color:#20242a;border:1px solid #d7dce2;border-radius:10px;box-shadow:0 12px 35px #0008}.system-card:hover>.hover-details,.system-card:focus-within>.hover-details,.pack-card:hover>.hover-details,.pack-card:focus-within>.hover-details{display:block}.hover-details h3{margin:0 0 9px;font-size:14px}.detail-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}.detail-row span{color:#59616a}.detail-row strong{text-align:right}.empty{color:var(--muted);padding:18px;border:1px dashed #485058;border-radius:10px}.inventory{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px}.entity{display:flex;justify-content:space-between;gap:12px;padding:11px 12px;border-bottom:1px solid #34383d}.entity span{color:#c2c6ca}.entity strong{font-weight:550;text-align:right;font-variant-numeric:tabular-nums}.footer{color:#858c92;font-size:12px;margin:16px 2px}
         @media(max-width:900px){.metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.topology{grid-template-columns:1fr}.link{height:20px;width:1px;margin:auto}}@media(max-width:520px){header{align-items:flex-start;flex-direction:column}.metrics{grid-template-columns:1fr 1fr}.metric{padding:13px}.section{padding:15px}}
       </style>
       <main class="shell">
         <header><div><h1>Battery SmartFlow AI</h1><p class="sub">Energy flow, storage and system status</p></div><div class="badge">● LIVE · updated ${this._escape(updated)}</div></header>
         <section class="section"><div class="section-head"><h2>Energy overview</h2><small>Live Home Assistant values</small></div><div class="metrics">${cards}</div></section>
-        <nav aria-label="Dashboard views"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">Overview</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">Energy & forecast</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">Economics</button></nav>
+        <nav aria-label="Dashboard views"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">Overview</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">Energy & forecast</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">Economics</button><button class="tab ${this._view === "controls" ? "active" : ""}" data-view="controls">Controls</button></nav>
         ${activeContent}
-        <p class="footer">The first dashboard preview is read-only. Existing BSFAI and Home Assistant controls remain unchanged.</p>
+        <p class="footer">Battery SmartFlow AI · Home Assistant-powered controls</p>
       </main>`;
     this.shadowRoot.querySelectorAll("[data-view]").forEach((button) => {
       button.addEventListener("click", () => {
         this._view = button.dataset.view;
         this._render();
+      });
+    });
+    this.shadowRoot.querySelectorAll("[data-apply-select]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const entityId = button.dataset.applySelect;
+        const select = this.shadowRoot.querySelector(`[data-control-select="${CSS.escape(entityId)}"]`);
+        const option = select ? select.value : undefined;
+        if (option !== undefined) this._applyControl("select_option", entityId, { option });
+      });
+    });
+    this.shadowRoot.querySelectorAll("[data-apply-number]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const entityId = button.dataset.applyNumber;
+        const input = this.shadowRoot.querySelector(`[data-control-number="${CSS.escape(entityId)}"]`);
+        const value = Number(input ? input.value : NaN);
+        if (input && input.reportValidity() && Number.isFinite(value)) this._applyControl("set_value", entityId, { value });
       });
     });
   }
