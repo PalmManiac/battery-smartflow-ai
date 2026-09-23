@@ -626,6 +626,9 @@
       "learned_planning_deadline": {
         "name": "Charge planning: Deadline"
       },
+      "learned_planning_coverage_end": {
+        "name": "Diagnostic: End of planned peak coverage"
+      },
       "learned_planning_required_charge_energy_kwh": {
         "name": "Charge planning: Recharge energy"
       },
@@ -676,6 +679,9 @@
       },
       "learned_planning_forecast_adjustment_kwh": {
         "name": "Diagnostic: Learned planning forecast adjustment"
+      },
+      "learned_planning_pv_forecast_credit_kwh": {
+        "name": "Diagnostic: PV forecast credited to the charge plan"
       },
       "learned_planning_effective_charge_power_w": {
         "name": "Diagnostic: Learned planning effective charge power"
@@ -1012,7 +1018,7 @@
         }
       },
       "avg_charge_price": {
-        "name": "Prices – Avg. legacy battery charge price"
+        "name": "Prices – Legacy SoC-estimated average battery charge price"
       },
       "profit_eur": {
         "name": "Balance since start – Legacy trading profit"

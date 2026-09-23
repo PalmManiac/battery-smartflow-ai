@@ -712,6 +712,75 @@ Battery SmartFlow AI nutzt diese Daten für:
 * wirtschaftliche Entladung
 * Preisfensterbewertung
 
+#### EDF Tempo mit einem Template-Sensor
+
+Nutzer des französischen EDF-Tempo-Tarifs können die stündlichen Tarife über
+einen Template-Sensor als `rates`-Attribut bereitstellen. Das Beispiel setzt die
+EDF-Tempo-Integration voraus. Ersetze die Entity-IDs bei Bedarf durch die IDs
+deiner Sensoren:
+
+```yaml
+template:
+  - sensor:
+      - name: "Tempo prix horaires"
+        unique_id: tempo_prix_horaires
+        device_class: monetary
+        unit_of_measurement: "EUR/kWh"
+        availability: >
+          {{ states('sensor.tarif_actuel_tempo_6kva_ttc')
+             not in ['unknown', 'unavailable', 'none', ''] }}
+        state: >
+          {{ states('sensor.tarif_actuel_tempo_6kva_ttc') | float }}
+        attributes:
+          rates: >
+            {% set colors = {
+              'yesterday': states('sensor.tarif_tempo_couleur_hier') | lower,
+              'today': states('sensor.tarif_tempo_couleur_aujourd_hui') | lower,
+              'tomorrow': states('sensor.tarif_tempo_couleur_demain') | lower
+            } %}
+            {% set tariffs = {
+              'bleu_hc': states('sensor.tarif_bleu_tempo_heures_creuses_ttc') | float(none),
+              'bleu_hp': states('sensor.tarif_bleu_tempo_heures_pleines_ttc') | float(none),
+              'blanc_hc': states('sensor.tarif_blanc_tempo_heures_creuses_ttc') | float(none),
+              'blanc_hp': states('sensor.tarif_blanc_tempo_heures_pleines_ttc') | float(none),
+              'rouge_hc': states('sensor.tarif_rouge_tempo_heures_creuses_ttc') | float(none),
+              'rouge_hp': states('sensor.tarif_rouge_tempo_heures_pleines_ttc') | float(none)
+            } %}
+            {% set ns = namespace(prices=[]) %}
+            {% for day_offset in range(2) %}
+              {% for hour in range(24) %}
+                {% if day_offset == 0 and hour < 6 %}
+                  {% set color = colors.yesterday %}
+                {% elif day_offset == 0 %}
+                  {% set color = colors.today %}
+                {% elif hour < 6 %}
+                  {% set color = colors.today %}
+                {% else %}
+                  {% set color = colors.tomorrow %}
+                {% endif %}
+                {% set period = 'hc' if hour < 6 or hour >= 22 else 'hp' %}
+                {% set price = tariffs.get(color ~ '_' ~ period) %}
+                {% set start = today_at('%02d:00' | format(hour)) + timedelta(days=day_offset) %}
+                {% if price is not none %}
+                  {% set ns.prices = ns.prices + [{
+                    'starts_at': start.isoformat(),
+                    'total': price,
+                    'energy': price,
+                    'tax': 0,
+                    'level': color,
+                    'period': period
+                  }] %}
+                {% endif %}
+              {% endfor %}
+            {% endfor %}
+            {{ ns.prices }}
+```
+
+Wähle den erzeugten Sensor anschließend als dynamische Preisquelle in BSFAI.
+Unbekannte Farben oder Tarife werden bewusst ausgelassen und niemals als
+`0,00 €/kWh` angelegt, damit noch nicht veröffentlichte Preise keine künstlich
+billige Ladeplanung auslösen.
+
 ---
 
 ### Aktueller Strompreis

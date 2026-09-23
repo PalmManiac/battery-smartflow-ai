@@ -191,6 +191,7 @@ class TranslationCoverageTests(unittest.TestCase):
             "expert_cell_voltage_config",
             "native_zendure",
             "native_zendure_device",
+            "dashboard",
         }
         files = [
             COMPONENT / "strings.json",
@@ -203,7 +204,7 @@ class TranslationCoverageTests(unittest.TestCase):
                 self.assertEqual(set(steps), expected_steps)
                 self.assertEqual(
                     set(steps["init"]["menu_options"]),
-                    {"general", "expert", "native_zendure", "debug"},
+                    {"general", "dashboard", "expert", "native_zendure", "debug"},
                 )
                 self.assertEqual(
                     set(steps["debug_start"]["data"]),
@@ -267,6 +268,38 @@ class TranslationCoverageTests(unittest.TestCase):
         files = [COMPONENT / "strings.json", *(TRANSLATIONS / f"{lang}.json" for lang in LANGUAGES)]
         for platform in ("sensor", "number", "select"):
             expected = translation_keys(platform)
+            if platform == "sensor":
+                tree = ast.parse((COMPONENT / "sensor.py").read_text(encoding="utf-8"))
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Call):
+                        continue
+                    if not (
+                        isinstance(node.func, ast.Name)
+                        and node.func.id == "NativeHardwareSensorDescription"
+                    ):
+                        continue
+                    keywords = {keyword.arg: keyword.value for keyword in node.keywords}
+                    if "key" not in keywords:
+                        for keyword in node.keywords:
+                            if (
+                                keyword.arg == "translation_key"
+                                and isinstance(keyword.value, ast.Constant)
+                                and isinstance(keyword.value.value, str)
+                            ):
+                                expected.add(keyword.value.value)
+                expected.update(
+                    {"learned_planning_coverage_end", "learned_planning_pv_forecast_credit_kwh"}
+                )
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.Assign):
+                        continue
+                    if not any(
+                        isinstance(target, ast.Name)
+                        and target.id == "_DOCUMENTED_ZENDURE_STATUS_SENSORS"
+                        for target in node.targets
+                    ):
+                        continue
+                    expected.update(item[1] for item in ast.literal_eval(node.value))
             for path in files:
                 with self.subTest(platform=platform, file=path.name):
                     actual = set(load_json(path)["entity"][platform])

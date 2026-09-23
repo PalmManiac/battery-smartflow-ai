@@ -251,6 +251,7 @@
         "description": "Kies welk instellingenonderdeel je wilt bewerken. Apparaatspecifieke regelwaarden worden automatisch beheerd door het geselecteerde apparaatprofiel.",
         "menu_options": {
           "general": "Algemeen",
+          "dashboard": "HEMS-dashboard",
           "expert": "Expertmodus",
           "native_zendure": "Native Zendure-test",
           "debug": "Debugmodus"
@@ -258,6 +259,11 @@
       },
       "native_zendure": {"title": "Native Zendure-verbinding", "description": "Voer het Home Assistant-app-token uit de Zendure-app in. Een vast puntenmasker geeft aan dat een token is opgeslagen; het is niet het token of de lengte ervan. Alleen een apparaat selecteren activeert de besturing niet; daarvoor is de aparte schakelaar in de volgende stap vereist.", "data": {"native_zendure_app_token": "Zendure app-token", "disable_native_zendure_test": "Native Zendure-test uitschakelen en verwijderen"}, "data_description": {"native_zendure_app_token": "Laat het puntenmasker ongewijzigd om het opgeslagen token opnieuw te gebruiken, of vervang het door een volledig nieuw Home Assistant-app-token.", "disable_native_zendure_test": "Stopt de verbinding en verwijdert het token. Z-HA blijft ongewijzigd."}},
       "native_zendure_device": {"title": "Zendure-systeem selecteren", "description": "Zendure meldde deze apparaten:\n\n{device_summary}\n\nSelecteer precies één systeem. BSFAI kiest automatisch het lokale transport en kan Legacy-apparaten via Bluetooth configureren.", "data": {"native_zendure_selected_device": "Zendure-systeem", "native_zendure_control_transport": "Communicatieverbinding", "native_zendure_control_enabled": "Native Zendure-besturing inschakelen", "native_zendure_local_mqtt_server": "Lokale MQTT-server", "native_zendure_local_mqtt_port": "Lokale MQTT-poort", "native_zendure_local_mqtt_username": "Lokale MQTT-gebruikersnaam", "native_zendure_local_mqtt_password": "Lokaal MQTT-wachtwoord", "native_zendure_legacy_wifi_ssid": "Wifi-SSID van Legacy-apparaat", "native_zendure_legacy_wifi_password": "Wifi-wachtwoord van Legacy-apparaat", "native_zendure_legacy_provision": "Geselecteerd Legacy-apparaat nu configureren"}, "data_description": {"native_zendure_selected_device": "Er wordt precies één hoofdsysteem geselecteerd; packs kunnen niet afzonderlijk worden bestuurd. BSFAI bepaalt ZenSDK of Local MQTT aan de hand van de geverifieerde modelfamilie.", "native_zendure_control_transport": "Cloud werkt na accountdetectie. De aanbevolen lokale verbinding wordt pas gebruikt nadat actuele gegevens zijn ontvangen.", "native_zendure_control_enabled": "Stuurt BSFAI-opdrachten via het lokale transport van het model.", "native_zendure_local_mqtt_server": "Adres dat via Bluetooth naar het Legacy-apparaat wordt gestuurd en door BSFAI wordt gebruikt.", "native_zendure_local_mqtt_port": "Legacy-apparaten gebruiken standaardpoort 1883.", "native_zendure_local_mqtt_username": "Brokeraccount dat alleen door BSFAI wordt gebruikt.", "native_zendure_local_mqtt_password": "Laat het puntenmasker staan om het opgeslagen wachtwoord opnieuw te gebruiken.", "native_zendure_legacy_wifi_ssid": "Alleen nodig voor Bluetooth-configuratie.", "native_zendure_legacy_wifi_password": "Alleen nodig voor Bluetooth-configuratie.", "native_zendure_legacy_provision": "Verstuurt het brokeradres en de wifi-instellingen via Bluetooth. Het apparaat start opnieuw."}},
+      "dashboard": {
+        "title": "HEMS-dashboard",
+        "description": "Schakel het aangepaste HEMS-dashboard van Battery SmartFlow AI in of uit in de zijbalk.",
+        "data": {"hems_dashboard_enabled": "Toon het HEMS-dashboard in de zijbalk"}
+      },
       "general": {
         "title": "Battery SmartFlow AI instellen – Algemeen",
         "description": "Algemene installatie-instellingen. Apparaatspecifieke regelwaarden blijven onderdeel van het geselecteerde apparaatprofiel.",
@@ -554,6 +560,9 @@
       "learned_planning_deadline": {
         "name": "Laadplanning: deadline"
       },
+      "learned_planning_coverage_end": {
+        "name": "Diagnose: einde van geplande piekprijsdekking"
+      },
       "learned_planning_required_charge_energy_kwh": {
         "name": "Laadplanning: bijlaadenergie"
       },
@@ -604,6 +613,9 @@
       },
       "learned_planning_forecast_adjustment_kwh": {
         "name": "Diagnose: prognosetoeslag lerende planning"
+      },
+      "learned_planning_pv_forecast_credit_kwh": {
+        "name": "Diagnose: PV-prognose verrekend in laadplanning"
       },
       "learned_planning_effective_charge_power_w": {
         "name": "Diagnose: effectief laadvermogen lerende planning"
@@ -940,7 +952,7 @@
         }
       },
       "avg_charge_price": {
-        "name": "Prijzen – Gem. eerdere batterijlaadprijs"
+        "name": "Prijzen – Gem. historische acculaadprijs (SoC-schatting)"
       },
       "profit_eur": {
         "name": "Balans sinds start – Eerdere handelswinst"

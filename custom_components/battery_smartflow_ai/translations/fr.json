@@ -251,6 +251,7 @@
         "description": "Sélectionnez la zone de paramètres à modifier. Les valeurs de régulation propres à l’appareil sont gérées automatiquement par le profil sélectionné.",
         "menu_options": {
           "general": "Général",
+          "dashboard": "Tableau de bord HEMS",
           "expert": "Mode expert",
           "native_zendure": "Test Zendure natif",
           "debug": "Mode débogage"
@@ -258,6 +259,11 @@
       },
       "native_zendure": {"title": "Connexion Zendure native", "description": "Saisissez le jeton d’application Home Assistant créé dans l’application Zendure. Un masque fixe de points indique qu’un jeton est enregistré ; il ne représente ni le jeton ni sa longueur. La sélection d’un appareil n’active pas le contrôle ; l’interrupteur séparé à l’étape suivante est requis.", "data": {"native_zendure_app_token": "Jeton d’application Zendure", "disable_native_zendure_test": "Désactiver et supprimer le test Zendure natif"}, "data_description": {"native_zendure_app_token": "Conservez le masque inchangé pour réutiliser le jeton enregistré, ou remplacez-le par un nouveau jeton Home Assistant complet.", "disable_native_zendure_test": "Arrête la connexion et supprime le jeton. Z-HA n’est pas modifié."}},
       "native_zendure_device": {"title": "Sélectionner le système Zendure", "description": "Zendure a signalé ces appareils :\n\n{device_summary}\n\nSélectionnez exactement un système. BSFAI choisit automatiquement le transport local et peut configurer les appareils Legacy via Bluetooth.", "data": {"native_zendure_selected_device": "Système Zendure", "native_zendure_control_transport": "Mode de communication", "native_zendure_control_enabled": "Activer le contrôle Zendure natif", "native_zendure_local_mqtt_server": "Serveur MQTT local", "native_zendure_local_mqtt_port": "Port MQTT local", "native_zendure_local_mqtt_username": "Nom d’utilisateur MQTT local", "native_zendure_local_mqtt_password": "Mot de passe MQTT local", "native_zendure_legacy_wifi_ssid": "SSID Wi-Fi de l’appareil Legacy", "native_zendure_legacy_wifi_password": "Mot de passe Wi-Fi de l’appareil Legacy", "native_zendure_legacy_provision": "Configurer maintenant l’appareil Legacy sélectionné"}, "data_description": {"native_zendure_selected_device": "Un seul système principal est sélectionné ; les packs ne peuvent pas être contrôlés séparément. BSFAI détermine ZenSDK ou Local MQTT à partir de la famille de modèles vérifiée.", "native_zendure_control_transport": "Le Cloud fonctionne après la détection du compte. La connexion locale recommandée sera utilisée uniquement après réception de données valides.", "native_zendure_control_enabled": "Transfère les commandes BSFAI vers le transport local du modèle.", "native_zendure_local_mqtt_server": "Adresse transmise à l’appareil Legacy via Bluetooth et utilisée par BSFAI.", "native_zendure_local_mqtt_port": "Les appareils Legacy utilisent le port standard 1883.", "native_zendure_local_mqtt_username": "Compte du broker utilisé uniquement par BSFAI.", "native_zendure_local_mqtt_password": "Conservez le masque à points pour réutiliser le mot de passe enregistré.", "native_zendure_legacy_wifi_ssid": "Requis uniquement pour la configuration Bluetooth.", "native_zendure_legacy_wifi_password": "Requis uniquement pour la configuration Bluetooth.", "native_zendure_legacy_provision": "Crée le compte du broker de l’appareil et transmet les paramètres via Bluetooth. L’appareil redémarre."}},
+      "dashboard": {
+        "title": "Tableau de bord HEMS",
+        "description": "Active ou désactive le tableau de bord HEMS personnalisé de Battery SmartFlow AI dans la barre latérale.",
+        "data": {"hems_dashboard_enabled": "Afficher le tableau de bord HEMS dans la barre latérale"}
+      },
       "general": {
         "title": "Paramètres de Battery SmartFlow AI – Général",
         "description": "Paramètres généraux de l’installation. Les valeurs de régulation propres à l’appareil restent intégrées au profil sélectionné.",
@@ -554,6 +560,9 @@
       "learned_planning_deadline": {
         "name": "Planification de charge : deadline"
       },
+      "learned_planning_coverage_end": {
+        "name": "Diagnostic : fin de la couverture planifiée du pic tarifaire"
+      },
       "learned_planning_required_charge_energy_kwh": {
         "name": "Planification de charge : énergie à recharger"
       },
@@ -604,6 +613,9 @@
       },
       "learned_planning_forecast_adjustment_kwh": {
         "name": "Diagnostic : correction prévision planification apprise"
+      },
+      "learned_planning_pv_forecast_credit_kwh": {
+        "name": "Diagnostic : prévision PV prise en compte dans le plan de charge"
       },
       "learned_planning_effective_charge_power_w": {
         "name": "Diagnostic : puissance de charge effective planification apprise"
@@ -940,7 +952,7 @@
         }
       },
       "avg_charge_price": {
-        "name": "Prix – Ancien prix moyen de charge batterie"
+        "name": "Prix – Prix moyen de charge batterie historique (estimation SoC)"
       },
       "profit_eur": {
         "name": "Bilan depuis le début – Ancien gain commercial"

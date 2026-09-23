@@ -22,7 +22,14 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
         script = f"import sys; sys.path.insert(0, {str(ROOT)!r})\n" + textwrap.dedent(
             """
             import asyncio
+            import sys
             from types import SimpleNamespace
+
+            dashboard = type(sys)("custom_components.battery_smartflow_ai.dashboard")
+            async def update_dashboard_panel(hass):
+                return None
+            dashboard.async_update_dashboard_panel = update_dashboard_panel
+            sys.modules[dashboard.__name__] = dashboard
 
             import custom_components.battery_smartflow_ai as integration
 
@@ -134,7 +141,7 @@ class EntityRegistryCompatibilityTests(unittest.TestCase):
     V460_DESCRIPTION_HASHES = {
         "sensor.py": (
             "_SENSOR_DESCRIPTIONS",
-            "f716309f65dc9aefbcb5ec6da87a42c2bf1d8f6160bbc76f581ef5761e97b748",
+            "9971d1257dc30317cdb5f107db7a221acd05d4db3f27129326bdddd97f9394d7",
         ),
         "number.py": (
             "NUMBERS",
@@ -179,7 +186,7 @@ class EntityRegistryCompatibilityTests(unittest.TestCase):
             self.assertIn("(DOMAIN, entry.entry_id)", source)
 
         self.assertIn('identifiers={(DOMAIN, f"{entry.entry_id}_economics")}', sensor)
-        self.assertIn("via_device=(DOMAIN, entry.entry_id)", sensor)
+        self.assertIn("via_device_id=_device_id_for_identifiers(", sensor)
 
 
 bootstrap()

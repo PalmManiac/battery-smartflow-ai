@@ -23,6 +23,7 @@ from custom_components.battery_smartflow_ai.decision_engine import (  # noqa: E4
     DecisionContext,
     DecisionEngine,
     LearnedPlanningRule,
+    PvHouseLoadPassthroughRule,
     PricePoint,
 )
 from custom_components.battery_smartflow_ai.learned_planning import (  # noqa: E402
@@ -470,6 +471,26 @@ class Dev9OptionalDataScenarios(unittest.TestCase):
 
 
 class Dev6ToDev8RegressionScenarios(unittest.TestCase):
+    def test_planned_prepeak_charge_can_exit_active_passthrough(self) -> None:
+        plan = SimpleNamespace(
+            status="active",
+            mode="charge",
+            decision_reason="learned_charge_window_latest_start_reached",
+            required_charge_energy_kwh=0.8,
+        )
+        ctx = context(
+            pv_sensor_valid=True,
+            profile={**PROFILE, "PV_HOUSELOAD_PASSTHROUGH": True},
+            pv_houseload_passthrough_active=True,
+            pv_houseload_passthrough_target_w=600.0,
+            learned_planning_enabled=True,
+            learned_charge_plan=plan,
+        )
+
+        result = PvHouseLoadPassthroughRule().evaluate(DecisionEngine(), ctx)
+
+        self.assertIsNone(result)
+
     def test_dev7_directional_blocker_keeps_valid_pv_charge(self) -> None:
         result = DecisionEngine().evaluate(
             context(
