@@ -31,7 +31,17 @@ _PANEL_PATH = "battery-smartflow-ai"
 _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
-DASHBOARD_VERSION = "1.0.5"
+DASHBOARD_VERSION = "1.0.6"
+
+_SYSTEM_SIGNAL_SENSOR_KEYS = (
+    "native_zendure_status",
+    "native_zendure_control",
+    "native_zendure_device_count",
+    "native_zendure_message_count",
+    "native_zendure_last_capture",
+    "native_zendure_error",
+    "forecast_status",
+)
 
 _DASHBOARD_SENSOR_KEYS = (
     "forecast_status",
@@ -50,6 +60,12 @@ _DASHBOARD_SENSOR_KEYS = (
     "learned_planning_required_charge_energy_kwh",
     "learned_planning_pv_forecast_credit_kwh",
     "learned_planning_coverage_end",
+    "economics_daily_grid_to_battery_kwh",
+    "economics_daily_pv_to_battery_kwh",
+    "economics_daily_grid_export_kwh",
+    "economics_daily_battery_to_home_kwh",
+    "economics_daily_battery_to_grid_kwh",
+    "economics_daily_native_pv_to_home_kwh",
     "economics_daily_battery_benefit",
     "economics_daily_avoided_grid_import_cost",
     "economics_daily_grid_charge_cost",
@@ -174,7 +190,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="SmartFlow",
         sidebar_icon="mdi:solar-power-variant",
-            module_url=f"{_PANEL_URL}?v=19",
+            module_url=f"{_PANEL_URL}?v=20",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,
@@ -182,6 +198,16 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             "power_sources": power_sources,
             "forecast_sources": forecast_sources,
             "sensor_entities": sensor_entities,
+            "system_signal_entity_ids": [
+                registry_entry.entity_id
+                for registry_entry in entity_registry.entities.values()
+                if registry_entry.platform == DOMAIN
+                and registry_entry.domain == "sensor"
+                and any(
+                    registry_entry.unique_id.endswith(f"_{key}")
+                    for key in _SYSTEM_SIGNAL_SENSOR_KEYS
+                )
+            ],
         },
         require_admin=False,
         handle_safe_area=True,
