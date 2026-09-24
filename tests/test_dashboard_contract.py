@@ -86,7 +86,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.1.0"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.10"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=24"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
