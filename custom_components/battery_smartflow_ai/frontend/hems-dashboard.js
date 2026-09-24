@@ -23,6 +23,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._view = "overview";
     this._renderQueued = false;
     this._openDetailId = null;
+    this._chartEntityId = null;
+    this._chartOriginView = "overview";
+    this._chartRange = "day";
+    this._chartData = [];
+    this._chartError = "";
+    this._chartRequestKey = "";
+    this._chartRequestSerial = 0;
     this._pointerActive = false;
     this._renderDeferred = false;
     this.shadowRoot.addEventListener("pointerdown", () => {
@@ -33,13 +40,48 @@ class BatterySmartFlowDashboard extends HTMLElement {
       if (this._renderDeferred) this._scheduleRender();
     };
     this.shadowRoot.addEventListener("click", (event) => {
-      const button = event.composedPath().find((node) => node instanceof Element && node.matches("[data-view]"));
-      if (!button) return;
-      this._view = button.dataset.view;
-      this.shadowRoot.querySelectorAll("[data-view]").forEach((tab) => {
-        tab.classList.toggle("active", tab.dataset.view === this._view);
-      });
-      this._scheduleRender();
+      const path = event.composedPath();
+      const nodeFor = (selector) => path.find((node) => node instanceof Element && node.matches(selector));
+      const viewButton = nodeFor("[data-view]");
+      if (viewButton) {
+        this._view = viewButton.dataset.view;
+        this.shadowRoot.querySelectorAll("[data-view]").forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.view === this._view);
+        });
+        this._scheduleRender();
+        return;
+      }
+      const historyButton = nodeFor("[data-history-entity]");
+      if (historyButton) {
+        this._openHistory(historyButton.dataset.historyEntity);
+        return;
+      }
+      const rangeButton = nodeFor("[data-history-range]");
+      if (rangeButton) {
+        this._chartRange = rangeButton.dataset.historyRange;
+        this._loadHistory();
+        this._scheduleRender();
+        return;
+      }
+      if (nodeFor("[data-history-back]")) {
+        this._view = this._chartOriginView;
+        this._scheduleRender();
+        return;
+      }
+      if (nodeFor("[data-home]")) {
+        event.preventDefault();
+        if (this._hass && typeof this._hass.navigate === "function") {
+          this._hass.navigate("/");
+        } else {
+          window.location.assign("/");
+        }
+      }
+    });
+    this.shadowRoot.addEventListener("keydown", (event) => {
+      if ((event.key === "Enter" || event.key === " ") && event.target instanceof Element && event.target.matches("[data-history-entity]")) {
+        event.preventDefault();
+        event.target.click();
+      }
     });
   }
 
@@ -143,6 +185,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       hardware_limits: ["Hardware-SoC-Grenzen", "Hardware SoC limits"], read_only: ["Nur lesbare Telemetrie", "Read-only telemetry"], hardware_explain: ["Diese Werte werden von der Hardware gemeldet. BSFAI stellt dafür keine unterstützte Schreibsteuerung bereit; sie dienen hier nur zur Information.", "These values are reported by the hardware. BSFAI does not expose a supported write control for them, so they are shown for reference only."], control_explain: ["Die Steuerung nutzt die vorhandenen BSFAI-Entitäten und Home-Assistant-Dienste. Das Dashboard schreibt nicht direkt an die Zendure-Hardware.", "Controls use existing BSFAI entities and Home Assistant services. The dashboard does not write directly to Zendure hardware."],
       systems: ["Systeme", "systems"], packs: ["Akku-Packs", "packs"], system: ["Zendure-System", "Zendure system"], zendure_hardware: ["Zendure-Hardware", "Zendure hardware"], dashboard_views: ["Dashboard-Ansichten", "Dashboard views"],
       details: ["Details", "Details"], hide_details: ["Schließen", "Close"], seconds_ago: ["Sek. zuvor", "s ago"],
+      home_assistant: ["Home Assistant", "Home Assistant"], show_history: ["Verlauf ansehen", "View history"], back_to_dashboard: ["Zurück zum Dashboard", "Back to dashboard"], current_value: ["Aktueller Wert", "Current value"], sensor_history: ["Sensorverlauf", "Sensor history"], day: ["Tag", "Day"], week: ["Woche", "Week"], month: ["Monat", "Month"], history_chart: ["Sensorverlauf", "Sensor history"], history_empty: ["Für diesen Zeitraum sind keine aufgezeichneten Verlaufsdaten verfügbar.", "No recorded history is available for this period."], history_error: ["Der Verlauf konnte nicht geladen werden. Prüfe, ob Home Assistant die Sensorhistorie speichert.", "History could not be loaded. Check whether Home Assistant records this sensor."], history_note: ["Der Verlauf wird aus den in Home Assistant gespeicherten Sensorzuständen erstellt.", "History is built from sensor states recorded by Home Assistant."], history_counter_note: ["Bei Zählern zeigt das Diagramm die Zunahme je Zeitabschnitt. Rücksetzungen werden nicht als negative Energie dargestellt.", "For counters, the chart shows increases per interval. Resets are not shown as negative energy."], period_increase: ["Zunahme im Zeitraum", "Increase in period"], max_interval: ["Größtes Intervall", "Largest interval"], minimum: ["Minimum", "Minimum"], maximum: ["Maximum", "Maximum"], latest: ["Letzter Wert", "Latest"],
       system_health: ["Systemzustand", "System health"], all_online: ["Alle Systeme online", "All systems online"], attention: ["Prüfung erforderlich", "Attention required"], online_systems: ["Online", "Online"], offline_systems: ["Offline oder unbekannt", "Offline or unknown"], oldest_telemetry: ["Älteste Telemetrie", "Oldest telemetry"], minutes_ago: ["Min. zuvor", "min ago"],
       topology: ["Hardware-Topologie", "Hardware topology"], model: ["Modell", "Model"], profile: ["Profil", "Profile"], communication: ["Kommunikation", "Communication"], status: ["Status", "Status"], last_data: ["Letzte Daten", "Last data"], battery_pack: ["Akku-Pack", "Battery Pack"], zendure_pack: ["Zendure-Akku-Pack", "Zendure battery pack"], telemetry: ["Telemetrie", "Telemetry"], unavailable: ["Nicht verfügbar", "Not available"], online: ["ONLINE", "ONLINE"], offline: ["OFFLINE", "OFFLINE"], unknown_path: ["Kommunikationsweg unbekannt", "Communication path unknown"], unknown_status: ["Status unbekannt", "Status unknown"], no_packs: ["Keine Akku-Packs erkannt", "No battery packs detected"], native_empty: ["Die native Hardwareübersicht ist noch nicht verfügbar. Erkannte Zendure-Geräte und angeschlossene Akku-Packs erscheinen hier.", "The native hardware inventory is not available yet. Discovered Zendure systems and attached battery packs will appear here."], system_signals: ["Systemsignale", "System signals"], matching_entities: ["passende Entitäten", "matching entities"], waiting_entities: ["Warte auf Battery-SmartFlow-AI-Entitäten.", "Waiting for Battery SmartFlow AI entities."], footer: ["Battery SmartFlow AI · Steuerung über Home Assistant", "Battery SmartFlow AI · Home Assistant-powered controls"],
     };
@@ -192,7 +235,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _reading(entities, title, terms, hint = "") {
     const entity = this._find(entities, terms);
-    return `<article class="reading"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${!entity ? `<small>${this._escape(hint || this._t("unavailable"))}</small>` : ""}</article>`;
+    const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"` : "";
+    return `<article class="reading${entity ? " history-card" : ""}"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(hint || this._t("unavailable"))}</small>`}</article>`;
   }
 
   _forecastStatus(entities) {
@@ -238,7 +282,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const entity = this._find(entities, terms);
     const numeric = entity && !["unknown", "unavailable"].includes(entity.state) && Number.isFinite(Number(entity.state));
     const displayedWidth = numeric ? Math.max(0, Math.min(100, width)) : 0;
-    return `<div class="flow-row"><div class="flow-node"><small>${this._escape(this._t("source"))}</small><strong>${this._escape(this._t(source))}</strong></div><div class="flow-route ${numeric ? "" : "unavailable"}" role="img" aria-label="${this._escape(title)}"><small class="flow-label">${this._escape(title)}</small><div class="flow-direction"><span>→</span><div class="flow-track"><i style="width:${displayedWidth}%"></i></div></div></div><div class="flow-node"><small>${this._escape(this._t("destination"))}</small><strong>${this._escape(this._t(destination))}</strong></div><strong class="flow-value">${this._escape(this._value(entity))}</strong></div>`;
+    const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"` : "";
+    return `<div class="flow-row${entity ? " history-card" : ""}"${history}><div class="flow-node"><small>${this._escape(this._t("source"))}</small><strong>${this._escape(this._t(source))}</strong></div><div class="flow-route ${numeric ? "" : "unavailable"}" role="img" aria-label="${this._escape(title)}"><small class="flow-label">${this._escape(title)}</small><div class="flow-direction"><span>→</span><div class="flow-track"><i style="width:${displayedWidth}%"></i></div></div></div><div class="flow-node"><small>${this._escape(this._t("destination"))}</small><strong>${this._escape(this._t(destination))}</strong></div><strong class="flow-value">${this._escape(this._value(entity))}</strong></div>`;
   }
 
   _powerCard(title, entityId, hint = "") {
@@ -255,7 +300,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
         value = `${watts.toLocaleString(locale, { maximumFractionDigits: 1 })} W`;
       }
     }
-    return `<article class="reading power-reading"><span>${this._escape(displayTitle)}</span><strong>${this._escape(value)}</strong>${!entity ? `<small>${this._escape(hint || this._t("source_unavailable"))}</small>` : ""}</article>`;
+    const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${displayTitle} · ${this._t("show_history")}`)}"` : "";
+    return `<article class="reading power-reading${entity ? " history-card" : ""}"${history}><span>${this._escape(displayTitle)}</span><strong>${this._escape(value)}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(hint || this._t("source_unavailable"))}</small>`}</article>`;
   }
 
   _livePowerView(entities) {
@@ -536,7 +582,172 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (!entity || ["unknown", "unavailable"].includes(entity.state)) {
       entity = this._find(this._entities(), fallbackTerms);
     }
-    return `<article class="metric"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${!entity ? `<small>${this._escape(this._t("waiting_entity"))}</small>` : ""}</article>`;
+    const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"` : "";
+    return `<article class="metric${entity ? " history-card" : ""}"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(this._t("waiting_entity"))}</small>`}</article>`;
+  }
+
+  _openHistory(entityId) {
+    if (!entityId || !this._hass || !this._hass.states[entityId]) return;
+    this._chartOriginView = this._view === "history" ? this._chartOriginView : this._view;
+    this._chartEntityId = entityId;
+    this._chartRange = "day";
+    this._chartData = [];
+    this._chartError = "";
+    this._chartRequestKey = "";
+    this._view = "history";
+    this._loadHistory();
+    this._scheduleRender();
+  }
+
+  _loadHistory() {
+    const entityId = this._chartEntityId;
+    if (!entityId || !this._hass || typeof this._hass.callWS !== "function") return;
+    const ranges = { hour: 60, day: 24 * 60, week: 7 * 24 * 60, month: 30 * 24 * 60 };
+    const minutes = ranges[this._chartRange] || ranges.day;
+    const end = new Date();
+    const start = new Date(end.getTime() - minutes * 60 * 1000);
+    const key = `${entityId}|${this._chartRange}|${Math.floor(end.getTime() / 30000)}`;
+    if (key === this._chartRequestKey) return;
+    this._chartRequestKey = key;
+    this._chartData = [];
+    this._chartError = "";
+    const requestSerial = ++this._chartRequestSerial;
+    this._hass.callWS({
+      type: "history/history_during_period",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      entity_ids: [entityId],
+      minimal_response: true,
+      no_attributes: true,
+      significant_changes_only: true,
+    }).then((history) => {
+      if (requestSerial !== this._chartRequestSerial) return;
+      const rows = Array.isArray(history) && Array.isArray(history[0]) ? history[0] : [];
+      this._chartData = rows
+        .map((row) => ({ time: Date.parse(row.last_changed || row.last_updated), value: Number(row.state) }))
+        .filter((row) => Number.isFinite(row.time) && Number.isFinite(row.value))
+        .sort((a, b) => a.time - b.time);
+      this._chartError = "";
+      this._scheduleRender();
+    }).catch((error) => {
+      if (requestSerial !== this._chartRequestSerial) return;
+      this._chartData = [];
+      this._chartError = String(error && error.message ? error.message : error);
+      this._scheduleRender();
+    });
+  }
+
+  _historyChart(entity) {
+    const rangeMinutes = { hour: 60, day: 24 * 60, week: 7 * 24 * 60, month: 30 * 24 * 60 }[this._chartRange] || 1440;
+    const end = Date.now();
+    const start = end - rangeMinutes * 60 * 1000;
+    const count = 72;
+    const attrs = entity.attributes || {};
+    const isCounter = attrs.state_class === "total_increasing" || attrs.state_class === "total";
+    const buckets = Array.from({ length: count }, () => (isCounter ? 0 : null));
+    const points = this._chartData;
+    if (isCounter) {
+      for (let i = 1; i < points.length; i += 1) {
+        let delta = points[i].value - points[i - 1].value;
+        if (delta < 0) {
+          if (attrs.state_class === "total" && points[i].value >= 0) delta = points[i].value;
+          else continue;
+        }
+        if (delta === 0) continue;
+        const bucket = Math.min(count - 1, Math.max(0, Math.floor((points[i].time - start) / (end - start) * count)));
+        buckets[bucket] += delta;
+      }
+    } else {
+      points.forEach((point) => {
+        const bucket = Math.min(count - 1, Math.max(0, Math.floor((point.time - start) / (end - start) * count)));
+        buckets[bucket] = point.value;
+      });
+      let previous = null;
+      buckets.forEach((value, index) => {
+        if (value !== null) previous = value;
+        else if (previous !== null) buckets[index] = previous;
+      });
+    }
+    const populated = isCounter ? buckets.some((value) => value > 0) : points.length > 0;
+    const visibleBuckets = buckets.filter((value) => value !== null);
+    const currentValue = Number(entity.state);
+    const rangeValues = [...visibleBuckets, ...(Number.isFinite(currentValue) ? [currentValue] : [])];
+    const minValue = isCounter ? 0 : Math.min(...rangeValues);
+    const maxValue = Math.max(...rangeValues, isCounter ? 0 : minValue + 1);
+    const span = maxValue - minValue || 1;
+    const width = 900;
+    const height = 300;
+    const plotLeft = 92;
+    const plotWidth = width - plotLeft;
+    const chartPoints = buckets.map((value, index) => ({
+      x: plotLeft + (index / Math.max(1, count - 1)) * plotWidth,
+      y: height - (((value === null ? minValue : value) - minValue) / span) * (height - 24) - 12,
+      value,
+    }));
+    const path = isCounter
+      ? ""
+      : (() => {
+        let drawing = false;
+        return chartPoints.map((point) => {
+          if (point.value === null) {
+            drawing = false;
+            return "";
+          }
+          const command = drawing ? "L" : "M";
+          drawing = true;
+          return `${command}${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+        }).filter(Boolean).join(" ");
+      })();
+    const bars = isCounter ? chartPoints.map((point, index) => {
+      const barWidth = plotWidth / count * 0.66;
+      const barHeight = Math.max(0, (point.value / (maxValue || 1)) * (height - 24));
+      return `<rect x="${(point.x - barWidth / 2).toFixed(1)}" y="${(height - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="2" class="chart-bar"><title>${this._escape(`${this._formatHistoryTime(start + index / count * (end - start))}: ${this._formatHistoryValue(point.value, attrs.unit_of_measurement)}`)}</title></rect>`;
+    }).join("") : "";
+    const line = path ? `<path d="${path}" class="chart-line"/>` : "";
+    const labels = [0, 1, 2, 3].map((index) => {
+      const y = 18 + index * ((height - 36) / 3);
+      const value = maxValue - (index / 3) * span;
+      return `<g><line x1="${plotLeft}" x2="${width}" y1="${y}" y2="${y}" class="chart-gridline"/><text x="0" y="${y - 4}" class="chart-axis-label">${this._escape(this._formatHistoryValue(value, attrs.unit_of_measurement))}</text></g>`;
+    }).join("");
+    const statusMessage = this._chartError
+      ? `<div class="empty">${this._escape(this._t("history_error"))}</div>`
+      : !populated
+        ? `<div class="empty">${this._escape(this._t("history_empty"))}</div>`
+        : "";
+    const summary = points.length ? this._historySummary(points, attrs.unit_of_measurement, isCounter, buckets) : "";
+    return `<section class="section history-section"><div class="section-head"><div><h2>${this._escape(this._label(entity))}</h2><small>${this._escape(attrs.unit_of_measurement || this._t("sensor_history"))}</small></div><button class="tab" type="button" data-history-back>${this._escape(this._t("back_to_dashboard"))}</button></div><div class="history-current"><span>${this._escape(this._t("current_value"))}</span><strong>${this._escape(this._value(entity))}</strong></div><div class="history-ranges">${[["hour", "1 h"], ["day", this._t("day")], ["week", this._t("week")], ["month", this._t("month")]].map(([range, label]) => `<button type="button" class="tab ${this._chartRange === range ? "active" : ""}" data-history-range="${range}">${this._escape(label)}</button>`).join("")}</div>${statusMessage || `<div class="history-chart-wrap"><svg class="history-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${this._escape(this._t("history_chart"))}">${labels}${bars}${line}</svg></div>`}<div class="history-axis"><span>${this._escape(this._formatHistoryTime(start))}</span><span>${this._escape(this._formatHistoryTime(end))}</span></div>${summary ? `<div class="history-summary">${summary}</div>` : ""}<p class="explain">${this._escape(this._t(isCounter ? "history_counter_note" : "history_note"))}</p></section>`;
+  }
+
+  _formatHistoryTime(timestamp) {
+    const date = new Date(timestamp);
+    const options = this._chartRange === "hour" || this._chartRange === "day"
+      ? { hour: "2-digit", minute: "2-digit" }
+      : { day: "2-digit", month: "2-digit", hour: "2-digit" };
+    return date.toLocaleString(this._hass && this._hass.locale ? this._hass.locale.language : undefined, options);
+  }
+
+  _formatHistoryValue(value, unit) {
+    const locale = this._hass && this._hass.locale ? this._hass.locale.language : undefined;
+    const normalizedUnit = String(unit || "").toLowerCase().replace(/\s+/g, "");
+    const precision = normalizedUnit === "kwh" ? 3 : ["eur", "€", "eur/kwh", "€/kwh"].includes(normalizedUnit) ? 2 : 1;
+    return `${Number(value).toLocaleString(locale, { maximumFractionDigits: precision })}${unit ? ` ${unit}` : ""}`;
+  }
+
+  _historySummary(points, unit, isCounter, buckets) {
+    if (isCounter) {
+      const increase = buckets.reduce((sum, value) => sum + value, 0);
+      const maximumInterval = Math.max(0, ...buckets);
+      return [[this._t("period_increase"), increase], [this._t("max_interval"), maximumInterval]]
+        .map(([label, value]) => `<span>${this._escape(label)} <strong>${this._escape(this._formatHistoryValue(value, unit))}</strong></span>`)
+        .join("");
+    }
+    const values = points.map((point) => point.value);
+    const minimum = Math.min(...values);
+    const maximum = Math.max(...values);
+    const latest = values[values.length - 1];
+    return [[this._t("minimum"), minimum], [this._t("maximum"), maximum], [this._t("latest"), latest]]
+      .map(([label, value]) => `<span>${this._escape(label)} <strong>${this._escape(this._formatHistoryValue(value, unit))}</strong></span>`)
+      .join("");
   }
 
   _overviewMetrics(entities) {
@@ -590,7 +801,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
       return Number.isFinite(stamp) && stamp > latest ? stamp : latest;
     }, 0);
     const updated = lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : this._t("no_data");
-    const activeContent = this._view === "energy"
+    const historyEntity = this._chartEntityId && this._hass.states[this._chartEntityId];
+    const activeContent = this._view === "history" && historyEntity
+      ? this._historyChart(historyEntity)
+      : this._view === "energy"
       ? this._energyView(entities)
       : this._view === "economics"
         ? this._economicsView(entities)
@@ -614,7 +828,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
             const systemDetailId = `system-details-${systemIndex}`;
             return `<article class="system-card"><div class="system-head"><div><strong>${this._escape(system.name || this._t("system"))}</strong><small>${this._escape(system.model || system.profile || this._t("zendure_hardware"))}</small></div><div class="system-actions"><span class="status ${system.online ? "" : "offline"}">${this._escape(this._t(system.online ? "online" : "offline"))}</span><button class="details-toggle" type="button" data-details-toggle="${systemDetailId}" aria-controls="${systemDetailId}" aria-expanded="false">${this._escape(this._t("details"))}</button></div></div><div class="device-meta">${this._escape(system.transport || this._t("unknown_path"))} · ${this._escape(system.status || this._t("unknown_status"))}</div><div class="packs">${packCards || `<div class="device-meta">${this._escape(this._t("no_packs"))}</div>`}</div><aside class="hover-details" id="${systemDetailId}"><h3>${this._escape(system.name || this._t("system"))}</h3>${systemDetails}${this._detailRows(systemEntities)}</aside></article>`;
           }).join("")}</div>` : `<div class="empty">${this._escape(this._t("native_empty"))}</div>`}
-        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${systemSignals.length} ${this._escape(this._t("additional_signals"))}</small></div><div class="inventory signal-grid">${systemSignals.map((entity) => `<div class="entity signal-entity"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(this._value(entity))}">${this._escape(this._value(entity))}</strong></div>`).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
+        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${systemSignals.length} ${this._escape(this._t("additional_signals"))}</small></div><div class="inventory signal-grid">${systemSignals.map((entity) => `<div class="entity signal-entity history-card" data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${this._signalLabel(entity)} · ${this._t("show_history")}`)}"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(this._value(entity))}">${this._escape(this._value(entity))}</strong></div>`).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
 
     this.shadowRoot.innerHTML = `
       <style>
@@ -635,9 +849,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         @media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:none}}
         .system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block!important}
         .signal-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))}.signal-entity{grid-template-columns:minmax(0,1fr) minmax(8rem,35%);align-items:center}.signal-value{max-width:none;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+        .history-card{cursor:pointer;transition:border-color .15s ease,transform .15s ease}.history-card:hover,.history-card:focus-visible{border-color:var(--cyan);transform:translateY(-1px);outline:2px solid #16c4df55;outline-offset:1px}.history-card small{font-size:11px}.home-link{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:9px 12px;border:1px solid #3f6578;border-radius:8px;background:#1a3442;color:#d9f5fb;text-decoration:none;font-size:13px}.home-link:hover,.home-link:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.history-section .section-head>div{min-width:0;overflow-wrap:anywhere}.history-section .section-head small{display:block;margin-top:5px;overflow-wrap:anywhere}.history-current{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;padding:15px 17px;border:1px solid #41464b;border-left:3px solid var(--cyan);border-radius:10px;background:#272b2f}.history-current span{color:var(--muted)}.history-current strong{font-size:clamp(20px,3vw,28px);font-variant-numeric:tabular-nums}.history-ranges{display:flex;gap:7px;margin:14px 0;overflow-x:auto}.history-chart-wrap{width:100%;padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428;overflow:hidden}.history-chart{display:block;width:100%;height:auto;min-height:180px;overflow:visible}.chart-gridline{stroke:#41464b;stroke-width:1}.chart-axis-label{fill:#a4a9af;font-size:11px}.chart-line{fill:none;stroke:#16c4df;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.chart-bar{fill:#16c4df;opacity:.86}.history-axis{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:var(--muted);font-size:11px}.history-summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:13px}.history-summary span{display:flex;gap:7px;padding:9px 12px;border:1px solid #41464b;border-radius:999px;background:#25292d;color:var(--muted);font-size:12px}.history-summary strong{color:#e7e9eb;font-variant-numeric:tabular-nums}
+        @media(max-width:520px){.shell{padding:16px 12px 34px}.home-link{min-height:44px}.history-chart-wrap{padding:6px}.history-chart{min-height:160px}.history-current{padding:12px}.history-section .section-head{flex-direction:row;align-items:center}}
       </style>
       <main class="shell">
-        <header><div><h1>Battery SmartFlow AI</h1><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
+        <header><div><h1>Battery SmartFlow AI</h1><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
         <section class="section"><div class="section-head"><h2>${this._escape(this._t("energy_overview"))}</h2><small>${this._escape(this._t("live_values"))}</small></div><div class="metric-groups">${cards}</div></section>
         <nav aria-label="${this._escape(this._t("dashboard_views"))}"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">${this._escape(this._t("overview"))}</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">${this._escape(this._t("energy"))}</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">${this._escape(this._t("economics"))}</button><button class="tab ${this._view === "controls" ? "active" : ""}" data-view="controls">${this._escape(this._t("controls"))}</button></nav>
         ${activeContent}
