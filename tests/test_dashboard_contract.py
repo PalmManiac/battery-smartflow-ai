@@ -74,8 +74,15 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('data-history-back', frontend)
         self.assertIn('href="/" data-home', frontend)
         self.assertIn('this._hass.navigate("/")', frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.7"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=21"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.8"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=22"', dashboard)
+        self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
+        self.assertIn("history[entityId]", frontend)
+        self.assertIn("row.s ?? row.state", frontend)
+        self.assertIn("row.lc ?? row.lu ?? row.last_changed", frontend)
+        self.assertIn(".history-card:hover{border-color:var(--cyan)}", frontend)
+        self.assertNotIn("transform:translateY(-1px)", frontend)
+        self.assertIn("row.lu ?? row.last_changed", frontend)
 
 
 if __name__ == "__main__":
