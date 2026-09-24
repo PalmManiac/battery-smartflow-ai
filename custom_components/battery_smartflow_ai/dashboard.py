@@ -31,7 +31,7 @@ _PANEL_PATH = "battery-smartflow-ai"
 _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
-DASHBOARD_VERSION = "1.0.9"
+DASHBOARD_VERSION = "1.1.0"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -188,9 +188,9 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         hass,
         frontend_url_path=_PANEL_PATH,
         webcomponent_name=_PANEL_NAME,
-        sidebar_title="SmartFlow",
+        sidebar_title="BSFAI Portal",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=23",
+        module_url=f"{_PANEL_URL}?v=24",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,
