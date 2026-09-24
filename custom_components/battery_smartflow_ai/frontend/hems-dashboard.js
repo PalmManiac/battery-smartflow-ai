@@ -691,7 +691,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
     });
     const rows = result && Array.isArray(result[entityId]) ? result[entityId] : [];
     const data = rows.map((row) => {
-      const time = typeof row.start === "number" ? row.start * 1000 : Date.parse(row.start || "");
+      // Recorder statistics timestamps are serialized as epoch milliseconds.
+      const time = typeof row.start === "number" ? row.start : Date.parse(row.start || "");
       const rawValue = isCounter ? row.sum ?? row.state : row.mean ?? row.state;
       const value = rawValue === null || rawValue === undefined ? Number.NaN : Number(rawValue);
       const rawDelta = row.change;
@@ -762,8 +763,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }
     const populated = isCounter ? buckets.some((value) => value > 0) : points.length > 0;
     const visibleBuckets = buckets.filter((value) => value !== null);
-    const currentValue = Number(entity.state);
-    const rangeValues = [...visibleBuckets, ...(Number.isFinite(currentValue) ? [currentValue] : [])];
+    const rangeValues = visibleBuckets.length ? visibleBuckets : [0];
     const minValue = isCounter ? 0 : Math.min(...rangeValues);
     const maxValue = Math.max(...rangeValues, isCounter ? 0 : minValue + 1);
     const span = maxValue - minValue || 1;
