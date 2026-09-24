@@ -622,11 +622,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       significant_changes_only: true,
     }).then((history) => {
       if (requestSerial !== this._chartRequestSerial) return;
-      const rows = Array.isArray(history) && Array.isArray(history[0]) ? history[0] : [];
-      this._chartData = rows
-        .map((row) => ({ time: Date.parse(row.last_changed || row.last_updated), value: Number(row.state) }))
-        .filter((row) => Number.isFinite(row.time) && Number.isFinite(row.value))
-        .sort((a, b) => a.time - b.time);
+      this._chartData = this._parseHistoryResponse(history, entityId);
       this._chartError = "";
       this._scheduleRender();
     }).catch((error) => {
@@ -635,6 +631,26 @@ class BatterySmartFlowDashboard extends HTMLElement {
       this._chartError = String(error && error.message ? error.message : error);
       this._scheduleRender();
     });
+  }
+
+  _parseHistoryResponse(history, entityId) {
+    const rows = history && Array.isArray(history[entityId])
+      ? history[entityId]
+      : Array.isArray(history) && Array.isArray(history[0])
+        ? history[0]
+        : Array.isArray(history)
+          ? history
+          : [];
+    return rows
+      .map((row) => {
+        const rawTime = row.lc ?? row.lu ?? row.last_changed ?? row.last_updated;
+        const time = typeof rawTime === "number"
+          ? rawTime * 1000
+          : Date.parse(rawTime || "");
+        return { time, value: Number(row.s ?? row.state) };
+      })
+      .filter((row) => Number.isFinite(row.time) && Number.isFinite(row.value))
+      .sort((a, b) => a.time - b.time);
   }
 
   _historyChart(entity) {
@@ -849,7 +865,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         @media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:none}}
         .system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block!important}
         .signal-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))}.signal-entity{grid-template-columns:minmax(0,1fr) minmax(8rem,35%);align-items:center}.signal-value{max-width:none;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-        .history-card{cursor:pointer;transition:border-color .15s ease,transform .15s ease}.history-card:hover,.history-card:focus-visible{border-color:var(--cyan);transform:translateY(-1px);outline:2px solid #16c4df55;outline-offset:1px}.history-card small{font-size:11px}.home-link{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:9px 12px;border:1px solid #3f6578;border-radius:8px;background:#1a3442;color:#d9f5fb;text-decoration:none;font-size:13px}.home-link:hover,.home-link:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.history-section .section-head>div{min-width:0;overflow-wrap:anywhere}.history-section .section-head small{display:block;margin-top:5px;overflow-wrap:anywhere}.history-current{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;padding:15px 17px;border:1px solid #41464b;border-left:3px solid var(--cyan);border-radius:10px;background:#272b2f}.history-current span{color:var(--muted)}.history-current strong{font-size:clamp(20px,3vw,28px);font-variant-numeric:tabular-nums}.history-ranges{display:flex;gap:7px;margin:14px 0;overflow-x:auto}.history-chart-wrap{width:100%;padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428;overflow:hidden}.history-chart{display:block;width:100%;height:auto;min-height:180px;overflow:visible}.chart-gridline{stroke:#41464b;stroke-width:1}.chart-axis-label{fill:#a4a9af;font-size:11px}.chart-line{fill:none;stroke:#16c4df;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.chart-bar{fill:#16c4df;opacity:.86}.history-axis{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:var(--muted);font-size:11px}.history-summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:13px}.history-summary span{display:flex;gap:7px;padding:9px 12px;border:1px solid #41464b;border-radius:999px;background:#25292d;color:var(--muted);font-size:12px}.history-summary strong{color:#e7e9eb;font-variant-numeric:tabular-nums}
+        .history-card{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}.history-card:hover{border-color:var(--cyan)}.history-card:focus-visible{border-color:var(--cyan);box-shadow:0 0 0 2px #16c4df55}.history-card small{font-size:11px}.home-link{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:9px 12px;border:1px solid #3f6578;border-radius:8px;background:#1a3442;color:#d9f5fb;text-decoration:none;font-size:13px}.home-link:hover,.home-link:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.history-section .section-head>div{min-width:0;overflow-wrap:anywhere}.history-section .section-head small{display:block;margin-top:5px;overflow-wrap:anywhere}.history-current{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;padding:15px 17px;border:1px solid #41464b;border-left:3px solid var(--cyan);border-radius:10px;background:#272b2f}.history-current span{color:var(--muted)}.history-current strong{font-size:clamp(20px,3vw,28px);font-variant-numeric:tabular-nums}.history-ranges{display:flex;gap:7px;margin:14px 0;overflow-x:auto}.history-chart-wrap{width:100%;padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428;overflow:hidden}.history-chart{display:block;width:100%;height:auto;min-height:180px;overflow:visible}.chart-gridline{stroke:#41464b;stroke-width:1}.chart-axis-label{fill:#a4a9af;font-size:11px}.chart-line{fill:none;stroke:#16c4df;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.chart-bar{fill:#16c4df;opacity:.86}.history-axis{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:var(--muted);font-size:11px}.history-summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:13px}.history-summary span{display:flex;gap:7px;padding:9px 12px;border:1px solid #41464b;border-radius:999px;background:#25292d;color:var(--muted);font-size:12px}.history-summary strong{color:#e7e9eb;font-variant-numeric:tabular-nums}
         @media(max-width:520px){.shell{padding:16px 12px 34px}.home-link{min-height:44px}.history-chart-wrap{padding:6px}.history-chart{min-height:160px}.history-current{padding:12px}.history-section .section-head{flex-direction:row;align-items:center}}
       </style>
       <main class="shell">
