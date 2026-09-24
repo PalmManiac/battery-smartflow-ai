@@ -583,8 +583,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (!entity || ["unknown", "unavailable"].includes(entity.state)) {
       entity = this._find(this._entities(), fallbackTerms);
     }
-    if (title === this._t("battery") && this._isSocLimitEntity(entity)) {
-      entity = this._findBatterySoc(this._entities());
+    if (title === this._t("battery")) {
+      entity = this._findBatterySoc(this._entities(), entityId) || entity;
     }
     const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"` : "";
     return `<article class="metric${entity ? " history-card" : ""}"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(this._t("waiting_entity"))}</small>`}</article>`;
@@ -593,21 +593,34 @@ class BatterySmartFlowDashboard extends HTMLElement {
   _isSocLimitEntity(entity) {
     if (!entity) return false;
     const text = this._searchText(`${entity.entity_id} ${this._label(entity)}`);
-    return /(?:soc|ladezustand|state of charge).*(?:min|minimum|max|maximum|limit)|(?:min|minimum|max|maximum|limit).*(?:soc|ladezustand|state of charge)|hardware.*soc/.test(text);
+    const terms = text.split(" ");
+    const mentionsSoc = terms.includes("soc") || text.includes("state of charge") || terms.includes("ladezustand");
+    const mentionsLimit = terms.some((term) => ["min", "minimum", "max", "maximum", "limit", "grenze", "reserve"].includes(term));
+    return mentionsSoc && mentionsLimit || text.includes("hardware soc");
   }
 
-  _findBatterySoc(entities) {
+  _findBatterySoc(entities, configuredEntityId) {
     const candidates = entities.filter((entity) =>
-      !this._isSocLimitEntity(entity) && !["unknown", "unavailable"].includes(entity.state));
-    const matches = (entity, terms) => {
-      const text = this._searchText(`${entity.entity_id} ${this._label(entity)}`);
-      return terms.every((term) => text.includes(this._searchText(term)));
-    };
-    return candidates.find((entity) => matches(entity, ["state of charge"]))
-      || candidates.find((entity) => matches(entity, ["ladezustand"]))
-      || candidates.find((entity) => matches(entity, ["battery", "soc"]))
-      || candidates.find((entity) => matches(entity, ["akku", "soc"]))
-      || candidates.find((entity) => matches(entity, ["soc"]));
+      entity.entity_id.startsWith("sensor.")
+      && !this._isSocLimitEntity(entity)
+      && !["unknown", "unavailable"].includes(entity.state)
+      && Number.isFinite(Number(entity.state)));
+    const configured = candidates.find((entity) => entity.entity_id === configuredEntityId);
+    const configuredText = configured ? this._searchText(`${configured.entity_id} ${this._label(configured)}`) : "";
+    if (configured && /state of charge|ladezustand|battery soc|akku soc|soc pct|soc percent/.test(configuredText)) {
+      return configured;
+    }
+    const textFor = (entity) => this._searchText(`${entity.entity_id} ${this._label(entity)}`);
+    const isPack = (entity) => /(?:battery|akku) pack|pack \d+/.test(textFor(entity));
+    const systemLevel = candidates
+      .filter((entity) => !isPack(entity))
+      .find((entity) => /state of charge|ladezustand|soc pct|soc percent/.test(textFor(entity)));
+    if (systemLevel) return systemLevel;
+
+    if (configured) return configured;
+    return candidates
+      .filter((entity) => isPack(entity))
+      .find((entity) => /state of charge|ladezustand|soc pct|soc percent/.test(textFor(entity))) || null;
   }
 
   _openHistory(entityId) {
