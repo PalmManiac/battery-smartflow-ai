@@ -62,6 +62,21 @@ class DashboardContractTests(unittest.TestCase):
 
         self.assertIn('this._find(entities, [sensorKey])', frontend)
 
+    def test_history_view_uses_recorder_and_offers_mobile_home_navigation(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+
+        self.assertIn('type: "history/history_during_period"', frontend)
+        self.assertIn('data-history-entity=', frontend)
+        self.assertIn('data-history-range=', frontend)
+        self.assertIn('data-history-back', frontend)
+        self.assertIn('href="/" data-home', frontend)
+        self.assertIn('this._hass.navigate("/")', frontend)
+        self.assertIn('DASHBOARD_VERSION = "1.0.7"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=21"', dashboard)
+
 
 if __name__ == "__main__":
     unittest.main()
