@@ -27,6 +27,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._chartOriginView = "overview";
     this._chartRange = "day";
     this._chartData = [];
+    this._chartDataIsStatistic = false;
     this._chartError = "";
     this._chartRequestKey = "";
     this._chartRequestSerial = 0;
@@ -582,8 +583,31 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (!entity || ["unknown", "unavailable"].includes(entity.state)) {
       entity = this._find(this._entities(), fallbackTerms);
     }
+    if (title === this._t("battery") && this._isSocLimitEntity(entity)) {
+      entity = this._findBatterySoc(this._entities());
+    }
     const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"` : "";
     return `<article class="metric${entity ? " history-card" : ""}"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(this._t("waiting_entity"))}</small>`}</article>`;
+  }
+
+  _isSocLimitEntity(entity) {
+    if (!entity) return false;
+    const text = this._searchText(`${entity.entity_id} ${this._label(entity)}`);
+    return /(?:soc|ladezustand|state of charge).*(?:min|minimum|max|maximum|limit)|(?:min|minimum|max|maximum|limit).*(?:soc|ladezustand|state of charge)|hardware.*soc/.test(text);
+  }
+
+  _findBatterySoc(entities) {
+    const candidates = entities.filter((entity) =>
+      !this._isSocLimitEntity(entity) && !["unknown", "unavailable"].includes(entity.state));
+    const matches = (entity, terms) => {
+      const text = this._searchText(`${entity.entity_id} ${this._label(entity)}`);
+      return terms.every((term) => text.includes(this._searchText(term)));
+    };
+    return candidates.find((entity) => matches(entity, ["state of charge"]))
+      || candidates.find((entity) => matches(entity, ["ladezustand"]))
+      || candidates.find((entity) => matches(entity, ["battery", "soc"]))
+      || candidates.find((entity) => matches(entity, ["akku", "soc"]))
+      || candidates.find((entity) => matches(entity, ["soc"]));
   }
 
   _openHistory(entityId) {
@@ -592,6 +616,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._chartEntityId = entityId;
     this._chartRange = "day";
     this._chartData = [];
+    this._chartDataIsStatistic = false;
     this._chartError = "";
     this._chartRequestKey = "";
     this._view = "history";
@@ -610,9 +635,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (key === this._chartRequestKey) return;
     this._chartRequestKey = key;
     this._chartData = [];
+    this._chartDataIsStatistic = false;
     this._chartError = "";
     const requestSerial = ++this._chartRequestSerial;
-    this._hass.callWS({
+    const loadStateHistory = () => this._hass.callWS({
       type: "history/history_during_period",
       start_time: start.toISOString(),
       end_time: end.toISOString(),
@@ -620,9 +646,15 @@ class BatterySmartFlowDashboard extends HTMLElement {
       minimal_response: true,
       no_attributes: true,
       significant_changes_only: true,
-    }).then((history) => {
+    }).then((history) => ({ data: this._parseHistoryResponse(history, entityId), isStatistic: false }));
+    const loadData = ["week", "month"].includes(this._chartRange)
+      ? this._loadLongTermStatistics(entityId, start, end).catch(() => null).then((statistics) =>
+        statistics && statistics.data.length ? statistics : loadStateHistory())
+      : loadStateHistory();
+    loadData.then(({ data, isStatistic }) => {
       if (requestSerial !== this._chartRequestSerial) return;
-      this._chartData = this._parseHistoryResponse(history, entityId);
+      this._chartData = data;
+      this._chartDataIsStatistic = isStatistic;
       this._chartError = "";
       this._scheduleRender();
     }).catch((error) => {
@@ -631,6 +663,43 @@ class BatterySmartFlowDashboard extends HTMLElement {
       this._chartError = String(error && error.message ? error.message : error);
       this._scheduleRender();
     });
+  }
+
+  async _loadLongTermStatistics(entityId, start, end) {
+    const metadata = await this._hass.callWS({
+      type: "recorder/get_statistics_metadata",
+      statistic_ids: [entityId],
+    });
+    const statistic = Array.isArray(metadata)
+      ? metadata.find((item) => item.statistic_id === entityId)
+      : null;
+    if (!statistic) return null;
+
+    const entity = this._hass.states[entityId];
+    const stateClass = entity?.attributes?.state_class;
+    const isCounter = stateClass === "total" || stateClass === "total_increasing";
+    const types = isCounter
+      ? ["change", "sum", "state"]
+      : ["mean", "state"];
+    const result = await this._hass.callWS({
+      type: "recorder/statistics_during_period",
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      statistic_ids: [entityId],
+      period: this._chartRange === "month" ? "day" : "hour",
+      types,
+    });
+    const rows = result && Array.isArray(result[entityId]) ? result[entityId] : [];
+    const data = rows.map((row) => {
+      const time = typeof row.start === "number" ? row.start * 1000 : Date.parse(row.start || "");
+      const rawValue = isCounter ? row.sum ?? row.state : row.mean ?? row.state;
+      const value = rawValue === null || rawValue === undefined ? Number.NaN : Number(rawValue);
+      const rawDelta = row.change;
+      const delta = rawDelta === null || rawDelta === undefined ? null : Number(rawDelta);
+      return { time, value, delta };
+    }).filter((row) => Number.isFinite(row.time) && (Number.isFinite(row.value) || Number.isFinite(row.delta)))
+      .sort((a, b) => a.time - b.time);
+    return { data, isStatistic: true };
   }
 
   _parseHistoryResponse(history, entityId) {
@@ -663,7 +732,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const buckets = Array.from({ length: count }, () => (isCounter ? 0 : null));
     const points = this._chartData;
     if (isCounter) {
-      for (let i = 1; i < points.length; i += 1) {
+      if (this._chartDataIsStatistic) {
+        points.forEach((point) => {
+          const delta = Number.isFinite(point.delta) ? point.delta : point.value;
+          if (!Number.isFinite(delta) || delta <= 0) return;
+          const bucket = Math.min(count - 1, Math.max(0, Math.floor((point.time - start) / (end - start) * count)));
+          buckets[bucket] += delta;
+        });
+      } else for (let i = 1; i < points.length; i += 1) {
         let delta = points[i].value - points[i - 1].value;
         if (delta < 0) {
           if (attrs.state_class === "total" && points[i].value >= 0) delta = points[i].value;
