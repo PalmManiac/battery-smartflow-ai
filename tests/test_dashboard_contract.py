@@ -29,16 +29,38 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"prognose status"', frontend)
 
     def test_system_signals_exclude_controls_and_hardware_details(self) -> None:
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('entity.entity_id.startsWith("sensor.")', frontend)
-        self.assertIn('registryEntry?.platform === "battery_smartflow_ai"', frontend)
-        self.assertIn("!hardwareIds.has(entity.entity_id)", frontend)
+        self.assertIn('"system_signal_entity_ids"', dashboard)
+        self.assertIn('"native_zendure_status"', dashboard)
+        self.assertIn('"native_zendure_error"', dashboard)
+        self.assertIn('"forecast_status"', dashboard)
+        self.assertIn('signalIds.has(entity.entity_id.toLowerCase())', frontend)
         self.assertIn("systemSignals.map((entity)", frontend)
         self.assertNotIn("entities.slice(0, 40)", frontend)
         self.assertIn("overflow-wrap:anywhere}", frontend)
+
+    def test_daily_energy_flows_are_registered_and_resolved_by_unique_id(self) -> None:
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        for key in (
+            "economics_daily_grid_to_battery_kwh",
+            "economics_daily_pv_to_battery_kwh",
+            "economics_daily_grid_export_kwh",
+            "economics_daily_battery_to_home_kwh",
+            "economics_daily_battery_to_grid_kwh",
+            "economics_daily_native_pv_to_home_kwh",
+        ):
+            self.assertIn(f'"{key}"', dashboard)
+            self.assertIn(f'"{key}"', frontend)
+
+        self.assertIn('this._find(entities, [sensorKey])', frontend)
 
 
 if __name__ == "__main__":

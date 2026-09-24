@@ -97,23 +97,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _systemSignalEntities(entities) {
-    const registry = (this._hass && this._hass.entities) || {};
-    const hardwareIds = new Set();
-    (this._currentSystems || []).forEach((system) => {
-      this._deviceEntities(entities, system.name, null).forEach((entity) => {
-        hardwareIds.add(entity.entity_id);
-      });
-      (system.packs || []).forEach((_, index) => {
-        this._deviceEntities(entities, system.name, index + 1).forEach((entity) => {
-          hardwareIds.add(entity.entity_id);
-        });
-      });
-    });
-
+    const signalIds = new Set(
+      (this._panel?.config?.system_signal_entity_ids || []).map((entityId) => entityId.toLowerCase())
+    );
     return entities.filter((entity) => {
-      if (!entity.entity_id.startsWith("sensor.")) return false;
-      const registryEntry = registry[entity.entity_id];
-      return registryEntry?.platform === "battery_smartflow_ai" && !hardwareIds.has(entity.entity_id);
+      return signalIds.has(entity.entity_id.toLowerCase());
     });
   }
 
@@ -319,22 +307,22 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }).filter((value) => value !== null);
     const forecastMax = Math.max(...forecastValues, 0);
     const flowSpecs = [
-      [this._t("pv_battery"), ["economics_daily_pv_to_battery_kwh", "pv to battery", "pv zur batterie"], "node_pv", "node_battery"],
-      [this._t("grid_battery"), ["economics_daily_grid_to_battery_kwh", "grid to battery", "netz zur batterie"], "node_grid", "node_battery"],
-      [this._t("battery_home"), ["economics_daily_battery_to_home_kwh", "battery to home", "akku → haus", "akku zu haus"], "node_battery", "node_home"],
-      [this._t("battery_grid"), ["economics_daily_battery_to_grid_kwh", "battery to grid", "akku → netz", "akku ins netz"], "node_battery", "node_grid"],
-      [this._t("native_pv_home"), ["economics_daily_native_pv_to_home_kwh", "native pv to home", "native pv → haus", "direkt ins haus"], "node_native_pv", "node_home"],
-      [this._t("grid_export"), ["economics_daily_grid_export_kwh", "grid export", "netzeinspeisung", "netz export"], "node_site", "node_grid"],
+      [this._t("pv_battery"), "economics_daily_pv_to_battery_kwh", "node_pv", "node_battery"],
+      [this._t("grid_battery"), "economics_daily_grid_to_battery_kwh", "node_grid", "node_battery"],
+      [this._t("battery_home"), "economics_daily_battery_to_home_kwh", "node_battery", "node_home"],
+      [this._t("battery_grid"), "economics_daily_battery_to_grid_kwh", "node_battery", "node_grid"],
+      [this._t("native_pv_home"), "economics_daily_native_pv_to_home_kwh", "node_native_pv", "node_home"],
+      [this._t("grid_export"), "economics_daily_grid_export_kwh", "node_site", "node_grid"],
     ];
-    const flowValues = flowSpecs.map(([, terms]) => {
-      const entity = this._find(entities, terms);
+    const flowValues = flowSpecs.map(([, sensorKey]) => {
+      const entity = this._find(entities, [sensorKey]);
       return entity && !["unknown", "unavailable"].includes(entity.state) && Number.isFinite(Number(entity.state))
         ? Math.max(0, Number(entity.state))
         : null;
     });
     const largestFlow = Math.max(...flowValues.filter((value) => value !== null), 0);
-    const flowRows = flowSpecs.map(([title, terms, source, destination], index) =>
-      this._flowRow(entities, title, terms, largestFlow ? Math.round((flowValues[index] || 0) / largestFlow * 100) : 0, source, destination)
+    const flowRows = flowSpecs.map(([title, sensorKey, source, destination], index) =>
+      this._flowRow(entities, title, [sensorKey], largestFlow ? Math.round((flowValues[index] || 0) / largestFlow * 100) : 0, source, destination)
     ).join("");
     return `
       ${this._livePowerView(entities)}
