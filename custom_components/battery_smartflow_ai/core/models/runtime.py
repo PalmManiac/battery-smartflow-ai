@@ -63,6 +63,11 @@ class RuntimeSnapshot:
     prev_charge_w: float
 
     battery_capacity_kwh: float
+
+    # Blended grid + PV opportunity price from the economics ledger. When
+    # available, this is the cost basis for economic discharge thresholds;
+    # avg_charge_price remains the legacy SoC-based trading estimate.
+    economics_average_battery_charge_price: float | None = None
     battery_discharge_w: float = 0.0
     last_output_w: float = 0.0
 

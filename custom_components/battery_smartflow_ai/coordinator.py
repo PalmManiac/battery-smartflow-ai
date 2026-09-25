@@ -4657,6 +4657,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     or 0.0
                 ),
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
+                economics_average_battery_charge_price=(
+                    self._economics_engine.total_snapshot().average_battery_charge_price
+                ),
                 expensive_threshold=float(expensive),
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
@@ -6538,6 +6541,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     or 0.0
                 ),
                 avg_charge_price=self._persist.get("trade_avg_charge_price"),
+                economics_average_battery_charge_price=(
+                    economics_total_snapshot.average_battery_charge_price
+                ),
                 expensive_threshold=float(expensive),
                 very_expensive_threshold=float(very_expensive),
                 profit_margin_pct=float(profit_margin_pct),
