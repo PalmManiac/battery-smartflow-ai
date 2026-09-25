@@ -89,8 +89,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.12"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=26"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.13"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=27"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -98,6 +98,20 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn(".history-card:hover{border-color:var(--cyan)}", frontend)
         self.assertNotIn("transform:translateY(-1px)", frontend)
         self.assertIn("row.lu ?? row.last_changed", frontend)
+
+    def test_hardware_pack_cards_show_a_safe_left_to_right_soc_fill(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("_findPackSoc(entities, systemName, packNumber)", frontend)
+        self.assertIn("this._findPackSoc(entities, system.name, packNumber)", frontend)
+        self.assertIn("!this._isSocLimitEntity(entity)", frontend)
+        self.assertIn("Math.min(100, Math.max(0, Number(candidates[0].state)))", frontend)
+        self.assertIn("style=\"--soc-level:${socLevel}%\"", frontend)
+        self.assertIn(".pack-card.has-soc{background:linear-gradient(90deg", frontend)
+        self.assertIn('data-soc-band="${socBand}"', frontend)
+        self.assertIn('class="pack-card${soc == null ? "" : " has-soc"}"', frontend)
 
 
 if __name__ == "__main__":
