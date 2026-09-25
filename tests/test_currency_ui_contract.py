@@ -19,6 +19,13 @@ class CurrencyUiContractTests(unittest.TestCase):
                 self.assertNotIn('native_unit_of_measurement="€"', source)
                 self.assertNotIn("mdi:currency-eur", source)
 
+    def test_display_symbol_mapping_is_central_and_has_iso_fallback(self) -> None:
+        source = (COMPONENT / "price_currency.py").read_text(encoding="utf-8")
+
+        self.assertIn('"EUR": "€"', source)
+        self.assertIn('return CURRENCY_SYMBOLS.get(self.code, self.code)', source)
+        self.assertIn("def canonical_price_unit(self)", source)
+
     def test_price_numbers_use_central_currency_profile_and_unit(self) -> None:
         source = (COMPONENT / "number.py").read_text(encoding="utf-8")
 

@@ -9,6 +9,23 @@ from typing import Any, MutableMapping
 DEFAULT_CURRENCY = "EUR"
 PRICE_STORAGE_MIGRATION_MARKER = "price_currency_storage_migrated"
 
+# Keep the most common display forms aligned with energy-market sensors such
+# as EPEX. Less common but structurally valid ISO codes remain unambiguous by
+# falling back to the code itself.
+CURRENCY_SYMBOLS: dict[str, str] = {
+    "EUR": "€",
+    "USD": "$",
+    "GBP": "£",
+    "CAD": "CA$",
+    "AUD": "A$",
+    "NZD": "NZ$",
+    "DKK": "kr",
+    "SEK": "kr",
+    "NOK": "kr",
+    "CZK": "Kč",
+    "PLN": "zł",
+}
+
 LEGACY_PRICE_FIELD_NAMES: dict[str, str] = {
     "charge_commit_acceptable_price_per_kwh": (
         "charge_commit_acceptable_price_eur_kwh"
@@ -43,8 +60,20 @@ class PriceCurrency:
     used_fallback: bool = False
 
     @property
+    def symbol(self) -> str:
+        """Return a concise display symbol, or the ISO code if unknown."""
+
+        return CURRENCY_SYMBOLS.get(self.code, self.code)
+
+    @property
     def price_unit(self) -> str:
-        """Return the Home Assistant unit used for prices per kWh."""
+        """Return the Home Assistant display unit for prices per kWh."""
+
+        return f"{self.symbol}/kWh"
+
+    @property
+    def canonical_price_unit(self) -> str:
+        """Return the ISO-code unit used internally for normalized prices."""
 
         return f"{self.code}/kWh"
 
