@@ -1671,10 +1671,15 @@ class DecisionEngine:
         return base_price * valley_factor
 
     def _compute_economic_discharge_threshold(self, ctx: DecisionContext) -> Optional[float]:
-        if ctx.avg_charge_price is None:
+        charge_price = (
+            ctx.economics_average_battery_charge_price
+            if ctx.economics_average_battery_charge_price is not None
+            else ctx.avg_charge_price
+        )
+        if charge_price is None:
             return None
         try:
-            avg_charge_price = float(ctx.avg_charge_price)
+            avg_charge_price = float(charge_price)
             margin_pct = float(ctx.profit_margin_pct)
         except Exception:
             return None
@@ -1702,7 +1707,11 @@ class DecisionEngine:
 
         configured_expensive_threshold = max(0.0, configured_expensive_threshold)
 
-        avg_charge_price = ctx.avg_charge_price
+        avg_charge_price = (
+            ctx.economics_average_battery_charge_price
+            if ctx.economics_average_battery_charge_price is not None
+            else ctx.avg_charge_price
+        )
         try:
             avg_charge_price_float = (
                 float(avg_charge_price)

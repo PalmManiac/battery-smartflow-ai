@@ -561,6 +561,37 @@ class Dev6ToDev8RegressionScenarios(unittest.TestCase):
 
 
 class Dev9Point1ChargePowerScenarios(unittest.TestCase):
+    def test_discharge_thresholds_prefer_blended_economics_price(self) -> None:
+        engine = DecisionEngine()
+        ctx = context(
+            avg_charge_price=0.10,
+            economics_average_battery_charge_price=0.30,
+            profit_margin_pct=20.0,
+        )
+
+        self.assertAlmostEqual(
+            engine._compute_economic_discharge_threshold(ctx),
+            0.36,
+        )
+        blended_effective = engine._compute_effective_discharge_threshold(ctx)
+        legacy_effective = engine._compute_effective_discharge_threshold(
+            context(avg_charge_price=0.10, profit_margin_pct=20.0)
+        )
+        self.assertGreater(blended_effective, legacy_effective)
+
+    def test_discharge_threshold_falls_back_without_economics_price(self) -> None:
+        engine = DecisionEngine()
+        ctx = context(
+            avg_charge_price=0.10,
+            economics_average_battery_charge_price=None,
+            profit_margin_pct=20.0,
+        )
+
+        self.assertAlmostEqual(
+            engine._compute_economic_discharge_threshold(ctx),
+            0.12,
+        )
+
     def test_remaining_cheap_window_raises_charge_power(self) -> None:
         requested = requested_charge_power_w(
             required_charge_energy_kwh=1.16,
