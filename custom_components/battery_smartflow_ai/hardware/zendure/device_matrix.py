@@ -348,6 +348,13 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 zensdk_verified=True,
             ),
             _entry(
+                "SF1600AC",
+                "SolarFlow 1600 AC+",
+                "SF1600AC",
+                "solarFlow1600AC+",
+                "SF1600AC+",
+            ),
+            _entry(
                 "SF800Plus",
                 "SolarFlow 800 Plus",
                 "solarFlow800Plus",
