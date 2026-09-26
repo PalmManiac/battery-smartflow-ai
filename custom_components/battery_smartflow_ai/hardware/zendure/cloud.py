@@ -219,7 +219,7 @@ def _parse_bootstrap(payload: Any) -> ZendureCloudBootstrap:
     devices = tuple(_parse_device(item) for item in raw_devices)
     candidate_ids = [item.candidate.candidate_id for item in devices]
     if len(candidate_ids) != len(set(candidate_ids)):
-        _log_duplicate_device_identities(devices)
+        _log_duplicate_device_identities(devices, raw_devices)
         raise ZendureCloudError("duplicate_device_id")
     mqtt = _parse_mqtt(data.get("mqtt"))
     raw_device_list = tuple(
@@ -232,10 +232,24 @@ def _parse_bootstrap(payload: Any) -> ZendureCloudBootstrap:
     )
 
 
-def _log_duplicate_device_identities(devices: tuple[ZendureCloudDevice, ...]) -> None:
-    """Log duplicate positions and non-sensitive model metadata only."""
+def _log_duplicate_device_identities(
+    devices: tuple[ZendureCloudDevice, ...], raw_devices: list[Any]
+) -> None:
+    """Log duplicate positions and a privacy-safe metadata comparison."""
     seen: dict[str, int] = {}
-    duplicates: list[tuple[int, int, str, str]] = []
+    duplicates: list[tuple[int, int, str, str, dict[str, Any]]] = []
+    safe_fields = {
+        "deviceKey": "device_key",
+        "snNumber": "serial_number",
+        "productKey": "product_key",
+        "productModel": "product_model",
+        "deviceName": "device_name",
+        "online": "online",
+        "isOnline": "is_online",
+        "packNum": "pack_count",
+        "packData": "pack_data",
+        "ip": "ip_address",
+    }
     for position, device in enumerate(devices, start=1):
         identity = device.candidate.identity
         key = device.candidate.candidate_id
@@ -245,11 +259,36 @@ def _log_duplicate_device_identities(devices: tuple[ZendureCloudDevice, ...]) ->
             continue
         identity_source = "deviceKey" if identity.device_id else "serialNumber"
         model = identity.product_model or "unknown"
-        duplicates.append((first_position, position, identity_source, model))
+        first_raw = raw_devices[first_position - 1]
+        current_raw = raw_devices[position - 1]
+        if not isinstance(first_raw, Mapping) or not isinstance(current_raw, Mapping):
+            comparison = {"records_identical": False, "comparison_available": False}
+        else:
+            differing_fields = tuple(
+                label
+                for field, label in safe_fields.items()
+                if first_raw.get(field) != current_raw.get(field)
+            )
+            known_fields = set(safe_fields)
+            first_other = {
+                field: value for field, value in first_raw.items() if field not in known_fields
+            }
+            current_other = {
+                field: value for field, value in current_raw.items() if field not in known_fields
+            }
+            comparison = {
+                "records_identical": dict(first_raw) == dict(current_raw),
+                "differing_fields": differing_fields,
+                "other_fields_differ": first_other != current_other,
+            }
+        duplicates.append(
+            (first_position, position, identity_source, model, comparison)
+        )
 
     _LOGGER.warning(
         "Zendure device discovery returned duplicate identities; "
-        "duplicate positions and metadata (no identifier values): %s",
+        "duplicate positions and sanitized metadata comparison "
+        "(no identifier or field values): %s",
         duplicates,
     )
 
