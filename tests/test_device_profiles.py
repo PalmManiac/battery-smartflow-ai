@@ -97,6 +97,21 @@ class MixDeviceProfileTests(unittest.TestCase):
 
 
 class TypedDeviceProfileTests(unittest.TestCase):
+    def test_original_sf800_has_its_own_conservative_profile(self):
+        profile = DEVICE_PROFILES["SF800"]
+        pro = DEVICE_PROFILES["SF800Pro"]
+
+        self.assertEqual(profile["label"], "Zendure SF800")
+        self.assertEqual(profile["MAX_INPUT_W"], 1200.0)
+        self.assertEqual(profile["MAX_OUTPUT_W"], 800.0)
+        self.assertFalse(profile["LOW_SOC_PROTECTION_STRICT"])
+        self.assertFalse(profile["SUPPORTS_PASSTHROUGH"])
+        self.assertFalse(profile["MPPT_CLIPS_WITHOUT_OUTPUT"])
+        self.assertNotEqual(
+            profile["PV_HOUSELOAD_PASSTHROUGH"],
+            pro["PV_HOUSELOAD_PASSTHROUGH"],
+        )
+
     def test_sf800plus_uses_confirmed_limits_and_conservative_800w_tuning(self):
         plus = DEVICE_PROFILES["SF800Plus"]
         pro = DEVICE_PROFILES["SF800Pro"]

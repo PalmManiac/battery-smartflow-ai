@@ -48,6 +48,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
                 "SF2400Pro",
                 "SF2400AC+",
                 "SF1600AC",
+                "SF800",
                 "SF800Plus",
                 "SF800Pro",
                 "SF800Pro2",
@@ -93,6 +94,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             "SF2400Pro": "SolarFlow 2400 Pro",
             "SF2400AC+": "SolarFlow 2400 AC+",
             "SF1600AC": "SolarFlow 1600 AC+",
+            "SF800": "SolarFlow 800",
             "SF800Plus": "SolarFlow 800 Plus",
             "SF800Pro": "SolarFlow 800 Pro",
             "SF800Pro2": "SolarFlow 800 Pro 2",
@@ -131,6 +133,10 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             resolve_zendure_device(identity(product_id="R3mn8U")).profile_key,
             "SF800Pro",
         )
+        self.assertEqual(
+            resolve_zendure_device(identity(product_id="a4ss5P")).profile_key,
+            "SF800",
+        )
         self.assertIsNone(resolve_zendure_device(identity(product_id="guessed")))
 
     def test_display_name_cannot_affect_resolution(self):
@@ -143,11 +149,20 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             resolve_zendure_device(identity(model="SF800Pro2")).profile_key,
             "SF800Pro2",
         )
+        self.assertEqual(
+            resolve_zendure_device(identity(model="SolarFlow 800 Plus")).profile_key,
+            "SF800Plus",
+        )
 
     def test_conflicting_verified_identity_is_rejected(self):
         self.assertIsNone(
             resolve_zendure_device(
                 identity(model="SF800Pro", product_id="BC8B7F")
+            )
+        )
+        self.assertIsNone(
+            resolve_zendure_device(
+                identity(model="SolarFlow 800", product_id="R3mn8U")
             )
         )
 
@@ -215,6 +230,26 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
         self.assertIs(
             entry.transport(ZendureTransport.LOCAL_MQTT).read,
             VerificationLevel.UNKNOWN,
+        )
+
+    def test_original_sf800_is_exactly_mapped_to_zensdk(self):
+        entry = resolve_zendure_device(
+            identity(model="SolarFlow 800", product_id="a4ss5P")
+        )
+
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.profile_key, "SF800")
+        self.assertIs(
+            preferred_local_transport(identity(model="solarFlow800")),
+            ZendureTransport.ZENSDK,
+        )
+        self.assertIs(
+            entry.transport(ZendureTransport.ZENSDK).read,
+            VerificationLevel.VERIFIED,
+        )
+        self.assertIs(
+            entry.property_write_level(ZendureTransport.ZENSDK, "outputLimit"),
+            VerificationLevel.VERIFIED,
         )
 
     def test_pack_observation_does_not_enable_main_system_control(self):
