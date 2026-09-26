@@ -352,8 +352,27 @@ SF800PRO_PROFILE = {
 }
 
 
+# The original SolarFlow 800 is distinct from its Plus and Pro variants.
+# Reuse conservative 800 W-class tuning, but keep Pro-specific passthrough
+# behavior disabled until model-specific field evidence confirms it. Zendure
+# specifies up to 1,200 W charge input depending on the connected battery and
+# 800 W maximum discharge output.
+SF800_PROFILE = {
+    **SF800PRO_PROFILE,
+    **PASSTHROUGH_DISABLED_DEFAULTS,
+    "label": "Zendure SF800",
+    "LOW_SOC_PROTECTION_STRICT": False,
+    "LOW_SOC_PV_CHARGE_REQUIRES_EXPORT": False,
+    "LOW_SOC_DISCHARGE_REQUIRES_CELL_RESUME": False,
+    "SUPPORTS_PASSTHROUGH": False,
+    "MPPT_CLIPS_WITHOUT_OUTPUT": False,
+    "MAX_INPUT_W": 1200.0,
+    "MAX_OUTPUT_W": 800.0,
+}
+
+
 # SolarFlow 800 Plus is a ZenSDK device with the same confirmed AC limits as
-# the SF800Pro (1,000 W input / 800 W output).  Reuse the conservative 800 W
+# the SF800Pro (1,000 W input / 800 W output). Reuse the conservative 800 W
 # controller tuning until model-specific field evidence calls for divergence.
 SF800PLUS_PROFILE = {
     **SF800PRO_PROFILE,
@@ -804,6 +823,7 @@ HUB2000_PROFILE = {
 
 
 DEVICE_PROFILES = {
+    "SF800": SF800_PROFILE,
     "SF800Plus": SF800PLUS_PROFILE,
     "SF800Pro": SF800PRO_PROFILE,
     "SF800Pro2": SF800PRO2_PROFILE,

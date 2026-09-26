@@ -208,6 +208,7 @@ class NativeDeviceCommandGateTests(unittest.IsolatedAsyncioTestCase):
             "SF2400AC",
             "SF2400Pro",
             "SF2400AC+",
+            "SF800",
             "SF800Pro",
             "SF800Pro2",
         ):
