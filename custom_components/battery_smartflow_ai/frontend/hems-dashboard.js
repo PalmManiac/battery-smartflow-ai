@@ -328,17 +328,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
     });
     houseLoads.forEach((entity) => cards.push(this._powerCard(this._t("house_load_source"), entity.entity_id)));
 
-    const systems = this._nativeSystems(entities);
-    systems.forEach((system) => {
-      const systemEntities = this._deviceEntities(entities, system.name, null);
-      const power = systemEntities.find((entity) => /batterieleistung|battery power/.test(this._label(entity).toLowerCase()))
-        || systemEntities.find((entity) => entity.entity_id.toLowerCase().includes("native_hardware_power_w"));
-      const pv = systemEntities.find((entity) => /pv-leistung|pv power/.test(this._label(entity).toLowerCase()))
-        || systemEntities.find((entity) => entity.entity_id.toLowerCase().includes("native_hardware_pv_power_w"));
-      if (power) cards.push(this._powerCard(`${system.name} · ${this._t("battery_source")}`, power.entity_id));
-      if (pv) cards.push(this._powerCard(`${system.name} · ${this._t("pv_source")}`, pv.entity_id));
-    });
-
     return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("power_now"))}</h2><small>${this._escape(this._t("power_note"))}</small></div><div class="reading-grid">${cards.join("") || `<div class="empty">${this._escape(this._t("no_power_readings"))}</div>`}</div></section>`;
   }
 
