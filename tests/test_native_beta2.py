@@ -17,6 +17,7 @@ from custom_components.battery_smartflow_ai.native_capacity import native_capaci
 from custom_components.battery_smartflow_ai.native_device_overview import _difference, _pack_status
 from custom_components.battery_smartflow_ai.native_source_fusion import NativeSourceFusion
 from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import preferred_local_transport, resolve_zendure_device
+from custom_components.battery_smartflow_ai.hardware.shelly_pro_3em import validate_shelly_host
 from custom_components.battery_smartflow_ai.native_config_ui import native_device_label, native_device_summary_line
 from custom_components.battery_smartflow_ai.price_currency import price_input_profile, resolve_price_currency
 from custom_components.battery_smartflow_ai.device_profiles import DEVICE_PROFILE_MODELS
@@ -84,6 +85,8 @@ class FlowBase:
         return {"type": "menu", **kwargs}
     def async_create_entry(self, **kwargs):
         return {"type": "create_entry", **kwargs}
+    def async_update_and_abort(self, entry, **kwargs):
+        return {"type": "abort", "entry": entry, **kwargs}
 
 
 class SelectorStub:
@@ -109,6 +112,7 @@ def load_flow_classes():
         price_input_profile=price_input_profile,
         native_device_label=native_device_label,
         native_device_summary_line=native_device_summary_line,
+        validate_shelly_host=validate_shelly_host,
     )
     from custom_components.battery_smartflow_ai.core.models import ZendureTransport
     namespace["ZendureTransport"] = ZendureTransport
@@ -153,3 +157,31 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         keys = {key.schema for key in flow._base_schema(entry).schema}
         self.assertNotIn(const.CONF_SOC_ENTITY, keys)
         self.assertEqual(entry.data[const.CONF_SOC_ENTITY], "sensor.old")
+
+    async def test_shelly_reconfigure_updates_options_without_unsupported_keyword(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        entry = SimpleNamespace(
+            data={
+                const.CONF_GRID_MODE: const.GRID_MODE_SHELLY_PRO_3EM,
+                const.CONF_SHELLY_PRO_3EM_HOST: "192.168.2.1",
+            },
+            options={
+                const.CONF_SHELLY_PRO_3EM_PASSWORD: "old-password",
+                const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: True,
+            },
+        )
+        flow._get_reconfigure_entry = lambda: entry
+        flow._user_input = dict(entry.data)
+
+        result = await flow.async_step_reconfigure_grid(
+            {const.CONF_SHELLY_PRO_3EM_HOST: "192.168.2.150"}
+        )
+
+        self.assertEqual(result["type"], "abort")
+        self.assertEqual(result["reason"], "reconfigure_success")
+        self.assertEqual(
+            result["data"][const.CONF_SHELLY_PRO_3EM_HOST], "192.168.2.150"
+        )
+        self.assertNotIn(const.CONF_SHELLY_PRO_3EM_PASSWORD, result["options"])
+        self.assertNotIn("options_updates", result)
