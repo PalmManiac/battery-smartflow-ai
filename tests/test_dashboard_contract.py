@@ -102,8 +102,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.16"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=30"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.17"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=31"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -143,8 +143,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('if (normalizedUnit.endsWith("/kwh")) return 4;', frontend)
         self.assertIn('if (["eur", "€"].includes(normalizedUnit)) return 2;', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.16"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=30"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.17"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=31"', dashboard)
 
 
 if __name__ == "__main__":

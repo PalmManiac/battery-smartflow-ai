@@ -39,7 +39,7 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "5.1.0-beta12"
+INTEGRATION_VERSION = "5.1.0-beta13"
 
 # V5 native Zendure discovery is observation-only in the first development
 # build. The App Token is account discovery material and must never be copied
@@ -229,12 +229,14 @@ def normalize_ai_mode(mode: str | None) -> str:
 
 MANUAL_STANDBY = "standby"
 MANUAL_CHARGE = "charge"
+MANUAL_PV_SURPLUS = "pv_surplus"
 MANUAL_DISCHARGE = "discharge"
 MANUAL_CONST_DISCHARGE = "constant_discharge"
 
 MANUAL_ACTIONS = [
     MANUAL_STANDBY,
     MANUAL_CHARGE,
+    MANUAL_PV_SURPLUS,
     MANUAL_DISCHARGE,
     MANUAL_CONST_DISCHARGE,
 ]

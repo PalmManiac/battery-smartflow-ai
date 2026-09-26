@@ -390,6 +390,7 @@
         "state": {
           "standby": "Standby",
           "charge": "Laden",
+          "pv_surplus": "PV-Überschussladen",
           "discharge": "Entladen",
           "constant_discharge": "Konstante Entladung"
         }

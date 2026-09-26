@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, List, Literal, Optional
 
-from .const import MANUAL_CONST_DISCHARGE
+from .const import MANUAL_CONST_DISCHARGE, MANUAL_PV_SURPLUS
 from .core.models.runtime import AiMode, DecisionContext, RuntimeSnapshot
 from .market_price import (
     MarketPrice,
@@ -757,7 +757,11 @@ class PvRule(BaseRule):
             return None
 
         planning = engine._evaluate_adaptive_planning(ctx)
-        if planning is not None:
+        manual_pv_surplus = bool(
+            ctx.ai_mode == "manual"
+            and ctx.manual_action == MANUAL_PV_SURPLUS
+        )
+        if planning is not None and not manual_pv_surplus:
             return None
 
         if ctx.soc >= ctx.soc_max:
@@ -1029,6 +1033,12 @@ class AutarkyLoadCoverageRule(BaseRule):
 class ManualRule(BaseRule):
     def evaluate(self, engine, ctx):
         if ctx.ai_mode != "manual":
+            return None
+
+        if ctx.manual_action == MANUAL_PV_SURPLUS:
+            # Let PvRule apply the existing export threshold, hysteresis and
+            # power-delta logic. Without confirmed surplus it cannot request
+            # grid charging; price rules stay inactive in manual mode.
             return None
 
         if ctx.manual_action == "charge":
