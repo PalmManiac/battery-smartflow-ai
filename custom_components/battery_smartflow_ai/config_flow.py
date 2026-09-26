@@ -521,10 +521,12 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
             if not errors:
-                return self.async_update_reload_and_abort(
+                # The entry update listener reloads the integration after the
+                # data/options change, so use the non-reloading flow helper.
+                return self.async_update_and_abort(
                     entry,
-                    data_updates=cleaned,
-                    options_updates=options_updates,
+                    data=cleaned,
+                    options=options_updates,
                     reason="reconfigure_success",
                 )
 
