@@ -120,8 +120,20 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
             2,
         )
         same_name[1]["deviceKey"] = "a"
-        with self.assertRaisesRegex(ZendureCloudError, "duplicate_device_id"):
-            await ZendureCloudClient(good).async_discover(token())
+        with self.assertLogs(
+            "custom_components.battery_smartflow_ai.hardware.zendure.cloud",
+            level="WARNING",
+        ) as captured:
+            with self.assertRaisesRegex(ZendureCloudError, "duplicate_device_id"):
+                await ZendureCloudClient(good).async_discover(token())
+        log_output = "\n".join(captured.output)
+        self.assertIn("positions and metadata", log_output)
+        self.assertIn("deviceKey", log_output)
+        self.assertIn("'B'", log_output)
+        self.assertNotIn("device-1", log_output)
+        self.assertNotIn("serial-1", log_output)
+        self.assertNotIn("Basement", log_output)
+        self.assertNotIn("secret-app-key", log_output)
 
     async def test_unknown_model_remains_visible_and_unsupported(self):
         async def post(*args, **kwargs):

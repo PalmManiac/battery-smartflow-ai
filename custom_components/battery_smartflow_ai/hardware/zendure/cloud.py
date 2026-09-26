@@ -12,6 +12,7 @@ import binascii
 from copy import deepcopy
 from dataclasses import dataclass, field
 import hashlib
+import logging
 import secrets
 import time
 from typing import Any, Awaitable, Callable, Mapping, Protocol
@@ -31,6 +32,7 @@ CLIENT_ID = "zenHa"
 # Required by Zendure's HA endpoint.  Keep this protocol signing material in
 # the transport adapter; it is not user/account data and must not leave it.
 _SIGNING_KEY = "C*dafwArEOXK"
+_LOGGER = logging.getLogger(__name__)
 
 
 class ZendureCloudError(Exception):
@@ -217,6 +219,7 @@ def _parse_bootstrap(payload: Any) -> ZendureCloudBootstrap:
     devices = tuple(_parse_device(item) for item in raw_devices)
     candidate_ids = [item.candidate.candidate_id for item in devices]
     if len(candidate_ids) != len(set(candidate_ids)):
+        _log_duplicate_device_identities(devices)
         raise ZendureCloudError("duplicate_device_id")
     mqtt = _parse_mqtt(data.get("mqtt"))
     raw_device_list = tuple(
@@ -226,6 +229,28 @@ def _parse_bootstrap(payload: Any) -> ZendureCloudBootstrap:
         devices=devices,
         mqtt=mqtt,
         raw_device_list=raw_device_list,
+    )
+
+
+def _log_duplicate_device_identities(devices: tuple[ZendureCloudDevice, ...]) -> None:
+    """Log duplicate positions and non-sensitive model metadata only."""
+    seen: dict[str, int] = {}
+    duplicates: list[tuple[int, int, str, str]] = []
+    for position, device in enumerate(devices, start=1):
+        identity = device.candidate.identity
+        key = device.candidate.candidate_id
+        first_position = seen.get(key)
+        if first_position is None:
+            seen[key] = position
+            continue
+        identity_source = "deviceKey" if identity.device_id else "serialNumber"
+        model = identity.product_model or "unknown"
+        duplicates.append((first_position, position, identity_source, model))
+
+    _LOGGER.warning(
+        "Zendure device discovery returned duplicate identities; "
+        "duplicate positions and metadata (no identifier values): %s",
+        duplicates,
     )
 
 
