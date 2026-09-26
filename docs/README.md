@@ -20,6 +20,8 @@ gleichzeitig Befehle an dasselbe Gerät senden.
 - [Installation über HACS](installation.md)
 - [Deutsche Anleitung mit bebildertem V5-Schnellstart](anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
 - [English user guide with illustrated V5 quick start](user-guide.md#v5-quick-start-connect-zendure-directly)
+- [V5.1.0 HEMS Portal overview (German)](anleitung.md#v510-das-bsfai-portal)
+- [V5.1.0 HEMS Portal overview (English)](user-guide.md#v510-the-bsfai-portal)
 - [Wirtschaft & Preise im Dashboard](dashboard-wirtschaft-preise.md)
 
 V5 ist jetzt die aktuelle stabile Version. Bei einer bestehenden V4-Installation

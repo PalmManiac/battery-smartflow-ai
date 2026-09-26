@@ -13,6 +13,7 @@
 ## Inhaltsverzeichnis
 
 * [V5-Schnellstart: Zendure direkt verbinden](#v5-schnellstart-zendure-direkt-verbinden)
+* [V5.1.0: Das BSFAI-Portal](#v510-das-bsfai-portal)
 * [Kapitel 1 – Was macht Battery SmartFlow AI?](#kapitel-1--was-macht-battery-smartflow-ai)
 * [Kapitel 2 – Zwingende Voraussetzungen](#kapitel-2--zwingende-voraussetzungen)
 * [Kapitel 3 – Installation](#kapitel-3--installation)
@@ -123,6 +124,58 @@ Datenempfang. Für Support können das *Zendure-Initial-Sync-JSON* und eine
 zeitlich begrenzte BSFAI-Debug-Aufzeichnung hilfreich sein; prüfe beide Dateien
 vor dem Teilen auf persönliche Daten. Schalte die native Steuerung nicht
 parallel zu einer aktiven Z-HA-Regelung ein.
+
+## V5.1.0: Das BSFAI-Portal
+
+V5.1.0 ergänzt ein optionales, eigenständiges Dashboard im Stil eines HEMS-
+Portals. Es fasst aktuelle Home-Assistant-Werte und vorhandene BSFAI-Funktionen
+in einer eigenen Oberfläche zusammen. Das Portal aktiviert keine zusätzliche
+Regelung und spricht die Zendure-Hardware nicht direkt an: Steuerelemente
+verwenden weiterhin die vorhandenen Home-Assistant-Entitäten und -Dienste.
+
+Aktiviere es über **Einstellungen → Geräte & Dienste → Battery SmartFlow AI →
+Konfigurieren** und die Option **HEMS-Dashboard in der Seitenleiste anzeigen**.
+Anschließend erscheint **BSFAI Portal** in der Home-Assistant-Seitenleiste.
+
+### Übersicht und Hardware-Topologie
+
+Die Übersicht zeigt Live-Werte, Systemzustand und erkannte SolarFlow-Geräte
+mit zugehörigen Akku-Packs. Der SoC wird als farbiger Füllstand dargestellt;
+Details zu System und Akku-Pack lassen sich gezielt öffnen.
+
+![BSFAI-Portal V5.1.0: Energieübersicht, Systemzustand und Hardware-Topologie](images/v510_portal_overview.png)
+
+### Energie und Prognose
+
+Der Bereich **Energie & Prognose** zeigt Momentanleistungen, aufsummierte
+Energieflüsse und PV-Prognosen. Die Prognose wird über die ausgewählte
+Home-Assistant-Energieprognose-Integration bezogen, nicht fest von Solcast.
+Klickbare Messwerte öffnen ihre Verlaufsdiagramme mit Zeiträumen von Stunde
+bis Monat, sofern Home Assistant dafür Verlauf gespeichert hat.
+
+![BSFAI-Portal V5.1.0: Momentanleistung, Energieflüsse und Solarprognose](images/v510_portal_energy_forecast.png)
+
+### Wirtschaftlichkeit
+
+Die Wirtschaftlichkeitsansicht bündelt Preis- und Ladeplanung, Tageskosten,
+Erlöse, Batterienutzen und gewichtete Durchschnittswerte. Die Sensoren bleiben
+auch einzeln in Home Assistant verfügbar; das Portal stellt sie übersichtlich
+zusammen und bietet für passende Messwerte den direkten Zugang zum Verlauf.
+
+![BSFAI-Portal V5.1.0: Preisplanung und Wirtschaftlichkeit](images/v510_portal_economics.png)
+
+### Steuerung
+
+Im Bereich **Steuerung** lassen sich vorhandene BSFAI-Auswahl- und
+Zahlen-Entitäten bedienen. Änderungen werden über Home Assistant gespeichert;
+die Anzeige nennt weiterhin die verfügbaren Hardware-SoC-Grenzen zur
+Information.
+
+![BSFAI-Portal V5.1.0: Betriebsart, Einstellungen und Hardware-SoC-Grenzen](images/v510_portal_controls.png)
+
+Die Darstellung und verfügbare Werte richten sich nach den eingerichteten
+Entitäten und Prognosequellen. Nicht konfigurierte oder nicht verfügbare
+Messwerte werden im Portal entsprechend gekennzeichnet.
 
 ## Upgrade von V4.7.4 auf V5
 
