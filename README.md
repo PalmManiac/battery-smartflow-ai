@@ -51,6 +51,20 @@ V5 is now the **current stable release**. Start with the illustrated
 [V5 quick start](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
 or the [German guide](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
 
+## V5.1.0 adds the BSFAI HEMS Portal
+
+V5.1.0 introduces an optional, purpose-built dashboard for energy flows,
+forecasts, economics, controls, and Zendure hardware topology. It includes
+interactive history charts and a left-to-right battery SoC view. Enable it from
+the integration's settings to add **BSFAI Portal** to the Home Assistant
+sidebar. The portal uses existing Home Assistant entities and services; it is
+not a second hardware controller.
+
+![Battery SmartFlow AI Portal V5.1.0 overview](docs/images/v510_portal_overview.png)
+
+See the [English portal guide](docs/user-guide.md#v510-the-bsfai-portal) or the
+[German portal guide](docs/anleitung.md#v510-das-bsfai-portal).
+
 ---
 
 # 🌍 Language
@@ -625,6 +639,20 @@ V5 ist jetzt die **aktuelle stabile Version**. Der bebilderte
 [V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
 und der [englische User Guide](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
 führen durch die neue Ersteinrichtung.
+
+## V5.1.0 bringt das BSFAI-HEMS-Portal
+
+V5.1.0 ergänzt ein optionales, eigens gestaltetes Dashboard für Energieflüsse,
+Prognosen, Wirtschaftlichkeit, Steuerung und Zendure-Hardware-Topologie. Es
+bietet Verlaufsdiagramme und eine SoC-Füllstandsanzeige für Akkus. Aktiviere
+es in den Integrationseinstellungen, damit **BSFAI Portal** in der
+Home-Assistant-Seitenleiste erscheint. Das Portal verwendet vorhandene
+Home-Assistant-Entitäten und -Dienste und ist kein zweiter Hardware-Regler.
+
+![Übersicht des Battery SmartFlow AI Portals V5.1.0](docs/images/v510_portal_overview.png)
+
+Mehr dazu in der [deutschen Portal-Anleitung](docs/anleitung.md#v510-das-bsfai-portal)
+oder im [englischen User Guide](docs/user-guide.md#v510-the-bsfai-portal).
 
 ---
 

@@ -3,5 +3,6 @@
 * [V5-Schnellstart](anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
 * [Anleitung](anleitung.md)
 * [V5 Quick Start](user-guide.md#v5-quick-start-connect-zendure-directly)
+* [V5.1.0 Portal](user-guide.md#v510-the-bsfai-portal)
 * [User Guide](user-guide.md)
 * [Dashboard Wirtschaft & Preise](dashboard-wirtschaft-preise.md)
