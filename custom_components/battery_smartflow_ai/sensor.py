@@ -29,6 +29,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
+    GRID_MODE_SHELLY_PRO_3EM,
     INTEGRATION_MANUFACTURER,
     INTEGRATION_MODEL,
     INTEGRATION_VERSION,
@@ -1700,6 +1701,15 @@ SENSORS: tuple[ZendureSensorEntityDescription, ...] = tuple(
 # V5-only full-charge maintenance entities stay outside the frozen V4.6
 # description tuple so existing entity identity remains provably unchanged.
 SENSORS += (
+    ZendureSensorEntityDescription(
+        key="grid_power",
+        translation_key="grid_power",
+        runtime_key="grid_power_w",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower",
+        suggested_display_precision=0,
+    ),
     ZendureSensorEntityDescription(
         key="full_charge_maintenance_state",
         translation_key="full_charge_maintenance_state",

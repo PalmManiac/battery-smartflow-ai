@@ -24,6 +24,7 @@ from .const import (
     CONF_PV_FORECAST_TOMORROW_ENTITY,
     CONF_SOC_ENTITY,
     DOMAIN,
+    GRID_MODE_SHELLY_PRO_3EM,
     INTEGRATION_VERSION,
 )
 
@@ -41,6 +42,7 @@ _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_last_capture",
     "native_zendure_error",
     "forecast_status",
+    "grid_power",
 )
 
 _DASHBOARD_SENSOR_KEYS = (
@@ -158,6 +160,12 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             "grid_export": data.get(CONF_GRID_EXPORT_ENTITY),
             "offgrid_power": data.get(CONF_OFFGRID_POWER_ENTITY),
         }
+        if data.get("grid_mode") == GRID_MODE_SHELLY_PRO_3EM:
+            sources["grid_power"] = entity_registry.async_get_entity_id(
+                "sensor",
+                DOMAIN,
+                f"{DOMAIN}_{entry.entry_id}_grid_power",
+            )
         if any(value for key, value in sources.items() if key != "name"):
             power_sources.append(sources)
         configured_price = data.get(CONF_PRICE_NOW_ENTITY)

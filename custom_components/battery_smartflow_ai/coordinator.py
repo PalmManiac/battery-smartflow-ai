@@ -36,6 +36,8 @@ from .const import (
     CONF_GRID_POWER_ENTITY,
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_EXPORT_ENTITY,
+    CONF_SHELLY_PRO_3EM_HOST,
+    CONF_SHELLY_PRO_3EM_PASSWORD,
     CONF_SOC_LIMIT_ENTITY,
     CONF_PACK_CAPACITY_KWH,
     CONF_BATTERY_AC_POWER_ENTITY,
@@ -53,6 +55,7 @@ from .const import (
     GRID_MODE_NONE,
     GRID_MODE_SINGLE,
     GRID_MODE_SPLIT,
+    GRID_MODE_SHELLY_PRO_3EM,
     # settings keys (entry.options)
     SETTING_SOC_MIN,
     SETTING_SOC_MAX,
@@ -123,6 +126,11 @@ from .decision_engine import (
     DecisionResult,
 )
 from .core.models.runtime import RuntimeSnapshot
+from .hardware.shelly_pro_3em import (
+    ShellyDigestSession,
+    ShellyPro3EMError,
+    async_read_shelly_pro_3em_power,
+)
 from .forecast import async_build_forecast_summary
 from .learned_planning import (
     LearningSample,
@@ -414,6 +422,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 entry.options.get(key) for key in LOWEST_CELL_VOLTAGE_CONFIG_KEYS
             ),
         )
+        self._shelly_pro_3em_host = str(
+            entry.data.get(CONF_SHELLY_PRO_3EM_HOST, "") or ""
+        )
+        self._shelly_pro_3em_password = str(
+            entry.options.get(CONF_SHELLY_PRO_3EM_PASSWORD, "") or ""
+        )
+        self._shelly_digest = ShellyDigestSession(
+            password=self._shelly_pro_3em_password
+        )
+        self._shelly_grid_power_w: float | None = None
+        self._shelly_last_error: str | None = None
 
         self.runtime_mode: dict[str, Any] = {
             "ai_mode": AI_MODE_AUTOMATIC,
@@ -2458,6 +2477,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mode == GRID_MODE_NONE:
             return None, None
 
+        if mode == GRID_MODE_SHELLY_PRO_3EM:
+            gp = self._shelly_grid_power_w
+            if gp is None:
+                return None, None
+            if gp >= 0:
+                return gp, 0.0
+            return 0.0, abs(gp)
+
         if mode == GRID_MODE_SINGLE and self.entities.grid_power:
             gp = _to_float(self._state(self.entities.grid_power), None)
             if gp is None:
@@ -2475,6 +2502,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return float(gi), float(ge)
 
         return None, None
+
+    async def _async_refresh_shelly_grid_power(self) -> None:
+        """Refresh the configured local Shelly Pro 3EM Gen2 reading."""
+
+        self._shelly_grid_power_w = None
+        if self.entities.grid_mode != GRID_MODE_SHELLY_PRO_3EM:
+            return
+
+        try:
+            from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+            self._shelly_grid_power_w = await async_read_shelly_pro_3em_power(
+                async_get_clientsession(self.hass),
+                host=self._shelly_pro_3em_host,
+                password=self._shelly_pro_3em_password,
+                auth=self._shelly_digest,
+                timeout_seconds=1.5,
+            )
+        except Exception as err:
+            reason = (
+                str(err)
+                if isinstance(err, ShellyPro3EMError)
+                else type(err).__name__
+            )
+            if reason != self._shelly_last_error:
+                _LOGGER.warning(
+                    "Local Shelly Pro 3EM grid reading is unavailable (%s)",
+                    reason,
+                )
+            self._shelly_last_error = reason
+            return
+
+        if self._shelly_last_error is not None:
+            _LOGGER.info("Local Shelly Pro 3EM grid reading recovered")
+        self._shelly_last_error = None
 
     def _get_import_market_price(self, now: datetime) -> MarketPrice:
         """Build the canonical import price from the configured V4.5 sources."""
@@ -4250,6 +4312,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 load_coverage_priority = False
 
             grid_sensor_configured = self.entities.grid_mode != GRID_MODE_NONE
+            await self._async_refresh_shelly_grid_power()
             grid_import_raw, grid_export_raw = self._get_grid()
             grid_sensor_valid = bool(
                 grid_sensor_configured
@@ -6690,6 +6753,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "native_pv_sensor_valid": native_pv_sensor_valid,
                 "deficit": float(grid_import),
                 "surplus": float(grid_export),
+                "grid_power_w": (
+                    self._shelly_grid_power_w
+                    if self.entities.grid_mode == GRID_MODE_SHELLY_PRO_3EM
+                    else None
+                ),
                 "grid_sensor_configured": bool(grid_sensor_configured),
                 "grid_sensor_valid": bool(grid_sensor_valid),
                 "soc_limits_valid": bool(soc_limits_valid),
@@ -7771,6 +7839,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "debug": "OK",
                 **self._debug_status_data(),
                 "details": details,
+                "grid_power_w": (
+                    self._shelly_grid_power_w
+                    if self.entities.grid_mode == GRID_MODE_SHELLY_PRO_3EM
+                    else None
+                ),
                 "decision_reason": decision.reason,
                 "next_action_time": next_action_time_state,
                 "next_action_state": next_action_state,
