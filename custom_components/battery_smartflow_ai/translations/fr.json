@@ -390,6 +390,7 @@
         "state": {
           "standby": "Veille",
           "charge": "Charge",
+          "pv_surplus": "Charge du surplus PV",
           "discharge": "Décharge",
           "constant_discharge": "Décharge constante"
         }

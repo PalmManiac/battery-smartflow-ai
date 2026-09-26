@@ -330,6 +330,43 @@ class Dev9FallbackScenarios(unittest.TestCase):
         self.assertEqual(result.reason, "manual_discharge")
         self.assertEqual(result.action, "discharge")
 
+    def test_manual_pv_surplus_action_uses_existing_confirmed_surplus_logic(self) -> None:
+        result = DecisionEngine().evaluate(
+            context(
+                ai_mode=AI_MODE_MANUAL,
+                manual_action="pv_surplus",
+                pv_sensor_valid=True,
+                pv_w=1200.0,
+                house_load_w=500.0,
+                grid_export_w=250.0,
+                grid_import_w=0.0,
+                pv_charge_start_export_w=80.0,
+                pv_charge_start_counter=2,
+                automatic_planning_allowed=False,
+            )
+        )
+
+        self.assertEqual(result.reason, "pv_surplus_charge")
+        self.assertEqual(result.action, "charge")
+        self.assertGreater(result.charge_w, 0.0)
+
+    def test_manual_pv_surplus_action_never_falls_back_to_grid_charge(self) -> None:
+        result = DecisionEngine().evaluate(
+            context(
+                ai_mode=AI_MODE_MANUAL,
+                manual_action="pv_surplus",
+                pv_sensor_valid=True,
+                pv_w=250.0,
+                house_load_w=600.0,
+                grid_export_w=0.0,
+                grid_import_w=350.0,
+                automatic_planning_allowed=False,
+            )
+        )
+
+        self.assertNotEqual(result.action, "charge")
+        self.assertNotIn(result.reason, {"manual_charge", "pv_surplus_charge"})
+
     def test_automatic_requires_a_configured_grid_sensor(self) -> None:
         result = DecisionEngine().evaluate(
             context(
