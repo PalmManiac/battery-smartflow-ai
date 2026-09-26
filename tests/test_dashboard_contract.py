@@ -102,8 +102,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.14"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=28"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.15"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=29"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -123,6 +123,11 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn("Math.min(100, Math.max(0, Number(candidates[0].state)))", frontend)
         self.assertIn("style=\"--soc-level:${socLevel}%\"", frontend)
         self.assertIn(".pack-card.has-soc{background:linear-gradient(90deg", frontend)
+        self.assertIn("box-shadow:inset 0 0 0 2px #202b35", frontend)
+        self.assertIn(".pack-card.has-soc::before", frontend)
+        self.assertIn("--soc-border:rgba(196,72,48,.85)", frontend)
+        self.assertIn("--soc-border:rgba(178,132,25,.85)", frontend)
+        self.assertIn("--soc-border:rgba(37,145,77,.85)", frontend)
         self.assertIn('data-soc-band="${socBand}"', frontend)
         self.assertIn('class="pack-card${soc == null ? "" : " has-soc"}"', frontend)
 
@@ -135,8 +140,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('if (normalizedUnit.endsWith("/kwh")) return 4;', frontend)
         self.assertIn('if (["eur", "€"].includes(normalizedUnit)) return 2;', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.14"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=28"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.15"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=29"', dashboard)
 
 
 if __name__ == "__main__":
