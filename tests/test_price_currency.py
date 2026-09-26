@@ -25,11 +25,12 @@ from custom_components.battery_smartflow_ai.price_currency import (  # noqa: E40
 
 
 class PriceCurrencyTests(unittest.TestCase):
-    def test_eur_remains_unchanged(self) -> None:
+    def test_eur_price_unit_uses_symbol_but_keeps_iso_amount_unit(self) -> None:
         currency = resolve_price_currency("EUR")
 
         self.assertEqual(currency, PriceCurrency("EUR"))
-        self.assertEqual(currency.price_unit, "EUR/kWh")
+        self.assertEqual(currency.price_unit, "€/kWh")
+        self.assertEqual(currency.canonical_price_unit, "EUR/kWh")
         self.assertEqual(currency.monetary_unit, "EUR")
         self.assertFalse(currency.used_fallback)
 
@@ -37,7 +38,8 @@ class PriceCurrencyTests(unittest.TestCase):
         currency = resolve_price_currency("DKK")
 
         self.assertEqual(currency.code, "DKK")
-        self.assertEqual(currency.price_unit, "DKK/kWh")
+        self.assertEqual(currency.price_unit, "kr/kWh")
+        self.assertEqual(currency.canonical_price_unit, "DKK/kWh")
         self.assertFalse(currency.used_fallback)
 
     def test_currency_code_is_normalized(self) -> None:
@@ -48,7 +50,7 @@ class PriceCurrencyTests(unittest.TestCase):
         currency = resolve_price_currency(None)
 
         self.assertEqual(currency.code, DEFAULT_CURRENCY)
-        self.assertEqual(currency.price_unit, "EUR/kWh")
+        self.assertEqual(currency.price_unit, "€/kWh")
         self.assertTrue(currency.used_fallback)
 
     def test_invalid_currency_uses_safe_eur_fallback(self) -> None:
@@ -62,6 +64,8 @@ class PriceCurrencyTests(unittest.TestCase):
         currency = resolve_price_currency("xyz")
 
         self.assertEqual(currency.code, "XYZ")
+        self.assertEqual(currency.price_unit, "XYZ/kWh")
+        self.assertEqual(currency.canonical_price_unit, "XYZ/kWh")
         self.assertFalse(currency.used_fallback)
 
     def test_legacy_persisted_prices_are_copied_without_conversion(self) -> None:
