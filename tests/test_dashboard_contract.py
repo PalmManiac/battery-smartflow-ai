@@ -62,6 +62,19 @@ class DashboardContractTests(unittest.TestCase):
 
         self.assertIn('this._find(entities, [sensorKey])', frontend)
 
+    def test_live_power_view_uses_only_configured_per_instance_sources(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        live_view = frontend.split("  _livePowerView(entities) {", 1)[1].split(
+            "\n  _energyView(", 1
+        )[0]
+
+        self.assertIn("this._panel.config.power_sources", live_view)
+        self.assertNotIn("this._nativeSystems(entities)", live_view)
+        self.assertNotIn("native_hardware_power_w", live_view)
+        self.assertNotIn("native_hardware_pv_power_w", live_view)
+
     def test_history_view_uses_recorder_and_offers_mobile_home_navigation(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"
