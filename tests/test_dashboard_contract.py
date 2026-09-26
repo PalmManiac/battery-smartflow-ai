@@ -102,8 +102,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.18"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=32"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.19"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=33"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -127,6 +127,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn("clip-path:inset(0 calc(100% - var(--soc-level)) 0 0 round 5px)", frontend)
         self.assertIn("inset:4px", frontend)
         self.assertIn("background:var(--soc-fill);border:1px solid var(--soc-border)", frontend)
+        self.assertIn(".pack-card.has-soc::before{border-width:2px}", frontend)
         self.assertIn("border-radius:5px", frontend)
         self.assertIn(".pack-head{position:relative;z-index:1}", frontend)
         self.assertIn("--soc-border:rgba(196,72,48,.85)", frontend)
@@ -144,8 +145,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('if (normalizedUnit.endsWith("/kwh")) return 4;', frontend)
         self.assertIn('if (["eur", "€"].includes(normalizedUnit)) return 2;', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.18"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=32"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.19"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=33"', dashboard)
 
 
 if __name__ == "__main__":
