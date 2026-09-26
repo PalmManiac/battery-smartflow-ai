@@ -201,19 +201,21 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const unit = entity.attributes.unit_of_measurement;
     const numeric = Number(entity.state);
     if (!Number.isFinite(numeric)) return `${entity.state}${unit ? ` ${unit}` : ""}`;
-    const normalizedUnit = String(unit || "").toLowerCase().replace(/\s+/g, "");
-    const precision = normalizedUnit === "kwh"
-      ? 3
-      : ["eur", "€", "eur/kwh", "€/kwh"].includes(normalizedUnit)
-        ? 2
-        : normalizedUnit === "w" || normalizedUnit === "kw"
-          ? 1
-          : null;
+    const precision = this._displayPrecision(unit);
     const locale = this._hass && this._hass.locale ? this._hass.locale.language : undefined;
     const value = precision === null
       ? entity.state
       : numeric.toLocaleString(locale, { maximumFractionDigits: precision });
     return `${value}${unit ? ` ${unit}` : ""}`;
+  }
+
+  _displayPrecision(unit) {
+    const normalizedUnit = String(unit || "").toLowerCase().replace(/\s+/g, "");
+    if (normalizedUnit === "kwh") return 3;
+    if (normalizedUnit.endsWith("/kwh")) return 4;
+    if (["eur", "€"].includes(normalizedUnit)) return 2;
+    if (normalizedUnit === "w" || normalizedUnit === "kw") return 1;
+    return null;
   }
 
   _find(entities, terms) {
@@ -846,8 +848,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _formatHistoryValue(value, unit) {
     const locale = this._hass && this._hass.locale ? this._hass.locale.language : undefined;
-    const normalizedUnit = String(unit || "").toLowerCase().replace(/\s+/g, "");
-    const precision = normalizedUnit === "kwh" ? 3 : ["eur", "€", "eur/kwh", "€/kwh"].includes(normalizedUnit) ? 2 : 1;
+    const precision = this._displayPrecision(unit) ?? 1;
     return `${Number(value).toLocaleString(locale, { maximumFractionDigits: precision })}${unit ? ` ${unit}` : ""}`;
   }
 

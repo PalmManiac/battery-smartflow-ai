@@ -89,8 +89,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.13"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=27"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.14"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=28"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -112,6 +112,18 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn(".pack-card.has-soc{background:linear-gradient(90deg", frontend)
         self.assertIn('data-soc-band="${socBand}"', frontend)
         self.assertIn('class="pack-card${soc == null ? "" : " has-soc"}"', frontend)
+
+    def test_price_per_kwh_values_use_four_decimals_in_cards_and_history(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+
+        self.assertIn('if (normalizedUnit.endsWith("/kwh")) return 4;', frontend)
+        self.assertIn('if (["eur", "€"].includes(normalizedUnit)) return 2;', frontend)
+        self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
+        self.assertIn('DASHBOARD_VERSION = "1.0.14"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=28"', dashboard)
 
 
 if __name__ == "__main__":
