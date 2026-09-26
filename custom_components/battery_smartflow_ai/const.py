@@ -96,6 +96,8 @@ CONF_GRID_MODE = "grid_mode"
 CONF_GRID_POWER_ENTITY = "grid_power_entity"      # +import / -export
 CONF_GRID_IMPORT_ENTITY = "grid_import_entity"    # import W
 CONF_GRID_EXPORT_ENTITY = "grid_export_entity"    # export W
+CONF_SHELLY_PRO_3EM_HOST = "shelly_pro_3em_host"
+CONF_SHELLY_PRO_3EM_PASSWORD = "shelly_pro_3em_password"
 
 # --- Config entry keys ---
 CONF_PACK_CAPACITY_KWH = "pack_capacity_kwh"
@@ -203,6 +205,7 @@ DEFAULT_DEVICE_PROFILE = DEVICE_PROFILE_SF2400AC
 GRID_MODE_NONE = "none"
 GRID_MODE_SINGLE = "single"
 GRID_MODE_SPLIT = "split"
+GRID_MODE_SHELLY_PRO_3EM = "shelly_pro_3em"
 
 # ==================================================
 # Runtime select modes (internal values remain EN)

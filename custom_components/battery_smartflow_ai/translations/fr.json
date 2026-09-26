@@ -11,6 +11,7 @@
       "debug_integration_not_loaded": "Battery SmartFlow AI n’est pas chargé actuellement."
     },
     "error": {
+      "invalid_shelly_host": "Saisissez uniquement un nom d’hôte ou une adresse IP, sans schéma, port ni chemin.",
       "grid_split_missing": "Avec deux capteurs, l’importation et l’exportation réseau doivent être sélectionnées.",
       "unsupported_device": "Unsupported device model.",
       "invalid_token": "Le format du jeton d’application est invalide.", "invalid_or_expired_token": "Le jeton d’application est invalide ou expiré.", "cannot_connect": "Impossible de se connecter à Zendure Cloud.", "timeout": "Zendure Cloud n’a pas répondu à temps.", "invalid_response": "Zendure Cloud a renvoyé une réponse inattendue.", "no_devices": "Aucun appareil Zendure n’a été trouvé.", "no_mqtt_credentials": "Zendure n’a fourni aucun accès Cloud MQTT.", "duplicate_device_id": "Zendure a renvoyé des identités en double.", "incomplete_device": "Zendure a renvoyé un appareil incomplet.", "device_not_found": "L’appareil sélectionné n’est plus disponible.", "local_mqtt_required": "Cet appareil Legacy nécessite les paramètres du broker MQTT local.", "legacy_wifi_required": "Saisissez le SSID Wi-Fi et le mot de passe avant de configurer l’appareil Legacy.", "legacy_port_required": "Les appareils Zendure Legacy nécessitent le port local 1883.", "legacy_ble_device_not_found": "L’appareil Legacy sélectionné n’est pas accessible via Bluetooth.", "legacy_device_id_missing": "Zendure n’a fourni aucune identité pour l’appareil Legacy.", "legacy_provision_failed": "Impossible de configurer l’appareil Legacy. Vérifiez Bluetooth, le Wi-Fi et le broker."
@@ -84,12 +85,16 @@
         "data": {
           "grid_power_entity": "Puissance réseau (simple)",
           "grid_import_entity": "Import réseau (séparé)",
-          "grid_export_entity": "Export réseau (séparé)"
+          "grid_export_entity": "Export réseau (séparé)",
+          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP du Shelly Pro 3EM Gen2",
+          "shelly_pro_3em_password": "Mot de passe Shelly Pro 3EM (facultatif)"
         },
         "data_description": {
           "grid_power_entity": "Un capteur unique avec puissance positive en import et négative en export.",
           "grid_import_entity": "Capteur de puissance d’import réseau actuelle en watts.",
-          "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts."
+          "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
+          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique.",
+          "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256."
         }
       },
       "grid": {
@@ -98,12 +103,16 @@
         "data": {
           "grid_power_entity": "Puissance réseau (simple)",
           "grid_import_entity": "Import réseau (séparé)",
-          "grid_export_entity": "Export réseau (séparé)"
+          "grid_export_entity": "Export réseau (séparé)",
+          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP du Shelly Pro 3EM Gen2",
+          "shelly_pro_3em_password": "Mot de passe Shelly Pro 3EM (facultatif)"
         },
         "data_description": {
           "grid_power_entity": "Un capteur unique avec puissance positive en import et négative en export.",
           "grid_import_entity": "Capteur de puissance d’import réseau actuelle en watts.",
-          "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts."
+          "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
+          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique.",
+          "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256."
         }
       },
       "user": {
@@ -371,7 +380,8 @@
       "options": {
         "none": "Aucun capteur réseau",
         "single": "Un capteur (+ / −)",
-        "split": "Deux capteurs (soutirage et injection)"
+        "split": "Deux capteurs (soutirage et injection)",
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local)"
       }
     }
   },
@@ -441,6 +451,7 @@
       }
     },
     "sensor": {
+      "grid_power": {"name": "Puissance réseau"},
       "native_zendure_status": {"name": "État du test Zendure natif", "state": {"disabled": "Non configuré", "discovering": "Recherche des appareils", "connecting": "Connexion", "capturing": "Collecte initiale", "observing": "Observation active", "error": "Erreur"}}, "native_zendure_control": {"name": "Contrôle Zendure natif", "state": {"disabled_zha_active": "Désactivé", "native_transport_not_ready": "Aucune donnée", "native_local_handover_cloud_active": "Cloud", "native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Local", "native_local_unsupported": "Non pris en charge"}}, "native_zendure_device_count": {"name": "Appareils Zendure natifs trouvés"}, "native_zendure_message_count": {"name": "Messages Zendure natifs reçus"}, "native_zendure_last_message": {"name": "Dernier message Zendure natif"}, "native_zendure_last_capture": {"name": "Paquet de synchronisation Zendure"}, "native_zendure_error": {"name": "Erreur Zendure native"},
       "native_hardware_pack_count": {"name":"Battery count"},
       "native_hardware_capacity_kwh": {"name":"Nominal capacity"},

@@ -22,6 +22,8 @@ from .const import (
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_MODE,
     CONF_GRID_POWER_ENTITY,
+    CONF_SHELLY_PRO_3EM_HOST,
+    CONF_SHELLY_PRO_3EM_PASSWORD,
     CONF_INPUT_LIMIT_ENTITY,
     CONF_INSTALLED_PV_WP,
     CONF_NATIVE_PV_ENTITY,
@@ -65,6 +67,7 @@ from .const import (
     GRID_MODE_NONE,
     GRID_MODE_SINGLE,
     GRID_MODE_SPLIT,
+    GRID_MODE_SHELLY_PRO_3EM,
     LOWEST_CELL_VOLTAGE_CONFIG_KEYS,
     SETTING_BATTERY_PACKS,
     SETTING_CELL_VOLTAGE_CUTOFF,
@@ -90,6 +93,7 @@ from .hardware.zendure.legacy import (
     async_provision_legacy_device,
     legacy_provisioning_default,
 )
+from .hardware.shelly_pro_3em import validate_shelly_host
 
 EMPTY_ENTITY_VALUES = {
     "",
@@ -393,6 +397,14 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             self._user_input.update(user_input)
 
+            if grid_mode == GRID_MODE_SHELLY_PRO_3EM:
+                try:
+                    self._user_input[CONF_SHELLY_PRO_3EM_HOST] = validate_shelly_host(
+                        self._user_input.get(CONF_SHELLY_PRO_3EM_HOST, "")
+                    )
+                except ValueError:
+                    errors["base"] = "invalid_shelly_host"
+
             if grid_mode == GRID_MODE_SPLIT:
                 if (
                     not user_input.get(CONF_GRID_IMPORT_ENTITY)
@@ -414,6 +426,16 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if grid_mode != GRID_MODE_SPLIT:
                 self._user_input.pop(CONF_GRID_IMPORT_ENTITY, None)
                 self._user_input.pop(CONF_GRID_EXPORT_ENTITY, None)
+
+            if grid_mode != GRID_MODE_SHELLY_PRO_3EM:
+                self._user_input.pop(CONF_SHELLY_PRO_3EM_HOST, None)
+
+            shelly_password = str(
+                self._user_input.pop(CONF_SHELLY_PRO_3EM_PASSWORD, "") or ""
+            ).strip()
+            if shelly_password and shelly_password != STORED_APP_TOKEN_MASK:
+                self._native_options = getattr(self, "_native_options", {})
+                self._native_options[CONF_SHELLY_PRO_3EM_PASSWORD] = shelly_password
 
             if not errors:
                 return self.async_create_entry(
@@ -456,12 +478,23 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             cleaned = dict(self._user_input)
             cleaned.update(user_input)
 
+            if grid_mode == GRID_MODE_SHELLY_PRO_3EM:
+                try:
+                    cleaned[CONF_SHELLY_PRO_3EM_HOST] = validate_shelly_host(
+                        cleaned.get(CONF_SHELLY_PRO_3EM_HOST, "")
+                    )
+                except ValueError:
+                    errors["base"] = "invalid_shelly_host"
+
             if grid_mode != GRID_MODE_SINGLE:
                 cleaned.pop(CONF_GRID_POWER_ENTITY, None)
 
             if grid_mode != GRID_MODE_SPLIT:
                 cleaned.pop(CONF_GRID_IMPORT_ENTITY, None)
                 cleaned.pop(CONF_GRID_EXPORT_ENTITY, None)
+
+            if grid_mode != GRID_MODE_SHELLY_PRO_3EM:
+                cleaned.pop(CONF_SHELLY_PRO_3EM_HOST, None)
 
             if grid_mode == GRID_MODE_SPLIT:
                 if (
@@ -472,6 +505,15 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             _cleanup_optional_entities(cleaned)
             _apply_forecast_selection(cleaned)
+
+            shelly_password = str(
+                cleaned.pop(CONF_SHELLY_PRO_3EM_PASSWORD, "") or ""
+            ).strip()
+            options_updates = dict(entry.options)
+            if grid_mode != GRID_MODE_SHELLY_PRO_3EM or not shelly_password:
+                options_updates.pop(CONF_SHELLY_PRO_3EM_PASSWORD, None)
+            elif shelly_password != STORED_APP_TOKEN_MASK:
+                options_updates[CONF_SHELLY_PRO_3EM_PASSWORD] = shelly_password
             
             cleaned[CONF_FEED_IN_TARIFF] = _normalize_optional_float(
                 cleaned.get(CONF_FEED_IN_TARIFF),
@@ -482,6 +524,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return self.async_update_reload_and_abort(
                     entry,
                     data_updates=cleaned,
+                    options_updates=options_updates,
                     reason="reconfigure_success",
                 )
 
@@ -804,6 +847,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     GRID_MODE_NONE,
                     GRID_MODE_SINGLE,
                     GRID_MODE_SPLIT,
+                    GRID_MODE_SHELLY_PRO_3EM,
                 ],
                 translation_key="grid_mode",
             )
@@ -860,6 +904,27 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
             ] = selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="sensor")
+            )
+
+        if grid_mode == GRID_MODE_SHELLY_PRO_3EM:
+            schema[
+                vol.Required(
+                    CONF_SHELLY_PRO_3EM_HOST,
+                    default=_val(CONF_SHELLY_PRO_3EM_HOST) or "",
+                )
+            ] = selector.TextSelector()
+            stored_password = (
+                entry.options.get(CONF_SHELLY_PRO_3EM_PASSWORD)
+                if entry is not None
+                else None
+            )
+            schema[
+                vol.Optional(
+                    CONF_SHELLY_PRO_3EM_PASSWORD,
+                    default=(STORED_APP_TOKEN_MASK if stored_password else ""),
+                )
+            ] = selector.TextSelector(
+                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
             )
 
         if grid_mode == GRID_MODE_SPLIT:
