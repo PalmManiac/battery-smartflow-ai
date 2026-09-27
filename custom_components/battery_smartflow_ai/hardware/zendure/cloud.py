@@ -222,8 +222,29 @@ def _parse_bootstrap(payload: Any) -> ZendureCloudBootstrap:
     devices = tuple(_parse_device(item) for item in raw_devices)
     candidate_ids = [item.candidate.candidate_id for item in devices]
     if len(candidate_ids) != len(set(candidate_ids)):
-        _log_duplicate_device_identities(devices, raw_devices)
-        raise ZendureCloudError("duplicate_device_id")
+        unique_devices: list[ZendureCloudDevice] = []
+        unique_raw_devices: list[Mapping[str, Any]] = []
+        first_by_candidate: dict[
+            str, tuple[ZendureCloudDevice, Mapping[str, Any]]
+        ] = {}
+        redundant_records = True
+        for device, raw in zip(devices, raw_devices, strict=True):
+            candidate_id = device.candidate.candidate_id
+            first = first_by_candidate.get(candidate_id)
+            if first is None:
+                first_by_candidate[candidate_id] = (device, raw)
+                unique_devices.append(device)
+                unique_raw_devices.append(raw)
+                continue
+            if not _same_supported_device_metadata(first[1], raw):
+                redundant_records = False
+        _log_duplicate_device_identities(
+            devices, raw_devices, redundant_records_ignored=redundant_records
+        )
+        if not redundant_records:
+            raise ZendureCloudError("duplicate_device_id")
+        devices = tuple(unique_devices)
+        raw_devices = unique_raw_devices
     mqtt = _parse_mqtt(data.get("mqtt"))
     raw_device_list = tuple(
         deepcopy(dict(item)) for item in raw_devices if isinstance(item, Mapping)
@@ -236,7 +257,10 @@ def _parse_bootstrap(payload: Any) -> ZendureCloudBootstrap:
 
 
 def _log_duplicate_device_identities(
-    devices: tuple[ZendureCloudDevice, ...], raw_devices: list[Any]
+    devices: tuple[ZendureCloudDevice, ...],
+    raw_devices: list[Any],
+    *,
+    redundant_records_ignored: bool,
 ) -> None:
     """Log duplicate positions and a privacy-safe metadata comparison."""
     seen: dict[str, int] = {}
@@ -300,12 +324,37 @@ def _log_duplicate_device_identities(
             (first_position, position, identity_source, model, comparison)
         )
 
+    action = (
+        "redundant records with matching supported metadata were ignored"
+        if redundant_records_ignored
+        else "conflicting duplicate identities were rejected"
+    )
     _LOGGER.warning(
-        "Zendure device discovery returned duplicate identities; "
+        "Zendure device discovery returned duplicate identities; %s; "
         "duplicate positions and sanitized metadata comparison "
         "(no identifier or field values): %s",
+        action,
         duplicates,
     )
+
+
+def _same_supported_device_metadata(
+    first: Mapping[str, Any], current: Mapping[str, Any]
+) -> bool:
+    """Allow duplicate rows only when all behavior-relevant fields agree."""
+    supported_fields = (
+        "deviceKey",
+        "snNumber",
+        "productKey",
+        "productModel",
+        "deviceName",
+        "online",
+        "isOnline",
+        "packNum",
+        "packData",
+        "ip",
+    )
+    return all(first.get(field) == current.get(field) for field in supported_fields)
 
 
 def _safe_diagnostic_field_name(field: Any) -> str:

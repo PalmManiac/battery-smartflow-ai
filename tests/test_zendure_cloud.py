@@ -138,7 +138,7 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("Basement", log_output)
         self.assertNotIn("secret-app-key", log_output)
 
-    async def test_exact_duplicate_device_records_are_reported_without_values(self):
+    async def test_exact_duplicate_device_records_are_collapsed_without_values(self):
         duplicated_device = {
             "deviceKey": "private-device-id",
             "productKey": "private-product-key",
@@ -155,15 +155,108 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
             "custom_components.battery_smartflow_ai.hardware.zendure.cloud",
             level="WARNING",
         ) as captured:
-            with self.assertRaisesRegex(ZendureCloudError, "duplicate_device_id"):
-                await ZendureCloudClient(post).async_discover(token())
+            result = await ZendureCloudClient(post).async_discover(token())
 
         log_output = "\n".join(captured.output)
+        self.assertEqual(len(result.devices), 1)
+        self.assertEqual(len(result.raw_device_list), 1)
+        self.assertIn(
+            "redundant records with matching supported metadata were ignored",
+            log_output,
+        )
         self.assertIn("records_identical': True", log_output)
         self.assertNotIn("private-device-id", log_output)
         self.assertNotIn("private-product-key", log_output)
         self.assertNotIn("private-serial", log_output)
         self.assertNotIn("Private device name", log_output)
+
+    async def test_duplicate_records_with_only_private_metadata_changes_are_collapsed(self):
+        records = [
+            {
+                "deviceKey": "private-device-id",
+                "productKey": "private-product-key",
+                "productModel": "SolarFlow 2400 Pro",
+                "snNumber": "private-serial",
+                "deviceName": "Private device name",
+                "online": True,
+                "packNum": 4,
+                "ip": "192.168.1.20",
+                "username": "private-user-one",
+                "password": "private-password-one",
+            },
+            {
+                "deviceKey": "private-device-id",
+                "productKey": "private-product-key",
+                "productModel": "SolarFlow 2400 Pro",
+                "snNumber": "private-serial",
+                "deviceName": "Private device name",
+                "online": True,
+                "packNum": 4,
+                "ip": "192.168.1.20",
+                "username": "private-user-two",
+                "password": "private-password-two",
+            },
+        ]
+
+        async def post(*args, **kwargs):
+            return Response(payload(records))
+
+        with self.assertLogs(
+            "custom_components.battery_smartflow_ai.hardware.zendure.cloud",
+            level="WARNING",
+        ) as captured:
+            result = await ZendureCloudClient(post).async_discover(token())
+
+        log_output = "\n".join(captured.output)
+        self.assertEqual(len(result.devices), 1)
+        self.assertEqual(len(result.raw_device_list), 1)
+        self.assertIn(
+            "redundant records with matching supported metadata were ignored",
+            log_output,
+        )
+        self.assertIn("'username'", log_output)
+        self.assertIn("'password'", log_output)
+        for secret in (
+            "private-device-id",
+            "private-product-key",
+            "private-serial",
+            "Private device name",
+            "private-user-one",
+            "private-password-one",
+            "private-user-two",
+            "private-password-two",
+        ):
+            self.assertNotIn(secret, log_output)
+
+    async def test_duplicate_device_records_with_different_addresses_are_rejected(self):
+        records = [
+            {
+                "deviceKey": "device-1",
+                "productModel": "SolarFlow 2400 Pro",
+                "snNumber": "serial-1",
+                "ip": "192.168.1.20",
+            },
+            {
+                "deviceKey": "device-1",
+                "productModel": "SolarFlow 2400 Pro",
+                "snNumber": "serial-1",
+                "ip": "192.168.1.21",
+            },
+        ]
+
+        async def post(*args, **kwargs):
+            return Response(payload(records))
+
+        with self.assertLogs(
+            "custom_components.battery_smartflow_ai.hardware.zendure.cloud",
+            level="WARNING",
+        ) as captured:
+            with self.assertRaisesRegex(ZendureCloudError, "duplicate_device_id"):
+                await ZendureCloudClient(post).async_discover(token())
+
+        log_output = "\n".join(captured.output)
+        self.assertIn("conflicting duplicate identities were rejected", log_output)
+        self.assertIn("'ip'", log_output)
 
     async def test_duplicate_diagnostic_shows_field_names_without_values(self):
         records = [
