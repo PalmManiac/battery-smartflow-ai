@@ -75,6 +75,17 @@ class DashboardContractTests(unittest.TestCase):
         self.assertNotIn("native_hardware_power_w", live_view)
         self.assertNotIn("native_hardware_pv_power_w", live_view)
 
+    def test_irrelevant_pv_cards_hide_but_reappear_for_configured_or_live_data(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("_configuredPowerSource(keys)", frontend)
+        self.assertIn("if (!entity || [\"unknown\", \"unavailable\"].includes(entity.state)) return \"\";", frontend)
+        self.assertIn("if (value === 0 && !this._configuredPowerSource(sourceKeys)) return \"\";", frontend)
+        self.assertIn("const showForecast = forecastSources.length > 0 || forecastStatus === \"available\";", frontend)
+        self.assertIn("this._scheduleRender();", frontend.split("set hass(hass) {", 1)[1].split("set narrow", 1)[0])
+
     def test_history_view_uses_recorder_and_offers_mobile_home_navigation(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"
@@ -102,8 +113,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.19"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=33"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.20"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=34"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -145,8 +156,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('if (normalizedUnit.endsWith("/kwh")) return 4;', frontend)
         self.assertIn('if (["eur", "€"].includes(normalizedUnit)) return 2;', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.19"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=33"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.20"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=34"', dashboard)
 
 
 if __name__ == "__main__":
