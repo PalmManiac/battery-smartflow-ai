@@ -165,17 +165,23 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("private-serial", log_output)
         self.assertNotIn("Private device name", log_output)
 
-    async def test_duplicate_diagnostic_reports_safe_unknown_field_names_only(self):
+    async def test_duplicate_diagnostic_shows_field_names_without_values(self):
         records = [
             {
                 "deviceKey": "private-device-id",
                 "productModel": "SolarFlow 2400 Pro",
+                "snNumber": "private-sn-a",
+                "serialNumber": "private-serial-a",
+                "deviceId": "private-device-a",
                 "firmwareVersion": "private-version-a",
                 "accessToken": "private-token-a",
             },
             {
                 "deviceKey": "private-device-id",
                 "productModel": "SolarFlow 2400 Pro",
+                "snNumber": "private-sn-b",
+                "serialNumber": "private-serial-b",
+                "deviceId": "private-device-b",
                 "firmwareVersion": "private-version-b",
                 "accessToken": "private-token-b",
             },
@@ -193,7 +199,16 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
 
         log_output = "\n".join(captured.output)
         self.assertIn("'firmwareVersion'", log_output)
-        self.assertIn("'[redacted]'", log_output)
+        self.assertIn("'snNumber'", log_output)
+        self.assertIn("'serialNumber'", log_output)
+        self.assertIn("'deviceId'", log_output)
+        self.assertIn("'accessToken'", log_output)
+        self.assertNotIn("private-sn-a", log_output)
+        self.assertNotIn("private-sn-b", log_output)
+        self.assertNotIn("private-serial-a", log_output)
+        self.assertNotIn("private-serial-b", log_output)
+        self.assertNotIn("private-device-a", log_output)
+        self.assertNotIn("private-device-b", log_output)
         self.assertNotIn("private-version-a", log_output)
         self.assertNotIn("private-version-b", log_output)
         self.assertNotIn("private-token-a", log_output)
