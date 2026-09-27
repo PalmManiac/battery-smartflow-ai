@@ -917,7 +917,18 @@ Battery SmartFlow AI setzt hier die gewünschte Entladeleistung in Watt.
 
 Die Netzmessung ist entscheidend für eine gute Regelung.
 
-Battery SmartFlow AI unterstützt drei Varianten.
+Neben den Home-Assistant-Sensoren unterstützt Battery SmartFlow AI auch die lokale
+Abfrage eines Shelly Pro 3EM Gen2 und des klassischen Shelly 3EM (Gen1). Wähle
+dafür den passenden Shelly-Modus und trage Hostname oder IP-Adresse ein. Ein
+Gerätepasswort ist optional.
+
+Der klassische 3EM wird lokal über seine Gen1-HTTP-Schnittstelle abgefragt.
+Diese Verbindung ist unverschlüsselt; verwende sie nur in einem vertrauenswürdigen
+lokalen Netzwerk. Eine reservierte oder statische IP-Adresse wird empfohlen.
+
+Bei beiden Shelly-Modi gilt: positiver Gesamtwert bedeutet Netzbezug, negativer
+Wert Netzeinspeisung. Der Pro 3EM Gen2 und der klassische 3EM Gen1 sind getrennte
+Geräteoptionen und verwenden unterschiedliche lokale Schnittstellen.
 
 ---
 

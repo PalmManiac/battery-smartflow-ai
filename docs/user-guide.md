@@ -901,7 +901,18 @@ Battery SmartFlow AI sets the desired discharging power in watts.
 
 Grid measurement is crucial for good control.
 
-Battery SmartFlow AI supports three variants.
+In addition to Home Assistant sensors, Battery SmartFlow AI supports direct local
+polling of the Shelly Pro 3EM Gen2 and the classic Shelly 3EM (Gen1). Select the
+matching Shelly mode and enter its hostname or IP address. A device password is
+optional.
+
+The classic 3EM is polled locally through its Gen1 HTTP interface. This connection
+is unencrypted, so use it only on a trusted local network. A reserved or static IP
+address is recommended.
+
+For both Shelly modes, positive total power means grid import and negative power
+means export. The Pro 3EM Gen2 and classic 3EM Gen1 are separate device options
+using different local interfaces.
 
 ---
 

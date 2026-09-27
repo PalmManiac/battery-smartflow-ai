@@ -87,14 +87,18 @@
           "grid_import_entity": "Netafname (split)",
           "grid_export_entity": "Netteruglevering (split)",
           "shelly_pro_3em_host": "Hostnaam of IP-adres van de Shelly Pro 3EM Gen2",
-          "shelly_pro_3em_password": "Shelly Pro 3EM-wachtwoord (optioneel)"
+          "shelly_pro_3em_password": "Shelly Pro 3EM-wachtwoord (optioneel)",
+          "shelly_3em_host": "Hostnaam of IP-adres van de Shelly 3EM Gen1",
+          "shelly_3em_password": "Shelly 3EM-wachtwoord (optioneel)"
         },
         "data_description": {
           "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
           "grid_import_entity": "Sensor met actuele netafname in watt.",
           "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
           "shelly_pro_3em_host": "Lokale hostnaam of IP-adres van de Shelly Pro 3EM Gen2. Gebruik een gereserveerd of statisch adres.",
-          "shelly_pro_3em_password": "Optioneel apparaatwachtwoord. Shelly gebruikt lokale SHA-256-digest-authenticatie."
+          "shelly_pro_3em_password": "Optioneel apparaatwachtwoord. Shelly gebruikt lokale SHA-256-digest-authenticatie.",
+          "shelly_3em_host": "Lokale hostnaam of IP-adres van de klassieke Shelly 3EM. Gebruik een gereserveerd of statisch adres.",
+          "shelly_3em_password": "Optioneel wachtwoord. Gen1 gebruikt HTTP Basic-authenticatie zonder versleuteling; gebruik dit alleen op een vertrouwd lokaal netwerk."
         }
       },
       "grid": {
@@ -105,14 +109,18 @@
           "grid_import_entity": "Netafname (split)",
           "grid_export_entity": "Netteruglevering (split)",
           "shelly_pro_3em_host": "Hostnaam of IP-adres van de Shelly Pro 3EM Gen2",
-          "shelly_pro_3em_password": "Shelly Pro 3EM-wachtwoord (optioneel)"
+          "shelly_pro_3em_password": "Shelly Pro 3EM-wachtwoord (optioneel)",
+          "shelly_3em_host": "Hostnaam of IP-adres van de Shelly 3EM Gen1",
+          "shelly_3em_password": "Shelly 3EM-wachtwoord (optioneel)"
         },
         "data_description": {
           "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
           "grid_import_entity": "Sensor met actuele netafname in watt.",
           "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
           "shelly_pro_3em_host": "Lokale hostnaam of IP-adres van de Shelly Pro 3EM Gen2. Gebruik een gereserveerd of statisch adres.",
-          "shelly_pro_3em_password": "Optioneel apparaatwachtwoord. Shelly gebruikt lokale SHA-256-digest-authenticatie."
+          "shelly_pro_3em_password": "Optioneel apparaatwachtwoord. Shelly gebruikt lokale SHA-256-digest-authenticatie.",
+          "shelly_3em_host": "Lokale hostnaam of IP-adres van de klassieke Shelly 3EM. Gebruik een gereserveerd of statisch adres.",
+          "shelly_3em_password": "Optioneel wachtwoord. Gen1 gebruikt HTTP Basic-authenticatie zonder versleuteling; gebruik dit alleen op een vertrouwd lokaal netwerk."
         }
       },
       "user": {
@@ -381,7 +389,8 @@
         "none": "Geen netsensor",
         "single": "Eén sensor (+ / −)",
         "split": "Twee sensoren (afname en teruglevering)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokaal)"
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokaal)",
+        "shelly_3em": "Shelly 3EM Gen1 (lokaal)"
       }
     }
   },
