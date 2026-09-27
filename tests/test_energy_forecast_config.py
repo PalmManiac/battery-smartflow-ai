@@ -59,8 +59,8 @@ class EnergyForecastConfigTests(unittest.TestCase):
         )
 
     def test_minimum_home_assistant_version_is_declared(self):
-        manifest = (COMPONENT / "manifest.json").read_text(encoding="utf-8")
-        self.assertIn('"homeassistant": "2026.8.0"', manifest)
+        hacs = (ROOT / "hacs.json").read_text(encoding="utf-8")
+        self.assertIn('"homeassistant": "2026.8.0"', hacs)
 
     def test_untouched_legacy_forecast_sensors_remain_compatible(self):
         data = {
