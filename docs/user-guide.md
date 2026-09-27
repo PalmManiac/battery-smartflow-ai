@@ -294,6 +294,8 @@ Battery SmartFlow AI is not intended to switch as much as possible, but rather:
 
 # Chapter 2 – Mandatory Requirements
 
+Home Assistant Core 2026.8.0 or newer is required.
+
 In order for Battery SmartFlow AI to work correctly and stably, certain settings must be observed.
 
 The integration controls the selected Zendure system. Parallel or conflicting
