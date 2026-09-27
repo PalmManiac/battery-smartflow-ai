@@ -35,40 +35,6 @@ CLIENT_ID = "zenHa"
 _SIGNING_KEY = "C*dafwArEOXK"
 _LOGGER = logging.getLogger(__name__)
 _DIAGNOSTIC_FIELD_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,63}$")
-_SENSITIVE_DIAGNOSTIC_FIELD_MARKERS = (
-    "account",
-    "apikey",
-    "appkey",
-    "auth",
-    "broker",
-    "credential",
-    "deviceid",
-    "devicekey",
-    "email",
-    "endpoint",
-    "host",
-    "identifier",
-    "ipaddress",
-    "location",
-    "mac",
-    "macaddress",
-    "mqtturl",
-    "name",
-    "password",
-    "phone",
-    "productkey",
-    "secret",
-    "serial",
-    "signature",
-    "ssid",
-    "server",
-    "snnumber",
-    "token",
-    "username",
-    "user",
-    "url",
-    "uuid",
-)
 _REDACTED_FIELD_NAME = "[redacted]"
 
 
@@ -302,8 +268,8 @@ def _log_duplicate_device_identities(
             comparison = {"records_identical": False, "comparison_available": False}
         else:
             differing_fields = tuple(
-                label
-                for field, label in safe_fields.items()
+                field
+                for field in safe_fields
                 if first_raw.get(field) != current_raw.get(field)
             )
             known_fields = set(safe_fields)
@@ -343,14 +309,9 @@ def _log_duplicate_device_identities(
 
 
 def _safe_diagnostic_field_name(field: Any) -> str:
-    """Return an unknown cloud field name only when it is safe to log."""
+    """Return a field name without logging its associated value."""
     name = str(field)
-    normalized = re.sub(r"[^a-z0-9]", "", name.casefold())
-    if (
-        not _DIAGNOSTIC_FIELD_NAME_PATTERN.fullmatch(name)
-        or any(marker in normalized for marker in _SENSITIVE_DIAGNOSTIC_FIELD_MARKERS)
-        or normalized.endswith(("key", "id", "sn", "uid", "mac"))
-    ):
+    if not _DIAGNOSTIC_FIELD_NAME_PATTERN.fullmatch(name):
         return _REDACTED_FIELD_NAME
     return name
 
