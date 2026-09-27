@@ -242,6 +242,21 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `<article class="reading${entity ? " history-card" : ""}"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(hint || this._t("unavailable"))}</small>`}</article>`;
   }
 
+  _configuredPowerSource(keys) {
+    const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
+    return sources.some((source) => keys.some((key) => Boolean(source[key])));
+  }
+
+  _optionalReading(entities, title, terms, sourceKeys = []) {
+    const entity = this._find(entities, terms);
+    if (!entity || ["unknown", "unavailable"].includes(entity.state)) return "";
+    const value = Number(entity.state);
+    if (!Number.isFinite(value)) return "";
+    if (value === 0 && !this._configuredPowerSource(sourceKeys)) return "";
+    const history = ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"`;
+    return `<article class="reading history-card"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong><small>${this._escape(this._t("show_history"))}</small></article>`;
+  }
+
   _forecastStatus(entities) {
     const entity = this._find(entities, ["forecast_status", "prognose status"]);
     return entity && !["unknown", "unavailable"].includes(entity.state) ? entity.state : "unavailable";
@@ -281,9 +296,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `<div class="forecast-group"><h3>${this._escape(title)}</h3><div class="forecast-day-chart">${rows}</div></div>`;
   }
 
-  _flowRow(entities, title, terms, width, source, destination) {
+  _flowRow(entities, title, terms, width, source, destination, optionalSources = null) {
     const entity = this._find(entities, terms);
     const numeric = entity && !["unknown", "unavailable"].includes(entity.state) && Number.isFinite(Number(entity.state));
+    if (optionalSources && (!numeric || (Number(entity.state) === 0 && !this._configuredPowerSource(optionalSources)))) return "";
     const displayedWidth = numeric ? Math.max(0, Math.min(100, width)) : 0;
     const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"` : "";
     return `<div class="flow-row${entity ? " history-card" : ""}"${history}><div class="flow-node"><small>${this._escape(this._t("source"))}</small><strong>${this._escape(this._t(source))}</strong></div><div class="flow-route ${numeric ? "" : "unavailable"}" role="img" aria-label="${this._escape(title)}"><small class="flow-label">${this._escape(title)}</small><div class="flow-direction"><span>→</span><div class="flow-track"><i style="width:${displayedWidth}%"></i></div></div></div><div class="flow-node"><small>${this._escape(this._t("destination"))}</small><strong>${this._escape(this._t(destination))}</strong></div><strong class="flow-value">${this._escape(this._value(entity))}</strong></div>`;
@@ -345,12 +361,12 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }).filter((value) => value !== null);
     const forecastMax = Math.max(...forecastValues, 0);
     const flowSpecs = [
-      [this._t("pv_battery"), "economics_daily_pv_to_battery_kwh", "node_pv", "node_battery"],
+      [this._t("pv_battery"), "economics_daily_pv_to_battery_kwh", "node_pv", "node_battery", ["pv", "native_pv"]],
       [this._t("grid_battery"), "economics_daily_grid_to_battery_kwh", "node_grid", "node_battery"],
       [this._t("battery_home"), "economics_daily_battery_to_home_kwh", "node_battery", "node_home"],
       [this._t("battery_grid"), "economics_daily_battery_to_grid_kwh", "node_battery", "node_grid"],
-      [this._t("native_pv_home"), "economics_daily_native_pv_to_home_kwh", "node_native_pv", "node_home"],
-      [this._t("grid_export"), "economics_daily_grid_export_kwh", "node_site", "node_grid"],
+      [this._t("native_pv_home"), "economics_daily_native_pv_to_home_kwh", "node_native_pv", "node_home", ["native_pv"]],
+      [this._t("grid_export"), "economics_daily_grid_export_kwh", "node_site", "node_grid", ["pv", "native_pv"]],
     ];
     const flowValues = flowSpecs.map(([, sensorKey]) => {
       const entity = this._find(entities, [sensorKey]);
@@ -359,9 +375,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         : null;
     });
     const largestFlow = Math.max(...flowValues.filter((value) => value !== null), 0);
-    const flowRows = flowSpecs.map(([title, sensorKey, source, destination], index) =>
-      this._flowRow(entities, title, [sensorKey], largestFlow ? Math.round((flowValues[index] || 0) / largestFlow * 100) : 0, source, destination)
+    const flowRows = flowSpecs.map(([title, sensorKey, source, destination, optionalSources], index) =>
+      this._flowRow(entities, title, [sensorKey], largestFlow ? Math.round((flowValues[index] || 0) / largestFlow * 100) : 0, source, destination, optionalSources)
     ).join("");
+    const forecastSources = (this._panel && this._panel.config && this._panel.config.forecast_sources) || [];
+    const showForecast = forecastSources.length > 0 || forecastStatus === "available";
     return `
       ${this._livePowerView(entities)}
       <section class="section"><div class="section-head"><h2>${this._escape(this._t("flows_today"))}</h2><small>${this._escape(this._t("daily_energy_note"))}</small></div>
@@ -369,7 +387,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
           ${flowRows}
         </div>
       </section>
-      <section class="section"><div class="section-head"><h2>${this._escape(this._t("solar_forecast"))}</h2><small class="forecast-source-hint">${this._escape(`${this._t("forecast_compare")} · ${this._forecastSourceHint()}`)}</small></div>
+      ${showForecast ? `<section class="section"><div class="section-head"><h2>${this._escape(this._t("solar_forecast"))}</h2><small class="forecast-source-hint">${this._escape(`${this._t("forecast_compare")} · ${this._forecastSourceHint()}`)}</small></div>
         <div class="forecast-groups">
           <div class="forecast-group"><h3>${this._escape(this._t("near_term"))}</h3><div class="reading-grid">
             ${this._forecastReading(entities, this._t("usable_3h"), [["forecast_next_3h_kwh"], ["usable pv forecast next 3 hours"], ["nutzbare pv-prognose", "nächste 3 stunden"]], forecastStatus)}
@@ -379,7 +397,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
           ${this._forecastComparison(entities, this._t("forecast_tomorrow"), usableTomorrowTerms, grossTomorrowTerms, forecastMax, forecastStatus)}
         </div>
         <p class="explain">${this._escape(forecastStatus === "available" ? this._t("forecast_explain") : this._t(forecastStatus === "not_configured" ? "forecast_not_configured" : "forecast_unavailable"))}</p>
-      </section>`;
+      </section>` : ""}`;
   }
 
   _economicsView(entities) {
@@ -391,7 +409,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
           ${this._reading(entities, this._t("peak_threshold"), [["current_peak_threshold"], ["preisspitzen-schwelle"]])}
           ${this._reading(entities, this._t("valley_threshold"), [["current_valley_threshold"], ["niedertarif-schwelle"]])}
           ${this._reading(entities, this._t("planned_charge_need"), [["learned_planning_required_charge_energy_kwh"], ["planned grid top-up"]])}
-          ${this._reading(entities, this._t("pv_credit"), ["learned_planning_pv_forecast_credit_kwh", "pv forecast credited to the charge plan"])}
+          ${this._optionalReading(entities, this._t("pv_credit"), ["learned_planning_pv_forecast_credit_kwh", "pv forecast credited to the charge plan"], ["pv", "native_pv"])}
           ${this._reading(entities, this._t("peak_coverage"), ["learned_planning_coverage_end", "end of planned peak coverage"])}
         </div>
       </section>
@@ -400,19 +418,19 @@ class BatterySmartFlowDashboard extends HTMLElement {
           ${this._reading(entities, this._t("battery_benefit"), ["economics_daily_battery_benefit", "battery benefit today", "bilanz heute batterie-nutzen"])}
           ${this._reading(entities, this._t("avoided_import"), ["economics_daily_avoided_grid_import_cost", "avoided grid import cost", "vermiedene netzbezugskosten"])}
           ${this._reading(entities, this._t("grid_charge_cost"), ["economics_daily_grid_charge_cost", "grid charging cost", "netzlade-kosten"])}
-          ${this._reading(entities, this._t("pv_opportunity_cost"), ["economics_daily_pv_opportunity_cost", "pv opportunity cost", "pv-opportunitätskosten"])}
-          ${this._reading(entities, this._t("export_revenue"), ["economics_daily_export_revenue", "export revenue", "einspeiseerlös"])}
-          ${this._reading(entities, this._t("self_consumption_value"), ["economics_daily_native_pv_self_consumption_value", "native pv self-consumption value", "wert native pv eigenverbrauch"])}
+          ${this._optionalReading(entities, this._t("pv_opportunity_cost"), ["economics_daily_pv_opportunity_cost", "pv opportunity cost", "pv-opportunitätskosten"], ["pv", "native_pv"])}
+          ${this._optionalReading(entities, this._t("export_revenue"), ["economics_daily_export_revenue", "export revenue", "einspeiseerlös"], ["pv", "native_pv"])}
+          ${this._optionalReading(entities, this._t("self_consumption_value"), ["economics_daily_native_pv_self_consumption_value", "native pv self-consumption value", "wert native pv eigenverbrauch"], ["native_pv"])}
         </div>
       </section>
       <section class="section"><div class="section-head"><h2>${this._escape(this._t("average_values"))}</h2><small>${this._escape(this._t("ledger_based"))}</small></div>
         <div class="reading-grid">
           ${this._reading(entities, this._t("grid_charge_price"), ["economics_average_grid_charge_price", "avg. grid charging price", "ø netzladepreis"])}
-          ${this._reading(entities, this._t("pv_opportunity_value"), ["economics_average_pv_opportunity_value", "avg. pv opportunity value", "ø pv-opportunitätswert"])}
+          ${this._optionalReading(entities, this._t("pv_opportunity_value"), ["economics_average_pv_opportunity_value", "avg. pv opportunity value", "ø pv-opportunitätswert"], ["pv", "native_pv"])}
           ${this._reading(entities, this._t("blended_charge_price"), ["economics_average_battery_charge_price", "avg. battery charge price", "ø akku-ladepreis"])}
-          ${this._reading(entities, this._t("export_price"), ["economics_average_export_price", "avg. export price", "ø einspeisepreis"])}
+          ${this._optionalReading(entities, this._t("export_price"), ["economics_average_export_price", "avg. export price", "ø einspeisepreis"], ["pv", "native_pv"])}
           ${this._reading(entities, this._t("discharge_value"), ["economics_average_battery_discharge_value", "avg. battery discharge value", "ø wert der batterieentladung"])}
-          ${this._reading(entities, this._t("native_pv_return"), ["economics_average_native_pv_to_home_return", "avg. pv to home return", "ø wert native pv direkt ins haus"])}
+          ${this._optionalReading(entities, this._t("native_pv_return"), ["economics_average_native_pv_to_home_return", "avg. pv to home return", "ø wert native pv direkt ins haus"], ["native_pv"])}
           ${this._reading(entities, this._t("efficiency"), ["economics_total_economic_efficiency_pct", "economic efficiency", "wirtschaftlichkeit"])}
         </div>
         <p class="explain">${this._escape(this._t("blended_explain"))}</p>
