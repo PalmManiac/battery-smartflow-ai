@@ -130,6 +130,7 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("positions and sanitized metadata comparison", log_output)
         self.assertIn("records_identical", log_output)
         self.assertIn("differing_fields", log_output)
+        self.assertIn("other_differing_fields", log_output)
         self.assertIn("deviceKey", log_output)
         self.assertIn("'B'", log_output)
         self.assertNotIn("device-1", log_output)
@@ -163,6 +164,40 @@ class ZendureCloudTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("private-product-key", log_output)
         self.assertNotIn("private-serial", log_output)
         self.assertNotIn("Private device name", log_output)
+
+    async def test_duplicate_diagnostic_reports_safe_unknown_field_names_only(self):
+        records = [
+            {
+                "deviceKey": "private-device-id",
+                "productModel": "SolarFlow 2400 Pro",
+                "firmwareVersion": "private-version-a",
+                "accessToken": "private-token-a",
+            },
+            {
+                "deviceKey": "private-device-id",
+                "productModel": "SolarFlow 2400 Pro",
+                "firmwareVersion": "private-version-b",
+                "accessToken": "private-token-b",
+            },
+        ]
+
+        async def post(*args, **kwargs):
+            return Response(payload(records))
+
+        with self.assertLogs(
+            "custom_components.battery_smartflow_ai.hardware.zendure.cloud",
+            level="WARNING",
+        ) as captured:
+            with self.assertRaisesRegex(ZendureCloudError, "duplicate_device_id"):
+                await ZendureCloudClient(post).async_discover(token())
+
+        log_output = "\n".join(captured.output)
+        self.assertIn("'firmwareVersion'", log_output)
+        self.assertIn("'[redacted]'", log_output)
+        self.assertNotIn("private-version-a", log_output)
+        self.assertNotIn("private-version-b", log_output)
+        self.assertNotIn("private-token-a", log_output)
+        self.assertNotIn("private-token-b", log_output)
 
     async def test_unknown_model_remains_visible_and_unsupported(self):
         async def post(*args, **kwargs):

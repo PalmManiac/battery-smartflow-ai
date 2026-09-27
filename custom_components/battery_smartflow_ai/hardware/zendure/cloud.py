@@ -13,6 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 import hashlib
 import logging
+import re
 import secrets
 import time
 from typing import Any, Awaitable, Callable, Mapping, Protocol
@@ -33,6 +34,42 @@ CLIENT_ID = "zenHa"
 # the transport adapter; it is not user/account data and must not leave it.
 _SIGNING_KEY = "C*dafwArEOXK"
 _LOGGER = logging.getLogger(__name__)
+_DIAGNOSTIC_FIELD_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,63}$")
+_SENSITIVE_DIAGNOSTIC_FIELD_MARKERS = (
+    "account",
+    "apikey",
+    "appkey",
+    "auth",
+    "broker",
+    "credential",
+    "deviceid",
+    "devicekey",
+    "email",
+    "endpoint",
+    "host",
+    "identifier",
+    "ipaddress",
+    "location",
+    "mac",
+    "macaddress",
+    "mqtturl",
+    "name",
+    "password",
+    "phone",
+    "productkey",
+    "secret",
+    "serial",
+    "signature",
+    "ssid",
+    "server",
+    "snnumber",
+    "token",
+    "username",
+    "user",
+    "url",
+    "uuid",
+)
+_REDACTED_FIELD_NAME = "[redacted]"
 
 
 class ZendureCloudError(Exception):
@@ -276,10 +313,22 @@ def _log_duplicate_device_identities(
             current_other = {
                 field: value for field, value in current_raw.items() if field not in known_fields
             }
+            missing = object()
+            other_differing_fields = tuple(
+                sorted(
+                    {
+                        _safe_diagnostic_field_name(field)
+                        for field in set(first_other) | set(current_other)
+                        if first_other.get(field, missing)
+                        != current_other.get(field, missing)
+                    }
+                )
+            )
             comparison = {
                 "records_identical": dict(first_raw) == dict(current_raw),
                 "differing_fields": differing_fields,
                 "other_fields_differ": first_other != current_other,
+                "other_differing_fields": other_differing_fields,
             }
         duplicates.append(
             (first_position, position, identity_source, model, comparison)
@@ -291,6 +340,19 @@ def _log_duplicate_device_identities(
         "(no identifier or field values): %s",
         duplicates,
     )
+
+
+def _safe_diagnostic_field_name(field: Any) -> str:
+    """Return an unknown cloud field name only when it is safe to log."""
+    name = str(field)
+    normalized = re.sub(r"[^a-z0-9]", "", name.casefold())
+    if (
+        not _DIAGNOSTIC_FIELD_NAME_PATTERN.fullmatch(name)
+        or any(marker in normalized for marker in _SENSITIVE_DIAGNOSTIC_FIELD_MARKERS)
+        or normalized.endswith(("key", "id", "sn", "uid", "mac"))
+    ):
+        return _REDACTED_FIELD_NAME
+    return name
 
 
 _KNOWN_DEVICE_FIELDS = {
