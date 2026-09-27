@@ -58,6 +58,10 @@ class EnergyForecastConfigTests(unittest.TestCase):
             manifest.index('"after_dependencies"'), manifest.index('"codeowners"')
         )
 
+    def test_minimum_home_assistant_version_is_declared(self):
+        hacs = (ROOT / "hacs.json").read_text(encoding="utf-8")
+        self.assertIn('"homeassistant": "2026.8.0"', hacs)
+
     def test_untouched_legacy_forecast_sensors_remain_compatible(self):
         data = {
             const.CONF_PV_FORECAST_TODAY_ENTITY: "sensor.today",

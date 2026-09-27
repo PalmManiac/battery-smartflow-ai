@@ -252,6 +252,8 @@ sources during setup; multiple sources are combined automatically.
 
 # 🛠 Installation (HACS)
 
+Requires Home Assistant Core 2026.8.0 or newer.
+
 [![HACS Repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PalmManiac&repository=battery-smartflow-ai&category=integration)
 
 1. Open HACS
@@ -834,6 +836,8 @@ werden automatisch zusammengeführt.
 ---
 
 # 🛠 Installation (HACS)
+
+Erfordert Home Assistant Core 2026.8.0 oder neuer.
 
 [![HACS Repository](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PalmManiac&repository=battery-smartflow-ai&category=integration)
 

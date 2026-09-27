@@ -307,6 +307,8 @@ Battery SmartFlow AI soll nicht möglichst viel schalten, sondern:
 
 Damit Battery SmartFlow AI korrekt und stabil arbeiten kann, müssen bestimmte Einstellungen zwingend beachtet werden.
 
+Voraussetzung ist Home Assistant Core 2026.8.0 oder neuer.
+
 Die Integration übernimmt die Steuerung des ausgewählten Zendure-Systems.
 Parallele oder widersprüchliche Steuerungen führen zu Instabilität. Z-HA ist
 beim direkten V5-Weg **keine Voraussetzung**.
