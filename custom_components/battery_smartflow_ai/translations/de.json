@@ -87,14 +87,18 @@
           "grid_import_entity": "Netzbezug (Split)",
           "grid_export_entity": "Netzeinspeisung (Split)",
           "shelly_pro_3em_host": "Hostname oder IP-Adresse des Shelly Pro 3EM Gen2",
-          "shelly_pro_3em_password": "Shelly-Pro-3EM-Passwort (optional)"
+          "shelly_pro_3em_password": "Shelly-Pro-3EM-Passwort (optional)",
+          "shelly_3em_host": "Hostname oder IP-Adresse des Shelly 3EM Gen1",
+          "shelly_3em_password": "Shelly-3EM-Passwort (optional)"
         },
         "data_description": {
           "grid_power_entity": "Ein einzelner Sensor mit positiver Leistung bei Bezug und negativer bei Einspeisung.",
           "grid_import_entity": "Sensor mit aktueller Netzbezugsleistung in Watt.",
           "grid_export_entity": "Sensor mit aktueller Netzeinspeisung in Watt.",
           "shelly_pro_3em_host": "Lokaler Hostname oder lokale IP-Adresse des Shelly Pro 3EM Gen2. Eine reservierte/statische Adresse verwenden.",
-          "shelly_pro_3em_password": "Optionales Gerätepasswort. Shelly verwendet lokal eine SHA-256-Digest-Anmeldung."
+          "shelly_pro_3em_password": "Optionales Gerätepasswort. Shelly verwendet lokal eine SHA-256-Digest-Anmeldung.",
+          "shelly_3em_host": "Lokaler Hostname oder lokale IP-Adresse des klassischen Shelly 3EM. Eine reservierte/statische Adresse verwenden.",
+          "shelly_3em_password": "Optionales Gerätepasswort. Gen1 verwendet unverschlüsselte HTTP-Basic-Authentifizierung; nur im vertrauenswürdigen lokalen Netzwerk verwenden."
         }
       },
       "grid": {
@@ -105,14 +109,18 @@
           "grid_import_entity": "Netzbezug (Split)",
           "grid_export_entity": "Netzeinspeisung (Split)",
           "shelly_pro_3em_host": "Hostname oder IP-Adresse des Shelly Pro 3EM Gen2",
-          "shelly_pro_3em_password": "Shelly-Pro-3EM-Passwort (optional)"
+          "shelly_pro_3em_password": "Shelly-Pro-3EM-Passwort (optional)",
+          "shelly_3em_host": "Hostname oder IP-Adresse des Shelly 3EM Gen1",
+          "shelly_3em_password": "Shelly-3EM-Passwort (optional)"
         },
         "data_description": {
           "grid_power_entity": "Ein einzelner Sensor mit positiver Leistung bei Bezug und negativer bei Einspeisung.",
           "grid_import_entity": "Sensor mit aktueller Netzbezugsleistung in Watt.",
           "grid_export_entity": "Sensor mit aktueller Netzeinspeisung in Watt.",
           "shelly_pro_3em_host": "Lokaler Hostname oder lokale IP-Adresse des Shelly Pro 3EM Gen2. Eine reservierte/statische Adresse verwenden.",
-          "shelly_pro_3em_password": "Optionales Gerätepasswort. Shelly verwendet lokal eine SHA-256-Digest-Anmeldung."
+          "shelly_pro_3em_password": "Optionales Gerätepasswort. Shelly verwendet lokal eine SHA-256-Digest-Anmeldung.",
+          "shelly_3em_host": "Lokaler Hostname oder lokale IP-Adresse des klassischen Shelly 3EM. Eine reservierte/statische Adresse verwenden.",
+          "shelly_3em_password": "Optionales Gerätepasswort. Gen1 verwendet unverschlüsselte HTTP-Basic-Authentifizierung; nur im vertrauenswürdigen lokalen Netzwerk verwenden."
         }
       },
       "user": {
@@ -381,7 +389,8 @@
         "none": "Kein Netzsensor",
         "single": "Ein Sensor (+ / −)",
         "split": "Zwei Sensoren (Bezug und Einspeisung)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokal)"
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokal)",
+        "shelly_3em": "Shelly 3EM Gen1 (lokal)"
       }
     }
   },

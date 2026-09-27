@@ -87,14 +87,18 @@
           "grid_import_entity": "Import réseau (séparé)",
           "grid_export_entity": "Export réseau (séparé)",
           "shelly_pro_3em_host": "Nom d’hôte ou adresse IP du Shelly Pro 3EM Gen2",
-          "shelly_pro_3em_password": "Mot de passe Shelly Pro 3EM (facultatif)"
+          "shelly_pro_3em_password": "Mot de passe Shelly Pro 3EM (facultatif)",
+          "shelly_3em_host": "Nom d’hôte ou adresse IP du Shelly 3EM Gen1",
+          "shelly_3em_password": "Mot de passe Shelly 3EM (facultatif)"
         },
         "data_description": {
           "grid_power_entity": "Un capteur unique avec puissance positive en import et négative en export.",
           "grid_import_entity": "Capteur de puissance d’import réseau actuelle en watts.",
           "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
           "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique.",
-          "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256."
+          "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256.",
+          "shelly_3em_host": "Nom d’hôte ou adresse IP locale du Shelly 3EM classique. Utilisez une adresse réservée ou statique.",
+          "shelly_3em_password": "Mot de passe facultatif. Gen1 utilise l’authentification HTTP Basic sans chiffrement ; utilisez-le uniquement sur un réseau local de confiance."
         }
       },
       "grid": {
@@ -105,14 +109,18 @@
           "grid_import_entity": "Import réseau (séparé)",
           "grid_export_entity": "Export réseau (séparé)",
           "shelly_pro_3em_host": "Nom d’hôte ou adresse IP du Shelly Pro 3EM Gen2",
-          "shelly_pro_3em_password": "Mot de passe Shelly Pro 3EM (facultatif)"
+          "shelly_pro_3em_password": "Mot de passe Shelly Pro 3EM (facultatif)",
+          "shelly_3em_host": "Nom d’hôte ou adresse IP du Shelly 3EM Gen1",
+          "shelly_3em_password": "Mot de passe Shelly 3EM (facultatif)"
         },
         "data_description": {
           "grid_power_entity": "Un capteur unique avec puissance positive en import et négative en export.",
           "grid_import_entity": "Capteur de puissance d’import réseau actuelle en watts.",
           "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
           "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique.",
-          "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256."
+          "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256.",
+          "shelly_3em_host": "Nom d’hôte ou adresse IP locale du Shelly 3EM classique. Utilisez une adresse réservée ou statique.",
+          "shelly_3em_password": "Mot de passe facultatif. Gen1 utilise l’authentification HTTP Basic sans chiffrement ; utilisez-le uniquement sur un réseau local de confiance."
         }
       },
       "user": {
@@ -381,7 +389,8 @@
         "none": "Aucun capteur réseau",
         "single": "Un capteur (+ / −)",
         "split": "Deux capteurs (soutirage et injection)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local)"
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local)",
+        "shelly_3em": "Shelly 3EM Gen1 (local)"
       }
     }
   },

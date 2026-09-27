@@ -38,6 +38,8 @@ from .const import (
     CONF_GRID_EXPORT_ENTITY,
     CONF_SHELLY_PRO_3EM_HOST,
     CONF_SHELLY_PRO_3EM_PASSWORD,
+    CONF_SHELLY_3EM_HOST,
+    CONF_SHELLY_3EM_PASSWORD,
     CONF_SOC_LIMIT_ENTITY,
     CONF_PACK_CAPACITY_KWH,
     CONF_BATTERY_AC_POWER_ENTITY,
@@ -56,6 +58,7 @@ from .const import (
     GRID_MODE_SINGLE,
     GRID_MODE_SPLIT,
     GRID_MODE_SHELLY_PRO_3EM,
+    GRID_MODE_SHELLY_3EM,
     # settings keys (entry.options)
     SETTING_SOC_MIN,
     SETTING_SOC_MAX,
@@ -130,6 +133,10 @@ from .hardware.shelly_pro_3em import (
     ShellyDigestSession,
     ShellyPro3EMError,
     async_read_shelly_pro_3em_power,
+)
+from .hardware.shelly_3em import (
+    Shelly3EMError,
+    async_read_shelly_3em_power,
 )
 from .forecast import async_build_forecast_summary
 from .learned_planning import (
@@ -430,6 +437,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._shelly_digest = ShellyDigestSession(
             password=self._shelly_pro_3em_password
+        )
+        self._shelly_3em_host = str(entry.data.get(CONF_SHELLY_3EM_HOST, "") or "")
+        self._shelly_3em_password = str(
+            entry.options.get(CONF_SHELLY_3EM_PASSWORD, "") or ""
         )
         self._shelly_grid_power_w: float | None = None
         self._shelly_last_error: str | None = None
@@ -2477,7 +2488,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mode == GRID_MODE_NONE:
             return None, None
 
-        if mode == GRID_MODE_SHELLY_PRO_3EM:
+        if mode in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM):
             gp = self._shelly_grid_power_w
             if gp is None:
                 return None, None
@@ -2504,38 +2515,49 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return None, None
 
     async def _async_refresh_shelly_grid_power(self) -> None:
-        """Refresh the configured local Shelly Pro 3EM Gen2 reading."""
+        """Refresh the configured local Shelly grid reading."""
 
         self._shelly_grid_power_w = None
-        if self.entities.grid_mode != GRID_MODE_SHELLY_PRO_3EM:
+        mode = self.entities.grid_mode
+        if mode not in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM):
             return
 
+        model_name = "Shelly Pro 3EM" if mode == GRID_MODE_SHELLY_PRO_3EM else "Shelly 3EM"
         try:
             from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-            self._shelly_grid_power_w = await async_read_shelly_pro_3em_power(
-                async_get_clientsession(self.hass),
-                host=self._shelly_pro_3em_host,
-                password=self._shelly_pro_3em_password,
-                auth=self._shelly_digest,
-                timeout_seconds=1.5,
-            )
+            if mode == GRID_MODE_SHELLY_PRO_3EM:
+                self._shelly_grid_power_w = await async_read_shelly_pro_3em_power(
+                    async_get_clientsession(self.hass),
+                    host=self._shelly_pro_3em_host,
+                    password=self._shelly_pro_3em_password,
+                    auth=self._shelly_digest,
+                    timeout_seconds=1.5,
+                )
+            else:
+                self._shelly_grid_power_w = await async_read_shelly_3em_power(
+                    async_get_clientsession(self.hass),
+                    host=self._shelly_3em_host,
+                    password=self._shelly_3em_password,
+                    timeout_seconds=1.5,
+                )
         except Exception as err:
             reason = (
                 str(err)
-                if isinstance(err, ShellyPro3EMError)
+                if isinstance(err, (ShellyPro3EMError, Shelly3EMError))
                 else type(err).__name__
             )
             if reason != self._shelly_last_error:
                 _LOGGER.warning(
-                    "Local Shelly Pro 3EM grid reading is unavailable (%s)",
+                    "Local %s grid reading is unavailable (%s)",
+                    model_name,
                     reason,
                 )
             self._shelly_last_error = reason
             return
 
         if self._shelly_last_error is not None:
-            _LOGGER.info("Local Shelly Pro 3EM grid reading recovered")
+            _LOGGER.info("Local %s grid reading recovered", model_name)
         self._shelly_last_error = None
 
     def _get_import_market_price(self, now: datetime) -> MarketPrice:
@@ -6755,7 +6777,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "surplus": float(grid_export),
                 "grid_power_w": (
                     self._shelly_grid_power_w
-                    if self.entities.grid_mode == GRID_MODE_SHELLY_PRO_3EM
+                    if self.entities.grid_mode in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM)
                     else None
                 ),
                 "grid_sensor_configured": bool(grid_sensor_configured),
@@ -7841,7 +7863,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "details": details,
                 "grid_power_w": (
                     self._shelly_grid_power_w
-                    if self.entities.grid_mode == GRID_MODE_SHELLY_PRO_3EM
+                    if self.entities.grid_mode in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM)
                     else None
                 ),
                 "decision_reason": decision.reason,

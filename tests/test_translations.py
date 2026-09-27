@@ -161,7 +161,7 @@ class TranslationCoverageTests(unittest.TestCase):
                 self.assertNotIn("abort", data["services"])
 
     def test_grid_mode_selector_options_are_translated(self) -> None:
-        expected = {"none", "single", "split", "shelly_pro_3em"}
+        expected = {"none", "single", "split", "shelly_pro_3em", "shelly_3em"}
         files = [
             COMPONENT / "strings.json",
             *(TRANSLATIONS / f"{lang}.json" for lang in LANGUAGES),

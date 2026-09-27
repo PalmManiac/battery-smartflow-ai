@@ -106,14 +106,18 @@
           "grid_import_entity": "Grid import (split)",
           "grid_export_entity": "Grid export (split)",
           "shelly_pro_3em_host": "Shelly Pro 3EM Gen2 hostname or IP address",
-          "shelly_pro_3em_password": "Shelly Pro 3EM password (optional)"
+          "shelly_pro_3em_password": "Shelly Pro 3EM password (optional)",
+          "shelly_3em_host": "Shelly 3EM Gen1 hostname or IP address",
+          "shelly_3em_password": "Shelly 3EM password (optional)"
         },
         "data_description": {
           "grid_power_entity": "A single sensor with positive power for import and negative power for export.",
           "grid_import_entity": "Sensor with current grid import power in watts.",
           "grid_export_entity": "Sensor with current grid export power in watts.",
           "shelly_pro_3em_host": "Local hostname or IP address of the Shelly Pro 3EM Gen2. Use a reserved/static address.",
-          "shelly_pro_3em_password": "Optional device password. Shelly authentication uses the local SHA-256 digest challenge."
+          "shelly_pro_3em_password": "Optional device password. Shelly authentication uses the local SHA-256 digest challenge.",
+          "shelly_3em_host": "Local hostname or IP address of the classic Shelly 3EM. Use a reserved/static address.",
+          "shelly_3em_password": "Optional device password. Gen1 uses HTTP Basic authentication without encryption; use only on a trusted local network."
         }
       },
       "grid": {
@@ -124,14 +128,18 @@
           "grid_import_entity": "Grid import (split)",
           "grid_export_entity": "Grid export (split)",
           "shelly_pro_3em_host": "Shelly Pro 3EM Gen2 hostname or IP address",
-          "shelly_pro_3em_password": "Shelly Pro 3EM password (optional)"
+          "shelly_pro_3em_password": "Shelly Pro 3EM password (optional)",
+          "shelly_3em_host": "Shelly 3EM Gen1 hostname or IP address",
+          "shelly_3em_password": "Shelly 3EM password (optional)"
         },
         "data_description": {
           "grid_power_entity": "A single sensor with positive power for import and negative power for export.",
           "grid_import_entity": "Sensor with current grid import power in watts.",
           "grid_export_entity": "Sensor with current grid export power in watts.",
           "shelly_pro_3em_host": "Local hostname or IP address of the Shelly Pro 3EM Gen2. Use a reserved/static address.",
-          "shelly_pro_3em_password": "Optional device password. Shelly authentication uses the local SHA-256 digest challenge."
+          "shelly_pro_3em_password": "Optional device password. Shelly authentication uses the local SHA-256 digest challenge.",
+          "shelly_3em_host": "Local hostname or IP address of the classic Shelly 3EM. Use a reserved/static address.",
+          "shelly_3em_password": "Optional device password. Gen1 uses HTTP Basic authentication without encryption; use only on a trusted local network."
         }
       },
       "user": {
@@ -459,7 +467,8 @@
         "none": "No grid sensor",
         "single": "One sensor (+ / −)",
         "split": "Two sensors (import and export)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local)"
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local)",
+        "shelly_3em": "Shelly 3EM Gen1 (local)"
       }
     }
   },
