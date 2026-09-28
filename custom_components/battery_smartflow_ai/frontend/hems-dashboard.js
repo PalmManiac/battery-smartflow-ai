@@ -213,9 +213,55 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const normalizedUnit = String(unit || "").toLowerCase().replace(/\s+/g, "");
     if (normalizedUnit === "kwh") return 3;
     if (normalizedUnit.endsWith("/kwh")) return 4;
-    if (["eur", "€"].includes(normalizedUnit)) return 2;
     if (normalizedUnit === "w" || normalizedUnit === "kw") return 1;
-    return null;
+
+    const currencyCode = this._currencyCodeForUnit(normalizedUnit);
+    if (!currencyCode) return null;
+
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: currencyCode,
+      }).resolvedOptions().maximumFractionDigits;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  _currencyCodeForUnit(normalizedUnit) {
+    const symbolCodes = {
+      "€": "EUR",
+      "£": "GBP",
+      "₹": "INR",
+      "₩": "KRW",
+      "₽": "RUB",
+      "₺": "TRY",
+    };
+    if (symbolCodes[normalizedUnit]) return symbolCodes[normalizedUnit];
+
+    const currencyCode = normalizedUnit.toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currencyCode)) return null;
+
+    if (typeof Intl.supportedValuesOf === "function") {
+      return Intl.supportedValuesOf("currency").includes(currencyCode)
+        ? currencyCode
+        : null;
+    }
+    if (typeof Intl.DisplayNames === "function") {
+      const currencyName = new Intl.DisplayNames(undefined, {
+        type: "currency",
+      }).of(currencyCode);
+      return currencyName && currencyName !== currencyCode ? currencyCode : null;
+    }
+
+    const fallbackCurrencies = [
+      "AED", "ARS", "AUD", "BGN", "BHD", "BRL", "CAD", "CHF", "CLP",
+      "CNY", "COP", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR",
+      "ILS", "INR", "ISK", "JPY", "KRW", "KWD", "MXN", "MYR", "NOK",
+      "NZD", "OMR", "PHP", "PLN", "QAR", "RON", "RUB", "SAR", "SEK",
+      "SGD", "THB", "TRY", "TWD", "UAH", "USD", "VND", "ZAR",
+    ];
+    return fallbackCurrencies.includes(currencyCode) ? currencyCode : null;
   }
 
   _find(entities, terms) {
