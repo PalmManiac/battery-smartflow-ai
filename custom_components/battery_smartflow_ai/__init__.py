@@ -14,6 +14,7 @@ from .const import (
     DOMAIN,
     PLATFORMS,
 )
+from .debug_recorder import DebugRecorderHandoff
 
 try:
     import homeassistant.helpers.config_validation as cv
@@ -138,7 +139,13 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
-    coordinator = ZendureSmartFlowCoordinator(hass, entry)
+    handoff: DebugRecorderHandoff = hass.data.setdefault(
+        f"{DOMAIN}_debug_recorder_handoff", DebugRecorderHandoff()
+    )
+    handed_off_recorder = handoff.get(entry.entry_id)
+    coordinator = ZendureSmartFlowCoordinator(
+        hass, entry, debug_recorder=handed_off_recorder
+    )
     if cv is None:
         coordinator.native_zendure = _DisabledNativeRuntime()
     else:
@@ -179,6 +186,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     await coordinator.async_config_entry_first_refresh()
+    if handed_off_recorder is not None:
+        handoff.discard_if_same(entry.entry_id, handed_off_recorder)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.native_zendure.start()
     from .dashboard import async_update_dashboard_panel
@@ -192,12 +201,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+        coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
         if coordinator:
+            handoff: DebugRecorderHandoff = hass.data.setdefault(
+                f"{DOMAIN}_debug_recorder_handoff", DebugRecorderHandoff()
+            )
+            handoff.retain_if_active(
+                entry.entry_id, coordinator.debug_recorder_for_reload
+            )
             await coordinator.native_zendure.async_stop()
             shutdown = getattr(coordinator, "async_shutdown", None)
             if shutdown is not None:
                 await shutdown()
+            hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
         from .dashboard import async_update_dashboard_panel
 
         await async_update_dashboard_panel(hass)

@@ -30,6 +30,30 @@ class DebugRecorderStatus:
     dropped_sample_count: int
 
 
+class DebugRecorderHandoff:
+    """Keep active recordings available while a config entry is reloaded."""
+
+    def __init__(self) -> None:
+        self._recorders: dict[str, DebugRecorder] = {}
+
+    def get(self, entry_id: str) -> DebugRecorder | None:
+        """Return a recorder waiting to be reused by the reloaded entry."""
+
+        return self._recorders.get(entry_id)
+
+    def retain_if_active(self, entry_id: str, recorder: DebugRecorder) -> None:
+        """Retain only active recordings; completed recordings need no handoff."""
+
+        if recorder.is_active:
+            self._recorders[entry_id] = recorder
+
+    def discard_if_same(self, entry_id: str, recorder: DebugRecorder) -> None:
+        """Clear a handoff after the new coordinator has adopted it."""
+
+        if self._recorders.get(entry_id) is recorder:
+            self._recorders.pop(entry_id, None)
+
+
 class DebugRecorder:
     """Manage one bounded in-memory debug recording at a time.
 

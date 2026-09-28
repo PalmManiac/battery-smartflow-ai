@@ -361,6 +361,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         entry: ConfigEntry,
         *,
         clock: Clock | None = None,
+        debug_recorder: DebugRecorder | None = None,
     ) -> None:
         self.hass = hass
         self.entry = entry
@@ -451,7 +452,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
         self._engine = DecisionEngine()
-        self._debug_recorder = DebugRecorder(integration_version=INTEGRATION_VERSION)
+        self._debug_recorder = debug_recorder or DebugRecorder(
+            integration_version=INTEGRATION_VERSION
+        )
         self._debug_last_package: str | None = None
         self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
@@ -1848,6 +1851,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Return the sparse recording status for the options flow."""
 
         return self._debug_recorder.status
+
+    @property
+    def debug_recorder_for_reload(self) -> DebugRecorder:
+        """Return the in-memory recorder so an options reload can reuse it."""
+
+        return self._debug_recorder
 
     def _debug_configured_entities(self) -> dict[str, str | None]:
         """Return entity ids by diagnostic role without reading their contents."""
