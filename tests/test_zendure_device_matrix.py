@@ -67,7 +67,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             preferred_local_transport(identity(model="SolarFlow future model"))
         )
 
-    def test_sf1600_ac_plus_is_recognized_as_zensdk_without_unverified_writes(self):
+    def test_sf1600_ac_plus_supports_verified_zensdk_control(self):
         native_identity = identity(model="SolarFlow 1600 AC+")
         entry = resolve_zendure_device(native_identity)
 
@@ -79,14 +79,20 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
         )
         self.assertIs(
             entry.transport(ZendureTransport.ZENSDK).read,
-            VerificationLevel.REFERENCE_ONLY,
+            VerificationLevel.VERIFIED,
         )
         self.assertIs(
-            entry.property_write_level(
-                ZendureTransport.ZENSDK, "outputLimit"
-            ),
-            VerificationLevel.REFERENCE_ONLY,
+            entry.transport(ZendureTransport.ZENSDK).write,
+            VerificationLevel.VERIFIED,
         )
+        for property_name in ("acMode", "inputLimit", "outputLimit"):
+            with self.subTest(property=property_name):
+                self.assertIs(
+                    entry.property_write_level(
+                        ZendureTransport.ZENSDK, property_name
+                    ),
+                    VerificationLevel.VERIFIED,
+                )
 
     def test_all_initial_profiles_have_exact_model_mapping(self):
         models = {
@@ -202,7 +208,7 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
                 )
                 expected = (
                     VerificationLevel.REFERENCE_ONLY
-                    if key in {"Hyper 2000", "HUB 2000", "SF1600AC"}
+                    if key in {"Hyper 2000", "HUB 2000"}
                     else VerificationLevel.VERIFIED
                 )
                 self.assertIs(
