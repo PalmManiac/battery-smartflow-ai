@@ -13,6 +13,7 @@ bootstrap()
 from custom_components.battery_smartflow_ai.debug_package import DebugSample  # noqa: E402
 from custom_components.battery_smartflow_ai.debug_recorder import (  # noqa: E402
     DebugRecorder,
+    DebugRecorderHandoff,
 )
 
 
@@ -178,6 +179,34 @@ class DebugRecorderTests(unittest.TestCase):
         self.assertTrue(status.active)
         self.assertEqual(status.sample_count, 0)
         self.assertEqual(status.dropped_sample_count, 0)
+
+    def test_active_recording_survives_config_reload_handoff(self) -> None:
+        handoff = DebugRecorderHandoff()
+        self.recorder.start(duration_minutes=10, now=self.start)
+        self.recorder.record(self.sample(1), now=self.start + timedelta(seconds=1))
+
+        handoff.retain_if_active("entry-1", self.recorder)
+        reloaded_recorder = handoff.get("entry-1")
+
+        self.assertIs(reloaded_recorder, self.recorder)
+        assert reloaded_recorder is not None
+        self.assertTrue(reloaded_recorder.is_active)
+        self.assertEqual(reloaded_recorder.status.sample_count, 1)
+        reloaded_recorder.record(
+            self.sample(2), now=self.start + timedelta(seconds=2)
+        )
+        handoff.discard_if_same("entry-1", reloaded_recorder)
+
+        package = reloaded_recorder.stop(now=self.start + timedelta(minutes=1))
+
+        assert package is not None
+        result = package.as_dict()
+        self.assertEqual(result["summary"]["captured_sample_count"], 2)
+        self.assertEqual(
+            [item["raw_values"]["sequence"] for item in result["samples"]],
+            [1, 2],
+        )
+        self.assertIsNone(handoff.get("entry-1"))
 
 
 if __name__ == "__main__":

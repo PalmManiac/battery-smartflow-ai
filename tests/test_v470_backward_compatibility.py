@@ -36,9 +36,12 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
             class FakeCoordinator:
                 instances = []
 
-                def __init__(self, hass, entry):
+                def __init__(self, hass, entry, *, debug_recorder=None):
                     self.hass = hass
                     self.entry = entry
+                    self.debug_recorder_for_reload = debug_recorder or SimpleNamespace(
+                        is_active=False
+                    )
                     self.refreshed = False
                     self.shutdown = False
                     self.instances.append(self)
