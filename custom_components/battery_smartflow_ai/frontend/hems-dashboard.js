@@ -520,7 +520,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const packPattern = /(battery|batterie|akku)[ -]?pack\s*0*([1-9]\d*)/i;
     return entities.filter((entity) => {
       const name = this._searchText(`${entity.entity_id} ${this._label(entity)}`);
-      if (!name.includes(prefix)) return false;
+      const hasDeviceName = name === prefix ||
+        name.startsWith(`${prefix} `) ||
+        name.includes(` ${prefix} `) ||
+        name.endsWith(` ${prefix}`);
+      if (!hasDeviceName) return false;
       const packMatch = name.match(packPattern);
       return packNumber
         ? Boolean(packMatch && Number(packMatch[2]) === packNumber)

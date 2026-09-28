@@ -113,8 +113,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.21"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=35"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.22"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=36"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -147,6 +147,20 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('data-soc-band="${socBand}"', frontend)
         self.assertIn('class="pack-card${soc == null ? "" : " has-soc"}"', frontend)
 
+    def test_hardware_details_match_complete_device_names_not_substrings(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        device_match = frontend.split("  _deviceEntities(entities, deviceName, packNumber) {", 1)[1].split(
+            "\n  _detailLabel(", 1
+        )[0]
+
+        self.assertIn("name === prefix", device_match)
+        self.assertIn('name.startsWith(`${prefix} `)', device_match)
+        self.assertIn('name.includes(` ${prefix} `)', device_match)
+        self.assertIn('name.endsWith(` ${prefix}`)', device_match)
+        self.assertNotIn("name.includes(prefix)", device_match)
+
     def test_price_per_kwh_values_use_four_decimals_in_cards_and_history(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"
@@ -161,8 +175,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.21"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=35"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.22"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=36"', dashboard)
 
 
 if __name__ == "__main__":
