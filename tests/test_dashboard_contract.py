@@ -113,8 +113,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.20"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=34"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.21"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=35"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -154,10 +154,15 @@ class DashboardContractTests(unittest.TestCase):
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
 
         self.assertIn('if (normalizedUnit.endsWith("/kwh")) return 4;', frontend)
-        self.assertIn('if (["eur", "€"].includes(normalizedUnit)) return 2;', frontend)
+        self.assertIn("_currencyCodeForUnit(normalizedUnit)", frontend)
+        self.assertIn('style: "currency"', frontend)
+        self.assertIn('currency: currencyCode', frontend)
+        self.assertIn('Intl.supportedValuesOf("currency")', frontend)
+        self.assertIn('"CHF"', frontend)
+        self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.20"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=34"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.21"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=35"', dashboard)
 
 
 if __name__ == "__main__":
