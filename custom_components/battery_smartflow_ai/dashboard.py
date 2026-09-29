@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
@@ -33,6 +34,7 @@ _PANEL_PATH = "battery-smartflow-ai"
 _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
+_STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
 DASHBOARD_VERSION = "1.0.22"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
@@ -186,12 +188,17 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             if key in sensor_entities and registry_entry.entity_id not in sensor_entities[key]:
                 sensor_entities[key].append(registry_entry.entity_id)
 
-    if not hass.data.get(_STATIC_PATH_KEY):
-        panel_file = Path(__file__).parent / "frontend" / "hems-dashboard.js"
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig(_PANEL_URL, str(panel_file), cache_headers=True)]
-        )
-        hass.data[_STATIC_PATH_KEY] = True
+    # Multiple config entries can reach dashboard setup concurrently. Protect
+    # the check-and-register sequence so each instance cannot register the
+    # same GET route before the other one marks it as registered.
+    registration_lock = hass.data.setdefault(_STATIC_PATH_LOCK_KEY, asyncio.Lock())
+    async with registration_lock:
+        if not hass.data.get(_STATIC_PATH_KEY):
+            panel_file = Path(__file__).parent / "frontend" / "hems-dashboard.js"
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(_PANEL_URL, str(panel_file), cache_headers=True)]
+            )
+            hass.data[_STATIC_PATH_KEY] = True
 
     await panel_custom.async_register_panel(
         hass,
