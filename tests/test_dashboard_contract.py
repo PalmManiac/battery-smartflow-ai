@@ -9,6 +9,24 @@ COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
 
 
 class DashboardContractTests(unittest.TestCase):
+    def test_static_dashboard_route_registration_is_serialized(self) -> None:
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+
+        self.assertIn("_STATIC_PATH_LOCK_KEY", dashboard)
+        self.assertIn(
+            "registration_lock = hass.data.setdefault(_STATIC_PATH_LOCK_KEY, asyncio.Lock())",
+            dashboard,
+        )
+        registration = dashboard.split("async with registration_lock:", 1)[1].split(
+            "await panel_custom.async_register_panel(", 1
+        )[0]
+        self.assertIn("if not hass.data.get(_STATIC_PATH_KEY):", registration)
+        self.assertIn("await hass.http.async_register_static_paths(", registration)
+        self.assertLess(
+            registration.index("await hass.http.async_register_static_paths("),
+            registration.index("hass.data[_STATIC_PATH_KEY] = True"),
+        )
+
     def test_forecast_sensors_are_resolved_by_registered_unique_ids(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
