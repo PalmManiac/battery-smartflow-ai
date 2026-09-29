@@ -49,6 +49,7 @@ _PRICE_KEYS = (
     "feed_in_tariff",
     "pv_opportunity_price",
     "avg_charge_price",
+    "economics_average_battery_charge_price",
     "economic_discharge_threshold",
     "effective_discharge_threshold",
     "current_peak_threshold",
