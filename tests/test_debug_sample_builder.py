@@ -27,6 +27,7 @@ class DebugSampleBuilderTests(unittest.TestCase):
             "pv_w": 840.0,
             "deficit": 120.0,
             "price_now": 0.21,
+            "economics_average_battery_charge_price": 0.38,
             "season_mode": "summer",
             "decision_action": "charge",
             "decision_reason": "pv_surplus",
@@ -71,6 +72,10 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(result["raw_values"]["soc"], 56.5)
         self.assertNotIn("battery_ac_power_raw", result["raw_values"])
         self.assertEqual(result["prices"]["price_now"], 0.21)
+        self.assertEqual(
+            result["prices"]["economics_average_battery_charge_price"],
+            0.38,
+        )
         self.assertEqual(result["strategy"]["decision_action"], "charge")
         self.assertEqual(result["strategy"]["season_mode"], "summer")
         self.assertTrue(result["strategy"]["automatic"]["strategy_active"])
