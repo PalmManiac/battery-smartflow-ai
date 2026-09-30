@@ -146,6 +146,39 @@ class ChargeSourceAllocatorDev8Tests(unittest.TestCase):
         self.assertEqual(result.device_input_w, 0.0)
         self.assertEqual(result.reason, "native_pv_covers_total_charge_target")
 
+    def test_native_pv_does_not_reduce_ac_inlet_limit(self) -> None:
+        result = self.allocator.allocate(
+            charge_commit_active=True,
+            allow_pv_blend=True,
+            total_target_w=2000.0,
+            pv_w=0.0,
+            house_load_w=0.0,
+            max_grid_input_w=1000.0,
+            max_total_charge_w=2000.0,
+            native_pv_w=600.0,
+            native_pv_valid=True,
+        )
+
+        self.assertEqual(result.grid_requested_w, 1000.0)
+        self.assertEqual(result.device_input_w, 1000.0)
+        self.assertEqual(result.native_pv_allocated_w, 600.0)
+
+    def test_native_pv_only_reduces_ac_when_total_battery_limit_is_near(self) -> None:
+        result = self.allocator.allocate(
+            charge_commit_active=True,
+            allow_pv_blend=True,
+            total_target_w=2000.0,
+            pv_w=0.0,
+            house_load_w=0.0,
+            max_grid_input_w=1000.0,
+            max_total_charge_w=2000.0,
+            native_pv_w=1800.0,
+            native_pv_valid=True,
+        )
+
+        self.assertEqual(result.grid_requested_w, 200.0)
+        self.assertEqual(result.device_input_w, 200.0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,6 +25,8 @@ _RAW_VALUE_KEYS = (
     "battery_charge_w_est",
     "battery_discharge_w_est",
     "max_charge",
+    "max_ac_input",
+    "max_battery_charge_limit",
     "max_discharge",
     "soc_limit",
     "soc_limits_valid",

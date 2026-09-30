@@ -17,6 +17,7 @@ from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E4
     SF2400AC_PROFILE,
     get_device_profile,
     merge_profile_with_overrides,
+    resolve_charge_limits,
 )
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     DeviceCapabilities,
@@ -121,6 +122,53 @@ class TypedDeviceProfileTests(unittest.TestCase):
         self.assertEqual(plus["CHARGE_KP_UP"], pro["CHARGE_KP_UP"])
         self.assertEqual(plus["DISCHARGE_KP_DOWN"], pro["DISCHARGE_KP_DOWN"])
         self.assertEqual(plus["label"], "Zendure SF800Plus")
+
+    def test_sf800pro_separates_ac_inlet_and_battery_charge_limits(self):
+        profile = DEVICE_PROFILES["SF800Pro"]
+
+        self.assertEqual(profile["MAX_INPUT_W"], 1000.0)
+        self.assertEqual(profile["MAX_BATTERY_CHARGE_W"], 1440.0)
+        self.assertEqual(profile["MAX_BATTERY_CHARGE_W_WITH_EXPANSION"], 2000.0)
+        self.assertEqual(
+            resolve_charge_limits(
+                profile,
+                configured_charge_w=2400.0,
+                battery_packs=1,
+                native_pv_w=0.0,
+                native_pv_valid=True,
+            ),
+            (1440.0, 1000.0),
+        )
+        self.assertEqual(
+            resolve_charge_limits(
+                profile,
+                configured_charge_w=2400.0,
+                battery_packs=3,
+                native_pv_w=600.0,
+                native_pv_valid=True,
+            ),
+            (2000.0, 1000.0),
+        )
+        self.assertEqual(
+            resolve_charge_limits(
+                profile,
+                configured_charge_w=2400.0,
+                battery_packs=3,
+                native_pv_w=1800.0,
+                native_pv_valid=True,
+            ),
+            (2000.0, 200.0),
+        )
+
+    def test_other_profiles_keep_their_legacy_charge_limit_semantics(self):
+        self.assertEqual(
+            resolve_charge_limits(
+                DEVICE_PROFILES["SF2400AC"],
+                configured_charge_w=2400.0,
+                battery_packs=1,
+            ),
+            (2400.0, 2400.0),
+        )
 
     def test_every_typed_profile_rebuilds_the_legacy_mapping_exactly(self) -> None:
         self.assertEqual(set(DEVICE_PROFILE_MODELS), set(DEVICE_PROFILES))

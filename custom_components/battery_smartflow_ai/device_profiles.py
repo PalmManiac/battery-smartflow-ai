@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from .core.models import DeviceProfile
 
 
@@ -838,6 +840,15 @@ DEVICE_PROFILES = {
     "HUB 2000": HUB2000_PROFILE,
 }
 
+# Zendure rates the SF800Pro battery charging path at 1,440 W with its
+# integrated battery and up to 2,000 W when at least one expansion battery is
+# connected. This is distinct from MAX_INPUT_W, which is the 1,000 W AC inlet.
+DEVICE_PROFILES["SF800Pro"] = {
+    **DEVICE_PROFILES["SF800Pro"],
+    "MAX_BATTERY_CHARGE_W": 1440.0,
+    "MAX_BATTERY_CHARGE_W_WITH_EXPANSION": 2000.0,
+}
+
 
 # Canonical V4.7 view. ``DEVICE_PROFILES`` remains the stable V4.6 mapping
 # facade for config/options, diagnostics and third-party imports.
@@ -858,6 +869,49 @@ def get_device_profile(profile_key: str) -> DeviceProfile:
 
 def get_profile_config(profile_key: str) -> dict:
     return get_device_profile(profile_key).as_legacy_mapping()
+
+
+def resolve_charge_limits(
+    profile: Mapping[str, object],
+    *,
+    configured_charge_w: float,
+    battery_packs: int = 1,
+    native_pv_w: float = 0.0,
+    native_pv_valid: bool = False,
+) -> tuple[float, float]:
+    """Return (total battery charge cap, controllable AC input cap)."""
+    configured = max(0.0, float(configured_charge_w or 0.0))
+    ac_limit = max(
+        0.0,
+        float(profile.get("MAX_INPUT_W", configured) or 0.0),
+    )
+    battery_limit = profile.get("MAX_BATTERY_CHARGE_W")
+
+    if battery_limit is None:
+        total_limit = min(configured, ac_limit)
+        return total_limit, total_limit
+
+    try:
+        has_expansion = int(battery_packs or 1) > 1
+    except (TypeError, ValueError):
+        has_expansion = False
+    if has_expansion:
+        battery_limit = profile.get(
+            "MAX_BATTERY_CHARGE_W_WITH_EXPANSION",
+            battery_limit,
+        )
+    total_limit = min(configured, max(0.0, float(battery_limit)))
+    native_pv = (
+        max(0.0, float(native_pv_w or 0.0))
+        if native_pv_valid
+        else 0.0
+    )
+    ac_input_limit = min(
+        configured,
+        ac_limit,
+        max(0.0, total_limit - native_pv),
+    )
+    return total_limit, ac_input_limit
 
 
 def merge_profile_with_overrides(profile_key: str, overrides: dict | None) -> dict:
