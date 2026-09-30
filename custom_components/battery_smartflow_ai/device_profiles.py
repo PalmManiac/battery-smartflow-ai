@@ -840,14 +840,23 @@ DEVICE_PROFILES = {
     "HUB 2000": HUB2000_PROFILE,
 }
 
-# Zendure rates the SF800Pro battery charging path at 1,440 W with its
-# integrated battery and up to 2,000 W when at least one expansion battery is
-# connected. This is distinct from MAX_INPUT_W, which is the 1,000 W AC inlet.
-DEVICE_PROFILES["SF800Pro"] = {
-    **DEVICE_PROFILES["SF800Pro"],
-    "MAX_BATTERY_CHARGE_W": 1440.0,
-    "MAX_BATTERY_CHARGE_W_WITH_EXPANSION": 2000.0,
-}
+# Keep the AC input rating separate from battery-side charging caps where PV
+# can feed the battery in parallel with controlled AC charging. Both 800 Pro
+# generations share 1,000 W AC input / 1,440 W battery charging, increasing to
+# 2,000 W with expansion batteries. The 2400 models have a 2,400 W combined
+# battery charging ceiling; for 2400 Pro, native DC PV consumes part of it.
+for _profile_key in ("SF800Pro", "SF800Pro2"):
+    DEVICE_PROFILES[_profile_key] = {
+        **DEVICE_PROFILES[_profile_key],
+        "MAX_BATTERY_CHARGE_W": 1440.0,
+        "MAX_BATTERY_CHARGE_W_WITH_EXPANSION": 2000.0,
+    }
+
+for _profile_key in ("SF2400AC+", "SF2400Pro"):
+    DEVICE_PROFILES[_profile_key] = {
+        **DEVICE_PROFILES[_profile_key],
+        "MAX_BATTERY_CHARGE_W": 2400.0,
+    }
 
 
 # Canonical V4.7 view. ``DEVICE_PROFILES`` remains the stable V4.6 mapping

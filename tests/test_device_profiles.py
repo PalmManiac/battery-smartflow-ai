@@ -123,41 +123,72 @@ class TypedDeviceProfileTests(unittest.TestCase):
         self.assertEqual(plus["DISCHARGE_KP_DOWN"], pro["DISCHARGE_KP_DOWN"])
         self.assertEqual(plus["label"], "Zendure SF800Plus")
 
-    def test_sf800pro_separates_ac_inlet_and_battery_charge_limits(self):
-        profile = DEVICE_PROFILES["SF800Pro"]
+    def test_800pro_profiles_separate_ac_inlet_and_battery_charge_limits(self):
+        for key in ("SF800Pro", "SF800Pro2"):
+            with self.subTest(profile=key):
+                profile = DEVICE_PROFILES[key]
 
-        self.assertEqual(profile["MAX_INPUT_W"], 1000.0)
-        self.assertEqual(profile["MAX_BATTERY_CHARGE_W"], 1440.0)
-        self.assertEqual(profile["MAX_BATTERY_CHARGE_W_WITH_EXPANSION"], 2000.0)
+                self.assertEqual(profile["MAX_INPUT_W"], 1000.0)
+                self.assertEqual(profile["MAX_BATTERY_CHARGE_W"], 1440.0)
+                self.assertEqual(
+                    profile["MAX_BATTERY_CHARGE_W_WITH_EXPANSION"],
+                    2000.0,
+                )
+                self.assertEqual(
+                    resolve_charge_limits(
+                        profile,
+                        configured_charge_w=2400.0,
+                        battery_packs=1,
+                        native_pv_w=0.0,
+                        native_pv_valid=True,
+                    ),
+                    (1440.0, 1000.0),
+                )
+                self.assertEqual(
+                    resolve_charge_limits(
+                        profile,
+                        configured_charge_w=2400.0,
+                        battery_packs=3,
+                        native_pv_w=600.0,
+                        native_pv_valid=True,
+                    ),
+                    (2000.0, 1000.0),
+                )
+                self.assertEqual(
+                    resolve_charge_limits(
+                        profile,
+                        configured_charge_w=2400.0,
+                        battery_packs=3,
+                        native_pv_w=1800.0,
+                        native_pv_valid=True,
+                    ),
+                    (2000.0, 200.0),
+                )
+
+    def test_2400_profiles_enforce_combined_battery_charge_limit(self):
+        for key in ("SF2400AC+", "SF2400Pro"):
+            with self.subTest(profile=key):
+                profile = DEVICE_PROFILES[key]
+                self.assertEqual(profile["MAX_INPUT_W"], 2400.0)
+                self.assertEqual(profile["MAX_BATTERY_CHARGE_W"], 2400.0)
+
         self.assertEqual(
             resolve_charge_limits(
-                profile,
-                configured_charge_w=2400.0,
-                battery_packs=1,
-                native_pv_w=0.0,
-                native_pv_valid=True,
+                DEVICE_PROFILES["SF2400AC+"],
+                configured_charge_w=3000.0,
+                battery_packs=2,
             ),
-            (1440.0, 1000.0),
+            (2400.0, 2400.0),
         )
         self.assertEqual(
             resolve_charge_limits(
-                profile,
-                configured_charge_w=2400.0,
-                battery_packs=3,
-                native_pv_w=600.0,
+                DEVICE_PROFILES["SF2400Pro"],
+                configured_charge_w=3000.0,
+                battery_packs=2,
+                native_pv_w=1000.0,
                 native_pv_valid=True,
             ),
-            (2000.0, 1000.0),
-        )
-        self.assertEqual(
-            resolve_charge_limits(
-                profile,
-                configured_charge_w=2400.0,
-                battery_packs=3,
-                native_pv_w=1800.0,
-                native_pv_valid=True,
-            ),
-            (2000.0, 200.0),
+            (2400.0, 1400.0),
         )
 
     def test_other_profiles_keep_their_legacy_charge_limit_semantics(self):
