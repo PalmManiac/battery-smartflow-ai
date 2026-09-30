@@ -158,6 +158,7 @@ from .grid_history import GridHistory, build_grid_history_config
 from .charge_source_allocator import ChargeSourceAllocator
 from .charge_commit_policy import (
     current_inactive_commit_abort_reason,
+    completed_charge_stop_decision,
     learned_commit_is_forced,
     learned_commit_price_phase,
     learned_commit_should_yield_to_discharge,
@@ -1557,6 +1558,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     abort_reason,
                     completed=completed,
                 )
+
+                stop_decision = completed_charge_stop_decision(
+                    decision=decision,
+                    abort_reason=abort_reason,
+                    target_soc=commit.target_soc,
+                )
+                if stop_decision is not None:
+                    return stop_decision
+
                 return decision
                 
             # V4.3.0-dev5.8:

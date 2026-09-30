@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from .decision_engine import DecisionResult
 from .strategy_state import ChargeCommitState
 
 
@@ -18,6 +19,48 @@ ECONOMIC_DISCHARGE_REASONS = {
     "very_expensive_force_discharge",
     "price_based_discharge",
 }
+
+
+def completed_charge_stop_decision(
+    *,
+    decision: DecisionResult,
+    abort_reason: str,
+    target_soc: float | None,
+) -> DecisionResult | None:
+    """Stop a still-active AC charge when its committed SoC target is met.
+
+    Other abort reasons must not replace the strategy's current decision. Nor
+    should target completion override a non-charging action such as discharge.
+    """
+    if str(abort_reason or "") not in {
+        "max_soc_reached",
+        "target_soc_reached",
+    }:
+        return None
+
+    if (
+        str(decision.action or "") != "charge"
+        or str(decision.ac_mode or "") != "input"
+        or float(decision.charge_w or 0.0) <= 0.0
+    ):
+        return None
+
+    return DecisionResult(
+        action="idle",
+        ac_mode="output",
+        charge_w=0.0,
+        discharge_w=0.0,
+        reason="charge_commit_target_reached",
+        target_soc=(
+            decision.target_soc
+            if decision.target_soc is not None
+            else target_soc
+        ),
+        current_peak_threshold=decision.current_peak_threshold,
+        current_valley_threshold=decision.current_valley_threshold,
+        economic_discharge_threshold=decision.economic_discharge_threshold,
+        effective_discharge_threshold=decision.effective_discharge_threshold,
+    )
 
 
 def learned_plan_charge_need_satisfied(
