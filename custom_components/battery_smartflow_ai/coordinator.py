@@ -121,7 +121,11 @@ from .const import (
     ZENDURE_MODE_INPUT,
     ZENDURE_MODE_OUTPUT,
 )
-from .device_profiles import get_device_profile, merge_profile_with_overrides
+from .device_profiles import (
+    get_device_profile,
+    merge_profile_with_overrides,
+    resolve_charge_limits,
+)
 from .decision_engine import (
     advance_pv_charge_hysteresis,
     compute_pv_attributable_export_w,
@@ -4160,10 +4164,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 previous_at=previous_soc_at,
                 now=now,
                 capacity_kwh=battery_capacity_kwh,
-                max_charge_w=float(
-                    profile.get("MAX_INPUT_W", DEFAULT_MAX_CHARGE)
-                    or DEFAULT_MAX_CHARGE
-                ),
+                max_charge_w=resolve_charge_limits(
+                    profile,
+                    configured_charge_w=DEFAULT_MAX_CHARGE,
+                    battery_packs=self._get_setting(
+                        SETTING_BATTERY_PACKS,
+                        DEFAULT_BATTERY_PACKS,
+                    ),
+                )[0],
                 max_discharge_w=float(
                     profile.get("MAX_OUTPUT_W", DEFAULT_MAX_DISCHARGE)
                     or DEFAULT_MAX_DISCHARGE
@@ -4269,9 +4277,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 profile.get("MAX_DISCHARGE_W", DEFAULT_MAX_DISCHARGE),
             )
 
+            configured_max_charge = float(max_charge)
             profile_max_in = float(profile.get("MAX_INPUT_W", max_charge))
             profile_max_out = float(profile.get("MAX_OUTPUT_W", max_discharge))
-            max_charge = min(float(max_charge), profile_max_in)
+            try:
+                configured_packs = int(
+                    self._get_setting(
+                        SETTING_BATTERY_PACKS,
+                        DEFAULT_BATTERY_PACKS,
+                    )
+                )
+            except (TypeError, ValueError):
+                configured_packs = DEFAULT_BATTERY_PACKS
+            max_charge, max_ac_input = resolve_charge_limits(
+                profile,
+                configured_charge_w=configured_max_charge,
+                battery_packs=configured_packs,
+                native_pv_w=native_pv_w,
+                native_pv_valid=bool(
+                    native_pv_configured and native_pv_sensor_valid
+                ),
+            )
             max_discharge = min(float(max_discharge), profile_max_out)
 
             soc_limits_valid = bool(
@@ -4279,6 +4305,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             power_limits_valid = bool(
                 float(max_charge) >= 0.0
+                and float(max_ac_input) >= 0.0
                 and float(max_discharge) > 0.0
                 and float(profile_max_in) > 0.0
                 and float(profile_max_out) > 0.0
@@ -5777,7 +5804,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 pv_w=float(pv_w or 0.0),
                 house_load_w=float(house_load or 0.0),
-                max_grid_input_w=float(max_charge),
+                max_grid_input_w=float(max_ac_input),
+                max_total_charge_w=float(max_charge),
                 native_pv_w=float(native_pv_w),
                 native_pv_valid=bool(
                     native_pv_configured and native_pv_sensor_valid
@@ -6186,7 +6214,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 grid=grid_history_state,
                 previous_input_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
-                max_input_w=float(max_charge),
+                max_input_w=float(max_ac_input),
                 max_output_w=float(max_discharge),
             )
             
@@ -6205,7 +6233,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._state(self.entities.output_limit),
                     None,
                 ),
-                max_input_w=float(max_charge),
+                max_input_w=float(max_ac_input),
                 max_output_w=float(max_discharge),
             )
 
@@ -6897,6 +6925,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     discharge_blocked_by_soc_min or cell_voltage_discharge_blocked
                 ),
                 "max_charge": max_charge,
+                "max_ac_input": max_ac_input,
+                "max_battery_charge_limit": max_charge,
                 "max_discharge": max_discharge,
                 "set_mode": ac_mode,
                 "set_input_w": int(round(in_w, 0)),
