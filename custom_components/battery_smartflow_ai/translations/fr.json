@@ -74,7 +74,7 @@
           "input_limit_entity": "Entité number pour définir la puissance de charge en watts.",
           "output_limit_entity": "Entité number pour définir la puissance de décharge en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
-          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
+          "offgrid_mode_entity": "Sélecteur Home Assistant facultatif pour le mode hors réseau Zendure. S’il est configuré, BSFAI ajoute une commande dédiée et transmet les choix manuels à ce sélecteur. Le mode n’est jamais modifié automatiquement.",
 		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle sert de valeur de repli lorsqu’aucun prix d’injection dynamique valide n’est disponible.",
           "dynamic_feed_in_price_entity": "Capteur numérique Home Assistant facultatif pour le prix d’injection dynamique actuel. Une valeur valide, y compris zéro ou un prix négatif, est prioritaire sur la rémunération fixe."
         }
@@ -254,7 +254,7 @@
           "input_limit_entity": "Puissance de charge réglable en watts.",
           "output_limit_entity": "Puissance de décharge réglable en watts.",
 		  "offgrid_power_entity": "Capteur optionnel pour la puissance de la prise hors réseau / prise îlot Zendure. Les valeurs positives sont interprétées comme une charge active sur la prise îlot.",
-          "offgrid_mode_entity": "Capteur de sélection optionnel pour le mode hors réseau / prise îlot Zendure. Le mode est uniquement lu et n’est jamais modifié par Battery SmartFlow AI.",
+          "offgrid_mode_entity": "Sélecteur Home Assistant facultatif pour le mode hors réseau Zendure. S’il est configuré, BSFAI ajoute une commande dédiée et transmet les choix manuels à ce sélecteur. Le mode n’est jamais modifié automatiquement.",
 		  "feed_in_tariff": "Rémunération par kWh injecté dans la même unité monétaire que les prix de l’électricité. Elle sert de valeur de repli lorsqu’aucun prix d’injection dynamique valide n’est disponible.",
           "dynamic_feed_in_price_entity": "Capteur numérique Home Assistant facultatif pour le prix d’injection dynamique actuel. Une valeur valide, y compris zéro ou un prix négatif, est prioritaire sur la rémunération fixe."
         }
@@ -412,6 +412,14 @@
           "pv_surplus": "Charge du surplus PV",
           "discharge": "Décharge",
           "constant_discharge": "Décharge constante"
+        }
+      },
+      "offgrid_mode_control": {
+        "name": "Mode hors réseau",
+        "state": {
+          "off": "Désactivé",
+          "normal": "Normal",
+          "eco": "Économique"
         }
       }
     },

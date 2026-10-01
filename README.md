@@ -336,7 +336,7 @@ with an off-grid / island socket:
 * Off-grid power
 * Off-grid mode
 
-The off-grid mode is only read by Battery SmartFlow AI. It is **never** controlled or changed by the integration.
+The off-grid mode is read for control context. If you configure an existing Home Assistant select for it, BSFAI also exposes a dedicated select that forwards explicit user choices to that entity. BSFAI never changes the mode automatically, and does not create a control when no select is configured.
 
 Positive off-grid power values are interpreted as an active load at the island socket.
 
@@ -923,7 +923,11 @@ optionale Sensoren konfiguriert werden:
 * Off-Grid-Leistung
 * Off-Grid-Modus
 
-Der Off-Grid-Modus wird von Battery SmartFlow AI nur gelesen. Er wird **niemals** durch die Integration gesetzt oder verändert.
+Der Off-Grid-Modus wird für den Regelungskontext gelesen. Wenn ein vorhandener
+Home-Assistant-Select dafür konfiguriert ist, stellt BSFAI zusätzlich einen
+eigenen Select bereit und leitet manuelle Auswahländerungen an diesen weiter.
+Die Automatik ändert den Modus niemals selbstständig; ohne konfigurierten
+Select wird keine Steuerung dafür angelegt.
 
 Positive Off-Grid-Leistungswerte werden als aktive Last an der Inselsteckdose interpretiert.
 
@@ -1029,6 +1033,11 @@ Unterstützte Off-Grid-Moduswerte:
 * `off`
 * `normal`
 * `eco`
+
+Wenn ein vorhandener Home-Assistant-Select für den Off-Grid-Modus konfiguriert
+ist, stellt BSFAI zusätzlich einen eigenen Select bereit und leitet manuelle
+Auswahländerungen an diesen weiter. Ohne konfigurierten Select gibt es keine
+Steuerung. Die Automatik ändert den Off-Grid-Modus niemals selbstständig.
 
 Bei aktiver Off-Grid-Last kann Battery SmartFlow AI einen technischen Unterstützungsmodus verwenden:
 
