@@ -261,6 +261,8 @@ class DeviceCommand:
     should_write_output: bool = True
     should_write_min_soc: bool = False
     should_write_max_soc: bool = False
+    offgrid_mode: Literal["normal", "eco", "off"] | None = None
+    should_write_offgrid_mode: bool = False
 
     skipped: bool = False
     skip_reason: CommandSkipReason = "none"

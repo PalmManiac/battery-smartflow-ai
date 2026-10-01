@@ -109,6 +109,12 @@ def map_zensdk_command(
         requested["minSoc"] = _soc_tenths(command.min_soc_pct)
     if command.should_write_max_soc:
         requested["socSet"] = _soc_tenths(command.max_soc_pct)
+    if command.should_write_offgrid_mode:
+        requested["gridOffMode"] = {
+            "normal": 0,
+            "eco": 1,
+            "off": 2,
+        }[command.offgrid_mode]
     if not requested:
         raise ValueError("empty_command")
 

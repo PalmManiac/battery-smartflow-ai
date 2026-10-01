@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
 
@@ -73,7 +74,8 @@ async def async_setup_entry(
         for description in SELECTS
     )
     offgrid_entity_id = entry.data.get(CONF_OFFGRID_MODE_ENTITY)
-    if offgrid_entity_id:
+    native_runtime = getattr(coordinator, "native_zendure", None)
+    if offgrid_entity_id or getattr(native_runtime, "configured", False):
         add_entities([ZendureOffgridModeSelect(entry, coordinator, offgrid_entity_id)])
 
 
@@ -137,7 +139,7 @@ class ZendureOffgridModeSelect(SelectEntity):
     _attr_has_entity_name = True
     _attr_icon = "mdi:power-plug"
 
-    def __init__(self, entry: ConfigEntry, coordinator, source_entity_id: str) -> None:
+    def __init__(self, entry: ConfigEntry, coordinator, source_entity_id: str | None) -> None:
         self.coordinator = coordinator
         self.source_entity_id = source_entity_id
         self._source_options: dict[str, str] = {}
@@ -153,11 +155,18 @@ class ZendureOffgridModeSelect(SelectEntity):
 
     @property
     def options(self) -> list[str]:
+        if self._native_control_available:
+            return [option for option in ("normal", "eco", "off")]
         return [option for option in OFFGRID_MODE_OPTIONS if option in self._source_options]
 
     @property
     def available(self) -> bool:
-        source = self.hass.states.get(self.source_entity_id) if self.hass else None
+        if self._native_control_available:
+            return True
+        source = (
+            self.hass.states.get(self.source_entity_id)
+            if self.hass and self.source_entity_id else None
+        )
         return bool(
             source is not None
             and source.state not in {"unknown", "unavailable"}
@@ -167,7 +176,13 @@ class ZendureOffgridModeSelect(SelectEntity):
 
     @property
     def current_option(self) -> str | None:
-        source = self.hass.states.get(self.source_entity_id) if self.hass else None
+        native = self._native_runtime
+        if self._native_control_available and native is not None:
+            return native.selected_offgrid_mode()
+        source = (
+            self.hass.states.get(self.source_entity_id)
+            if self.hass and self.source_entity_id else None
+        )
         if source is None:
             return None
         option = normalize_offgrid_option(source.state)
@@ -178,6 +193,17 @@ class ZendureOffgridModeSelect(SelectEntity):
 
         if option not in self.options:
             return
+        native = self._native_runtime
+        if self._native_control_available and native is not None:
+            result = await native.async_select_offgrid_mode(option)
+            if getattr(result.status, "value", result.status) != "applied":
+                raise HomeAssistantError(
+                    f"Could not set native Zendure off-grid mode: {result.reason}"
+                )
+            self.async_write_ha_state()
+            return
+        if self.source_entity_id is None:
+            raise HomeAssistantError("No Zendure off-grid mode source is configured")
         upstream_option = self._source_options[option]
         if not self.available:
             return
@@ -191,18 +217,37 @@ class ZendureOffgridModeSelect(SelectEntity):
 
     async def async_added_to_hass(self) -> None:
         self._refresh_source_options()
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass,
-                [self.source_entity_id],
-                self._handle_source_state_change,
+        removers = []
+        if self.source_entity_id:
+            removers.append(
+                async_track_state_change_event(
+                    self.hass,
+                    [self.source_entity_id],
+                    self._handle_source_state_change,
+                )
             )
-        )
+        native = self._native_runtime
+        if native is not None and hasattr(self.coordinator, "async_add_listener"):
+            removers.append(self.coordinator.async_add_listener(self.async_write_ha_state))
+        self.async_on_remove(lambda: [remove() for remove in removers])
 
     def _refresh_source_options(self) -> None:
-        source = self.hass.states.get(self.source_entity_id)
+        source = self.hass.states.get(self.source_entity_id) if self.source_entity_id else None
         raw_options = source.attributes.get("options", []) if source is not None else []
         self._source_options = matching_offgrid_options(raw_options)
+
+    @property
+    def _native_runtime(self):
+        return getattr(self.coordinator, "native_zendure", None)
+
+    @property
+    def _native_control_available(self) -> bool:
+        native = self._native_runtime
+        return bool(
+            native is not None
+            and callable(getattr(native, "native_offgrid_mode_control_available", None))
+            and native.native_offgrid_mode_control_available()
+        )
 
     async def _handle_source_state_change(self, _event: Event) -> None:
         self._refresh_source_options()

@@ -336,7 +336,7 @@ with an off-grid / island socket:
 * Off-grid power
 * Off-grid mode
 
-The off-grid mode is read for control context. If you configure an existing Home Assistant select for it, BSFAI also exposes a dedicated select that forwards explicit user choices to that entity. BSFAI never changes the mode automatically, and does not create a control when no select is configured.
+When the selected native ZenSDK device reports `gridOffMode`, BSFAI exposes a guarded control for explicit user changes and verifies the result through readback. If native control is unavailable, an optional existing Home Assistant select can be configured as a manual forwarding fallback. BSFAI never changes this mode automatically.
 
 Positive off-grid power values are interpreted as an active load at the island socket.
 
@@ -923,11 +923,11 @@ optionale Sensoren konfiguriert werden:
 * Off-Grid-Leistung
 * Off-Grid-Modus
 
-Der Off-Grid-Modus wird für den Regelungskontext gelesen. Wenn ein vorhandener
-Home-Assistant-Select dafür konfiguriert ist, stellt BSFAI zusätzlich einen
-eigenen Select bereit und leitet manuelle Auswahländerungen an diesen weiter.
-Die Automatik ändert den Modus niemals selbstständig; ohne konfigurierten
-Select wird keine Steuerung dafür angelegt.
+Wenn das ausgewählte native ZenSDK-Gerät `gridOffMode` meldet, stellt BSFAI
+eine abgesicherte Steuerung für manuelle Änderungen bereit und prüft das
+Ergebnis per Rückmeldung. Falls native Steuerung nicht verfügbar ist, kann
+optional ein vorhandener Home-Assistant-Select als manuelle Weiterleitung
+konfiguriert werden. Die Automatik ändert den Modus niemals selbstständig.
 
 Positive Off-Grid-Leistungswerte werden als aktive Last an der Inselsteckdose interpretiert.
 

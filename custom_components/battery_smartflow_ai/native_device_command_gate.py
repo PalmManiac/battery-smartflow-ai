@@ -353,6 +353,10 @@ def _validate_command(
         and command.min_soc_pct > command.max_soc_pct
     ):
         reasons.append("invalid_soc_interval")
+    if command.should_write_offgrid_mode and command.offgrid_mode not in {
+        "normal", "eco", "off"
+    }:
+        reasons.append("invalid_offgrid_mode")
     if command.ac_mode == "input" and command.should_write_output and command.output_limit_w != 0:
         reasons.append("invalid_input_mode_output_target")
     if command.ac_mode == "output" and command.should_write_input and command.input_limit_w != 0:
@@ -363,6 +367,7 @@ def _validate_command(
         command.should_write_output,
         command.should_write_min_soc,
         command.should_write_max_soc,
+        command.should_write_offgrid_mode,
     )):
         reasons.append("invalid_empty_command")
     if matrix is not None:
@@ -377,6 +382,8 @@ def _validate_command(
             properties.append("minSoc")
         if command.should_write_max_soc:
             properties.append("socSet")
+        if command.should_write_offgrid_mode:
+            properties.append("gridOffMode")
         for prop in properties:
             if matrix.property_write_level(transport, prop) is not VerificationLevel.VERIFIED:
                 reasons.append(f"command_capability_unsupported:{prop}")
@@ -463,4 +470,6 @@ def _command_values(command: DeviceCommand) -> dict[str, Any]:
         "write_output": command.should_write_output,
         "write_min_soc": command.should_write_min_soc,
         "write_max_soc": command.should_write_max_soc,
+        "offgrid_mode": command.offgrid_mode,
+        "write_offgrid_mode": command.should_write_offgrid_mode,
     }

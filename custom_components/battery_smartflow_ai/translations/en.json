@@ -93,7 +93,7 @@
           "input_limit_entity": "Number entity for setting the charge power in watts.",
           "output_limit_entity": "Number entity for setting the discharge power in watts.",
           "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
-          "offgrid_mode_entity": "Optional Home Assistant select for the Zendure off-grid / island socket mode. If configured, BSFAI adds a dedicated control that forwards explicit user selections to this entity; it never changes the mode automatically.",
+          "offgrid_mode_entity": "Optional fallback Home Assistant select for the Zendure off-grid / island socket mode. BSFAI uses its guarded native ZenSDK control when available; otherwise, manual choices can be forwarded to this entity. Automation never changes the mode automatically.",
           "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as a fallback when no valid dynamic feed-in price is available.",
           "dynamic_feed_in_price_entity": "Optional numeric Home Assistant sensor for the current dynamic feed-in price. A valid sensor value, including zero or a negative price, takes priority over the fixed feed-in tariff."
         }
@@ -273,7 +273,7 @@
           "input_limit_entity": "Adjustable charge power in watts.",
           "output_limit_entity": "Adjustable discharge power in watts.",
           "offgrid_power_entity": "Optional sensor for the power of the Zendure off-grid / island socket. Positive values are interpreted as an active load at the island socket.",
-          "offgrid_mode_entity": "Optional Home Assistant select for the Zendure off-grid / island socket mode. If configured, BSFAI adds a dedicated control that forwards explicit user selections to this entity; it never changes the mode automatically.",
+          "offgrid_mode_entity": "Optional fallback Home Assistant select for the Zendure off-grid / island socket mode. BSFAI uses its guarded native ZenSDK control when available; otherwise, manual choices can be forwarded to this entity. Automation never changes the mode automatically.",
           "feed_in_tariff": "Compensation per exported kWh in the same currency unit as the electricity prices. Used as a fallback when no valid dynamic feed-in price is available.",
           "dynamic_feed_in_price_entity": "Optional numeric Home Assistant sensor for the current dynamic feed-in price. A valid sensor value, including zero or a negative price, takes priority over the fixed feed-in tariff."
         }
