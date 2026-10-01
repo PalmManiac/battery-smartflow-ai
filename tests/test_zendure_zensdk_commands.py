@@ -90,6 +90,30 @@ def output_command(value=301):
 
 
 class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_offgrid_mode_is_a_single_verified_property_write(self):
+        data = await make_bootstrap()
+        calls = []
+        manager = NativeCommandVerificationManager()
+
+        async def post(url, **kwargs):
+            calls.append((url, kwargs))
+            return Response({"success": True}, 200)
+
+        command = DeviceCommand(
+            "output",
+            should_write_mode=False,
+            should_write_input=False,
+            should_write_output=False,
+            should_write_offgrid_mode=True,
+            offgrid_mode="eco",
+        )
+        result = await ZendureZenSdkCommandAdapter(
+            data, post, manager, clock=lambda: NOW
+        ).execute(authorized(command))
+
+        self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
+        self.assertEqual(calls[0][1]["json"]["properties"], {"gridOffMode": 1})
+        self.assertIsNotNone(manager.active_for(DEVICE, "gridOffMode"))
     async def test_running_output_adjustment_writes_only_output_limit(self):
         data = await make_bootstrap()
         calls = []

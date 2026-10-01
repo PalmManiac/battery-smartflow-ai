@@ -268,6 +268,12 @@ def _entry(
             transport_writes[ZendureTransport.ZENSDK][property_name] = (
                 VerificationLevel.VERIFIED
             )
+        # Zendure-HA implements this documented property as a direct select;
+        # ZenSDK reports expose the same numeric field for native readback.
+        writes["gridOffMode"] = VerificationLevel.VERIFIED
+        transport_writes[ZendureTransport.ZENSDK]["gridOffMode"] = (
+            VerificationLevel.VERIFIED
+        )
     if local_mqtt_verified:
         transports[ZendureTransport.ZENSDK] = TransportCapability(
             ZendureTransport.ZENSDK,

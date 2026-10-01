@@ -1137,16 +1137,15 @@ Typische interne Zustände:
 | `normal` | Normalbetrieb               |
 | `eco`    | ökonomischer Off-Grid-Modus |
 
-Battery SmartFlow AI liest diesen Modus für den Regelungskontext. Wenn ein
-vorhandener Home-Assistant-Select dafür konfiguriert ist, erscheint zusätzlich
-ein eigener Off-Grid-Select in BSFAI. Eine manuelle Auswahl wird an den
-konfigurierten Select weitergeleitet.
+Wenn das ausgewählte native ZenSDK-Gerät `gridOffMode` meldet, stellt BSFAI
+einen eigenen Select für manuelle Änderungen bereit und prüft den Wert nach
+dem Schreiben per Rückmeldung. Falls native Steuerung nicht verfügbar ist,
+kann ein vorhandener Home-Assistant-Select als manuelle Weiterleitung dienen.
 
 > [!IMPORTANT]
-> Die BSFAI-Automatik ändert den Off-Grid-Modus niemals selbstständig. Ohne
-> konfigurierten Home-Assistant-Select stellt BSFAI keine Steuerung dafür bereit.
-> Der tatsächliche Schreibbefehl und die Rückmeldung kommen weiterhin von der
-> ausgewählten Zendure-Integration.
+> Die BSFAI-Automatik ändert den Off-Grid-Modus niemals selbstständig. Native
+> Schreibbefehle werden nur für freigegebene ZenSDK-Geräte und bei frischer
+> Telemetrie angeboten.
 
 ---
 
@@ -1184,9 +1183,11 @@ keine gültigen Kandidaten für:
 
 ### Einschränkung
 
-Eine manuelle Änderung des Off-Grid-Modus wird an den konfigurierten Select
-weitergeleitet. Welche Leistung die Inselsteckdose tatsächlich bereitstellt,
-bleibt von Zendure-Firmware, Gerätegrenzen und Gerätekonfiguration abhängig.
+Eine manuelle Änderung wird nativ über ZenSDK geschrieben und anhand des
+Rücklesewerts geprüft; falls das nicht möglich ist, kann sie an einen
+konfigurierten Home-Assistant-Select weitergeleitet werden. Welche Leistung
+die Inselsteckdose tatsächlich bereitstellt, bleibt von Zendure-Firmware,
+Gerätegrenzen und Gerätekonfiguration abhängig.
 
 ---
 
@@ -3096,9 +3097,9 @@ Prüfung eine Debug-Aufzeichnung; das Paket enthält die gelesene Leistung, den
 Modus, die erkannte Last und den internen Regelgrund.
 
 > [!NOTE]
-> Battery SmartFlow AI nutzt den Off-Grid-Modus als Kontext. Eine manuelle
-> Änderung wird nur an den konfigurierten Home-Assistant-Select weitergeleitet;
-> die Automatik verändert ihn nicht. Die tatsächlich bereitgestellte
+> Battery SmartFlow AI nutzt den Off-Grid-Modus als Kontext. Manuelle Änderungen
+> werden nativ geschrieben, wenn der ausgewählte ZenSDK-Pfad dafür freigegeben
+> ist; die Automatik verändert ihn nicht. Die tatsächlich bereitgestellte
 > Off-Grid-Leistung bleibt Aufgabe von Zendure-Firmware und Gerätekonfiguration.
 
 ---

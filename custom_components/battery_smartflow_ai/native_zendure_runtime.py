@@ -1028,6 +1028,75 @@ class NativeZendureRuntime:
                 output_written=final_command.should_write_output,
             ))
 
+    def selected_offgrid_mode(self) -> str | None:
+        """Return the selected system's current, documented native off-grid mode."""
+
+        state = self.selected_device_state()
+        if state is None:
+            return None
+        observed = state.diagnostics.get("gridOffMode")
+        if observed is None or not observed.valid or isinstance(observed.value, bool):
+            return None
+        try:
+            numeric = int(observed.value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if numeric != observed.value:
+            return None
+        return {0: "normal", 1: "eco", 2: "off"}.get(numeric)
+
+    def native_offgrid_mode_control_available(self) -> bool:
+        """Check whether a manual mode write can use the guarded ZenSDK path."""
+
+        if (
+            not self._control_enabled
+            or self._status != STATUS_OBSERVING
+            or self._selected_device is None
+        ):
+            return False
+        state = self._states.get(self._selected_device)
+        device = self._inventory.devices.get(self._selected_device)
+        if state is None or device is None or not _fresh_native_state(state):
+            return False
+        if self.selected_offgrid_mode() is None:
+            return False
+        if self._effective_control_transport(device).transport is not ZendureTransport.ZENSDK:
+            return False
+        if not self._control_transport_ready(ZendureTransport.ZENSDK):
+            return False
+        matrix = resolve_zendure_device(device.native_identities[0]) if device.native_identities else None
+        return bool(
+            matrix is not None
+            and matrix.native_control_approved
+            and matrix.property_write_level(
+                ZendureTransport.ZENSDK, "gridOffMode"
+            ) is VerificationLevel.VERIFIED
+        )
+
+    async def async_select_offgrid_mode(self, option: str) -> CommandExecutionResult:
+        """Send a user-selected native off-grid mode through the command gate."""
+
+        if option not in {"normal", "eco", "off"}:
+            return self._remember_command_result(_command_result(
+                CommandExecutionStatus.SKIPPED, "invalid_offgrid_mode"
+            ))
+        if not self.native_offgrid_mode_control_available():
+            return self._remember_command_result(_command_result(
+                CommandExecutionStatus.SKIPPED, "native_offgrid_control_not_ready"
+            ))
+        command = DeviceCommand(
+            ac_mode="output",
+            input_limit_w=0,
+            output_limit_w=0,
+            reason="manual_offgrid_mode_selection",
+            should_write_mode=False,
+            should_write_input=False,
+            should_write_output=False,
+            should_write_offgrid_mode=True,
+            offgrid_mode=option,
+        )
+        return await self.async_execute_device_command(command)
+
     def _remember_command_result(
         self, result: CommandExecutionResult
     ) -> CommandExecutionResult:
@@ -1961,10 +2030,14 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
             should_write_output,
             command.should_write_min_soc,
             command.should_write_max_soc,
+            command.should_write_offgrid_mode,
         )),
         skip_reason=(
             "none"
-            if any((should_write_mode, should_write_input, should_write_output))
+            if any((
+                should_write_mode, should_write_input, should_write_output,
+                command.should_write_offgrid_mode,
+            ))
             else command.skip_reason
         ),
     )
@@ -1975,6 +2048,7 @@ def _has_writes(command: DeviceCommand) -> bool:
         command.should_write_mode, command.should_write_input,
         command.should_write_output, command.should_write_min_soc,
         command.should_write_max_soc,
+        command.should_write_offgrid_mode,
     ))
 
 

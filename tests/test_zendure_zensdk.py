@@ -169,6 +169,28 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.result, "property_not_allowed")
         self.assertFalse(called)
 
+    async def test_native_offgrid_mode_write_accepts_only_documented_values(self):
+        data = await make_bootstrap()
+        calls = []
+
+        async def post(url, **kwargs):
+            calls.append((url, kwargs))
+            return Response({"success": True}, 200)
+
+        result = await async_write_zensdk_property(
+            data, "cloud_mqtt:device-real-1", "gridOffMode", 2, 9, post
+        )
+        self.assertTrue(result.accepted)
+        self.assertEqual(calls[0][1]["json"]["properties"], {"gridOffMode": 2})
+
+        for invalid in (-1, 3, True):
+            with self.subTest(invalid=invalid):
+                rejected = await async_write_zensdk_property(
+                    data, "cloud_mqtt:device-real-1", "gridOffMode", invalid, 10, post
+                )
+                self.assertFalse(rejected.accepted)
+        self.assertEqual(len(calls), 1)
+
     async def test_direction_group_rejects_inconsistent_payload_without_network(self):
         data = await make_bootstrap()
         calls = []

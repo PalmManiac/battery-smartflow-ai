@@ -63,6 +63,7 @@ def approved_matrix():
             "outputLimit": VerificationLevel.VERIFIED,
             "minSoc": VerificationLevel.REFERENCE_ONLY,
             "socSet": VerificationLevel.REFERENCE_ONLY,
+            "gridOffMode": VerificationLevel.VERIFIED,
         },
         writable_main_properties_by_transport={
             **source.writable_main_properties_by_transport,
@@ -72,6 +73,7 @@ def approved_matrix():
                 "outputLimit": VerificationLevel.VERIFIED,
                 "minSoc": VerificationLevel.REFERENCE_ONLY,
                 "socSet": VerificationLevel.REFERENCE_ONLY,
+                "gridOffMode": VerificationLevel.VERIFIED,
             },
         },
     )
@@ -149,6 +151,37 @@ def ready_gate():
 
 
 class NativeDeviceCommandGateTests(unittest.IsolatedAsyncioTestCase):
+    async def test_verified_offgrid_mode_command_is_accepted(self):
+        gate = ready_gate()
+        mode_command = DeviceCommand(
+            "output",
+            should_write_mode=False,
+            should_write_input=False,
+            should_write_output=False,
+            should_write_offgrid_mode=True,
+            offgrid_mode="eco",
+        )
+        result = gate.evaluate(
+            NativeCommandRequest(DEVICE_ID, TRANSPORT, mode_command), context()
+        )
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.final["offgrid_mode"], "eco")
+
+    async def test_unknown_offgrid_mode_is_rejected(self):
+        mode_command = DeviceCommand(
+            "output",
+            should_write_mode=False,
+            should_write_input=False,
+            should_write_output=False,
+            should_write_offgrid_mode=True,
+            offgrid_mode="automatic",
+        )
+        result = ready_gate().evaluate(
+            NativeCommandRequest(DEVICE_ID, TRANSPORT, mode_command), context()
+        )
+        self.assertFalse(result.accepted)
+        self.assertIn("invalid_offgrid_mode", result.reasons)
+
     async def test_valid_command_reaches_adapter_with_correlation_id(self):
         gate = ready_gate()
         calls = []

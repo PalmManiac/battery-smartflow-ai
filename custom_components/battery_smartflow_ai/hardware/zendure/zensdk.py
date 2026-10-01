@@ -68,7 +68,7 @@ async def async_write_zensdk_property(
 ) -> ZenSdkWriteResult:
     """Write one allow-listed property to one exact local main device."""
 
-    if property_name != "outputLimit":
+    if property_name not in {"outputLimit", "gridOffMode"}:
         return ZenSdkWriteResult(False, None, "property_not_allowed")
     return await async_write_zensdk_properties(
         bootstrap,
@@ -95,9 +95,11 @@ async def async_write_zensdk_properties(
     direction_names = frozenset(
         {"smartMode", "acMode", "inputLimit", "outputLimit"}
     )
-    if property_names not in (frozenset({"outputLimit"}), direction_names):
-        return ZenSdkWriteResult(False, None, "property_not_allowed")
     if any(isinstance(value, bool) or not isinstance(value, int) for value in properties.values()):
+        return ZenSdkWriteResult(False, None, "invalid_property_value")
+    if property_names not in (frozenset({"outputLimit"}), direction_names, frozenset({"gridOffMode"})):
+        return ZenSdkWriteResult(False, None, "property_not_allowed")
+    if property_names == frozenset({"gridOffMode"}) and next(iter(properties.values())) not in {0, 1, 2}:
         return ZenSdkWriteResult(False, None, "invalid_property_value")
     if property_names == direction_names and not _valid_direction_group(properties):
         return ZenSdkWriteResult(False, None, "invalid_direction_group")

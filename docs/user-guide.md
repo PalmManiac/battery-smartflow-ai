@@ -1111,7 +1111,9 @@ or discharging strategy.
 
 ### Off-grid mode
 
-Off-grid mode is an optional select sensor.
+Off-grid mode is reported as native telemetry when available. A manual control
+is exposed for supported native ZenSDK devices; an existing Home Assistant
+select can optionally serve as a fallback.
 
 Typical internal states:
 
@@ -1121,14 +1123,13 @@ Typical internal states:
 | `normal` | Normal operation |
 | `eco` | economical off-grid mode |
 
-Battery SmartFlow AI reads this mode as control context. If an existing Home
-Assistant select is configured for it, BSFAI also exposes a dedicated off-grid
-select and forwards manual choices to that entity.
+Battery SmartFlow AI reads this mode as control context. Manual choices are
+written through the selected native ZenSDK connection when supported; otherwise
+they can be forwarded to a configured Home Assistant select.
 
 > [!IMPORTANT]
-> BSFAI automation never changes off-grid mode automatically. Without a
-> configured Home Assistant select, no control is created. The selected
-> Zendure integration remains responsible for the actual command and readback.
+> BSFAI automation never changes off-grid mode automatically. Native writes
+> are offered only for approved ZenSDK devices with fresh telemetry.
 
 ---
 
@@ -3063,8 +3064,8 @@ start a debug recording; the package contains the read power, mode, detected
 load and internal control reason.
 
 > [!NOTE]
-> Battery SmartFlow AI uses off-grid mode as context. Manual changes are only
-> forwarded to the configured Home Assistant select; automation never changes
+> Battery SmartFlow AI uses off-grid mode as context. Manual changes are sent
+> natively when the selected ZenSDK path is approved; automation never changes
 > this mode. The actual off-grid power remains the
 > responsibility of Zendure firmware and the device configuration.
 

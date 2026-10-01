@@ -194,6 +194,10 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
             VerificationLevel.VERIFIED,
         )
         self.assertIs(
+            approved.property_write_level(ZendureTransport.ZENSDK, "gridOffMode"),
+            VerificationLevel.VERIFIED,
+        )
+        self.assertIs(
             approved.transport(ZendureTransport.CLOUD_MQTT).write,
             VerificationLevel.VERIFIED,
         )

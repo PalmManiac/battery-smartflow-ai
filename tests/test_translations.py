@@ -268,6 +268,9 @@ class TranslationCoverageTests(unittest.TestCase):
         files = [COMPONENT / "strings.json", *(TRANSLATIONS / f"{lang}.json" for lang in LANGUAGES)]
         for platform in ("sensor", "number", "select"):
             expected = translation_keys(platform)
+            if platform == "select":
+                # This option-dependent entity is created outside SELECTS.
+                expected.add("offgrid_mode_control")
             if platform == "sensor":
                 tree = ast.parse((COMPONENT / "sensor.py").read_text(encoding="utf-8"))
                 for node in ast.walk(tree):
