@@ -78,6 +78,12 @@ class BatterySmartFlowDashboard extends HTMLElement {
         }
       }
     });
+    this.shadowRoot.addEventListener("pointermove", (event) => this._updateHistoryTooltip(event));
+    this.shadowRoot.addEventListener("pointerout", (event) => {
+      const fromChart = event.target instanceof Element ? event.target.closest("[data-history-chart]") : null;
+      const toChart = event.relatedTarget instanceof Element ? event.relatedTarget.closest("[data-history-chart]") : null;
+      if (fromChart && fromChart !== toChart) this._hideHistoryTooltip(fromChart);
+    });
     this.shadowRoot.addEventListener("keydown", (event) => {
       if ((event.key === "Enter" || event.key === " ") && event.target instanceof Element && event.target.matches("[data-history-entity]")) {
         event.preventDefault();
@@ -849,50 +855,145 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const populated = isCounter ? buckets.some((value) => value > 0) : points.length > 0;
     const visibleBuckets = buckets.filter((value) => value !== null);
     const rangeValues = visibleBuckets.length ? visibleBuckets : [0];
-    const minValue = isCounter ? 0 : Math.min(...rangeValues);
-    const maxValue = Math.max(...rangeValues, isCounter ? 0 : minValue + 1);
+    const isPower = attrs.device_class === "power" || String(attrs.unit_of_measurement || "").trim().toLowerCase() === "w";
+    const showLine = !isCounter || attrs.device_class === "monetary";
+    const axis = this._historyAxis(rangeValues, attrs, isCounter, isPower);
+    const minValue = axis.min;
+    const maxValue = axis.max;
     const span = maxValue - minValue || 1;
     const width = 900;
     const height = 300;
     const plotLeft = 92;
     const plotWidth = width - plotLeft;
+    const plotHeight = height - 24;
     const chartPoints = buckets.map((value, index) => ({
       x: plotLeft + (index / Math.max(1, count - 1)) * plotWidth,
-      y: height - (((value === null ? minValue : value) - minValue) / span) * (height - 24) - 12,
+      y: height - (((value === null ? minValue : value) - minValue) / span) * plotHeight - 12,
       value,
+      time: start + ((index + 0.5) / count) * (end - start),
     }));
-    const path = isCounter
-      ? ""
-      : (() => {
-        let drawing = false;
-        return chartPoints.map((point) => {
-          if (point.value === null) {
-            drawing = false;
-            return "";
-          }
-          const command = drawing ? "L" : "M";
-          drawing = true;
-          return `${command}${point.x.toFixed(1)},${point.y.toFixed(1)}`;
-        }).filter(Boolean).join(" ");
-      })();
-    const bars = isCounter ? chartPoints.map((point, index) => {
+    const path = showLine ? (() => {
+      let drawing = false;
+      return chartPoints.map((point) => {
+        if (point.value === null) {
+          drawing = false;
+          return "";
+        }
+        const command = drawing ? "L" : "M";
+        drawing = true;
+        return `${command}${point.x.toFixed(1)},${point.y.toFixed(1)}`;
+      }).filter(Boolean).join(" ");
+    })() : "";
+    const bars = !showLine ? chartPoints.map((point) => {
       const barWidth = plotWidth / count * 0.66;
-      const barHeight = Math.max(0, (point.value / (maxValue || 1)) * (height - 24));
-      return `<rect x="${(point.x - barWidth / 2).toFixed(1)}" y="${(height - barHeight).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="2" class="chart-bar"><title>${this._escape(`${this._formatHistoryTime(start + index / count * (end - start))}: ${this._formatHistoryValue(point.value, attrs.unit_of_measurement)}`)}</title></rect>`;
+      const zeroY = height - ((0 - minValue) / span) * plotHeight - 12;
+      const barHeight = Math.abs(zeroY - point.y);
+      return `<rect x="${(point.x - barWidth / 2).toFixed(1)}" y="${Math.min(zeroY, point.y).toFixed(1)}" width="${barWidth.toFixed(1)}" height="${barHeight.toFixed(1)}" rx="2" class="chart-bar"><title>${this._escape(`${this._formatHistoryTime(point.time)}: ${this._formatHistoryValue(point.value, attrs.unit_of_measurement)}`)}</title></rect>`;
     }).join("") : "";
     const line = path ? `<path d="${path}" class="chart-line"/>` : "";
-    const labels = [0, 1, 2, 3].map((index) => {
-      const y = 18 + index * ((height - 36) / 3);
-      const value = maxValue - (index / 3) * span;
-      return `<g><line x1="${plotLeft}" x2="${width}" y1="${y}" y2="${y}" class="chart-gridline"/><text x="0" y="${y - 4}" class="chart-axis-label">${this._escape(this._formatHistoryValue(value, attrs.unit_of_measurement))}</text></g>`;
+    const labels = axis.ticks.map((value) => {
+      const y = height - ((value - minValue) / span) * plotHeight - 12;
+      const zeroClass = Math.abs(value) < axis.step * 1e-8 ? " chart-zero-gridline" : "";
+      return `<g><line x1="${plotLeft}" x2="${width}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="chart-gridline${zeroClass}"/><text x="0" y="${(y - 4).toFixed(1)}" class="chart-axis-label">${this._escape(this._formatHistoryAxisValue(value, attrs.unit_of_measurement, axis.step))}</text></g>`;
     }).join("");
+    const chartPointsJson = this._escape(JSON.stringify(chartPoints.map((point) => ({ time: point.time, value: point.value }))));
+    const hoverLayer = `<rect x="${plotLeft}" y="12" width="${plotWidth}" height="${plotHeight}" class="chart-hover-area"/>`;
+    const hoverTooltip = `<div class="chart-hover-tooltip" data-history-tooltip role="status" aria-live="polite" hidden></div>`;
     const statusMessage = this._chartError
       ? `<div class="empty">${this._escape(this._t("history_error"))}</div>`
       : !populated
         ? `<div class="empty">${this._escape(this._t("history_empty"))}</div>`
         : "";
     const summary = points.length ? this._historySummary(points, attrs.unit_of_measurement, isCounter, buckets) : "";
-    return `<section class="section history-section"><div class="section-head"><div><h2>${this._escape(this._label(entity))}</h2><small>${this._escape(attrs.unit_of_measurement || this._t("sensor_history"))}</small></div><button class="tab" type="button" data-history-back>${this._escape(this._t("back_to_dashboard"))}</button></div><div class="history-current"><span>${this._escape(this._t("current_value"))}</span><strong>${this._escape(this._value(entity))}</strong></div><div class="history-ranges">${[["hour", "1 h"], ["day", this._t("day")], ["week", this._t("week")], ["month", this._t("month")]].map(([range, label]) => `<button type="button" class="tab ${this._chartRange === range ? "active" : ""}" data-history-range="${range}">${this._escape(label)}</button>`).join("")}</div>${statusMessage || `<div class="history-chart-wrap"><svg class="history-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${this._escape(this._t("history_chart"))}">${labels}${bars}${line}</svg></div>`}<div class="history-axis"><span>${this._escape(this._formatHistoryTime(start))}</span><span>${this._escape(this._formatHistoryTime(end))}</span></div>${summary ? `<div class="history-summary">${summary}</div>` : ""}<p class="explain">${this._escape(this._t(isCounter ? "history_counter_note" : "history_note"))}</p></section>`;
+    return `<section class="section history-section"><div class="section-head"><div><h2>${this._escape(this._label(entity))}</h2><small>${this._escape(attrs.unit_of_measurement || this._t("sensor_history"))}</small></div><button class="tab" type="button" data-history-back>${this._escape(this._t("back_to_dashboard"))}</button></div><div class="history-current"><span>${this._escape(this._t("current_value"))}</span><strong>${this._escape(this._value(entity))}</strong></div><div class="history-ranges">${[["hour", "1 h"], ["day", this._t("day")], ["week", this._t("week")], ["month", this._t("month")]].map(([range, label]) => `<button type="button" class="tab ${this._chartRange === range ? "active" : ""}" data-history-range="${range}">${this._escape(label)}</button>`).join("")}</div>${statusMessage || `<div class="history-chart-wrap"><svg class="history-chart" data-history-chart data-plot-left="${plotLeft}" data-plot-width="${plotWidth}" data-chart-points="${chartPointsJson}" data-chart-unit="${this._escape(attrs.unit_of_measurement || "")}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${this._escape(this._t("history_chart"))}">${hoverLayer}${labels}${bars}${line}</svg>${hoverTooltip}</div>`}<div class="history-axis"><span>${this._escape(this._formatHistoryTime(start))}</span><span>${this._escape(this._formatHistoryTime(end))}</span></div>${summary ? `<div class="history-summary">${summary}</div>` : ""}<p class="explain">${this._escape(this._t(isCounter ? "history_counter_note" : "history_note"))}</p></section>`;
+  }
+
+  _historyAxis(values, attrs, isCounter, isPower) {
+    const axisValues = values.filter(Number.isFinite);
+    let min = isCounter ? 0 : Math.min(...axisValues);
+    let max = Math.max(...axisValues);
+    if (isPower || isCounter) {
+      min = Math.min(0, min);
+      max = Math.max(0, max);
+    }
+    if (min === max) max = min + Math.max(Math.abs(min) * 0.1, 1);
+
+    const span = max - min;
+    const minimumStep = 10 ** -4;
+    const niceStep = (value, roundUp) => {
+      const exponent = Math.floor(Math.log10(value));
+      const magnitude = 10 ** exponent;
+      const fraction = value / magnitude;
+      const choices = [1, 2, 2.5, 5, 10];
+      const choice = roundUp
+        ? choices.find((candidate) => candidate >= fraction - 1e-10) || 10
+        : [...choices].reverse().find((candidate) => candidate <= fraction + 1e-10) || 1;
+      return choice * magnitude;
+    };
+
+    let step = Math.max(minimumStep, niceStep(span / 5, true));
+    let axisMin = Math.floor(min / step + 1e-10) * step;
+    let axisMax = Math.ceil(max / step - 1e-10) * step;
+    let divisions = Math.round((axisMax - axisMin) / step);
+    if (divisions < 5) {
+      const extraDivisions = 5 - divisions;
+      if (isPower && max <= 0) axisMin -= extraDivisions * step;
+      else axisMax += extraDivisions * step;
+      divisions = 5;
+    }
+    return {
+      min: axisMin,
+      max: axisMax,
+      step,
+      ticks: Array.from({ length: divisions + 1 }, (_, index) => Number((axisMin + index * step).toPrecision(12))),
+    };
+  }
+
+  _formatHistoryAxisValue(value, unit, step) {
+    const displayPrecision = this._displayPrecision(unit) ?? 1;
+    const stepPrecision = Math.max(0, Math.min(4, Math.ceil(-Math.log10(step) - 1e-10)));
+    const precision = Math.min(4, Math.max(displayPrecision, stepPrecision));
+    const locale = this._hass && this._hass.locale ? this._hass.locale.language : undefined;
+    return `${Number(value).toLocaleString(locale, { maximumFractionDigits: precision })}${unit ? ` ${unit}` : ""}`;
+  }
+
+  _updateHistoryTooltip(event) {
+    const chart = event.target instanceof Element ? event.target.closest("[data-history-chart]") : null;
+    if (!chart) return;
+    let points;
+    try {
+      points = JSON.parse(chart.dataset.chartPoints || "[]");
+    } catch (_error) {
+      return;
+    }
+    const rect = chart.getBoundingClientRect();
+    if (!rect.width || !points.length) return;
+    const plotLeft = Number(chart.dataset.plotLeft || 0);
+    const plotWidth = Number(chart.dataset.plotWidth || 1);
+    const chartX = ((event.clientX - rect.left) / rect.width) * 900;
+    const ratio = Math.min(1, Math.max(0, (chartX - plotLeft) / plotWidth));
+    const index = Math.round(ratio * (points.length - 1));
+    let point = points[index];
+    if (!point || !Number.isFinite(point.value)) {
+      point = points
+        .filter((candidate) => candidate && Number.isFinite(candidate.value))
+        .reduce((nearest, candidate) => !nearest || Math.abs(candidate.time - points[index].time) < Math.abs(nearest.time - points[index].time) ? candidate : nearest, null);
+    }
+    if (!point) return;
+    const wrap = chart.parentElement;
+    const tooltip = wrap && wrap.querySelector("[data-history-tooltip]");
+    if (!tooltip) return;
+    const wrapRect = wrap.getBoundingClientRect();
+    tooltip.textContent = `${this._formatHistoryTime(point.time)} · ${this._formatHistoryValue(point.value, chart.dataset.chartUnit)}`;
+    tooltip.style.left = `${Math.max(96, Math.min(wrapRect.width - 96, event.clientX - wrapRect.left))}px`;
+    tooltip.style.top = `${Math.max(56, event.clientY - wrapRect.top)}px`;
+    tooltip.hidden = false;
+  }
+
+  _hideHistoryTooltip(chart) {
+    const wrap = chart && chart.parentElement;
+    const tooltip = wrap && wrap.querySelector("[data-history-tooltip]");
+    if (tooltip) tooltip.hidden = true;
   }
 
   _formatHistoryTime(timestamp) {
@@ -1032,7 +1133,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         @media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:none}}
         .system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block!important}
         .signal-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))}.signal-entity{grid-template-columns:minmax(0,1fr) minmax(8rem,35%);align-items:center}.signal-value{max-width:none;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
-        .history-card{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}.history-card:hover{border-color:var(--cyan)}.history-card:focus-visible{border-color:var(--cyan);box-shadow:0 0 0 2px #16c4df55}.history-card small{font-size:11px}.home-link{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:9px 12px;border:1px solid #3f6578;border-radius:8px;background:#1a3442;color:#d9f5fb;text-decoration:none;font-size:13px}.home-link:hover,.home-link:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.history-section .section-head>div{min-width:0;overflow-wrap:anywhere}.history-section .section-head small{display:block;margin-top:5px;overflow-wrap:anywhere}.history-current{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;padding:15px 17px;border:1px solid #41464b;border-left:3px solid var(--cyan);border-radius:10px;background:#272b2f}.history-current span{color:var(--muted)}.history-current strong{font-size:clamp(20px,3vw,28px);font-variant-numeric:tabular-nums}.history-ranges{display:flex;gap:7px;margin:14px 0;overflow-x:auto}.history-chart-wrap{width:100%;padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428;overflow:hidden}.history-chart{display:block;width:100%;height:auto;min-height:180px;overflow:visible}.chart-gridline{stroke:#41464b;stroke-width:1}.chart-axis-label{fill:#a4a9af;font-size:11px}.chart-line{fill:none;stroke:#16c4df;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.chart-bar{fill:#16c4df;opacity:.86}.history-axis{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:var(--muted);font-size:11px}.history-summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:13px}.history-summary span{display:flex;gap:7px;padding:9px 12px;border:1px solid #41464b;border-radius:999px;background:#25292d;color:var(--muted);font-size:12px}.history-summary strong{color:#e7e9eb;font-variant-numeric:tabular-nums}
+        .history-card{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}.history-card:hover{border-color:var(--cyan)}.history-card:focus-visible{border-color:var(--cyan);box-shadow:0 0 0 2px #16c4df55}.history-card small{font-size:11px}.home-link{display:inline-flex;align-items:center;gap:7px;margin-top:12px;padding:9px 12px;border:1px solid #3f6578;border-radius:8px;background:#1a3442;color:#d9f5fb;text-decoration:none;font-size:13px}.home-link:hover,.home-link:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.history-section .section-head>div{min-width:0;overflow-wrap:anywhere}.history-section .section-head small{display:block;margin-top:5px;overflow-wrap:anywhere}.history-current{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:12px 0;padding:15px 17px;border:1px solid #41464b;border-left:3px solid var(--cyan);border-radius:10px;background:#272b2f}.history-current span{color:var(--muted)}.history-current strong{font-size:clamp(20px,3vw,28px);font-variant-numeric:tabular-nums}.history-ranges{display:flex;gap:7px;margin:14px 0;overflow-x:auto}.history-chart-wrap{position:relative;width:100%;padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428;overflow:hidden}.history-chart{display:block;width:100%;height:auto;min-height:180px;overflow:visible}.chart-hover-area{fill:transparent;pointer-events:all}.chart-gridline{stroke:#41464b;stroke-width:1}.chart-gridline.chart-zero-gridline{stroke:#91a0a7;stroke-width:1.7;stroke-dasharray:5 3}.chart-axis-label{fill:#a4a9af;font-size:11px}.chart-line{fill:none;stroke:#16c4df;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}.chart-bar{fill:#16c4df;opacity:.86}.chart-hover-tooltip{position:absolute;z-index:2;transform:translate(-50%,-100%);max-width:calc(100% - 24px);padding:7px 10px;border:1px solid #3f6578;border-radius:7px;background:#142d39;color:#e8f8fc;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap;pointer-events:none;box-shadow:0 3px 10px #0006}.chart-hover-tooltip[hidden]{display:none}.history-axis{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:var(--muted);font-size:11px}.history-summary{display:flex;flex-wrap:wrap;gap:10px;margin-top:13px}.history-summary span{display:flex;gap:7px;padding:9px 12px;border:1px solid #41464b;border-radius:999px;background:#25292d;color:var(--muted);font-size:12px}.history-summary strong{color:#e7e9eb;font-variant-numeric:tabular-nums}
         @media(max-width:520px){.shell{padding:16px 12px 34px}.home-link{min-height:44px}.history-chart-wrap{padding:6px}.history-chart{min-height:160px}.history-current{padding:12px}.history-section .section-head{flex-direction:row;align-items:center}}
         .pack-card.has-soc::before{border-width:2px}
       </style>
