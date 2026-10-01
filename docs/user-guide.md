@@ -1121,11 +1121,14 @@ Typical internal states:
 | `normal` | Normal operation |
 | `eco` | economical off-grid mode |
 
-Battery SmartFlow AI reads only in this mode.
+Battery SmartFlow AI reads this mode as control context. If an existing Home
+Assistant select is configured for it, BSFAI also exposes a dedicated off-grid
+select and forwards manual choices to that entity.
 
 > [!IMPORTANT]
-> Battery SmartFlow AI does not set or change off-grid mode.
-> Control remains with Zendure App, ZHA or the Zendure integration used.
+> BSFAI automation never changes off-grid mode automatically. Without a
+> configured Home Assistant select, no control is created. The selected
+> Zendure integration remains responsible for the actual command and readback.
 
 ---
 
@@ -1163,9 +1166,9 @@ valid candidates for:
 
 ### Limitation
 
-Battery SmartFlow AI does not change the device's off-grid mode. Which
-The power that the island socket actually provides remains dependent on Zendure.
-Firmware, device limits and device configuration dependent.
+Manual off-grid mode changes are forwarded to the configured select. The power
+provided by the island socket remains dependent on Zendure firmware, device
+limits and device configuration.
 
 ---
 
@@ -3060,8 +3063,9 @@ start a debug recording; the package contains the read power, mode, detected
 load and internal control reason.
 
 > [!NOTE]
-> Battery SmartFlow AI only reads the off-grid mode and does not directly
-> control the off-grid socket. The actual off-grid power remains the
+> Battery SmartFlow AI uses off-grid mode as context. Manual changes are only
+> forwarded to the configured Home Assistant select; automation never changes
+> this mode. The actual off-grid power remains the
 > responsibility of Zendure firmware and the device configuration.
 
 ---

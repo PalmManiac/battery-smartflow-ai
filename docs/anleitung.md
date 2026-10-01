@@ -1137,11 +1137,16 @@ Typische interne Zustände:
 | `normal` | Normalbetrieb               |
 | `eco`    | ökonomischer Off-Grid-Modus |
 
-Battery SmartFlow AI liest diesen Modus nur.
+Battery SmartFlow AI liest diesen Modus für den Regelungskontext. Wenn ein
+vorhandener Home-Assistant-Select dafür konfiguriert ist, erscheint zusätzlich
+ein eigener Off-Grid-Select in BSFAI. Eine manuelle Auswahl wird an den
+konfigurierten Select weitergeleitet.
 
 > [!IMPORTANT]
-> Battery SmartFlow AI setzt oder verändert den Off-Grid-Modus nicht.
-> Die Steuerung bleibt bei Zendure App, ZHA oder der verwendeten Zendure-Integration.
+> Die BSFAI-Automatik ändert den Off-Grid-Modus niemals selbstständig. Ohne
+> konfigurierten Home-Assistant-Select stellt BSFAI keine Steuerung dafür bereit.
+> Der tatsächliche Schreibbefehl und die Rückmeldung kommen weiterhin von der
+> ausgewählten Zendure-Integration.
 
 ---
 
@@ -1179,9 +1184,9 @@ keine gültigen Kandidaten für:
 
 ### Einschränkung
 
-Battery SmartFlow AI verändert den Off-Grid-Modus des Geräts nicht. Welche
-Leistung die Inselsteckdose tatsächlich bereitstellt, bleibt von Zendure-
-Firmware, Gerätegrenzen und Gerätekonfiguration abhängig.
+Eine manuelle Änderung des Off-Grid-Modus wird an den konfigurierten Select
+weitergeleitet. Welche Leistung die Inselsteckdose tatsächlich bereitstellt,
+bleibt von Zendure-Firmware, Gerätegrenzen und Gerätekonfiguration abhängig.
 
 ---
 
@@ -3091,8 +3096,9 @@ Prüfung eine Debug-Aufzeichnung; das Paket enthält die gelesene Leistung, den
 Modus, die erkannte Last und den internen Regelgrund.
 
 > [!NOTE]
-> Battery SmartFlow AI liest den Off-Grid-Modus nur und steuert die
-> Inselsteckdose nicht direkt. Die tatsächlich bereitgestellte
+> Battery SmartFlow AI nutzt den Off-Grid-Modus als Kontext. Eine manuelle
+> Änderung wird nur an den konfigurierten Home-Assistant-Select weitergeleitet;
+> die Automatik verändert ihn nicht. Die tatsächlich bereitgestellte
 > Off-Grid-Leistung bleibt Aufgabe von Zendure-Firmware und Gerätekonfiguration.
 
 ---

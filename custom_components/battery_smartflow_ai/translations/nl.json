@@ -74,7 +74,7 @@
           "input_limit_entity": "Number-entiteit voor het instellen van het laadvermogen in watt.",
           "output_limit_entity": "Number-entiteit voor het instellen van het ontlaadvermogen in watt.",
 		  "offgrid_power_entity": "Optionele sensor voor het vermogen van het Zendure off-grid / eilandstopcontact. Positieve waarden worden geïnterpreteerd als een actieve belasting op het eilandstopcontact.",
-          "offgrid_mode_entity": "Optionele select-sensor voor de Zendure off-grid / eilandstopcontact-modus. De modus wordt alleen gelezen en nooit door Battery SmartFlow AI ingesteld.",
+          "offgrid_mode_entity": "Optionele Home Assistant-select voor de Zendure off-gridmodus. Als deze is ingesteld, voegt BSFAI een aparte bediening toe en stuurt handmatige keuzes door naar deze select. De modus wordt nooit automatisch gewijzigd.",
 		  "feed_in_tariff": "Vergoeding per teruggeleverde kWh in dezelfde valuta-eenheid als de stroomprijzen. Deze dient als terugvalwaarde wanneer geen geldige dynamische terugleverprijs beschikbaar is.",
           "dynamic_feed_in_price_entity": "Optionele numerieke Home Assistant-sensor voor de actuele dynamische terugleverprijs. Een geldige sensorwaarde, inclusief nul of een negatieve prijs, krijgt voorrang op de vaste vergoeding."
         }
@@ -254,7 +254,7 @@
           "input_limit_entity": "Instelbaar laadvermogen in watt.",
           "output_limit_entity": "Instelbaar ontlaadvermogen in watt.",
 		  "offgrid_power_entity": "Optionele sensor voor het vermogen van het Zendure off-grid / eilandstopcontact. Positieve waarden worden geïnterpreteerd als een actieve belasting op het eilandstopcontact.",
-          "offgrid_mode_entity": "Optionele select-sensor voor de Zendure off-grid / eilandstopcontact-modus. De modus wordt alleen gelezen en nooit door Battery SmartFlow AI ingesteld.",
+          "offgrid_mode_entity": "Optionele Home Assistant-select voor de Zendure off-gridmodus. Als deze is ingesteld, voegt BSFAI een aparte bediening toe en stuurt handmatige keuzes door naar deze select. De modus wordt nooit automatisch gewijzigd.",
 		  "feed_in_tariff": "Vergoeding per teruggeleverde kWh in dezelfde valuta-eenheid als de stroomprijzen. Deze dient als terugvalwaarde wanneer geen geldige dynamische terugleverprijs beschikbaar is.",
           "dynamic_feed_in_price_entity": "Optionele numerieke Home Assistant-sensor voor de actuele dynamische terugleverprijs. Een geldige sensorwaarde, inclusief nul of een negatieve prijs, krijgt voorrang op de vaste vergoeding."
         }
@@ -412,6 +412,14 @@
           "pv_surplus": "Laden op PV-overschot",
           "discharge": "Ontladen",
           "constant_discharge": "Constante ontlading"
+        }
+      },
+      "offgrid_mode_control": {
+        "name": "Off-gridmodus",
+        "state": {
+          "off": "Uit",
+          "normal": "Normaal",
+          "eco": "Economisch"
         }
       }
     },
