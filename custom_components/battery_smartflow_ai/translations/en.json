@@ -755,6 +755,9 @@
       "native_hardware_temperature_c": {
         "name": "Temperature"
       },
+      "native_hardware_cell_temperature_c": {
+        "name": "Maximum cell temperature"
+      },
       "native_hardware_battery_voltage_v": {
         "name": "Battery voltage"
       },

@@ -538,6 +538,7 @@
       "native_hardware_pv_power_w": {"name": "PV power"},
       "native_hardware_mode": {"name": "Operating mode", "state": {"idle": "Idle", "charge": "Charging", "discharge": "Discharging", "unknown": "Unknown"}},
       "native_hardware_temperature_c": {"name": "Temperature"},
+      "native_hardware_cell_temperature_c": {"name": "Maximum cell temperature"},
       "native_hardware_battery_voltage_v": {"name": "Battery voltage"},
       "native_hardware_voltage_v": {"name": "Voltage"},
       "native_hardware_current_a": {"name": "Current"},
