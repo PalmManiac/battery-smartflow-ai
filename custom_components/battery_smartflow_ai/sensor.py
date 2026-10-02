@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -57,6 +57,11 @@ from .const import (
 )
 from .device_profiles import DEVICE_PROFILES
 from .native_device_overview import legacy_display_retains_stale_value
+from .native_entity_availability import (
+    OPTIONAL_NATIVE_MAIN_SENSOR_KEYS,
+    optional_native_main_sensor_available,
+    optional_native_sensor_registry_action,
+)
 from .remaining_output_time import RemainingOutputTime
 from .core.full_charge_maintenance import (
     MaintenanceBlockReason,
@@ -273,6 +278,7 @@ NATIVE_MAIN_SENSORS = (
     NativeHardwareSensorDescription(
         key="firmware", translation_key="native_hardware_firmware",
         source="firmware", entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     NativeHardwareSensorDescription(
         key="product_id", translation_key="native_hardware_product_id",
@@ -315,6 +321,7 @@ NATIVE_MAIN_SENSORS += (
         measurement_key="wifiState", device_class=SensorDeviceClass.ENUM,
         options=["connected", "disconnected", "unknown"],
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
     ),
     NativeHardwareSensorDescription(
         key="remaining_output_time",
@@ -1876,8 +1883,11 @@ async def async_setup_entry(
     add_entities(entities)
 
     known_native_entities: set[tuple[str, str, str]] = set()
+    entity_registry = er.async_get(hass)
+    optional_registry_initialized = False
 
     def add_discovered_native_entities() -> None:
+        nonlocal optional_registry_initialized
         discovered = []
         for system in coordinator.native_zendure.hardware_overview():
             firmware = _measured_value(getattr(system, "firmware", None))
@@ -1892,16 +1902,61 @@ async def async_setup_entry(
                 via_device_id=integration_device.id,
             )
             for description in NATIVE_MAIN_SENSORS:
+                available = optional_native_main_sensor_available(
+                    system, description.key
+                )
+                if description.key in OPTIONAL_NATIVE_MAIN_SENSOR_KEYS:
+                    unique_id = native_hardware_unique_id(
+                        entry.entry_id,
+                        "main",
+                        system.public_id,
+                        description.key,
+                    )
+                    entity_id = entity_registry.async_get_entity_id(
+                        "sensor", DOMAIN, unique_id
+                    )
+                    if entity_id is not None:
+                        registered = entity_registry.async_get(entity_id)
+                        action = optional_native_sensor_registry_action(
+                            available=available,
+                            disabled_by_integration=(
+                                registered is not None
+                                and registered.disabled_by
+                                is er.RegistryEntryDisabler.INTEGRATION
+                            ),
+                            enabled=(
+                                registered is not None
+                                and registered.disabled_by is None
+                            ),
+                            initializing=not optional_registry_initialized,
+                        )
+                        if action == "enable":
+                            entity_registry.async_update_entity(
+                                entity_id, disabled_by=None
+                            )
+                        elif action == "disable":
+                            entity_registry.async_update_entity(
+                                entity_id,
+                                disabled_by=er.RegistryEntryDisabler.INTEGRATION,
+                            )
                 key = ("main", system.public_id, description.key)
                 if key not in known_native_entities:
                     known_native_entities.add(key)
+                    effective_description = (
+                        replace(
+                            description,
+                            entity_registry_enabled_default=available,
+                        )
+                        if description.key in OPTIONAL_NATIVE_MAIN_SENSOR_KEYS
+                        else description
+                    )
                     discovered.append(NativeZendureHardwareSensor(
                         entry,
                         coordinator,
                         kind="main",
                         public_id=system.public_id,
                         parent_public_id=None,
-                        description=description,
+                        description=effective_description,
                     ))
             for pack in system.packs:
                 for description in NATIVE_PACK_SENSORS:
@@ -1918,6 +1973,7 @@ async def async_setup_entry(
                         ))
         if discovered:
             add_entities(discovered)
+        optional_registry_initialized = True
 
     add_discovered_native_entities()
     unsubscribe = coordinator.async_add_listener(add_discovered_native_entities)
