@@ -335,7 +335,7 @@ def _clamp_season_counter(value: Any) -> int:
 @dataclass
 class SelectedEntities:
     soc: str
-    pv: str
+    pv: str | None
     native_pv: str | None
     pv_forecast_today: str | None
     pv_forecast_tomorrow: str | None
@@ -401,7 +401,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self.entities = SelectedEntities(
             soc=str(entry.data.get(CONF_SOC_ENTITY, "")),
-            pv=str(entry.data[CONF_PV_ENTITY]),
+            pv=entry.data.get(CONF_PV_ENTITY),
             native_pv=entry.data.get(CONF_NATIVE_PV_ENTITY),
             pv_forecast_today=entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY),
             pv_forecast_tomorrow=entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY),
@@ -4130,6 +4130,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             native_pv = _to_float(self._state(self.entities.native_pv), None)
             if native_state is not None:
                 native_pv = float(native_state.pv_power_w.value) if native_state.pv_power_w.valid else None
+                # Native Zendure setup can operate without an external PV
+                # entity; use the device telemetry for all PV-based logic.
+                if pv is None:
+                    pv = native_pv
 
             if soc is None or not 0.0 <= float(soc) <= 100.0:
                 return await self._enter_safe_idle(

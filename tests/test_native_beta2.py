@@ -137,10 +137,16 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(const.CONF_PACK_CAPACITY_KWH, keys)
         self.assertNotIn(const.CONF_OUTPUT_LIMIT_ENTITY, keys)
         self.assertIn(const.CONF_PV_ENTITY, keys)
-        await flow.async_step_native_external({const.CONF_PV_ENTITY: "sensor.pv", const.CONF_GRID_MODE: const.GRID_MODE_SINGLE})
+        pv_key = next(
+            key for key in result["data_schema"].schema
+            if key.schema == const.CONF_PV_ENTITY
+        )
+        self.assertIsInstance(pv_key, vol.Optional)
+        await flow.async_step_native_external({const.CONF_GRID_MODE: const.GRID_MODE_SINGLE})
         entry = await flow.async_step_grid({const.CONF_GRID_POWER_ENTITY: "sensor.grid"})
         self.assertEqual(entry["type"], "create_entry")
         self.assertEqual(entry["data"][const.CONF_DEVICE_PROFILE], "SF2400AC")
+        self.assertNotIn(const.CONF_PV_ENTITY, entry["data"])
         self.assertNotIn(const.CONF_NATIVE_ZENDURE_APP_TOKEN, entry["data"])
         self.assertEqual(entry["options"][const.CONF_NATIVE_ZENDURE_APP_TOKEN], "private-test-token")
 
@@ -157,6 +163,24 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         keys = {key.schema for key in flow._base_schema(entry).schema}
         self.assertNotIn(const.CONF_SOC_ENTITY, keys)
         self.assertEqual(entry.data[const.CONF_SOC_ENTITY], "sensor.old")
+
+    def test_external_pv_entity_remains_required_for_legacy_setup(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        schema = flow._base_schema().schema
+        pv_key = next(key for key in schema if key.schema == const.CONF_PV_ENTITY)
+        self.assertIsInstance(pv_key, vol.Required)
+
+    def test_native_reconfiguration_keeps_pv_entity_optional(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        entry = SimpleNamespace(
+            data={"connection_type": "native"},
+            options={},
+        )
+        schema = flow._base_schema(entry).schema
+        pv_key = next(key for key in schema if key.schema == const.CONF_PV_ENTITY)
+        self.assertIsInstance(pv_key, vol.Optional)
 
     async def test_shelly_reconfigure_updates_options_without_unsupported_keyword(self):
         flow = load_flow_classes()()
