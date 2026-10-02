@@ -127,6 +127,7 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
                 "BatVolt": 4953,
                 "masterSoftVersion": 4106,
                 "remainOutTime": 327,
+                "oldMode": 0,
                 "futureProperty": {"kept": "only in raw diagnostics"},
             },
             "packData": [
@@ -187,6 +188,10 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         # so the timestamp sensor can derive an "empty at" estimate from it.
         self.assertEqual(state.diagnostics["remainOutTime"].value, 327)
         self.assertTrue(state.diagnostics["remainOutTime"].valid)
+        # Regression: the device reports camelCase "oldMode"; the raw diagnostic
+        # key must match that casing or the entity can never be populated.
+        self.assertEqual(state.diagnostics["oldMode"].value, 0)
+        self.assertTrue(state.diagnostics["oldMode"].valid)
         self.assertFalse(state.hems_active.value)
         self.assertAlmostEqual(state.temperature_c.value, 22.95)
         self.assertEqual(state.battery_voltage_v.value, 49.53)
