@@ -1,6 +1,7 @@
 """Configuration contract for Energy dashboard compatible forecasts."""
 
 import ast
+import json
 from pathlib import Path
 from typing import Any
 import unittest
@@ -49,13 +50,14 @@ class EnergyForecastConfigTests(unittest.TestCase):
         self.assertIn("return build_forecast_summary(", source)
 
     def test_rc_version_is_consistent(self):
-        const = (COMPONENT / "const.py").read_text(encoding="utf-8")
-        manifest = (COMPONENT / "manifest.json").read_text(encoding="utf-8")
-        self.assertIn('INTEGRATION_VERSION = "5.1.9"', const)
-        self.assertIn('"version": "5.1.9"', manifest)
-        self.assertIn('"after_dependencies": ["energy"]', manifest)
+        manifest_text = (COMPONENT / "manifest.json").read_text(encoding="utf-8")
+        manifest = json.loads(manifest_text)
+        self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+$")
+        self.assertEqual(const.INTEGRATION_VERSION, manifest["version"])
+        self.assertIn('"after_dependencies": ["energy"]', manifest_text)
         self.assertLess(
-            manifest.index('"after_dependencies"'), manifest.index('"codeowners"')
+            manifest_text.index('"after_dependencies"'),
+            manifest_text.index('"codeowners"'),
         )
 
     def test_minimum_home_assistant_version_is_declared(self):
