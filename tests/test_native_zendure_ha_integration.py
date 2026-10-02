@@ -247,6 +247,17 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             source[global_last_message:global_last_message + 500],
         )
 
+    def test_optional_firmware_and_wifi_entities_follow_observed_telemetry(self) -> None:
+        source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        for key in ("firmware", "wifi_status"):
+            start = source.index(f'key="{key}"')
+            block = source[start:start + 500]
+            self.assertIn("entity_registry_enabled_default=False", block)
+        self.assertIn("optional_native_main_sensor_available", source)
+        self.assertIn("optional_native_sensor_registry_action", source)
+        self.assertIn("entity_registry_enabled_default=available", source)
+        self.assertIn("entity_registry.async_update_entity", source)
+
 
 if __name__ == "__main__":
     unittest.main()
