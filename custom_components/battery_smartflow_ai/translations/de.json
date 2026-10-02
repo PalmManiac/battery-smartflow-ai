@@ -477,6 +477,7 @@
       "native_hardware_cell_delta_v": {"name":"Zellspannungsdifferenz"},
       "native_hardware_pack_status": {"name":"Status","state":{"idle":"Ruhezustand","charge":"Laden","discharge":"Entladen"}},
       "native_hardware_rssi": {"name": "WLAN-Signalstärke"},
+      "native_hardware_remaining_output_time": {"name": "Geschätzte Restlaufzeit bis leer"},
       "native_hardware_available_energy": {"name": "Verfügbare Energie"},
       "native_hardware_roundtrip_efficiency": {"name": "Wirkungsgrad (Roundtrip)"},
       "native_hardware_charged_energy": {"name": "Gesamtenergie Laden"},
