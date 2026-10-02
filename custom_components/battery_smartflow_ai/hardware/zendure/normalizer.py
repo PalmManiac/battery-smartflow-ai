@@ -241,7 +241,7 @@ PACK_PROPERTY_MAPPINGS = {
 RAW_MAIN_DIAGNOSTICS = (
     "acStatus", "aiState", "batCalTime", "bindstate", "dataReady", "dcStatus",
     "factoryModeState", "gridStandard", "gridState", "IOTState", "is_error",
-    "LCNState", "localAPIEnable", "net", "OldMode", "OTAState", "phaseSwitch",
+    "LCNState", "localAPIEnable", "net", "oldMode", "OTAState", "phaseSwitch",
     "pvStatus", "rssi", "wifiState", "smartMode", "socStatus", "socLimit", "socCompSwitch", "writeRsp",
     "pass", "reverseState", "gridOffMode",
     "packNum", "solarPower1", "solarPower2", "solarPower3", "solarPower4",
