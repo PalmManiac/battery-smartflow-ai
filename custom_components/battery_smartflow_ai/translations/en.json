@@ -611,6 +611,9 @@
       "native_hardware_rssi": {
         "name": "Wi-Fi signal strength"
       },
+      "native_hardware_remaining_output_time": {
+        "name": "Estimated time until empty"
+      },
       "native_hardware_available_energy": {
         "name": "Available energy"
       },

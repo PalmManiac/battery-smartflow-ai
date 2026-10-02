@@ -519,6 +519,7 @@
       "native_hardware_cell_delta_v": {"name":"Cell voltage difference"},
       "native_hardware_pack_status": {"name":"Status","state":{"idle":"Idle","charge":"Charging","discharge":"Discharging"}},
       "native_hardware_rssi": {"name": "Wi-Fi signal strength"},
+      "native_hardware_remaining_output_time": {"name": "Estimated time until empty"},
       "native_hardware_available_energy": {"name": "Available energy"},
       "native_hardware_roundtrip_efficiency": {"name": "Round-trip efficiency"},
       "native_hardware_charged_energy": {"name": "Total energy charged"},

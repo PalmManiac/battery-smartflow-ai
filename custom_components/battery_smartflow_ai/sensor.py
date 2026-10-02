@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import timedelta
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -316,6 +317,12 @@ NATIVE_MAIN_SENSORS += (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     NativeHardwareSensorDescription(
+        key="remaining_output_time",
+        translation_key="native_hardware_remaining_output_time",
+        measurement_key="remainOutTime",
+        device_class=SensorDeviceClass.TIMESTAMP,
+    ),
+    NativeHardwareSensorDescription(
         key="rssi", translation_key="native_hardware_rssi", measurement_key="rssi",
         native_unit_of_measurement="dBm", device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT, entity_category=EntityCategory.DIAGNOSTIC,
@@ -456,7 +463,7 @@ NATIVE_MAIN_SENSORS += tuple(
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ) for key in RAW_MAIN_DIAGNOSTICS
-    if key not in {"smartMode", "wifiState", *_DOCUMENTED_ZENDURE_STATUS_KEYS}
+    if key not in {"smartMode", "wifiState", "remainOutTime", *_DOCUMENTED_ZENDURE_STATUS_KEYS}
 )
 
 NATIVE_PACK_SENSORS = (
@@ -1939,6 +1946,10 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         self._kind = kind
         self._public_id = public_id
         self._parent_public_id = parent_public_id
+        # Cache for the remaining-output-time timestamp so it only steps when
+        # the device's own minute estimate changes, not on every poll.
+        self._remain_cache_minutes: int | None = None
+        self._remain_cache_timestamp = None
         self._attr_unique_id = native_hardware_unique_id(
             entry.entry_id,
             kind,
@@ -2066,6 +2077,48 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             )
         return attributes
 
+    def _remaining_output_minutes(self, item, measured) -> int | None:
+        """Return the device's remaining discharge minutes, only while discharging.
+
+        The value is meaningful only during discharge. When charging, idle, or
+        reported as zero/invalid, the estimate carries no usable meaning, so the
+        entity stays unavailable rather than pointing at ``now``.
+        """
+
+        if not self._measurement_available_for_display(measured):
+            return None
+        minutes = _measured_value(measured)
+        if not isinstance(minutes, (int, float)) or isinstance(minutes, bool):
+            return None
+        if minutes <= 0:
+            return None
+        discharge = item.measurements.get("discharge_power_w")
+        discharging = bool(
+            discharge is not None
+            and discharge.valid
+            and isinstance(discharge.value, (int, float))
+            and discharge.value > 0
+        )
+        if not discharging:
+            return None
+        return int(minutes)
+
+    def _remaining_output_timestamp(self, item, measured):
+        """Absolute "battery empty at" time, stepping only when minutes change."""
+
+        minutes = self._remaining_output_minutes(item, measured)
+        if minutes is None:
+            self._remain_cache_minutes = None
+            self._remain_cache_timestamp = None
+            return None
+        if (
+            self._remain_cache_minutes != minutes
+            or self._remain_cache_timestamp is None
+        ):
+            self._remain_cache_minutes = minutes
+            self._remain_cache_timestamp = dt_util.utcnow() + timedelta(minutes=minutes)
+        return self._remain_cache_timestamp
+
     @property
     def available(self) -> bool:
         item = self._item()
@@ -2080,6 +2133,8 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 and item.selected_transport.value == "zensdk"
             ):
                 return True
+            if description.measurement_key == "remainOutTime":
+                return self._remaining_output_minutes(item, measured) is not None
             return self._measurement_available_for_display(measured)
         if description.source == "firmware":
             return self._measurement_available_for_display(item.firmware)
@@ -2108,6 +2163,8 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 if raw_value == 0:
                     return "disconnected"
                 return "unknown"
+            if self.entity_description.measurement_key == "remainOutTime":
+                return self._remaining_output_timestamp(item, measured)
             if (
                 self.entity_description.measurement_key
                 in _DOCUMENTED_ZENDURE_STATUS_KEYS

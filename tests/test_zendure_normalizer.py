@@ -126,6 +126,7 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
                 "hyperTmp": 2961,
                 "BatVolt": 4953,
                 "masterSoftVersion": 4106,
+                "remainOutTime": 327,
                 "futureProperty": {"kept": "only in raw diagnostics"},
             },
             "packData": [
@@ -182,6 +183,10 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.setpoints.max_soc_pct.value, 93.0)
         self.assertEqual(state.diagnostics["socLimit"].value, 1)
         self.assertTrue(state.diagnostics["socLimit"].valid)
+        # remainOutTime (minutes until empty) must be captured as a raw diagnostic
+        # so the timestamp sensor can derive an "empty at" estimate from it.
+        self.assertEqual(state.diagnostics["remainOutTime"].value, 327)
+        self.assertTrue(state.diagnostics["remainOutTime"].valid)
         self.assertFalse(state.hems_active.value)
         self.assertAlmostEqual(state.temperature_c.value, 22.95)
         self.assertEqual(state.battery_voltage_v.value, 49.53)

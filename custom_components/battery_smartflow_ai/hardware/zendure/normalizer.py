@@ -243,7 +243,7 @@ RAW_MAIN_DIAGNOSTICS = (
     "factoryModeState", "gridStandard", "gridState", "IOTState", "is_error",
     "LCNState", "localAPIEnable", "net", "OldMode", "OTAState", "phaseSwitch",
     "pvStatus", "rssi", "wifiState", "smartMode", "socStatus", "socLimit", "socCompSwitch", "writeRsp",
-    "pass", "reverseState", "gridOffMode",
+    "pass", "reverseState", "gridOffMode", "remainOutTime",
     "packNum", "solarPower1", "solarPower2", "solarPower3", "solarPower4",
     "solarPower5", "solarPower6", "PowerCycle",
 )
