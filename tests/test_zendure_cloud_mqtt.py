@@ -272,6 +272,13 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(public, {"async_execute_authorized", "async_start", "async_stop"})
         self.assertEqual(len(self.sessions[0].state_requests), 2)
         self.assertEqual(len(self.sessions[1].state_requests), 2)
+        diagnostics = transport.connection_diagnostics
+        self.assertEqual(diagnostics["disconnect_count"], 1)
+        self.assertEqual(diagnostics["reconnect_count"], 1)
+        self.assertEqual(
+            diagnostics["last_disconnect_category"],
+            "network_or_transport_error",
+        )
 
     async def test_paho_managed_reconnect_does_not_create_competing_session(self):
         transport = ZendureCloudMqttTransport(
@@ -297,6 +304,9 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         session.on_connect(True, None)
         await asyncio.sleep(0)
         self.assertEqual(transport.state, ConnectionState.CONNECTED)
+        diagnostics = transport.connection_diagnostics
+        self.assertEqual(diagnostics["disconnect_count"], 1)
+        self.assertEqual(diagnostics["reconnect_count"], 1)
         await transport.async_stop()
 
     async def test_credentials_do_not_appear_in_logs_or_representations(self):
@@ -316,6 +326,13 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         text = " ".join(logs.output)
         for secret in ("secret-user", "secret-pass", "broker.example"):
             self.assertNotIn(secret, text)
+        diagnostics = transport.connection_diagnostics
+        self.assertEqual(diagnostics["disconnect_count"], 1)
+        self.assertEqual(
+            diagnostics["last_disconnect_category"],
+            "unclassified",
+        )
+        self.assertNotIn("secret-user", repr(diagnostics))
         await transport.async_stop()
 
     async def test_no_routable_device_is_rejected(self):

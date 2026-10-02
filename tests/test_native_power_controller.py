@@ -37,6 +37,7 @@ from custom_components.battery_smartflow_ai.native_command_verification import (
 from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
     STATUS_OBSERVING,
     NativeZendureRuntime,
+    _fresh_native_state,
     _maintenance_pack_conflict,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
@@ -211,6 +212,35 @@ def legacy_runtime(*, current_state=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    def test_grouped_legacy_hyper_safety_window_is_model_scoped(self):
+        old = NOW - timedelta(seconds=45)
+        measured_state = state()
+        measured_state.soc_pct = MeasuredValue.available(80, observed_at=old)
+        measured_state.protection_active = MeasuredValue.available(False, observed_at=old)
+
+        self.assertTrue(
+            _fresh_native_state(
+                measured_state,
+                device=MainDevice("system", "Hyper", model="Hyper 2000"),
+            )
+        )
+        self.assertFalse(
+            _fresh_native_state(
+                measured_state,
+                device=MainDevice("system", "Other", model="SolarFlow 2400 AC"),
+            )
+        )
+
+        too_old = NOW - timedelta(seconds=181)
+        measured_state.soc_pct = MeasuredValue.available(80, observed_at=too_old)
+        measured_state.protection_active = MeasuredValue.available(False, observed_at=too_old)
+        self.assertFalse(
+            _fresh_native_state(
+                measured_state,
+                device=MainDevice("system", "Hyper", model="Hyper 2000"),
+            )
+        )
+
     def test_calibration_diagnostics_never_claim_unverified_native_truth(self):
         diagnostic = runtime().diagnostic_data()["calibration_information"]
         self.assertEqual(diagnostic["information_source"], "bsfai_derived")
