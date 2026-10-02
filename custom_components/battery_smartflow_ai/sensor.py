@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import timedelta
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -58,6 +57,7 @@ from .const import (
 )
 from .device_profiles import DEVICE_PROFILES
 from .native_device_overview import legacy_display_retains_stale_value
+from .remaining_output_time import RemainingOutputTime
 from .core.full_charge_maintenance import (
     MaintenanceBlockReason,
     MaintenanceState,
@@ -1946,10 +1946,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         self._kind = kind
         self._public_id = public_id
         self._parent_public_id = parent_public_id
-        # Cache for the remaining-output-time timestamp so it only steps when
-        # the device's own minute estimate changes, not on every poll.
-        self._remain_cache_minutes: int | None = None
-        self._remain_cache_timestamp = None
+        self._remaining_output_time = RemainingOutputTime()
         self._attr_unique_id = native_hardware_unique_id(
             entry.entry_id,
             kind,
@@ -2085,39 +2082,24 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         entity stays unavailable rather than pointing at ``now``.
         """
 
-        if not self._measurement_available_for_display(measured):
-            return None
-        minutes = _measured_value(measured)
-        if not isinstance(minutes, (int, float)) or isinstance(minutes, bool):
-            return None
-        if minutes <= 0:
-            return None
         discharge = item.measurements.get("discharge_power_w")
-        discharging = bool(
-            discharge is not None
-            and discharge.valid
-            and isinstance(discharge.value, (int, float))
-            and discharge.value > 0
+        return self._remaining_output_time.remaining_minutes(
+            _measured_value(measured),
+            _measured_value(discharge),
+            estimate_available=self._measurement_available_for_display(measured),
+            discharge_available=(
+                discharge is not None and discharge.valid
+            ),
         )
-        if not discharging:
-            return None
-        return int(minutes)
 
     def _remaining_output_timestamp(self, item, measured):
         """Absolute "battery empty at" time, stepping only when minutes change."""
 
         minutes = self._remaining_output_minutes(item, measured)
-        if minutes is None:
-            self._remain_cache_minutes = None
-            self._remain_cache_timestamp = None
-            return None
-        if (
-            self._remain_cache_minutes != minutes
-            or self._remain_cache_timestamp is None
-        ):
-            self._remain_cache_minutes = minutes
-            self._remain_cache_timestamp = dt_util.utcnow() + timedelta(minutes=minutes)
-        return self._remain_cache_timestamp
+        return self._remaining_output_time.timestamp(
+            minutes,
+            now=dt_util.utcnow(),
+        )
 
     @property
     def available(self) -> bool:
