@@ -95,6 +95,10 @@ ZENSDK_POLL_INTERVAL = 5.0
 ZENSDK_OFFLINE_AFTER_FAILURES = 3
 ZENSDK_MAX_DATA_AGE = 30.0
 ZENSDK_MAX_RETRY_INTERVAL = 60.0
+LEGACY_GROUPED_CONTROL_MAX_DATA_AGE = 180.0
+_LEGACY_GROUPED_CONTROL_MODELS = frozenset(
+    {"hyper2000", "hub2000", "solarflowhub2000"}
+)
 
 
 @dataclass(slots=True)
@@ -208,7 +212,8 @@ class NativeZendureRuntime:
         if self._selected_device is None:
             return None
         state = self._states.get(self._selected_device)
-        if state is None or not _fresh_native_state(state):
+        device = self._inventory.devices.get(self._selected_device)
+        if state is None or not _fresh_native_state(state, device=device):
             return None
         return state
 
@@ -298,7 +303,8 @@ class NativeZendureRuntime:
         if self._selected_device is None:
             return None
         state = self._states.get(self._selected_device)
-        if state is None or not _fresh_native_state(state):
+        device = self._inventory.devices.get(self._selected_device)
+        if state is None or not _fresh_native_state(state, device=device):
             return None
 
         mode = state.mode
@@ -666,7 +672,11 @@ class NativeZendureRuntime:
             DeviceControlState.OFFLINE,
         }:
             return device.control_state
-        if state is None or not _fresh_native_state(state) or not device.online:
+        if (
+            state is None
+            or not _fresh_native_state(state, device=device)
+            or not device.online
+        ):
             return DeviceControlState.OFFLINE
         if self._selected_control_transport(device).transport is None:
             return DeviceControlState.UNSUPPORTED
@@ -742,6 +752,7 @@ class NativeZendureRuntime:
                     self._transport.command_diagnostics
                     if self._transport is not None else {"commands": []}
                 ),
+                "cloud_mqtt": self._cloud_mqtt_diagnostics(),
                 "local_mqtt": self._local_mqtt_diagnostics(),
                 "last_command_result": self._last_command_result,
                 "write_authority": self._transport_router.diagnostics(),
@@ -889,7 +900,11 @@ class NativeZendureRuntime:
                 ))
             state = self._states.get(self._selected_device)
             source_device = self._inventory.devices.get(self._selected_device)
-            if state is None or source_device is None or not _fresh_native_state(state):
+            if (
+                state is None
+                or source_device is None
+                or not _fresh_native_state(state, device=source_device)
+            ):
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_state_not_fresh"
                 ))
@@ -1056,7 +1071,7 @@ class NativeZendureRuntime:
             return False
         state = self._states.get(self._selected_device)
         device = self._inventory.devices.get(self._selected_device)
-        if state is None or device is None or not _fresh_native_state(state):
+        if state is None or device is None or not _fresh_native_state(state, device=device):
             return False
         if self.selected_offgrid_mode() is None:
             return False
@@ -1463,7 +1478,7 @@ class NativeZendureRuntime:
         ready = bool(
             selection.transport is not None
             and state is not None
-            and _fresh_native_state(state)
+            and _fresh_native_state(state, device=device)
             and self._control_transport_ready(selection.transport)
         )
         self._transport_router.update_readiness(
@@ -1544,6 +1559,32 @@ class NativeZendureRuntime:
                 )
             ],
             "command_verification": transport.command_diagnostics,
+        }
+
+    def _cloud_mqtt_diagnostics(self) -> dict[str, Any]:
+        transport = self._transport
+        if transport is None:
+            return {"configured": self._bootstrap is not None, "state": "not_started"}
+        state = getattr(transport, "state", None)
+        device_states = getattr(transport, "device_states", {})
+        return {
+            "configured": True,
+            "state": getattr(state, "value", str(state or "unknown")),
+            "connection_variant": getattr(
+                transport, "connection_variant", "unknown"
+            ),
+            "connection_phase": getattr(transport, "connection_phase", "unknown"),
+            "connection": dict(getattr(transport, "connection_diagnostics", {})),
+            "last_message_at": getattr(transport, "last_message_at", None),
+            "devices": [
+                {
+                    "device_id": candidate_id,
+                    "last_message_at": state.last_message_at,
+                    "online": state.online,
+                    "property_count": len(state.property_updated_at),
+                }
+                for candidate_id, state in sorted(device_states.items())
+            ],
         }
 
     def _zensdk_health(self, candidate_id: str, now: datetime) -> dict[str, Any]:
@@ -1850,7 +1891,12 @@ def _numeric_value(measured: Any) -> float | None:
         return None
 
 
-def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> bool:
+def _fresh_native_state(
+    state: Any,
+    *,
+    maximum_age_seconds: float = 30.0,
+    device: MainDevice | None = None,
+) -> bool:
     """Require fresh control-safety data; HEMS freshness has its own gate.
 
     The HEMS activity fallback deliberately keeps the timestamp of the last
@@ -1866,6 +1912,21 @@ def _fresh_native_state(state: Any, *, maximum_age_seconds: float = 30.0) -> boo
     # would turn such a healthy device into ``soc_invalid``.  A recent SoC and
     # protection state are the actual safety prerequisites; their timestamps
     # also prove that the device is still communicating.
+    # Hyper/Hub 2000 legacy firmware reports safety values in grouped,
+    # infrequent updates. Match the normalizer's bounded 180-second window
+    # only for these explicitly identified models; every other device keeps
+    # the strict 30-second control gate.
+    model = "".join(
+        character
+        for character in str(
+            (device.model or device.profile_key) if device else ""
+        ).casefold()
+        if character.isalnum()
+    )
+    if model in _LEGACY_GROUPED_CONTROL_MODELS:
+        maximum_age_seconds = max(
+            maximum_age_seconds, LEGACY_GROUPED_CONTROL_MAX_DATA_AGE
+        )
     now = datetime.now(timezone.utc)
     required = (state.soc_pct, state.protection_active)
     return all(
