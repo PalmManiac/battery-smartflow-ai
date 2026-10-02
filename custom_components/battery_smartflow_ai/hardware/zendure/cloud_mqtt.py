@@ -158,6 +158,9 @@ class ZendureCloudMqttTransport:
         self._connect_failure: str | None = None
         self._stopping = False
         self._disconnect_reported = False
+        self._disconnect_count = 0
+        self._reconnect_count = 0
+        self._last_disconnect_category = "none"
         self._reconnect_task: asyncio.Task[None] | None = None
         self._session_number = 0
         self._request_message_id = 0
@@ -250,14 +253,22 @@ class ZendureCloudMqttTransport:
         return self._last_connection_phase
 
     @property
-    def connection_diagnostics(self) -> Mapping[str, str | bool]:
+    def connection_diagnostics(self) -> Mapping[str, Any]:
         """Return only allow-listed, non-identifying connection facts."""
 
+        diagnostics: dict[str, Any] = {}
         if self._session is not None:
             value = getattr(self._session, "connection_diagnostics", None)
             if isinstance(value, Mapping):
-                return dict(value)
-        return dict(self._last_connection_diagnostics)
+                diagnostics.update(value)
+        if not diagnostics:
+            diagnostics.update(self._last_connection_diagnostics)
+        diagnostics.update({
+            "disconnect_count": self._disconnect_count,
+            "reconnect_count": self._reconnect_count,
+            "last_disconnect_category": self._last_disconnect_category,
+        })
+        return diagnostics
 
     @property
     def topics(self) -> tuple[str, ...]:
@@ -423,6 +434,8 @@ class ZendureCloudMqttTransport:
             return
         self._state = ConnectionState.CONNECTED
         self._connected.set()
+        if self._disconnect_count > self._reconnect_count:
+            self._reconnect_count += 1
         if self._disconnect_reported:
             _LOGGER.info("Zendure Cloud MQTT reconnected")
         self._disconnect_reported = False
@@ -438,6 +451,9 @@ class ZendureCloudMqttTransport:
         self._connected.clear()
         if self._stopping:
             return
+        if self._state is ConnectionState.CONNECTED:
+            self._disconnect_count += 1
+            self._last_disconnect_category = _disconnect_category(reason)
         safe = ZendureDiagnosticSanitizer().sanitize(reason or "unknown")
         if bool(getattr(self._session, "manages_reconnect", False)):
             # Paho's network loop already owns reconnection for this session.
@@ -932,6 +948,22 @@ def _safe_peer_scope(mqtt_socket: Any) -> str:
     if address.is_global:
         return "public"
     return "other"
+
+
+def _disconnect_category(reason: str | None) -> str:
+    """Classify disconnects without retaining/exporting broker text."""
+
+    normalized = str(reason or "").casefold()
+    if any(token in normalized for token in ("auth", "refused", "denied")):
+        return "broker_rejected"
+    if any(
+        token in normalized
+        for token in ("network", "socket", "timeout", "reset", "eof", "connection")
+    ):
+        return "network_or_transport_error"
+    if normalized in {"0", "success", "normal", "normal disconnection"}:
+        return "normal_disconnect"
+    return "unclassified"
 
 
 def _parse_broker_url(value: str) -> tuple[str, int, bool]:
