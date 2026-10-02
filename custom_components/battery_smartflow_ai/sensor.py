@@ -534,7 +534,7 @@ NATIVE_PACK_SENSORS = (
         suggested_display_precision=2,
     ),
     NativeHardwareSensorDescription(
-        key="temperature_c", translation_key="native_hardware_temperature_c",
+        key="temperature_c", translation_key="native_hardware_cell_temperature_c",
         measurement_key="temperature_c",
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
         device_class=SensorDeviceClass.TEMPERATURE,

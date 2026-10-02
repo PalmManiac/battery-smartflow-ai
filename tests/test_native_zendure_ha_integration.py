@@ -247,6 +247,23 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             source[global_last_message:global_last_message + 500],
         )
 
+    def test_pack_temperature_is_labeled_as_maximum_cell_temperature(self) -> None:
+        source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        main_section = source.split("NATIVE_MAIN_SENSORS = (", 1)[1].split(
+            "_DOCUMENTED_ZENDURE_STATUS_SENSORS", 1
+        )[0]
+        pack_section = source.split("NATIVE_PACK_SENSORS = (", 1)[1].split(
+            "_SENSOR_DESCRIPTIONS", 1
+        )[0]
+        self.assertIn(
+            'key="temperature_c", translation_key="native_hardware_temperature_c"',
+            main_section,
+        )
+        self.assertIn(
+            'key="temperature_c", translation_key="native_hardware_cell_temperature_c"',
+            pack_section,
+        )
+
     def test_optional_firmware_and_wifi_entities_follow_observed_telemetry(self) -> None:
         source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
         for key in ("firmware", "wifi_status"):
