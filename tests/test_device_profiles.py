@@ -142,17 +142,17 @@ class TypedDeviceProfileTests(unittest.TestCase):
                         native_pv_w=0.0,
                         native_pv_valid=True,
                     ),
-                    (1440.0, 1000.0),
+                    (1440.0, 1000.0, 1000.0),
                 )
                 self.assertEqual(
                     resolve_charge_limits(
                         profile,
-                        configured_charge_w=2400.0,
+                        configured_charge_w=800.0,
                         battery_packs=3,
-                        native_pv_w=600.0,
+                        native_pv_w=443.0,
                         native_pv_valid=True,
                     ),
-                    (2000.0, 1000.0),
+                    (2000.0, 800.0, 1243.0),
                 )
                 self.assertEqual(
                     resolve_charge_limits(
@@ -162,7 +162,17 @@ class TypedDeviceProfileTests(unittest.TestCase):
                         native_pv_w=1800.0,
                         native_pv_valid=True,
                     ),
-                    (2000.0, 200.0),
+                    (2000.0, 200.0, 2000.0),
+                )
+                self.assertEqual(
+                    resolve_charge_limits(
+                        profile,
+                        configured_charge_w=800.0,
+                        battery_packs=3,
+                        native_pv_w=1800.0,
+                        native_pv_valid=True,
+                    ),
+                    (2000.0, 200.0, 2000.0),
                 )
 
     def test_2400_profiles_enforce_combined_battery_charge_limit(self):
@@ -178,7 +188,7 @@ class TypedDeviceProfileTests(unittest.TestCase):
                 configured_charge_w=3000.0,
                 battery_packs=2,
             ),
-            (2400.0, 2400.0),
+            (2400.0, 2400.0, 2400.0),
         )
         self.assertEqual(
             resolve_charge_limits(
@@ -188,7 +198,17 @@ class TypedDeviceProfileTests(unittest.TestCase):
                 native_pv_w=1000.0,
                 native_pv_valid=True,
             ),
-            (2400.0, 1400.0),
+            (2400.0, 1400.0, 2400.0),
+        )
+        self.assertEqual(
+            resolve_charge_limits(
+                DEVICE_PROFILES["SF2400Pro"],
+                configured_charge_w=800.0,
+                battery_packs=2,
+                native_pv_w=1000.0,
+                native_pv_valid=True,
+            ),
+            (2400.0, 800.0, 1800.0),
         )
 
     def test_other_profiles_keep_their_legacy_charge_limit_semantics(self):
@@ -198,7 +218,7 @@ class TypedDeviceProfileTests(unittest.TestCase):
                 configured_charge_w=2400.0,
                 battery_packs=1,
             ),
-            (2400.0, 2400.0),
+            (2400.0, 2400.0, 2400.0),
         )
 
     def test_every_typed_profile_rebuilds_the_legacy_mapping_exactly(self) -> None:

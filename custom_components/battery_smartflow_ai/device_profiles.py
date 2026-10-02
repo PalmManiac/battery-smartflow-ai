@@ -887,8 +887,14 @@ def resolve_charge_limits(
     battery_packs: int = 1,
     native_pv_w: float = 0.0,
     native_pv_valid: bool = False,
-) -> tuple[float, float]:
-    """Return (total battery charge cap, controllable AC input cap)."""
+) -> tuple[float, float, float]:
+    """Return (physical total cap, AC input cap, current charge target cap).
+
+    For profiles with a known battery-side limit, the configured charge power
+    is an AC-input cap. Valid native PV can add to that AC allowance, up to
+    the battery-side limit. Profiles without a separate battery-side limit
+    retain their conservative legacy behavior.
+    """
     configured = max(0.0, float(configured_charge_w or 0.0))
     ac_limit = max(
         0.0,
@@ -898,7 +904,7 @@ def resolve_charge_limits(
 
     if battery_limit is None:
         total_limit = min(configured, ac_limit)
-        return total_limit, total_limit
+        return total_limit, total_limit, total_limit
 
     try:
         has_expansion = int(battery_packs or 1) > 1
@@ -909,7 +915,7 @@ def resolve_charge_limits(
             "MAX_BATTERY_CHARGE_W_WITH_EXPANSION",
             battery_limit,
         )
-    total_limit = min(configured, max(0.0, float(battery_limit)))
+    total_limit = max(0.0, float(battery_limit))
     native_pv = (
         max(0.0, float(native_pv_w or 0.0))
         if native_pv_valid
@@ -920,7 +926,11 @@ def resolve_charge_limits(
         ac_limit,
         max(0.0, total_limit - native_pv),
     )
-    return total_limit, ac_input_limit
+    current_charge_limit = min(
+        total_limit,
+        ac_input_limit + native_pv,
+    )
+    return total_limit, ac_input_limit, current_charge_limit
 
 
 def merge_profile_with_overrides(profile_key: str, overrides: dict | None) -> dict:

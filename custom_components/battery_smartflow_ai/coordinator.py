@@ -4303,7 +4303,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
             except (TypeError, ValueError):
                 configured_packs = DEFAULT_BATTERY_PACKS
-            max_charge, max_ac_input = resolve_charge_limits(
+            max_battery_charge_limit, max_ac_input, max_charge = resolve_charge_limits(
                 profile,
                 configured_charge_w=configured_max_charge,
                 battery_packs=configured_packs,
@@ -5819,7 +5819,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_w=float(pv_w or 0.0),
                 house_load_w=float(house_load or 0.0),
                 max_grid_input_w=float(max_ac_input),
-                max_total_charge_w=float(max_charge),
+                max_total_charge_w=float(max_battery_charge_limit),
                 native_pv_w=float(native_pv_w),
                 native_pv_valid=bool(
                     native_pv_configured and native_pv_sensor_valid
@@ -6940,7 +6940,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "max_charge": max_charge,
                 "max_ac_input": max_ac_input,
-                "max_battery_charge_limit": max_charge,
+                "configured_ac_charge_limit": configured_max_charge,
+                "max_battery_charge_limit": max_battery_charge_limit,
                 "max_discharge": max_discharge,
                 "set_mode": ac_mode,
                 "set_input_w": int(round(in_w, 0)),

@@ -437,7 +437,7 @@
         "name": "SoC maximum"
       },
       "max_charge": {
-        "name": "Puissance de charge max."
+        "name": "Puissance de charge CA max."
       },
       "max_discharge": {
         "name": "Puissance de décharge max."

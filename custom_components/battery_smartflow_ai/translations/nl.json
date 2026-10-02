@@ -437,7 +437,7 @@
         "name": "SoC maximum"
       },
       "max_charge": {
-        "name": "Max. laadvermogen"
+        "name": "Max. AC-laadvermogen"
       },
       "max_discharge": {
         "name": "Max. ontlaadvermogen"
