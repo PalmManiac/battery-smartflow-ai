@@ -473,7 +473,7 @@
         "name": "SoC maximum"
       },
       "max_charge": {
-        "name": "Max. charge power"
+        "name": "Max. AC charging power"
       },
       "max_discharge": {
         "name": "Max. discharge power"

@@ -25,6 +25,7 @@ class DebugSampleBuilderTests(unittest.TestCase):
         details = {
             "soc": 56.5,
             "pv_w": 840.0,
+            "configured_ac_charge_limit": 800.0,
             "deficit": 120.0,
             "price_now": 0.21,
             "economics_average_battery_charge_price": 0.38,
@@ -70,6 +71,10 @@ class DebugSampleBuilderTests(unittest.TestCase):
         result = build_debug_sample(timestamp=self.now, details=details).as_dict()
 
         self.assertEqual(result["raw_values"]["soc"], 56.5)
+        self.assertEqual(
+            result["raw_values"]["configured_ac_charge_limit"],
+            800.0,
+        )
         self.assertNotIn("battery_ac_power_raw", result["raw_values"])
         self.assertEqual(result["prices"]["price_now"], 0.21)
         self.assertEqual(
