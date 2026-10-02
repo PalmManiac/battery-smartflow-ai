@@ -126,6 +126,7 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
                 "hyperTmp": 2961,
                 "BatVolt": 4953,
                 "masterSoftVersion": 4106,
+                "oldMode": 0,
                 "futureProperty": {"kept": "only in raw diagnostics"},
             },
             "packData": [
@@ -182,6 +183,10 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.setpoints.max_soc_pct.value, 93.0)
         self.assertEqual(state.diagnostics["socLimit"].value, 1)
         self.assertTrue(state.diagnostics["socLimit"].valid)
+        # Regression: the device reports camelCase "oldMode"; the raw diagnostic
+        # key must match that casing or the entity can never be populated.
+        self.assertEqual(state.diagnostics["oldMode"].value, 0)
+        self.assertTrue(state.diagnostics["oldMode"].valid)
         self.assertFalse(state.hems_active.value)
         self.assertAlmostEqual(state.temperature_c.value, 22.95)
         self.assertEqual(state.battery_voltage_v.value, 49.53)
