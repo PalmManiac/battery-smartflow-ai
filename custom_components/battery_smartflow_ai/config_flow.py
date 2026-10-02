@@ -648,9 +648,21 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
         )
 
-        schema[
-            vol.Required(CONF_PV_ENTITY, default=_val(CONF_PV_ENTITY))
-        ] = selector.EntitySelector(
+        is_native = native or bool(
+            entry and entry.data.get("connection_type") == "native"
+        )
+        if is_native:
+            pv_value = _val(CONF_PV_ENTITY)
+            pv_entity_key = (
+                vol.Optional(CONF_PV_ENTITY, default=pv_value)
+                if pv_value
+                else vol.Optional(CONF_PV_ENTITY)
+            )
+        else:
+            pv_entity_key = vol.Required(
+                CONF_PV_ENTITY, default=_val(CONF_PV_ENTITY)
+            )
+        schema[pv_entity_key] = selector.EntitySelector(
             selector.EntitySelectorConfig(domain="sensor")
         )
 
