@@ -275,6 +275,16 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn("entity_registry_enabled_default=available", source)
         self.assertIn("entity_registry.async_update_entity", source)
 
+    def test_mppt_power_entities_expose_power_statistics_metadata(self) -> None:
+        source = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        mppt_block = source.split(
+            "_MPPT_POWER_PROPERTIES = tuple(", 1
+        )[1].split("# Other raw properties", 1)[0]
+        self.assertIn("native_unit_of_measurement=UnitOfPower.WATT", mppt_block)
+        self.assertIn("device_class=SensorDeviceClass.POWER", mppt_block)
+        self.assertIn("state_class=SensorStateClass.MEASUREMENT", mppt_block)
+        self.assertIn("for key in _MPPT_POWER_PROPERTIES", mppt_block)
+
 
 if __name__ == "__main__":
     unittest.main()
