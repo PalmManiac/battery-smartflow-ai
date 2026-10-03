@@ -210,6 +210,36 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second.charge_power_w.value, 0.0)
         self.assertEqual(second.discharge_power_w.value, 19.0)
         self.assertEqual(second.current_a.value, -0.4)
+
+    async def test_flat_cloud_state_applies_partial_device_and_pack_updates(self):
+        bootstrap = await make_bootstrap(primary_model="Hyper 2000")
+        normalizer = ZendureCloudNormalizer(bootstrap)
+        initial = normalizer.apply(report(self.at, self.full_payload()))
+        self.assertIsNotNone(initial)
+
+        update_time = self.at + timedelta(seconds=45)
+        flat_state = {
+            "sn": "device-1",
+            "hyperTmp": 3000,
+            "solarInputPower": 740,
+            "packData": [{"sn": "pack-a", "socLevel": 57}],
+        }
+        result = normalizer.apply(
+            report(update_time, flat_state, topic="state"),
+        )
+
+        self.assertIsNotNone(result)
+        state = result.state
+        self.assertAlmostEqual(state.temperature_c.value, 26.85)
+        self.assertEqual(state.pv_power_w.value, 740.0)
+        # Partial updates do not erase other, previously observed values.
+        self.assertEqual(state.ac_input_power_w.value, 279.0)
+        self.assertEqual(state.soc_pct.value, 55.0)
+        self.assertEqual(state.ac_input_power_w.observed_at, self.at)
+        self.assertEqual(state.pv_power_w.observed_at, update_time)
+        self.assertEqual(state.packs[0].soc_pct.value, 57.0)
+        self.assertEqual(state.packs[1].soc_pct.value, 56.0)
+        self.assertNotIn("sn", result.unknown_main_properties)
         self.assertEqual(result.unknown_main_properties, ("futureProperty",))
         self.assertEqual(
             result.unknown_pack_properties, ("futurePackProperty",)

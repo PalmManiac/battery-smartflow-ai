@@ -34,6 +34,22 @@ from .cloud_mqtt_commands import (
 )
 
 
+CLOUD_STATE_METADATA_KEYS = frozenset(
+    {
+        "sn",
+        "deviceKey",
+        "productKey",
+        "productModel",
+        "deviceName",
+        "online",
+        "isHA",
+        "packData",
+        "timestamp",
+        "ts",
+    }
+)
+
+
 _LOGGER = logging.getLogger(__name__)
 _MAX_RETAINED_MESSAGES = 10_000
 _COMMAND_READBACK_TIMEOUT_SECONDS = 15.0
@@ -554,7 +570,7 @@ class ZendureCloudMqttTransport:
         if candidate_id is not None and state_message:
             state = self._devices[candidate_id]
             state.last_message_at = received_at
-            for name in _property_names(parsed):
+            for name in _property_names(parsed, topic=topic):
                 state.property_updated_at[name] = received_at
             online = _online_value(parsed)
             if online is not None:
@@ -666,12 +682,18 @@ def _pack_identity(value: Any, main_device_id: str | None) -> str | None:
     return None
 
 
-def _property_names(value: Any) -> set[str]:
+def _property_names(value: Any, *, topic: str = "") -> set[str]:
     if not isinstance(value, Mapping):
         return set()
     properties = value.get("properties")
     if isinstance(properties, Mapping):
         return {str(name) for name in properties}
+    if topic.rstrip("/").endswith("/state"):
+        return {
+            str(name)
+            for name in value
+            if name not in CLOUD_STATE_METADATA_KEYS
+        }
     return set()
 
 

@@ -170,17 +170,28 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         await transport.async_start()
         session = self.sessions[0]
         session.emit("/product-a/main-1/properties/report", json.dumps({"properties": {"socLevel": 55, "solarInputPower": 800}}).encode())
+        session.emit(
+            "/product-a/main-1/state",
+            json.dumps({"hyperTmp": 311, "sn": "main-1"}).encode(),
+        )
         session.emit("/product-a/main-1/new/future/topic", b'{broken')
         session.emit("/product-b/main-2/state", b"\xff\x00")
         await asyncio.sleep(0)
         messages = transport.messages
-        self.assertEqual([item.payload_format for item in messages], ["json", "text", "binary"])
+        self.assertEqual(
+            [item.payload_format for item in messages],
+            ["json", "json", "text", "binary"],
+        )
         self.assertTrue(messages[0].known_topic)
-        self.assertFalse(messages[1].known_topic)
+        self.assertTrue(messages[1].known_topic)
+        self.assertFalse(messages[2].known_topic)
         self.assertEqual(messages[0].device_candidate_id, "cloud_mqtt:main-1")
         state = transport.device_states["cloud_mqtt:main-1"]
         self.assertEqual(state.last_message_at, self.now)
-        self.assertEqual(set(state.property_updated_at), {"socLevel", "solarInputPower"})
+        self.assertEqual(
+            set(state.property_updated_at),
+            {"socLevel", "solarInputPower", "hyperTmp"},
+        )
 
     async def test_legacy_bridge_copy_is_not_counted_as_cloud_observation(self):
         transport = ZendureCloudMqttTransport(
