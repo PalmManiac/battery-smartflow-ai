@@ -462,7 +462,25 @@ NATIVE_MAIN_SENSORS += tuple(
     for key, translation_key, options in _DOCUMENTED_ZENDURE_STATUS_SENSORS
 )
 
-# Raw properties stay disabled diagnostics until the user needs them; no guessed enums.
+_MPPT_POWER_PROPERTIES = tuple(f"solarPower{index}" for index in range(1, 7))
+
+NATIVE_MAIN_SENSORS += tuple(
+    NativeHardwareSensorDescription(
+        key=key,
+        name=key,
+        measurement_key=key,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+    )
+    for key in _MPPT_POWER_PROPERTIES
+)
+
+# Other raw properties stay disabled diagnostics until the user needs them;
+# do not guess units, device classes, or enum semantics.
 NATIVE_MAIN_SENSORS += tuple(
     NativeHardwareSensorDescription(
         key=key, name=key, measurement_key=key,
@@ -470,7 +488,13 @@ NATIVE_MAIN_SENSORS += tuple(
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
     ) for key in RAW_MAIN_DIAGNOSTICS
-    if key not in {"smartMode", "wifiState", "remainOutTime", *_DOCUMENTED_ZENDURE_STATUS_KEYS}
+    if key not in {
+        "smartMode",
+        "wifiState",
+        "remainOutTime",
+        *_DOCUMENTED_ZENDURE_STATUS_KEYS,
+        *_MPPT_POWER_PROPERTIES,
+    }
 )
 
 NATIVE_PACK_SENSORS = (
