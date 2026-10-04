@@ -73,6 +73,17 @@ _STRATEGY_KEYS = (
     "strategy_state",
 )
 
+_TIMING_KEYS = (
+    "timing_cycle_observed_at",
+    "timing_cycle_completed_at",
+    "timing_cycle_duration_seconds",
+    "timing_grid_acquisition_seconds",
+    "timing_grid_state_age_seconds",
+    "timing_grid_source",
+    "timing_technical_decision_seconds",
+    "timing_command_execution_seconds",
+)
+
 
 def _selected(source: Mapping[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
     """Copy only keys that are actually present in the source mapping."""
@@ -225,6 +236,11 @@ def build_debug_sample(
         "output_write": _prefixed(details, "output_write_"),
         "effectiveness": _prefixed(details, "command_effectiveness_"),
     }
+    timing = _selected(details, _TIMING_KEYS)
+    timing = {
+        key.removeprefix("timing_"): value
+        for key, value in timing.items()
+    }
 
     return DebugSample(
         timestamp=timestamp,
@@ -234,4 +250,5 @@ def build_debug_sample(
         prices=_selected(details, _PRICE_KEYS),
         planning=planning,
         command=command,
+        timing=timing,
     ).redacted_copy()

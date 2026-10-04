@@ -2537,6 +2537,42 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return None, None
 
+    def _get_grid_state_age_seconds(self, now: datetime) -> float | None:
+        """Return the age of the oldest configured HA grid reading.
+
+        Direct Shelly reads do not expose a source timestamp, so their freshness
+        is represented by the measured acquisition duration instead.
+        """
+
+        if self.entities.grid_mode == GRID_MODE_SINGLE:
+            entity_ids = (self.entities.grid_power,)
+        elif self.entities.grid_mode == GRID_MODE_SPLIT:
+            entity_ids = (self.entities.grid_import, self.entities.grid_export)
+        else:
+            return None
+
+        if any(not entity_id for entity_id in entity_ids):
+            return None
+        states = [self.hass.states.get(entity_id) for entity_id in entity_ids]
+        if not states or any(state is None for state in states):
+            return None
+
+        now_utc = dt_util.as_utc(now)
+        ages = [
+            max(
+                0.0,
+                (
+                    now_utc
+                    - dt_util.as_utc(
+                        getattr(state, "last_reported", None)
+                        or state.last_updated
+                    )
+                ).total_seconds(),
+            )
+            for state in states
+        ]
+        return max(ages)
+
     async def _async_refresh_shelly_grid_power(self) -> None:
         """Refresh the configured local Shelly grid reading."""
 
@@ -4083,6 +4119,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
     async def _async_update_data(self) -> dict[str, Any]:
+        timing_enabled = self._debug_recorder.is_active
+        cycle_started_monotonic = (
+            self._clock.monotonic() if timing_enabled else None
+        )
+        grid_acquisition_seconds: float | None = None
+        grid_state_age_seconds: float | None = None
+        technical_decision_seconds: float | None = None
+        command_execution_seconds: float | None = None
         try:
             if self._persist.get("last_ts") is None:
                 await self._load()
@@ -4384,8 +4428,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 load_coverage_priority = False
 
             grid_sensor_configured = self.entities.grid_mode != GRID_MODE_NONE
+            grid_acquisition_started = (
+                self._clock.monotonic() if timing_enabled else None
+            )
             await self._async_refresh_shelly_grid_power()
             grid_import_raw, grid_export_raw = self._get_grid()
+            if grid_acquisition_started is not None:
+                grid_acquisition_seconds = max(
+                    0.0,
+                    self._clock.monotonic() - grid_acquisition_started,
+                )
+                grid_state_age_seconds = self._get_grid_state_age_seconds(now)
             grid_sensor_valid = bool(
                 grid_sensor_configured
                 and grid_import_raw is not None
@@ -6208,6 +6261,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 or soc_limit == 2
             )
 
+            technical_decision_started = (
+                self._clock.monotonic() if timing_enabled else None
+            )
             mode_arbiter_result = self._mode_arbiter.evaluate(
                 now=now,
                 intent=strategy_intent,
@@ -6250,6 +6306,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 max_input_w=float(max_ac_input),
                 max_output_w=float(max_discharge),
             )
+            if technical_decision_started is not None:
+                technical_decision_seconds = max(
+                    0.0,
+                    self._clock.monotonic() - technical_decision_started,
+                )
 
             technical_reason = (
                 str(strategic_reason)
@@ -6366,6 +6427,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ai_mode == AI_MODE_MANUAL
                 and str(manual_action) == MANUAL_STANDBY
             )
+            command_execution_started = None
 
             if manual_standby_no_command:
                 # Stop BSFAI's active side exactly once when manual standby is
@@ -6408,6 +6470,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         ),
                         metadata={"command_path": "manual_standby"},
                     )
+                    command_execution_started = (
+                        self._clock.monotonic() if timing_enabled else None
+                    )
                     await self._execute_device_command(
                         standby_command,
                         force_power=True,
@@ -6415,6 +6480,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         # sequence used when entering passive manual standby.
                         power_before_mode=standby_direction == "input",
                     )
+                    if command_execution_started is not None:
+                        command_execution_seconds = max(
+                            0.0,
+                            self._clock.monotonic() - command_execution_started,
+                        )
 
                     self._persist["last_set_input_w"] = 0
                     self._persist["last_set_output_w"] = 0
@@ -6437,10 +6507,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 # Force the selected active-side command so a direction change
                 # cannot be skipped merely because the Number entity still
                 # displays the same watt value as an earlier cycle.
+                command_execution_started = (
+                    self._clock.monotonic() if timing_enabled else None
+                )
                 execution_result = await self._execute_device_command(
                     regulation_device_command,
                     force_power=True,
                 )
+                if command_execution_started is not None:
+                    command_execution_seconds = max(
+                        0.0,
+                        self._clock.monotonic() - command_execution_started,
+                    )
 
                 if (
                     effectiveness_retry_direction == "input"
@@ -7870,6 +7948,29 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     charge_source_allocation.reason
                 ),
             }
+
+            if timing_enabled and cycle_started_monotonic is not None:
+                details.update(
+                    {
+                        "timing_cycle_observed_at": dt_util.as_utc(now).isoformat(),
+                        "timing_cycle_completed_at": dt_util.as_utc(
+                            self._clock.utc_now()
+                        ).isoformat(),
+                        "timing_cycle_duration_seconds": max(
+                            0.0,
+                            self._clock.monotonic() - cycle_started_monotonic,
+                        ),
+                        "timing_grid_acquisition_seconds": grid_acquisition_seconds,
+                        "timing_grid_state_age_seconds": grid_state_age_seconds,
+                        "timing_grid_source": str(self.entities.grid_mode),
+                        "timing_technical_decision_seconds": (
+                            technical_decision_seconds
+                        ),
+                        "timing_command_execution_seconds": (
+                            command_execution_seconds
+                        ),
+                    }
+                )
 
             def _iso_or_none(val):
                 try:

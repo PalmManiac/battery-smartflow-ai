@@ -120,6 +120,31 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(result["command"]["input_write"]["effective_w"], 500)
         self.assertEqual(result["command"]["effectiveness"]["status"], "effective")
 
+    def test_groups_optional_control_timing_measurements(self) -> None:
+        result = build_debug_sample(
+            timestamp=self.now,
+            details={
+                "timing_cycle_observed_at": "2026-08-12T12:00:00+00:00",
+                "timing_cycle_completed_at": "2026-08-12T12:00:00.180000+00:00",
+                "timing_cycle_duration_seconds": 0.18,
+                "timing_grid_acquisition_seconds": 0.025,
+                "timing_grid_state_age_seconds": 0.7,
+                "timing_grid_source": "single",
+                "timing_technical_decision_seconds": 0.002,
+                "timing_command_execution_seconds": 0.11,
+                "timing_private_identifier": "must-not-be-captured",
+            },
+        ).as_dict()
+
+        self.assertEqual(
+            result["timing"]["cycle_observed_at"],
+            "2026-08-12T12:00:00+00:00",
+        )
+        self.assertEqual(result["timing"]["cycle_duration_seconds"], 0.18)
+        self.assertEqual(result["timing"]["grid_state_age_seconds"], 0.7)
+        self.assertEqual(result["timing"]["grid_source"], "single")
+        self.assertNotIn("private_identifier", result["timing"])
+
     def test_sample_omits_repeated_profile_and_healthy_entity_details(self) -> None:
         result = build_debug_sample(
             timestamp=self.now,
