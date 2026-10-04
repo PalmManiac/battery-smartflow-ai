@@ -12,6 +12,7 @@ bootstrap()
 from custom_components.battery_smartflow_ai.hardware.zendure.privacy import (  # noqa: E402
     REDACTED,
     ZendureDiagnosticSanitizer,
+    public_device_id,
     sanitize_zendure_diagnostics,
 )
 
@@ -93,6 +94,31 @@ class ZendurePrivacyTests(unittest.TestCase):
             result["devices"]["ZD_DEVICE_A1"]["topic"],
             "iot/ZD_DEVICE_A1/properties/report",
         )
+
+    def test_hashed_command_device_id_matches_selected_device_alias(self) -> None:
+        private_id = "private-device-123"
+        result = sanitize_zendure_diagnostics(
+            {
+                "selected_device": f"cloud_mqtt:{private_id}",
+                "devices": {
+                    private_id: {"device_id": private_id},
+                },
+                "command_verification": {
+                    "commands": [
+                        {"device_id": public_device_id(private_id)},
+                    ],
+                },
+            }
+        )
+
+        device_alias = result["selected_device"].split(":", 1)[1]
+        self.assertEqual(device_alias, "ZD_DEVICE_A1")
+        self.assertEqual(next(iter(result["devices"])), device_alias)
+        self.assertEqual(
+            result["command_verification"]["commands"][0]["device_id"],
+            device_alias,
+        )
+        self.assertNotIn(private_id, str(result))
 
     def test_unknown_nested_credential_fields_use_same_boundary(self) -> None:
         result = sanitize_zendure_diagnostics(

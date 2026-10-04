@@ -6,11 +6,11 @@ import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
-from hashlib import sha256
 from typing import Any
 from uuid import uuid4
 
 from .core.models import ZendureTransport
+from .hardware.zendure.privacy import public_device_id
 
 
 class CommandVerificationStatus(StrEnum):
@@ -361,4 +361,4 @@ def _latency(start: datetime | None, end: datetime | None) -> float | None:
 
 
 def _public_device_id(value: str) -> str:
-    return f"device_{sha256(value.encode('utf-8')).hexdigest()[:12]}"
+    return public_device_id(value)

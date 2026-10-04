@@ -214,6 +214,7 @@ from .command_effectiveness import (
     CommandEffectivenessConfig,
     CommandEffectivenessState,
     evaluate_command_effectiveness,
+    resolve_observed_ac_mode,
     record_effectiveness_retry,
 )
 from .debug_recorder import DebugRecorder
@@ -6340,8 +6341,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else 0.0
             )
 
-            current_ac_mode = str(
-                self._state(self.entities.ac_mode) or ""
+            native_mode = (
+                native_state.mode.value
+                if native_state is not None and native_state.mode.valid
+                else None
+            )
+            current_ac_mode = resolve_observed_ac_mode(
+                native_mode=(
+                    str(native_mode) if native_mode is not None else None
+                ),
+                native_mode_valid=bool(
+                    native_state is not None
+                    and native_state.mode.valid
+                ),
+                entity_mode=self._state(self.entities.ac_mode),
             )
 
             active_command_write_pending = bool(

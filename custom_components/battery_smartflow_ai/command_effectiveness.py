@@ -9,6 +9,23 @@ CommandDirection = Literal["none", "input", "output"]
 RetryDirection = Literal["input", "output"] | None
 
 
+def resolve_observed_ac_mode(
+    *,
+    native_mode: str | None,
+    native_mode_valid: bool,
+    entity_mode: str | None,
+) -> str:
+    """Prefer fresh native device mode over an unrelated HA select state."""
+
+    if native_mode_valid:
+        return {
+            "charge": "input",
+            "discharge": "output",
+            "idle": "idle",
+        }.get(str(native_mode or "").strip().lower(), "")
+    return str(entity_mode or "")
+
+
 @dataclass(frozen=True)
 class CommandEffectivenessConfig:
     """Limits for bounded active-command recovery."""
