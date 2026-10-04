@@ -269,6 +269,11 @@ SETTING_PEAK_FACTOR = "peak_factor"
 # Defaults
 # ==================================================
 UPDATE_INTERVAL = 10  # seconds
+# Keep event-triggered control evaluations aligned with the existing native
+# telemetry cadence; rapid source updates are coalesced rather than causing a
+# command attempt on every measurement.
+GRID_EVENT_REFRESH_MIN_INTERVAL_S = 5.0
+DIRECT_SHELLY_POLL_INTERVAL_S = 1.0
 
 DEFAULT_SOC_MIN = 12.0
 DEFAULT_SOC_MAX = 100.0  # Herstellerempfehlung ✔
