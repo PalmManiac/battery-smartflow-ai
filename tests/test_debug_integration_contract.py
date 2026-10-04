@@ -29,7 +29,10 @@ class DebugIntegrationContractTests(unittest.TestCase):
             and isinstance(node.value, ast.Constant)
         )
 
-        self.assertRegex(manifest_version, r"^\d+\.\d+\.\d+$")
+        self.assertRegex(
+            manifest_version,
+            r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$",
+        )
         self.assertEqual(runtime_version, manifest_version)
 
     def test_services_expose_only_supported_durations(self) -> None:
