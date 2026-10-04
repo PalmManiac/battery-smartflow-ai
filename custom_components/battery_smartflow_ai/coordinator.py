@@ -9,6 +9,11 @@ from typing import Any, Mapping
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -18,6 +23,8 @@ from .soc_plausibility import evaluate_soc_for_accounting
 from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
+    DIRECT_SHELLY_POLL_INTERVAL_S,
+    GRID_EVENT_REFRESH_MIN_INTERVAL_S,
     INTEGRATION_VERSION,
     # config keys
     CONF_SOC_ENTITY,
@@ -243,6 +250,7 @@ from .market_price import (
 from .manual_standby import active_power_direction
 from .full_charge_maintenance_runtime import FullChargeMaintenanceRuntime
 from .full_charge_maintenance_control import apply_maintenance_charge_request
+from .grid_event_refresh import grid_refresh_delay, grid_value_changed
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -451,6 +459,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._shelly_grid_power_w: float | None = None
         self._shelly_last_error: str | None = None
+        self._shelly_last_read_at: datetime | None = None
+        self._shelly_last_read_duration_s: float | None = None
+        self._shelly_poll_in_progress = False
+        self._shelly_poll_unsubscribe = None
+        self._grid_event_unsubscribe = None
+        self._grid_refresh_cancel = None
+        self._grid_refresh_pending = False
+        self._grid_last_refresh_monotonic: float | None = None
 
         self.runtime_mode: dict[str, Any] = {
             "ai_mode": AI_MODE_AUTOMATIC,
@@ -657,6 +673,123 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             _LOGGER,
             name="Battery SmartFlow AI",
             update_interval=timedelta(seconds=UPDATE_INTERVAL),
+        )
+
+    def grid_event_entity_ids(self) -> tuple[str, ...]:
+        """Return configured HA grid-power sources that can trigger a refresh."""
+
+        if self.entities.grid_mode == GRID_MODE_SINGLE:
+            entity_ids = (self.entities.grid_power,)
+        elif self.entities.grid_mode == GRID_MODE_SPLIT:
+            entity_ids = (self.entities.grid_import, self.entities.grid_export)
+        else:
+            # Direct Shelly measurements are polled through their own timer.
+            return ()
+        return tuple(str(entity_id) for entity_id in entity_ids if entity_id)
+
+    def async_start_grid_event_refresh(self):
+        """Subscribe to meaningful selected-grid updates with bounded refreshes."""
+
+        entity_ids = self.grid_event_entity_ids()
+        has_direct_shelly = self.entities.grid_mode in (
+            GRID_MODE_SHELLY_PRO_3EM,
+            GRID_MODE_SHELLY_3EM,
+        )
+        if not entity_ids and not has_direct_shelly:
+            return None
+
+        if entity_ids:
+            self._grid_event_unsubscribe = async_track_state_change_event(
+                self.hass,
+                list(entity_ids),
+                self._handle_grid_state_change,
+            )
+        if has_direct_shelly:
+            self._shelly_poll_unsubscribe = async_track_time_interval(
+                self.hass,
+                self._async_poll_shelly_grid_power,
+                timedelta(seconds=DIRECT_SHELLY_POLL_INTERVAL_S),
+            )
+
+        def _unsubscribe() -> None:
+            if self._grid_event_unsubscribe is not None:
+                self._grid_event_unsubscribe()
+                self._grid_event_unsubscribe = None
+            if self._shelly_poll_unsubscribe is not None:
+                self._shelly_poll_unsubscribe()
+                self._shelly_poll_unsubscribe = None
+            if self._grid_refresh_cancel is not None:
+                self._grid_refresh_cancel()
+                self._grid_refresh_cancel = None
+            self._grid_refresh_pending = False
+
+        return _unsubscribe
+
+    def _handle_grid_state_change(self, event) -> None:
+        """Queue a regulation refresh only when a selected grid value changes."""
+
+        data = getattr(event, "data", {})
+        old_state = data.get("old_state")
+        new_state = data.get("new_state")
+        if not grid_value_changed(
+            getattr(old_state, "state", None),
+            getattr(new_state, "state", None),
+        ):
+            return
+        self._queue_grid_event_refresh()
+
+    def _flush_grid_event_refresh(self, _now) -> None:
+        """Run one coalesced refresh for the latest grid reading."""
+
+        self._grid_refresh_cancel = None
+        if not self._grid_refresh_pending:
+            return
+        self._grid_refresh_pending = False
+        self._grid_last_refresh_monotonic = self._clock.monotonic()
+        self.hass.async_create_task(self.async_request_refresh())
+
+    async def async_initialize_direct_shelly_grid(self) -> None:
+        """Acquire one initial Shelly sample before the first regulation cycle."""
+
+        if self.entities.grid_mode in (
+            GRID_MODE_SHELLY_PRO_3EM,
+            GRID_MODE_SHELLY_3EM,
+        ):
+            await self._async_refresh_shelly_grid_power()
+
+    async def _async_poll_shelly_grid_power(self, _now=None) -> None:
+        """Poll the local Shelly independently from the main 10-second cycle."""
+
+        if self._shelly_poll_in_progress:
+            return
+        self._shelly_poll_in_progress = True
+        previous_value = self._shelly_grid_power_w
+        try:
+            await self._async_refresh_shelly_grid_power()
+        finally:
+            self._shelly_poll_in_progress = False
+
+        if (
+            previous_value is not None and self._shelly_grid_power_w is None
+        ) or grid_value_changed(previous_value, self._shelly_grid_power_w):
+            self._queue_grid_event_refresh()
+
+    def _queue_grid_event_refresh(self) -> None:
+        """Queue one bounded control refresh after a new grid measurement."""
+
+        self._grid_refresh_pending = True
+        if self._grid_refresh_cancel is not None:
+            return
+
+        delay = grid_refresh_delay(
+            now_monotonic=self._clock.monotonic(),
+            last_refresh_monotonic=self._grid_last_refresh_monotonic,
+            min_interval_s=GRID_EVENT_REFRESH_MIN_INTERVAL_S,
+        )
+        self._grid_refresh_cancel = async_call_later(
+            self.hass,
+            delay,
+            self._flush_grid_event_refresh,
         )
 
     async def _load(self) -> None:
@@ -2577,17 +2710,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _async_refresh_shelly_grid_power(self) -> None:
         """Refresh the configured local Shelly grid reading."""
 
-        self._shelly_grid_power_w = None
         mode = self.entities.grid_mode
         if mode not in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM):
             return
 
+        started = self._clock.monotonic()
         model_name = "Shelly Pro 3EM" if mode == GRID_MODE_SHELLY_PRO_3EM else "Shelly 3EM"
         try:
             from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
             if mode == GRID_MODE_SHELLY_PRO_3EM:
-                self._shelly_grid_power_w = await async_read_shelly_pro_3em_power(
+                grid_power_w = await async_read_shelly_pro_3em_power(
                     async_get_clientsession(self.hass),
                     host=self._shelly_pro_3em_host,
                     password=self._shelly_pro_3em_password,
@@ -2595,13 +2728,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     timeout_seconds=1.5,
                 )
             else:
-                self._shelly_grid_power_w = await async_read_shelly_3em_power(
+                grid_power_w = await async_read_shelly_3em_power(
                     async_get_clientsession(self.hass),
                     host=self._shelly_3em_host,
                     password=self._shelly_3em_password,
                     timeout_seconds=1.5,
                 )
+            self._shelly_grid_power_w = _to_float(grid_power_w, None)
+            self._shelly_last_read_at = (
+                self._clock.utc_now()
+                if self._shelly_grid_power_w is not None
+                else None
+            )
+            self._shelly_last_read_duration_s = max(
+                0.0, self._clock.monotonic() - started
+            )
         except Exception as err:
+            self._shelly_grid_power_w = None
+            self._shelly_last_read_at = None
+            self._shelly_last_read_duration_s = max(
+                0.0, self._clock.monotonic() - started
+            )
             reason = (
                 str(err)
                 if isinstance(err, (ShellyPro3EMError, Shelly3EMError))
@@ -4120,6 +4267,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
 
     async def _async_update_data(self) -> dict[str, Any]:
+        # Include periodic cycles in the same throttle so grid events cannot
+        # cause a second control evaluation immediately after one just ran.
+        self._grid_last_refresh_monotonic = self._clock.monotonic()
         timing_enabled = self._debug_recorder.is_active
         cycle_started_monotonic = (
             self._clock.monotonic() if timing_enabled else None
@@ -4432,14 +4582,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             grid_acquisition_started = (
                 self._clock.monotonic() if timing_enabled else None
             )
-            await self._async_refresh_shelly_grid_power()
             grid_import_raw, grid_export_raw = self._get_grid()
             if grid_acquisition_started is not None:
-                grid_acquisition_seconds = max(
-                    0.0,
-                    self._clock.monotonic() - grid_acquisition_started,
-                )
-                grid_state_age_seconds = self._get_grid_state_age_seconds(now)
+                if self.entities.grid_mode in (
+                    GRID_MODE_SHELLY_PRO_3EM,
+                    GRID_MODE_SHELLY_3EM,
+                ):
+                    grid_acquisition_seconds = self._shelly_last_read_duration_s
+                    if self._shelly_last_read_at is not None:
+                        grid_state_age_seconds = max(
+                            0.0,
+                            (
+                                dt_util.as_utc(now)
+                                - dt_util.as_utc(self._shelly_last_read_at)
+                            ).total_seconds(),
+                        )
+                else:
+                    grid_acquisition_seconds = max(
+                        0.0,
+                        self._clock.monotonic() - grid_acquisition_started,
+                    )
+                    grid_state_age_seconds = self._get_grid_state_age_seconds(now)
             grid_sensor_valid = bool(
                 grid_sensor_configured
                 and grid_import_raw is not None

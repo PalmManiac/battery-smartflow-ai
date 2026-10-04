@@ -185,11 +185,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
+    initialize_direct_shelly = getattr(
+        coordinator, "async_initialize_direct_shelly_grid", None
+    )
+    if callable(initialize_direct_shelly):
+        await initialize_direct_shelly()
     await coordinator.async_config_entry_first_refresh()
     if handed_off_recorder is not None:
         handoff.discard_if_same(entry.entry_id, handed_off_recorder)
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.native_zendure.start()
+    start_grid_event_refresh = getattr(
+        coordinator, "async_start_grid_event_refresh", None
+    )
+    grid_event_unsubscribe = (
+        start_grid_event_refresh() if callable(start_grid_event_refresh) else None
+    )
+    if grid_event_unsubscribe is not None:
+        if hasattr(entry, "async_on_unload"):
+            entry.async_on_unload(grid_event_unsubscribe)
+        else:
+            grid_event_unsubscribe()
     from .dashboard import async_update_dashboard_panel
 
     await async_update_dashboard_panel(hass)
