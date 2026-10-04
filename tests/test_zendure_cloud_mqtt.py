@@ -9,6 +9,7 @@ import inspect
 import json
 from pathlib import Path
 import socket
+from types import SimpleNamespace
 import unittest
 
 from custom_components.battery_smartflow_ai.hardware.zendure.cloud import ZendureCloudClient
@@ -23,6 +24,8 @@ from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     _parse_broker_url,
     _property_write_request,
     _reason_code_success,
+    _disconnect_packet_from_server,
+    _reason_code_number,
     _safe_peer_scope,
     _safe_socket_family,
 )
@@ -345,6 +348,33 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("secret-user", repr(diagnostics))
         await transport.async_stop()
+
+    def test_paho_disconnect_captures_only_safe_reason_facts(self):
+        session = object.__new__(PahoReadOnlyMqttSession)
+        session._tls = False
+        session._endpoint_scope = "public"
+        session._socket_family = "ipv4"
+        session._connect_packet_sent = True
+        session._last_disconnect_packet_from_server = None
+        session._last_disconnect_reason_code = None
+        disconnect_reasons = []
+        session._on_disconnect = disconnect_reasons.append
+
+        session._paho_disconnect(
+            None,
+            None,
+            SimpleNamespace(is_disconnect_packet_from_server=True),
+            SimpleNamespace(value=128),
+            None,
+        )
+
+        diagnostics = session.connection_diagnostics
+        self.assertIs(diagnostics["last_disconnect_packet_from_server"], True)
+        self.assertEqual(diagnostics["last_disconnect_reason_code"], 128)
+        self.assertIn("reason_code=128", disconnect_reasons[0])
+        self.assertIn("disconnect_packet_from_server=True", disconnect_reasons[0])
+        self.assertIsNone(_disconnect_packet_from_server(SimpleNamespace()))
+        self.assertIsNone(_reason_code_number("Unspecified error"))
 
     async def test_no_routable_device_is_rejected(self):
         data = await bootstrap([{"snNumber": "serial-only", "productModel": "SolarFlow2400AC"}])
