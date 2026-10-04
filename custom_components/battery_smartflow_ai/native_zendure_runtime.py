@@ -2034,6 +2034,11 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
         and charge_power.valid
         and float(charge_power.value) > 30
     )
+    stopping_active_discharge = bool(
+        zero_power_command
+        and discharge_power.valid
+        and float(discharge_power.value) > 30
+    )
     stopping_previous_target = bool(
         zero_power_command
         and any(
@@ -2041,7 +2046,11 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
             for key in ("last_input_limit_w", "last_output_limit_w")
         )
     )
-    force_atomic_idle = stopping_active_input or stopping_previous_target
+    force_atomic_idle = (
+        stopping_active_input
+        or stopping_active_discharge
+        or stopping_previous_target
+    )
     input_is_inactive = bool(
         float(command.input_limit_w) > 0
         and charge_power.valid

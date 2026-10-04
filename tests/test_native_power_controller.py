@@ -193,8 +193,11 @@ def runtime(
     return result
 
 
-def legacy_runtime(*, current_state=None):
-    result = runtime(current_state=current_state)
+def legacy_runtime(*, current_state=None, control_transport=None):
+    result = runtime(
+        current_state=current_state,
+        control_transport=control_transport,
+    )
     identity = NativeDeviceIdentity(
         ZendureTransport.CLOUD_MQTT,
         device_id="main-1",
@@ -493,6 +496,27 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             "native_cloud_mqtt_active",
         )
 
+    async def test_cloud_hyper_stops_active_discharge_even_when_reported_limit_is_zero(self):
+        target = legacy_runtime(
+            current_state=state(output_w=0, discharge_w=632),
+            control_transport=ZendureTransport.CLOUD_MQTT.value,
+        )
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", input_limit_w=0, output_limit_w=0,
+            should_write_mode=True, should_write_input=False,
+            should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(len(target._transport.commands), 1)
+        self.assertEqual(target._local_transport.commands, [])
+        command = target._transport.commands[-1].command
+        self.assertTrue(command.should_write_mode)
+        self.assertTrue(command.should_write_output)
+        self.assertEqual(command.input_limit_w, 0)
+        self.assertEqual(command.output_limit_w, 0)
+
     async def test_stale_local_mqtt_never_falls_back(self):
         target = legacy_runtime()
         target._local_handover_complete = True
@@ -658,6 +682,21 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             should_write_mode=False, should_write_input=False,
             should_write_output=False, skipped=True,
             skip_reason="unchanged_within_tolerance",
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        command = target._zensdk_command_adapter.commands[-1].command
+        self.assertTrue(command.should_write_mode)
+        self.assertTrue(command.should_write_output)
+        self.assertEqual(command.input_limit_w, 0)
+        self.assertEqual(command.output_limit_w, 0)
+
+    async def test_idle_after_active_discharge_forces_atomic_zero_when_limit_matches(self):
+        target = runtime(current_state=state(output_w=0, discharge_w=632))
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", input_limit_w=0, output_limit_w=0,
+            should_write_mode=True, should_write_input=False,
+            should_write_output=True,
         ))
 
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
