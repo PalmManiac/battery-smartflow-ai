@@ -10,6 +10,7 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime, timezone
 from enum import Enum
+from hashlib import sha256
 import re
 from typing import Any, Mapping
 
@@ -78,6 +79,13 @@ _SECRET_ASSIGNMENT_PATTERN = re.compile(
 _NETWORK_URL_PATTERN = re.compile(r"(?i)\b(?:https?|mqtts?)://[^\s,;&]+")
 _IPV4_PATTERN = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 _LOCAL_HOST_PATTERN = re.compile(r"(?i)\b[a-z0-9][a-z0-9.-]*\.local\b")
+_PUBLIC_DEVICE_ID_PATTERN = re.compile(r"^device_[0-9a-f]{12}$")
+
+
+def public_device_id(value: str) -> str:
+    """Return the stable pseudonym used by native command diagnostics."""
+
+    return f"device_{sha256(str(value).encode('utf-8')).hexdigest()[:12]}"
 
 
 def _normalized_key(value: Any) -> str:
@@ -133,12 +141,17 @@ class ZendureDiagnosticSanitizer:
         self._aliases: dict[tuple[str, str], str] = {}
         self._secret_values: set[str] = set()
         self._identity_values: dict[str, str] = {}
+        self._pending_public_device_ids: set[str] = set()
 
     def sanitize(self, value: Any) -> Any:
         """Return a detached JSON-safe copy with secrets and identities removed."""
 
         safe = _json_safe(deepcopy(value))
         self._discover(safe)
+        for public_id in sorted(self._pending_public_device_ids):
+            if ("DEVICE", public_id) not in self._aliases:
+                alias = self._alias("DEVICE", public_id)
+                self._identity_values[public_id] = alias
         return self._sanitize_value(safe)
 
     def sanitize_exception(self, error: BaseException) -> str:
@@ -161,9 +174,7 @@ class ZendureDiagnosticSanitizer:
             for key, item in value.items():
                 if container_kind is not None:
                     original_key = str(key)
-                    alias = self._alias(container_kind, original_key)
-                    if len(original_key) >= 4:
-                        self._identity_values[original_key] = alias
+                    self._register_identity(container_kind, original_key)
                 if _is_secret_key(key):
                     if isinstance(item, (str, int, float)) and not isinstance(item, bool):
                         text = str(item)
@@ -173,9 +184,7 @@ class ZendureDiagnosticSanitizer:
                 kind = _identity_kind(key)
                 if kind is not None and item is not None:
                     original = str(item)
-                    alias = self._alias(kind, original)
-                    if len(original) >= 4:
-                        self._identity_values[original] = alias
+                    self._register_identity(kind, original)
                 self._discover(
                     item,
                     _IDENTITY_CONTAINERS.get(_normalized_key(key)),
@@ -184,6 +193,21 @@ class ZendureDiagnosticSanitizer:
         if isinstance(value, list):
             for item in value:
                 self._discover(item)
+
+    def _register_identity(self, kind: str, original: str) -> None:
+        """Alias raw IDs and their diagnostic pseudonyms consistently."""
+
+        if kind == "DEVICE" and _PUBLIC_DEVICE_ID_PATTERN.fullmatch(original):
+            self._pending_public_device_ids.add(original)
+            return
+
+        alias = self._alias(kind, original)
+        if len(original) >= 4:
+            self._identity_values[original] = alias
+        if kind == "DEVICE":
+            public_id = public_device_id(original)
+            self._aliases[(kind, public_id)] = alias
+            self._identity_values[public_id] = alias
 
     def _sanitize_value(self, value: Any) -> Any:
         if isinstance(value, dict):
