@@ -47,6 +47,7 @@ class DebugSample:
     prices: Mapping[str, Any] = field(default_factory=dict)
     planning: Mapping[str, Any] = field(default_factory=dict)
     command: Mapping[str, Any] = field(default_factory=dict)
+    timing: Mapping[str, Any] = field(default_factory=dict)
 
     def redacted_copy(self) -> DebugSample:
         """Return a detached sample safe to retain in the recorder buffer."""
@@ -60,6 +61,7 @@ class DebugSample:
             prices=redact_secrets(self.prices),
             planning=redact_secrets(self.planning),
             command=redact_secrets(self.command),
+            timing=redact_secrets(self.timing),
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -74,6 +76,7 @@ class DebugSample:
                 "prices": self.prices,
                 "planning": self.planning,
                 "command": self.command,
+                "timing": self.timing,
             }
         )
 
