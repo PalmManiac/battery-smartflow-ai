@@ -139,7 +139,7 @@ class CloudMqttSession(Protocol):
     def connection_phase(self) -> str: ...
 
     @property
-    def connection_diagnostics(self) -> Mapping[str, str | bool]: ...
+    def connection_diagnostics(self) -> Mapping[str, str | bool | int | None]: ...
 
 
 SessionFactory = Callable[[CloudMqttCredentials], CloudMqttSession]
@@ -182,7 +182,9 @@ class ZendureCloudMqttTransport:
         self._request_message_id = 0
         self._last_message_at: datetime | None = None
         self._last_connection_phase = "not_started"
-        self._last_connection_diagnostics: dict[str, str | bool] = {
+        self._last_connection_diagnostics: dict[
+            str, str | bool | int | None
+        ] = {
             "credential_source": "cloud_mqtt_block",
             "transport_security": "unknown",
             "endpoint_scope": "unknown",
@@ -726,6 +728,8 @@ class PahoReadOnlyMqttSession:
         self._endpoint_scope = "unknown"
         self._socket_family = "unknown"
         self._connect_packet_sent = False
+        self._last_disconnect_packet_from_server: bool | None = None
+        self._last_disconnect_reason_code: int | None = None
         self._client = mqtt.Client(
             mqtt.CallbackAPIVersion.VERSION2,
             client_id=self._client_id(credentials),
@@ -751,13 +755,17 @@ class PahoReadOnlyMqttSession:
         return self._connection_phase
 
     @property
-    def connection_diagnostics(self) -> Mapping[str, str | bool]:
+    def connection_diagnostics(self) -> Mapping[str, str | bool | int | None]:
         return {
             "credential_source": "cloud_mqtt_block",
             "transport_security": "tls" if self._tls else "plain",
             "endpoint_scope": self._endpoint_scope,
             "socket_family": self._socket_family,
             "connect_packet_sent": self._connect_packet_sent,
+            "last_disconnect_packet_from_server": (
+                self._last_disconnect_packet_from_server
+            ),
+            "last_disconnect_reason_code": self._last_disconnect_reason_code,
         }
 
     def set_callbacks(
@@ -869,9 +877,23 @@ class PahoReadOnlyMqttSession:
         reason_code: Any,
         _properties: Any,
     ) -> None:
+        self._last_disconnect_packet_from_server = (
+            _disconnect_packet_from_server(_flags)
+        )
+        self._last_disconnect_reason_code = _reason_code_number(reason_code)
         if self._on_disconnect is not None:
+            reason = (
+                None
+                if _reason_code_success(reason_code)
+                else (
+                    f"{reason_code}; reason_code="
+                    f"{self._last_disconnect_reason_code}; "
+                    "disconnect_packet_from_server="
+                    f"{self._last_disconnect_packet_from_server}"
+                )
+            )
             self._on_disconnect(
-                None if _reason_code_success(reason_code) else str(reason_code)
+                reason
             )
 
     def _paho_message(self, _client: Any, _userdata: Any, message: Any) -> None:
@@ -905,6 +927,25 @@ def _reason_code_success(reason_code: Any) -> bool:
         return int(value) == 0
     except (TypeError, ValueError):
         return str(reason_code).strip().casefold() == "success"
+
+
+def _disconnect_packet_from_server(flags: Any) -> bool | None:
+    """Return Paho's broker-packet flag only when it is an actual boolean."""
+
+    value = getattr(flags, "is_disconnect_packet_from_server", None)
+    return value if isinstance(value, bool) else None
+
+
+def _reason_code_number(reason_code: Any) -> int | None:
+    """Extract Paho's numeric reason code without retaining arbitrary text."""
+
+    value = getattr(reason_code, "value", reason_code)
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
 
 
 def _bsfai_client_id(cloud_client_id: str) -> str:
