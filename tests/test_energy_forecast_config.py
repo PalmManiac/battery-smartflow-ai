@@ -52,7 +52,10 @@ class EnergyForecastConfigTests(unittest.TestCase):
     def test_rc_version_is_consistent(self):
         manifest_text = (COMPONENT / "manifest.json").read_text(encoding="utf-8")
         manifest = json.loads(manifest_text)
-        self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+$")
+        self.assertRegex(
+            manifest["version"],
+            r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$",
+        )
         self.assertEqual(const.INTEGRATION_VERSION, manifest["version"])
         self.assertIn('"after_dependencies": ["energy"]', manifest_text)
         self.assertLess(
