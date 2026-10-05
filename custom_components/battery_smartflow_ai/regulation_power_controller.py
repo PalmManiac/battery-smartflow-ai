@@ -51,10 +51,11 @@ DEFAULT_CHARGE_MAX_STEP_DOWN = 800.0
 
 # Adaptive response shaping is intentionally bounded by the existing profile
 # step limits. Within three deadbands, soften proportional corrections to
-# reduce overshoot as the grid approaches its target. Fast-load events bypass
-# this soft landing and retain the existing fast-response multipliers.
+# reduce overshoot as the grid approaches its target; larger errors receive a
+# bounded fast attack. Fast-load events retain their existing multiplier.
 ADAPTIVE_SOFT_LANDING_MAX_ERROR_DEADBANDS = 3.0
 ADAPTIVE_SOFT_LANDING_MIN_FACTOR = 0.5
+ADAPTIVE_FAST_ATTACK_MAX_FACTOR = 1.25
 
 DEFAULT_KEEPALIVE_MIN_OUTPUT_W = 60.0
 DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
@@ -398,7 +399,7 @@ class RegulationPowerController:
         deadband_w: float,
         fast_load_change: bool,
     ) -> float:
-        """Soften ordinary corrections near target; preserve fast reactions."""
+        """Shape ordinary corrections from soft landing to bounded fast attack."""
 
         if fast_load_change:
             return 1.0
@@ -411,7 +412,8 @@ class RegulationPowerController:
             max(0.0, (error_in_deadbands - 1.0) / ramp_width),
         )
         return ADAPTIVE_SOFT_LANDING_MIN_FACTOR + (
-            (1.0 - ADAPTIVE_SOFT_LANDING_MIN_FACTOR) * progress
+            (ADAPTIVE_FAST_ATTACK_MAX_FACTOR - ADAPTIVE_SOFT_LANDING_MIN_FACTOR)
+            * progress
         )
         
     def _control_grid_w_for_output(self, grid: GridHistoryState) -> float:

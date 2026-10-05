@@ -1007,10 +1007,10 @@ class Maintenance431Tests(unittest.TestCase):
             max_output_w=2400.0,
         )
 
-        # 60 W error is twice the 30 W deadband: the regular correction is
-        # softened to 75%, while the existing profile step cap remains intact.
-        self.assertEqual(result.metadata["adaptive_response_factor"], 0.75)
-        self.assertEqual(result.final_power_w, 549.25)
+        # 60 W error is twice the 30 W deadband: the correction is between
+        # soft landing and fast attack, while profile step limits stay intact.
+        self.assertEqual(result.metadata["adaptive_response_factor"], 0.875)
+        self.assertEqual(result.final_power_w, 554.12)
 
     def test_fast_load_attack_bypasses_adaptive_soft_landing(self) -> None:
         result = RegulationPowerController().calculate(
@@ -1039,6 +1039,34 @@ class Maintenance431Tests(unittest.TestCase):
         self.assertEqual(result.metadata["adaptive_response_factor"], 1.0)
         self.assertEqual(result.final_power_w, 568.75)
 
+    def test_large_output_error_uses_bounded_fast_attack(self) -> None:
+        result = RegulationPowerController().calculate(
+            intent=StrategyIntent(
+                intent="cover_deficit",
+                requested_mode="output",
+                requested_power_w=2000.0,
+                reason="grid_import",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="output",
+                resolved_mode="output",
+                allowed=True,
+                reason="discharge_active",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=130.0,
+                grid_avg_short_w=130.0,
+                grid_avg_medium_w=130.0,
+            ),
+            previous_output_w=500.0,
+            max_output_w=2400.0,
+        )
+
+        # A 120 W deviation reaches the 1.25x fast-attack ceiling. The result
+        # remains subject to the configured step and hardware power limits.
+        self.assertEqual(result.metadata["adaptive_response_factor"], 1.25)
+        self.assertEqual(result.final_power_w, 627.5)
+
     def test_pv_charge_uses_adaptive_soft_landing_near_grid_target(self) -> None:
         result = RegulationPowerController().calculate(
             intent=StrategyIntent(
@@ -1062,8 +1090,8 @@ class Maintenance431Tests(unittest.TestCase):
             max_input_w=2400.0,
         )
 
-        self.assertEqual(result.metadata["adaptive_response_factor"], 0.75)
-        self.assertEqual(result.final_power_w, 129.25)
+        self.assertEqual(result.metadata["adaptive_response_factor"], 0.875)
+        self.assertEqual(result.final_power_w, 134.12)
 
     def test_final_device_command_rechecks_user_power_limits(self) -> None:
         builder = DeviceCommandBuilder()
