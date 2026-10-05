@@ -766,7 +766,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         self._grid_refresh_pending = False
         self._grid_last_refresh_monotonic = self._clock.monotonic()
-        self.hass.async_create_task(self.async_request_refresh())
+        # Grid state callbacks can be delivered from a worker thread. Use the
+        # thread-safe Home Assistant scheduler and pass the coroutine function
+        # itself so the coroutine is only created on HA's event loop.
+        self.hass.add_job(self.async_request_refresh)
 
     async def async_initialize_direct_shelly_grid(self) -> None:
         """Acquire one initial Shelly sample before the first regulation cycle."""

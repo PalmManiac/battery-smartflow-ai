@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import ast
 import unittest
+from pathlib import Path
 
 from support import bootstrap
 
@@ -18,6 +20,38 @@ from custom_components.battery_smartflow_ai.grid_event_refresh import (  # noqa:
 
 
 class GridEventRefreshTests(unittest.TestCase):
+    def test_refresh_callback_uses_thread_safe_home_assistant_scheduler(self) -> None:
+        coordinator_path = (
+            Path(__file__).resolve().parents[1]
+            / "custom_components"
+            / "battery_smartflow_ai"
+            / "coordinator.py"
+        )
+        tree = ast.parse(coordinator_path.read_text(encoding="utf-8"))
+        coordinator_class = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "ZendureSmartFlowCoordinator"
+        )
+        flush_method = next(
+            node
+            for node in coordinator_class.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_flush_grid_event_refresh"
+        )
+        calls = [
+            ast.unparse(node)
+            for node in ast.walk(flush_method)
+            if isinstance(node, ast.Call)
+        ]
+
+        self.assertIn("self.hass.add_job(self.async_request_refresh)", calls)
+        self.assertNotIn(
+            "self.hass.async_create_task(self.async_request_refresh())",
+            calls,
+        )
+
     def test_only_meaningful_numeric_changes_trigger(self) -> None:
         self.assertTrue(grid_value_changed("unknown", "120"))
         self.assertTrue(grid_value_changed(None, "120"))
