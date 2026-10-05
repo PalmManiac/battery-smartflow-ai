@@ -61,6 +61,7 @@ from .hardware.zendure.first_write import (
 from .hardware.zendure.hems import ZendureHemsCommandGate
 from .hardware.zendure.initial_sync import (
     async_capture_initial_sync,
+    capture_zensdk_initial_sync,
     export_initial_sync_capture,
 )
 from .hardware.zendure.local_mqtt import (
@@ -1139,6 +1140,8 @@ class NativeZendureRuntime:
                     candidate_id,
                     system_id=candidate_id,
                 )
+            selected_transport = self._startup_transport()
+            use_cloud_mqtt = selected_transport is not ZendureTransport.ZENSDK
             self._normalizer = NativeSourceFusion(
                 bootstrap,
                 preferred_transport=self._configured_transport,
@@ -1153,14 +1156,21 @@ class NativeZendureRuntime:
                 self._get_json,
             )
             self._record_zensdk_cycle(zensdk)
-            self._transport = ZendureCloudMqttTransport(
-                bootstrap,
-                # Zendure routes account Cloud telemetry only to the assigned
-                # client identity.  Local selections still need that proven
-                # Cloud session while their Legacy handover is pending.
-                use_assigned_client_id=True,
+            self._transport = (
+                ZendureCloudMqttTransport(
+                    bootstrap,
+                    # Zendure routes account Cloud telemetry only to the assigned
+                    # client identity.  Local selections still need that proven
+                    # Cloud session while their Legacy handover is pending.
+                    use_assigned_client_id=True,
+                )
+                if use_cloud_mqtt
+                else None
             )
-            if self._local_mqtt_credentials is not None:
+            if (
+                selected_transport is ZendureTransport.LOCAL_MQTT
+                and self._local_mqtt_credentials is not None
+            ):
                 candidate = ZendureLocalMqttTransport(
                     bootstrap, self._local_mqtt_credentials
                 )
@@ -1175,20 +1185,28 @@ class NativeZendureRuntime:
                         )
             self._set_status(STATUS_CONNECTING)
             self._set_status(STATUS_CAPTURING)
-            capture = await async_capture_initial_sync(
-                bootstrap,
-                self._transport,
-                initial_messages=zensdk.messages,
-                zensdk_attempts=zensdk.attempts,
-                completion_transport=(
-                    self._configured_transport.value
-                    if self._configured_transport in {
-                        ZendureTransport.CLOUD_MQTT,
-                        ZendureTransport.ZENSDK,
-                    }
-                    else None
-                ),
-            )
+            if self._transport is not None:
+                capture = await async_capture_initial_sync(
+                    bootstrap,
+                    self._transport,
+                    initial_messages=zensdk.messages,
+                    zensdk_attempts=zensdk.attempts,
+                    completion_transport=(
+                        self._configured_transport.value
+                        if self._configured_transport in {
+                            ZendureTransport.CLOUD_MQTT,
+                            ZendureTransport.ZENSDK,
+                        }
+                        else None
+                    ),
+                )
+            else:
+                capture = capture_zensdk_initial_sync(
+                    bootstrap,
+                    messages=zensdk.messages,
+                    zensdk_attempts=zensdk.attempts,
+                    selected_device_id=self._selected_device,
+                )
             self._capture_complete = capture.complete
             self._capture_reason = capture.completion_reason
             exported = await self._hass.async_add_executor_job(
@@ -1235,6 +1253,8 @@ class NativeZendureRuntime:
     def _capture_failure_is_fatal(self, reason: str) -> bool:
         """Keep a proven local transport alive when Cloud observation fails."""
 
+        if reason.startswith("zensdk_initial_sync"):
+            return False
         if reason in {"initial_sync_quiet", "hard_timeout"}:
             return False
         if (
@@ -1564,7 +1584,18 @@ class NativeZendureRuntime:
     def _cloud_mqtt_diagnostics(self) -> dict[str, Any]:
         transport = self._transport
         if transport is None:
-            return {"configured": self._bootstrap is not None, "state": "not_started"}
+            disabled_by_selection = (
+                self._startup_transport() is ZendureTransport.ZENSDK
+            )
+            return {
+                "configured": self._bootstrap is not None,
+                "enabled": False,
+                "state": (
+                    "disabled_by_selected_transport"
+                    if disabled_by_selection
+                    else "not_started"
+                ),
+            }
         state = getattr(transport, "state", None)
         device_states = getattr(transport, "device_states", {})
         return {
@@ -1783,6 +1814,16 @@ class NativeZendureRuntime:
             self._configured_transport,
             "configured_transport",
         )
+
+    def _startup_transport(self) -> ZendureTransport | None:
+        """Resolve the selected path before opening any MQTT session."""
+
+        if self._configured_transport is not None:
+            return self._configured_transport
+        device = self._inventory.devices.get(self._selected_device or "")
+        if device is None:
+            return None
+        return self._selected_control_transport(device).transport
 
     def _control_sensor_state(self) -> str:
         configured = self._selected_local_transport()
