@@ -984,6 +984,87 @@ class Maintenance431Tests(unittest.TestCase):
             1300.0,
         )
 
+    def test_adaptive_soft_landing_reduces_small_output_corrections(self) -> None:
+        result = RegulationPowerController().calculate(
+            intent=StrategyIntent(
+                intent="cover_deficit",
+                requested_mode="output",
+                requested_power_w=2000.0,
+                reason="grid_import",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="output",
+                resolved_mode="output",
+                allowed=True,
+                reason="discharge_active",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=70.0,
+                grid_avg_short_w=70.0,
+                grid_avg_medium_w=70.0,
+            ),
+            previous_output_w=500.0,
+            max_output_w=2400.0,
+        )
+
+        # 60 W error is twice the 30 W deadband: the regular correction is
+        # softened to 75%, while the existing profile step cap remains intact.
+        self.assertEqual(result.metadata["adaptive_response_factor"], 0.75)
+        self.assertEqual(result.final_power_w, 549.25)
+
+    def test_fast_load_attack_bypasses_adaptive_soft_landing(self) -> None:
+        result = RegulationPowerController().calculate(
+            intent=StrategyIntent(
+                intent="cover_deficit",
+                requested_mode="output",
+                requested_power_w=2000.0,
+                reason="grid_import",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="output",
+                resolved_mode="output",
+                allowed=True,
+                reason="discharge_active",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=70.0,
+                grid_avg_short_w=70.0,
+                grid_avg_medium_w=70.0,
+                fast_load_rise_detected=True,
+            ),
+            previous_output_w=500.0,
+            max_output_w=2400.0,
+        )
+
+        self.assertEqual(result.metadata["adaptive_response_factor"], 1.0)
+        self.assertEqual(result.final_power_w, 568.75)
+
+    def test_pv_charge_uses_adaptive_soft_landing_near_grid_target(self) -> None:
+        result = RegulationPowerController().calculate(
+            intent=StrategyIntent(
+                intent="pv_charge",
+                requested_mode="input",
+                requested_power_w=1000.0,
+                reason="pv_surplus_charge",
+            ),
+            arbiter=ModeArbiterResult(
+                requested_mode="input",
+                resolved_mode="input",
+                allowed=True,
+                reason="pv_charge_active",
+            ),
+            grid=GridHistoryState(
+                grid_now_w=-50.0,
+                grid_avg_short_w=-50.0,
+                grid_avg_medium_w=-50.0,
+            ),
+            previous_input_w=100.0,
+            max_input_w=2400.0,
+        )
+
+        self.assertEqual(result.metadata["adaptive_response_factor"], 0.75)
+        self.assertEqual(result.final_power_w, 129.25)
+
     def test_final_device_command_rechecks_user_power_limits(self) -> None:
         builder = DeviceCommandBuilder()
         power = PowerControllerResult(final_power_w=2400.0)
