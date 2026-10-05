@@ -299,6 +299,40 @@ async def async_capture_initial_sync(
         await asyncio.sleep(poll_interval)
 
 
+def capture_zensdk_initial_sync(
+    bootstrap: ZendureCloudBootstrap,
+    *,
+    messages: tuple[CloudMqttMessage, ...],
+    zensdk_attempts: tuple[ZenSdkReadAttempt, ...],
+    selected_device_id: str | None,
+) -> InitialSyncCaptureResult:
+    """Build the startup diagnostic from ZenSDK only, without MQTT Cloud."""
+
+    recorder = ZendureInitialSyncRecorder(
+        bootstrap,
+        initial_messages=messages,
+        zensdk_attempts=zensdk_attempts,
+        completion_transport="zensdk",
+    )
+    selected_seen = bool(
+        selected_device_id
+        and any(
+            item.transport == "zensdk"
+            and item.device_candidate_id == selected_device_id
+            and is_zendure_state_message(item)
+            for item in messages
+        )
+    )
+    return recorder.finish(
+        complete=selected_seen,
+        reason=(
+            "zensdk_initial_sync"
+            if selected_seen
+            else "zensdk_initial_sync_no_selected_report"
+        ),
+    )
+
+
 def export_initial_sync_capture(
     capture: InitialSyncCaptureResult,
     *,
