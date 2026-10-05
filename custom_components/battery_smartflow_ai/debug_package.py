@@ -48,6 +48,8 @@ class DebugSample:
     planning: Mapping[str, Any] = field(default_factory=dict)
     command: Mapping[str, Any] = field(default_factory=dict)
     timing: Mapping[str, Any] = field(default_factory=dict)
+    additional: Mapping[str, Any] = field(default_factory=dict)
+    native_state: Mapping[str, Any] = field(default_factory=dict)
 
     def redacted_copy(self) -> DebugSample:
         """Return a detached sample safe to retain in the recorder buffer."""
@@ -62,6 +64,8 @@ class DebugSample:
             planning=redact_secrets(self.planning),
             command=redact_secrets(self.command),
             timing=redact_secrets(self.timing),
+            additional=redact_secrets(self.additional),
+            native_state=redact_secrets(self.native_state),
         )
 
     def as_dict(self) -> dict[str, Any]:
@@ -77,6 +81,8 @@ class DebugSample:
                 "planning": self.planning,
                 "command": self.command,
                 "timing": self.timing,
+                "additional": self.additional,
+                "native_state": self.native_state,
             }
         )
 

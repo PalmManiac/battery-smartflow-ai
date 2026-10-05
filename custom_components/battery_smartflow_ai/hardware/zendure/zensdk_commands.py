@@ -143,6 +143,12 @@ class ZendureZenSdkCommandAdapter:
         self._verification = verification
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._request_id = 0
+        self._last_diagnostics: dict[str, object] | None = None
+
+    def diagnostics(self) -> dict[str, object] | None:
+        """Return the latest payload-free, privacy-safe ZenSDK write result."""
+
+        return dict(self._last_diagnostics) if self._last_diagnostics else None
 
     async def execute(
         self, authorized: AuthorizedNativeCommand
@@ -193,6 +199,16 @@ class ZendureZenSdkCommandAdapter:
             write.request_id,
             self._post_json,
         )
+        self._last_diagnostics = {
+            "recorded_at": self._clock(),
+            "device_id": authorized.device_id,
+            "properties": sorted(write.properties),
+            "result": outcome.result,
+            "http_status": outcome.http_status,
+            "address_source": outcome.address_source,
+            "error_type": outcome.error_type,
+            "elapsed_seconds": outcome.elapsed_seconds,
+        }
         for _property_name, _value, command_id in prepared:
             self._verification.transport_result(
                 command_id,

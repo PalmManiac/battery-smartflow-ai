@@ -319,7 +319,7 @@
       },
       "debug_start": {
         "title": "Start debug recording",
-        "description": "Use this support function only for troubleshooting. Technical states and configured entity IDs are recorded for a limited time; passwords, tokens and API keys are filtered. Progress is shown by the debug status sensors in the Battery SmartFlow AI device view. Up to 10 packages are retained under /config/bsfai/debug/.",
+        "description": "Use this support function only for troubleshooting. Configured sensor values, device and battery-pack telemetry, and technical read/write diagnostics are recorded for a limited time. This can include energy and price values. Passwords, tokens and API keys are filtered, but review the package for private information before sharing it. Progress is shown by the debug status sensors. Up to 10 packages are retained under /config/bsfai/debug/.",
         "data": {
           "duration_minutes": "Recording duration"
         },

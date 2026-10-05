@@ -87,6 +87,9 @@ class NativeSourceFusion:
         self._retained_packs: dict[
             tuple[ZendureTransport, str, str], dict[str, bool]
         ] = {}
+        self._debug_properties: dict[
+            tuple[ZendureTransport, str], dict[str, Any]
+        ] = {}
 
     def apply(
         self, message: CloudMqttMessage, *, now: datetime | None = None
@@ -94,6 +97,7 @@ class NativeSourceFusion:
         transport = _transport(message.transport)
         if transport is None:
             return None
+        self._capture_debug_properties(transport, message)
         result = self._normalizers[transport].apply(message, now=now)
         if result is None or message.device_candidate_id is None:
             return None
@@ -102,6 +106,57 @@ class NativeSourceFusion:
             message.device_candidate_id,
             now=now or message.received_at,
         )
+
+    def debug_property_snapshot(self, system_id: str) -> dict[str, Any]:
+        """Return the latest raw main/pack properties received per transport."""
+
+        return {
+            transport.value: self._debug_properties[(transport, system_id)]
+            for transport in _TRANSPORTS
+            if (transport, system_id) in self._debug_properties
+        }
+
+    def _capture_debug_properties(
+        self, transport: ZendureTransport, message: CloudMqttMessage
+    ) -> None:
+        """Keep scalar property values only; never retain full raw MQTT payloads."""
+
+        system_id = message.device_candidate_id
+        payload = message.parsed_payload
+        if system_id is None or not isinstance(payload, dict):
+            return
+        main = payload.get("properties")
+        if not isinstance(main, dict):
+            state = payload.get("state")
+            if isinstance(state, dict):
+                main = state
+            else:
+                main = {
+                    key: value
+                    for key, value in payload.items()
+                    if key not in {
+                        "packData", "sn", "deviceKey", "deviceId",
+                        "deviceName", "productKey", "productModel",
+                    }
+                }
+        packs = payload.get("packData")
+        pack_values = []
+        if isinstance(packs, list):
+            for index, pack in enumerate(packs[:16]):
+                if not isinstance(pack, dict):
+                    continue
+                pack_values.append(
+                    {
+                        "pack_id": _pack_id(pack) or f"pack_{index + 1}",
+                        "properties": _debug_scalar_properties(pack),
+                    }
+                )
+        self._debug_properties[(transport, system_id)] = {
+            "recorded_at": message.received_at,
+            "topic": message.topic,
+            "main_properties": _debug_scalar_properties(main),
+            "packs": pack_values,
+        }
 
     def snapshot(
         self, system_id: str, *, now: datetime | None = None
@@ -474,6 +529,20 @@ def _pack_id(pack: dict[str, Any]) -> str | None:
             if text:
                 return text
     return None
+
+
+def _debug_scalar_properties(source: dict[str, Any]) -> dict[str, Any]:
+    """Bound raw property diagnostics to simple scalar values and short keys."""
+
+    result = {}
+    for key, value in source.items():
+        if not isinstance(key, str) or not key:
+            continue
+        if value is None or isinstance(value, (bool, int, float)):
+            result[key[:128]] = value
+        elif isinstance(value, str):
+            result[key[:128]] = value[:256]
+    return result
 
 
 def _measurement(

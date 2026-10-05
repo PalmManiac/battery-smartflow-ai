@@ -165,12 +165,60 @@ def configured_entity_availability(
     }
 
 
+def configured_entity_snapshot(
+    configured_entities: Mapping[str, Any] | None,
+    state_getter: Callable[[str], Any],
+) -> dict[str, dict[str, Any]]:
+    """Capture configured HA states and safe metadata without entity IDs."""
+
+    result: dict[str, dict[str, Any]] = {}
+    safe_attributes = (
+        "device_class",
+        "state_class",
+        "unit_of_measurement",
+        "suggested_display_precision",
+    )
+    for role, entity_id in (configured_entities or {}).items():
+        if not isinstance(entity_id, str) or not entity_id:
+            continue
+        state = state_getter(entity_id)
+        if state is None:
+            result[str(role)] = {"status": "missing"}
+            continue
+        state_value = getattr(state, "state", None)
+        attributes = getattr(state, "attributes", {})
+        metadata = {
+            key: attributes[key]
+            for key in safe_attributes
+            if isinstance(attributes, Mapping) and key in attributes
+        }
+        snapshot: dict[str, Any] = {
+            "status": (
+                "unknown"
+                if state_value is None
+                else "available"
+                if state_value not in {"unknown", "unavailable"}
+                else str(state_value)
+            ),
+            "state": str(state_value)[:256] if state_value is not None else None,
+            "attributes": metadata,
+        }
+        for attr_name in ("last_changed", "last_updated"):
+            timestamp = getattr(state, attr_name, None)
+            if timestamp is not None:
+                snapshot[attr_name] = timestamp
+        result[str(role)] = snapshot
+    return redact_secrets(result)
+
+
 def build_debug_sample(
     *,
     timestamp: datetime,
     details: Mapping[str, Any],
     configured_entities: Mapping[str, Any] | None = None,
     entity_availability: Mapping[str, bool | None] | None = None,
+    entity_snapshot: Mapping[str, Any] | None = None,
+    native_state: Mapping[str, Any] | None = None,
 ) -> DebugSample:
     """Group existing coordinator diagnostics into one schema-v1 sample.
 
@@ -184,6 +232,7 @@ def build_debug_sample(
         entity_availability,
         compact=True,
     )
+    raw_values["entity_states"] = dict(entity_snapshot or {})
 
     strategy = _selected(details, _STRATEGY_KEYS)
     strategy["automatic"] = _prefixed(details, "automatic_")
@@ -242,6 +291,22 @@ def build_debug_sample(
         for key, value in timing.items()
     }
 
+    additional = {
+        key: value
+        for key, value in details.items()
+        if key not in _RAW_VALUE_KEYS
+        and key not in _PRICE_KEYS
+        and key not in _STRATEGY_KEYS
+        and key not in _TIMING_KEYS
+        and key not in {"set_mode", "set_input_w", "set_output_w", "pv_outlook"}
+        and not key.startswith((
+            "automatic_", "regulation_", "charge_source_allocation_",
+            "learned_planning_", "forecast_", "charge_commit_",
+            "full_charge_maintenance_", "mode_write_", "input_write_",
+            "output_write_", "command_effectiveness_",
+        ))
+    }
+
     return DebugSample(
         timestamp=timestamp,
         strategy=strategy,
@@ -251,4 +316,6 @@ def build_debug_sample(
         planning=planning,
         command=command,
         timing=timing,
+        additional=additional,
+        native_state=dict(native_state or {}),
     ).redacted_copy()

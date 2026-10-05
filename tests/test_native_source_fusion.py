@@ -104,6 +104,26 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(state.soc_pct.value, 51.0)
         self.assertEqual(state.observed_transport, ZendureTransport.ZENSDK)
 
+    def test_debug_snapshot_keeps_raw_main_and_pack_properties_per_transport(self):
+        self.fusion.apply(
+            report(
+                self.now,
+                {"electricLevel": 50, "futureMainSensor": 17.5},
+                transport="zensdk",
+                packs=[{"sn": "pack-1", "futurePackSensor": "active"}],
+            )
+        )
+
+        snapshot = self.fusion.debug_property_snapshot("cloud_mqtt:device-1")
+
+        self.assertEqual(
+            snapshot["zensdk"]["main_properties"]["futureMainSensor"], 17.5
+        )
+        self.assertEqual(
+            snapshot["zensdk"]["packs"][0]["properties"]["futurePackSensor"],
+            "active",
+        )
+
     def test_fresh_cloud_value_replaces_stale_zensdk_value(self):
         self.fusion.apply(report(self.now, {"electricLevel": 40}, transport="zensdk"))
         later = self.now + timedelta(seconds=91)
