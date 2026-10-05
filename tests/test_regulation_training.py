@@ -71,8 +71,8 @@ class RegulationTrainingModelTests(unittest.TestCase):
                 confidence=0.5,
             ),
             discharge_parameters=RegulationDirectionParameters(
-                fast_gain=1.1,
-                max_step_fast_w=500.0,
+                kp_up=1.1,
+                max_step_up_w=500.0,
             ),
         )
 
@@ -80,8 +80,8 @@ class RegulationTrainingModelTests(unittest.TestCase):
 
         self.assertEqual(serialized["state"], "shadow")
         self.assertEqual(serialized["charge"]["metrics"]["sample_count"], 20)
-        self.assertEqual(serialized["discharge"]["parameters"]["fast_gain"], 1.1)
-        self.assertIsNone(serialized["charge"]["parameters"]["fast_gain"])
+        self.assertEqual(serialized["discharge"]["parameters"]["kp_up"], 1.1)
+        self.assertIsNone(serialized["charge"]["parameters"]["kp_up"])
         json.dumps(serialized)
 
     def test_profile_requires_timezone_aware_training_timestamp(self) -> None:
@@ -92,7 +92,7 @@ class RegulationTrainingModelTests(unittest.TestCase):
                     transport=ZendureTransport.ZENSDK,
                     device_model="SolarFlow 2400 AC",
                 ),
-                trained_at=datetime(2026, 10, 5, 12, 0),
+                trained_at=datetime(2026, 10, 5, 12, 0),  # noqa: DTZ001
             )
 
     def test_metrics_and_candidate_parameters_reject_unsafe_numbers(self) -> None:
@@ -101,7 +101,7 @@ class RegulationTrainingModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "between 0 and 1"):
             RegulationDirectionMetrics(overshoot_rate=1.1)
         with self.assertRaisesRegex(ValueError, "finite non-negative"):
-            RegulationDirectionParameters(fast_gain=-0.1)
+            RegulationDirectionParameters(kp_up=-0.1)
 
     def test_profile_state_is_not_implicitly_active(self) -> None:
         profile = RegulationProfile(
@@ -165,6 +165,13 @@ class RegulationTrainingModelTests(unittest.TestCase):
                 "battery_charge_w": 450,
                 "battery_discharge_w": 0,
                 "regulation_command_skipped": False,
+                "regulation_error_w": 120,
+                "regulation_target_import_w": 10,
+                "effective_charge_kp_up": 0.65,
+                "effective_charge_kp_down": 0.45,
+                "effective_charge_max_step_up": 550,
+                "effective_charge_max_step_down": 300,
+                "effective_charge_deadband_w": 50,
                 "password": "must-not-be-recorded",
             },
         )
@@ -175,6 +182,11 @@ class RegulationTrainingModelTests(unittest.TestCase):
         self.assertEqual(serialized["key"]["transport"], "zensdk")
         self.assertEqual(serialized["profile"]["state"], "shadow")
         self.assertEqual(serialized["samples"][0]["direction"], "charge")
+        self.assertEqual(serialized["samples"][0]["grid_error_w"], 120)
+        self.assertEqual(serialized["samples"][0]["baseline_kp_up"], 0.65)
+        self.assertEqual(
+            serialized["samples"][0]["baseline_max_step_down_w"], 300
+        )
         self.assertNotIn("password", json.dumps(serialized))
         self.assertFalse(recorder.active)
 
@@ -183,7 +195,7 @@ class RegulationTrainingModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "timezone-aware"):
             recorder.start(
                 key=self._key(),
-                now=datetime(2026, 10, 5, 12, 0),
+                now=datetime(2026, 10, 5, 12, 0),  # noqa: DTZ001
                 duration_minutes=10,
                 direction_scope=TrainingDirection.BOTH,
             )

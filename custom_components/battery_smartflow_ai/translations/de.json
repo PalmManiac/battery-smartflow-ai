@@ -819,6 +819,16 @@
       },
       "regulation_training_sample_count": {"name": "Regelungstrainings-Datensätze"},
       "regulation_training_saved_sessions": {"name": "Gespeicherte Trainingssitzungen"},
+      "regulation_training_result": {
+        "name": "Ergebnis des Regelungstrainings",
+        "state": {
+          "not_trained": "Noch nicht trainiert",
+          "training": "Training läuft",
+          "candidate_proposed": "Shadow-Kandidat verfügbar",
+          "no_improvement": "Keine sichere Verbesserung gefunden",
+          "insufficient_data": "Weitere Trainingsdaten erforderlich"
+        }
+      },
       "fault_level_status": {
         "name": "Fehlerstatus",
         "state": {
