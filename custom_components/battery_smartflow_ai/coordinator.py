@@ -209,6 +209,7 @@ from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
 )
+from .feedforward_shadow import evaluate_feedforward_shadow
 from .device_command import DeviceCommandBuilder, clamp_number_power_request
 from .command_execution_state import confirmed_command_state_updates
 from .adapters.home_assistant.device_backend import (
@@ -6450,6 +6451,72 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
                 max_input_w=float(max_ac_input),
                 max_output_w=float(max_discharge),
+            )
+
+            native_power_observed_at = None
+            if (
+                battery_power_source == "native_zendure"
+                and native_charge is not None
+                and native_charge.valid
+                and native_discharge is not None
+                and native_discharge.valid
+                and native_charge.observed_at is not None
+                and native_discharge.observed_at is not None
+            ):
+                native_power_observed_at = min(
+                    native_charge.observed_at,
+                    native_discharge.observed_at,
+                )
+
+            feedforward_max_input_w = float(max_ac_input)
+            if strategy_intent.intent == "pv_charge":
+                target_import_w = float(
+                    regulation_power_result.metadata.get(
+                        "target_import_w",
+                        0.0,
+                    )
+                )
+                current_grid_w = float(grid_history_state.grid_now_w or 0.0)
+                previous_input_w = float(
+                    self._persist.get("last_set_input_w", 0.0) or 0.0
+                )
+                current_grid_safe_cap_w = max(
+                    0.0,
+                    previous_input_w + target_import_w - current_grid_w,
+                )
+                feedforward_max_input_w = min(
+                    feedforward_max_input_w,
+                    current_grid_safe_cap_w,
+                )
+
+            feedforward_max_output_w = float(max_discharge)
+            requested_discharge_w = float(
+                strategy_intent.requested_power_w or 0.0
+            )
+            if requested_discharge_w > 0.0:
+                feedforward_max_output_w = min(
+                    feedforward_max_output_w,
+                    requested_discharge_w + 80.0,
+                )
+
+            feedforward_shadow = evaluate_feedforward_shadow(
+                intent=strategy_intent.intent,
+                error_w=regulation_power_result.metadata.get("error_w"),
+                measured_battery_power_w=(
+                    battery_power
+                    if battery_power_source == "native_zendure"
+                    else None
+                ),
+                observed_at=native_power_observed_at,
+                now=now,
+                max_input_w=feedforward_max_input_w,
+                max_output_w=feedforward_max_output_w,
+            )
+            regulation_power_result.metadata.update(
+                {
+                    f"feedforward_shadow_{key}": value
+                    for key, value in feedforward_shadow.diagnostics().items()
+                }
             )
             
             regulation_device_command = self._device_command_builder.build(

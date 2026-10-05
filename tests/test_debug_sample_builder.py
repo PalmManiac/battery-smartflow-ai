@@ -145,6 +145,25 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(result["timing"]["grid_source"], "single")
         self.assertNotIn("private_identifier", result["timing"])
 
+    def test_groups_feedforward_shadow_diagnostics_under_regulation(self) -> None:
+        result = build_debug_sample(
+            timestamp=self.now,
+            details={
+                "regulation_feedforward_shadow_available": True,
+                "regulation_feedforward_shadow_reason": (
+                    "candidate_only_no_control_change"
+                ),
+                "regulation_feedforward_shadow_candidate_power_w": 850.0,
+                "regulation_feedforward_shadow_measurement_age_seconds": 2.0,
+            },
+        ).as_dict()
+
+        self.assertTrue(result["regulation"]["feedforward_shadow_available"])
+        self.assertEqual(
+            result["regulation"]["feedforward_shadow_candidate_power_w"],
+            850.0,
+        )
+
     def test_sample_omits_repeated_profile_and_healthy_entity_details(self) -> None:
         result = build_debug_sample(
             timestamp=self.now,
