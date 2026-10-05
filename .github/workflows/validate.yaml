@@ -2,9 +2,9 @@ name: Validate with hassfest and HACS
 
 on:
   push:
-    branches: [ main ] 
+    branches: [ main, release-base-v5-2-dev03 ] 
   pull_request:
-    branches: [ main ]
+    branches: [ main, release-base-v5-2-dev03 ]
 
 jobs:
   validate:
