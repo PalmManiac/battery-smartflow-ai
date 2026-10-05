@@ -49,6 +49,13 @@ DEFAULT_CHARGE_KP_DOWN = 0.90
 DEFAULT_CHARGE_MAX_STEP_UP = 550.0
 DEFAULT_CHARGE_MAX_STEP_DOWN = 800.0
 
+# Adaptive response shaping is intentionally bounded by the existing profile
+# step limits. Within three deadbands, soften proportional corrections to
+# reduce overshoot as the grid approaches its target. Fast-load events bypass
+# this soft landing and retain the existing fast-response multipliers.
+ADAPTIVE_SOFT_LANDING_MAX_ERROR_DEADBANDS = 3.0
+ADAPTIVE_SOFT_LANDING_MIN_FACTOR = 0.5
+
 DEFAULT_KEEPALIVE_MIN_OUTPUT_W = 60.0
 DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
 
@@ -383,6 +390,29 @@ class RegulationPowerController:
         # Normal path:
         # Slightly more direct than before, but still smoothed.
         return (grid_now_w * 0.65) + (grid_avg_short_w * 0.35)
+
+    @staticmethod
+    def _adaptive_response_factor(
+        *,
+        error_w: float,
+        deadband_w: float,
+        fast_load_change: bool,
+    ) -> float:
+        """Soften ordinary corrections near target; preserve fast reactions."""
+
+        if fast_load_change:
+            return 1.0
+
+        deadband = max(1.0, abs(float(deadband_w or 0.0)))
+        error_in_deadbands = abs(float(error_w or 0.0)) / deadband
+        ramp_width = ADAPTIVE_SOFT_LANDING_MAX_ERROR_DEADBANDS - 1.0
+        progress = min(
+            1.0,
+            max(0.0, (error_in_deadbands - 1.0) / ramp_width),
+        )
+        return ADAPTIVE_SOFT_LANDING_MIN_FACTOR + (
+            (1.0 - ADAPTIVE_SOFT_LANDING_MIN_FACTOR) * progress
+        )
         
     def _control_grid_w_for_output(self, grid: GridHistoryState) -> float:
         """Weighted grid value for discharge/output regulation.
@@ -807,6 +837,7 @@ class RegulationPowerController:
         )
 
         error_w = control_grid_w - target_import_w
+        adaptive_response_factor = 1.0
 
         near_zero_trim_w = 0.0
         near_zero_reason = "none"
@@ -828,6 +859,13 @@ class RegulationPowerController:
             else:
                 reason = "output_increase_to_reduce_import"
 
+            adaptive_response_factor = self._adaptive_response_factor(
+                error_w=error_w,
+                deadband_w=output_deadband_w,
+                fast_load_change=bool(grid.fast_load_rise_detected),
+            )
+            delta *= adaptive_response_factor
+
             raw_target = prev + delta
 
         else:
@@ -841,6 +879,13 @@ class RegulationPowerController:
                 reason = "output_fast_decrease_to_avoid_export"
             else:
                 reason = "output_decrease_to_avoid_export"
+
+            adaptive_response_factor = self._adaptive_response_factor(
+                error_w=error_w,
+                deadband_w=output_deadband_w,
+                fast_load_change=bool(grid.fast_load_drop_detected),
+            )
+            delta *= adaptive_response_factor
 
             raw_target = prev - delta
             
@@ -922,6 +967,10 @@ class RegulationPowerController:
                 "effective_deadband_w": round(output_deadband_w, 2),
                 "requested_power_w": requested,
                 "error_w": round(error_w, 2),
+                "adaptive_response_factor": round(
+                    adaptive_response_factor,
+                    3,
+                ),
                 "near_zero_trim_w": round(float(near_zero_trim_w or 0.0), 2),
                 "near_zero_controller_reason": near_zero_reason,
                 **near_zero_metadata,
@@ -975,6 +1024,7 @@ class RegulationPowerController:
             # charge target is additionally capped by the current grid value.
             grid_now_w = float(grid.grid_now_w or 0.0)
             error_w = target_import_w - float(control_grid_w)
+            adaptive_response_factor = 1.0
 
             if abs(error_w) <= input_deadband_w:
                 raw_target = prev
@@ -991,6 +1041,13 @@ class RegulationPowerController:
                 else:
                     reason = "pv_input_increase_from_export"
 
+                adaptive_response_factor = self._adaptive_response_factor(
+                    error_w=error_w,
+                    deadband_w=input_deadband_w,
+                    fast_load_change=bool(grid.fast_load_drop_detected),
+                )
+                delta *= adaptive_response_factor
+
                 raw_target = prev + delta
 
             else:
@@ -1003,6 +1060,13 @@ class RegulationPowerController:
                     reason = "pv_input_fast_decrease_to_avoid_import"
                 else:
                     reason = "pv_input_decrease_to_avoid_import"
+
+                adaptive_response_factor = self._adaptive_response_factor(
+                    error_w=error_w,
+                    deadband_w=input_deadband_w,
+                    fast_load_change=bool(grid.fast_load_rise_detected),
+                )
+                delta *= adaptive_response_factor
 
                 raw_target = prev - delta
 
@@ -1056,6 +1120,10 @@ class RegulationPowerController:
                     "effective_deadband_w": round(input_deadband_w, 2),
                     "requested_power_w": requested,
                     "error_w": round(error_w, 2),
+                    "adaptive_response_factor": round(
+                        adaptive_response_factor,
+                        3,
+                    ),
                     "current_grid_limited": bool(current_grid_limited),
                     **economic_target_metadata,
                 },
