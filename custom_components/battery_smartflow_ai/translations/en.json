@@ -1207,6 +1207,16 @@
       },
       "regulation_training_sample_count": {"name": "Regulation training samples"},
       "regulation_training_saved_sessions": {"name": "Saved training sessions"},
+      "regulation_training_result": {
+        "name": "Regulation training result",
+        "state": {
+          "not_trained": "Not trained",
+          "training": "Training in progress",
+          "candidate_proposed": "Shadow candidate available",
+          "no_improvement": "No safe improvement found",
+          "insufficient_data": "More training data needed"
+        }
+      },
       "fault_level_status": {
         "name": "Fault status",
         "state": {

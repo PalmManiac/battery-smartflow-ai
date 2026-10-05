@@ -6,12 +6,13 @@ controller parameters.
 
 from __future__ import annotations
 
+import math
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import StrEnum
-import math
-from typing import Any, Mapping
+from typing import Any
 
 from .core.models import ZendureTransport
 
@@ -68,6 +69,13 @@ class TrainingSample:
     grid_valid: bool
     pv_valid: bool
     command_skipped: bool
+    grid_error_w: float | None = None
+    target_import_w: float | None = None
+    baseline_kp_up: float | None = None
+    baseline_kp_down: float | None = None
+    baseline_max_step_up_w: float | None = None
+    baseline_max_step_down_w: float | None = None
+    baseline_deadband_w: float | None = None
 
     def __post_init__(self) -> None:
         _aware(self.timestamp)
@@ -267,6 +275,25 @@ class PassiveTrainingRecorder:
             grid_valid=bool(details.get("grid_sensor_valid")),
             pv_valid=bool(details.get("pv_sensor_valid")),
             command_skipped=bool(details.get("regulation_command_skipped")),
+            grid_error_w=_finite_number(details.get("regulation_error_w")),
+            target_import_w=_finite_number(
+                details.get("regulation_target_import_w")
+            ),
+            baseline_kp_up=_finite_number(
+                details.get(f"effective_{direction}_kp_up")
+            ),
+            baseline_kp_down=_finite_number(
+                details.get(f"effective_{direction}_kp_down")
+            ),
+            baseline_max_step_up_w=_finite_number(
+                details.get(f"effective_{direction}_max_step_up")
+            ),
+            baseline_max_step_down_w=_finite_number(
+                details.get(f"effective_{direction}_max_step_down")
+            ),
+            baseline_deadband_w=_finite_number(
+                details.get(f"effective_{direction}_deadband_w")
+            ),
         )
 
 
@@ -330,10 +357,10 @@ class RegulationDirectionMetrics:
 class RegulationDirectionParameters:
     """Optional optimizer proposal; missing values retain standard control."""
 
-    fast_gain: float | None = None
-    slow_gain: float | None = None
-    max_step_fast_w: float | None = None
-    max_step_slow_w: float | None = None
+    kp_up: float | None = None
+    kp_down: float | None = None
+    max_step_up_w: float | None = None
+    max_step_down_w: float | None = None
     soft_landing_threshold_w: float | None = None
     min_command_interval_seconds: float | None = None
 
@@ -361,12 +388,12 @@ class RegulationProfile:
         RegulationDirectionParameters()
     )
     state: RegulationProfileState = RegulationProfileState.SHADOW
-    schema_version: int = 1
+    schema_version: int = 2
 
     def __post_init__(self) -> None:
         if self.trained_at.tzinfo is None or self.trained_at.utcoffset() is None:
             raise ValueError("trained_at must be timezone-aware")
-        if self.schema_version != 1:
+        if self.schema_version != 2:
             raise ValueError("unsupported regulation profile schema version")
 
     def as_dict(self) -> dict[str, Any]:

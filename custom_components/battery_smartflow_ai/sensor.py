@@ -1909,6 +1909,21 @@ SENSORS += (
         icon="mdi:archive-check-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    TrainingSensorEntityDescription(
+        key="regulation_training_result",
+        translation_key="regulation_training_result",
+        runtime_key="regulation_training_result",
+        device_class=SensorDeviceClass.ENUM,
+        options=[
+            "not_trained",
+            "training",
+            "candidate_proposed",
+            "no_improvement",
+            "insufficient_data",
+        ],
+        icon="mdi:chart-box-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
 )
 
 

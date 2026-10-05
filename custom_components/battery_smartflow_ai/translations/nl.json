@@ -819,6 +819,16 @@
       },
       "regulation_training_sample_count": {"name": "Regelingstrainingsmonsters"},
       "regulation_training_saved_sessions": {"name": "Opgeslagen trainingssessies"},
+      "regulation_training_result": {
+        "name": "Resultaat regelingstraining",
+        "state": {
+          "not_trained": "Nog niet getraind",
+          "training": "Training bezig",
+          "candidate_proposed": "Shadow-kandidaat beschikbaar",
+          "no_improvement": "Geen veilige verbetering gevonden",
+          "insufficient_data": "Meer trainingsgegevens nodig"
+        }
+      },
       "fault_level_status": {
         "name": "Foutstatus",
         "state": {

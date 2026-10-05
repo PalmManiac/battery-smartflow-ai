@@ -819,6 +819,16 @@
       },
       "regulation_training_sample_count": {"name": "Échantillons d’entraînement de régulation"},
       "regulation_training_saved_sessions": {"name": "Sessions d’entraînement enregistrées"},
+      "regulation_training_result": {
+        "name": "Résultat de l’entraînement de régulation",
+        "state": {
+          "not_trained": "Pas encore entraîné",
+          "training": "Entraînement en cours",
+          "candidate_proposed": "Candidat Shadow disponible",
+          "no_improvement": "Aucune amélioration sûre trouvée",
+          "insufficient_data": "Données d’entraînement supplémentaires nécessaires"
+        }
+      },
       "fault_level_status": {
         "name": "État d’erreur",
         "state": {
