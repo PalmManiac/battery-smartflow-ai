@@ -2372,7 +2372,9 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
         self._attr_unique_id = f"{DOMAIN}_{entry.entry_id}_{description.key}"
 
-        if description.economics_device:
+        # Training sensors use a separate description dataclass and belong to
+        # the main control/planning device, not the economics virtual device.
+        if getattr(description, "economics_device", False):
             self._attr_device_info = DeviceInfo(
                 identifiers={(DOMAIN, f"{entry.entry_id}_economics")},
                 translation_key="economics_and_prices",
