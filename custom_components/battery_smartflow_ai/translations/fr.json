@@ -813,6 +813,12 @@
       "debug_sample_count": {"name": "Echantillons de debogage enregistres"},
       "debug_last_package": {"name": "Dernier paquet de debogage"},
       "debug_last_error": {"name": "Derniere erreur de debogage"},
+      "regulation_training_active": {
+        "name": "Entraînement de régulation actif",
+        "state": {"no": "Non", "yes": "Oui"}
+      },
+      "regulation_training_sample_count": {"name": "Échantillons d’entraînement de régulation"},
+      "regulation_training_saved_sessions": {"name": "Sessions d’entraînement enregistrées"},
       "fault_level_status": {
         "name": "État d’erreur",
         "state": {

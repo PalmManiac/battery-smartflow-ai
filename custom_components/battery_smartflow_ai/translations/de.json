@@ -813,6 +813,12 @@
       "debug_sample_count": {"name": "Erfasste Debug-Datensätze"},
       "debug_last_package": {"name": "Letztes Debug-Paket"},
       "debug_last_error": {"name": "Letzter Debug-Fehler"},
+      "regulation_training_active": {
+        "name": "Regelungstraining aktiv",
+        "state": {"no": "Nein", "yes": "Ja"}
+      },
+      "regulation_training_sample_count": {"name": "Regelungstrainings-Datensätze"},
+      "regulation_training_saved_sessions": {"name": "Gespeicherte Trainingssitzungen"},
       "fault_level_status": {
         "name": "Fehlerstatus",
         "state": {

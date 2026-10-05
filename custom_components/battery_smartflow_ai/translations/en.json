@@ -1201,6 +1201,12 @@
       "debug_last_error": {
         "name": "Last debug error"
       },
+      "regulation_training_active": {
+        "name": "Regulation training active",
+        "state": {"no": "No", "yes": "Yes"}
+      },
+      "regulation_training_sample_count": {"name": "Regulation training samples"},
+      "regulation_training_saved_sessions": {"name": "Saved training sessions"},
       "fault_level_status": {
         "name": "Fault status",
         "state": {
