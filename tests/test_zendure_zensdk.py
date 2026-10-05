@@ -92,6 +92,41 @@ async def make_bootstrap(
 
 
 class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_startup_transport_selection_can_disable_cloud_mqtt_for_zensdk(self):
+        data = await make_bootstrap()
+        candidate_id = data.devices[0].candidate.candidate_id
+
+        explicit = NativeZendureRuntime(
+            SimpleNamespace(), app_token="configured", selected_device=candidate_id,
+            notify=lambda: None, control_transport="zensdk",
+        )
+        self.assertEqual(explicit._startup_transport(), ZendureTransport.ZENSDK)
+        self.assertFalse(
+            explicit._capture_failure_is_fatal(
+                "zensdk_initial_sync_no_selected_report"
+            )
+        )
+        self.assertEqual(
+            explicit._cloud_mqtt_diagnostics()["state"],
+            "disabled_by_selected_transport",
+        )
+
+        data.register_candidates(explicit._inventory)
+        explicit._inventory.add_observed_system(candidate_id, system_id=candidate_id)
+        automatic = NativeZendureRuntime(
+            SimpleNamespace(), app_token="configured", selected_device=candidate_id,
+            notify=lambda: None,
+        )
+        data.register_candidates(automatic._inventory)
+        automatic._inventory.add_observed_system(candidate_id, system_id=candidate_id)
+        self.assertEqual(automatic._startup_transport(), ZendureTransport.ZENSDK)
+
+        cloud = NativeZendureRuntime(
+            SimpleNamespace(), app_token="configured", selected_device=candidate_id,
+            notify=lambda: None, control_transport="cloud_mqtt",
+        )
+        self.assertEqual(cloud._startup_transport(), ZendureTransport.CLOUD_MQTT)
+
     async def test_first_write_posts_one_allowlisted_property_to_exact_device(self):
         data = await make_bootstrap()
         calls = []

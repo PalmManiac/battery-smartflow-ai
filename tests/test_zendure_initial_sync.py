@@ -24,6 +24,7 @@ from custom_components.battery_smartflow_ai.hardware.zendure.initial_sync import
     InitialSyncExportError,
     ZendureInitialSyncRecorder,
     async_capture_initial_sync,
+    capture_zensdk_initial_sync,
     export_initial_sync_capture,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (  # noqa: E402
@@ -144,6 +145,30 @@ class InitialSyncCaptureTests(unittest.IsolatedAsyncioTestCase):
             self.bootstrap.raw_device_list[0]["firmwareVersion"], "2.3.4"
         )
         self.assertNotIn("mqtt-password-secret", repr(self.bootstrap))
+
+    async def test_zensdk_startup_capture_has_no_cloud_mqtt_session_or_messages(self):
+        selected = "cloud_mqtt:real-device-1"
+        report = message(
+            self.time.clock(),
+            selected,
+            "real-device-1",
+            {"properties": {"electricLevel": 61}},
+            transport="zensdk",
+        )
+        capture = capture_zensdk_initial_sync(
+            self.bootstrap,
+            messages=(report,),
+            zensdk_attempts=(ZenSdkReadAttempt(selected, "device_list_ip", "success", 200),),
+            selected_device_id=selected,
+        )
+
+        data = capture.as_dict()
+        self.assertTrue(capture.complete)
+        self.assertEqual(capture.completion_reason, "zensdk_initial_sync")
+        self.assertEqual(capture.connection_events, ())
+        self.assertEqual(data["raw_communication"]["mqtt_messages"], [])
+        self.assertEqual(len(data["raw_communication"]["zensdk_responses"]), 1)
+        self.assertEqual(len(data["raw_communication"]["zensdk_requests"]), 1)
 
     async def test_quiet_completion_requires_every_main_device(self):
         recorder = self.recorder()
