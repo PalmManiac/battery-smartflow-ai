@@ -213,6 +213,13 @@ class ZendureSensorEntityDescription(SensorEntityDescription):
 
 
 @dataclass(frozen=True, kw_only=True)
+class TrainingSensorEntityDescription(SensorEntityDescription):
+    """New opt-in training diagnostics, separate from the frozen legacy set."""
+
+    runtime_key: str
+
+
+@dataclass(frozen=True, kw_only=True)
 class NativeHardwareSensorDescription(SensorEntityDescription):
     measurement_key: str | None = None
     source: str = "measurement"
@@ -1873,6 +1880,33 @@ SENSORS += (
         translation_key="native_zendure_error",
         runtime_key="native_zendure_error",
         icon="mdi:alert-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+)
+
+# V5.2 training lifecycle entities are separate from the frozen V4.6 set.
+SENSORS += (
+    TrainingSensorEntityDescription(
+        key="regulation_training_active",
+        translation_key="regulation_training_active",
+        runtime_key="regulation_training_active",
+        device_class=SensorDeviceClass.ENUM,
+        options=BOOLEAN_STATE_ENUMS,
+        icon="mdi:brain",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    TrainingSensorEntityDescription(
+        key="regulation_training_sample_count",
+        translation_key="regulation_training_sample_count",
+        runtime_key="regulation_training_sample_count",
+        icon="mdi:counter",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    TrainingSensorEntityDescription(
+        key="regulation_training_saved_sessions",
+        translation_key="regulation_training_saved_sessions",
+        runtime_key="regulation_training_saved_sessions",
+        icon="mdi:archive-check-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )

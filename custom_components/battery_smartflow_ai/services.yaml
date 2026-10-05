@@ -44,3 +44,43 @@ verify_native_write:
       description: Confirms that Zendure HEMS, Z-HA control, and external writers are disabled for this test.
       selector:
         boolean:
+
+start_regulation_training:
+  name: Start passive regulation training
+  description: Record real charge/discharge behavior for a limited time. This never changes regulation settings or sends experimental commands.
+  fields:
+    entry_id:
+      required: false
+      description: Required only when more than one Battery SmartFlow AI config entry is loaded.
+      selector:
+        config_entry:
+          integration: battery_smartflow_ai
+    duration_minutes:
+      required: true
+      selector:
+        select:
+          options:
+            - "10"
+            - "30"
+            - "60"
+            - "120"
+    direction:
+      required: false
+      default: both
+      selector:
+        select:
+          options:
+            - both
+            - charge
+            - discharge
+
+stop_regulation_training:
+  name: Stop passive regulation training
+  description: Stop the active training capture and save its observations locally in Home Assistant storage.
+  fields:
+    entry_id:
+      required: false
+      description: Required only when more than one Battery SmartFlow AI config entry is loaded.
+      selector:
+        config_entry:
+          integration: battery_smartflow_ai

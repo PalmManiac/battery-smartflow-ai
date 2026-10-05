@@ -203,7 +203,12 @@ from .strategy_adapter import decision_to_strategy_intent
 from .strategy_state import ChargeCommitState
 from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
-from .core.models import CommandExecutionResult, DeviceCapabilities, DeviceCommand
+from .core.models import (
+    CommandExecutionResult,
+    DeviceCapabilities,
+    DeviceCommand,
+    ZendureTransport,
+)
 from .core.ports import Clock, DeviceBackend, DeviceBackendExecutionError
 from .regulation_power_controller import (
     RegulationPowerController,
@@ -226,6 +231,11 @@ from .command_effectiveness import (
     record_effectiveness_retry,
 )
 from .debug_recorder import DebugRecorder
+from .regulation_training import (
+    PassiveTrainingRecorder,
+    RegulationProfileKey,
+    TrainingDirection,
+)
 from .debug_exporter import DebugExportError, export_debug_package
 from .debug_sample_builder import (
     build_debug_sample,
@@ -478,6 +488,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._debug_recorder = debug_recorder or DebugRecorder(
             integration_version=INTEGRATION_VERSION
         )
+        self._training_recorder = PassiveTrainingRecorder()
+        self._training_store = HomeAssistantStateStore(
+            hass,
+            version=1,
+            key=f"{DOMAIN}_regulation_training_{entry.entry_id}",
+        )
+        self._training_sessions: list[dict[str, Any]] = []
         self._debug_last_package: str | None = None
         self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
@@ -1988,6 +2005,129 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "debug_last_package": self._debug_last_package,
             "debug_last_error": self._debug_last_error,
         }
+
+    def _training_status_data(self) -> dict[str, Any]:
+        """Expose only small lifecycle counters, never raw training samples."""
+
+        status = self._training_recorder.status
+        return {
+            "regulation_training_active": status["active"],
+            "regulation_training_started_at": status["started_at"],
+            "regulation_training_ends_at": status["ends_at"],
+            "regulation_training_direction": status["direction_scope"],
+            "regulation_training_sample_count": status["sample_count"],
+            "regulation_training_saved_sessions": len(self._training_sessions),
+        }
+
+    async def async_load_regulation_training(self) -> None:
+        """Load previously completed sessions; unfinished sessions never resume."""
+
+        try:
+            result = await self._training_store.load()
+        except Exception:  # pragma: no cover - HA storage failure boundary
+            _LOGGER.exception("Could not load regulation training sessions")
+            return
+        stored = result.data
+        if not isinstance(stored, dict) or stored.get("schema_version") != 1:
+            return
+        sessions = stored.get("sessions")
+        if isinstance(sessions, list):
+            self._training_sessions = [
+                item for item in sessions[-5:] if isinstance(item, dict)
+            ]
+
+    def _regulation_training_key(self) -> RegulationProfileKey:
+        """Build an internal, V6-ready per-device and per-transport key."""
+
+        native_context = None
+        context_getter = getattr(
+            getattr(self, "native_zendure", None),
+            "regulation_training_context",
+            None,
+        )
+        if callable(context_getter):
+            native_context = context_getter()
+        if native_context:
+            return RegulationProfileKey(
+                device_id=str(native_context["device_id"]),
+                transport=ZendureTransport(str(native_context["transport"])),
+                device_model=str(native_context["device_model"]),
+                firmware_context=native_context.get("firmware_context"),
+            )
+        native_runtime = getattr(self, "native_zendure", None)
+        if getattr(native_runtime, "selected_device_id", None):
+            raise ValueError(
+                "The selected Zendure device is not ready for regulation training"
+            )
+        return RegulationProfileKey(
+            device_id=str(self.entry.entry_id),
+            transport=ZendureTransport.HOME_ASSISTANT,
+            device_model=str(self.device_profile_key),
+        )
+
+    async def async_start_regulation_training(
+        self, *, duration_minutes: int, direction: str
+    ) -> None:
+        """Start user-requested passive capture without changing regulation."""
+
+        self._training_recorder.start(
+            key=self._regulation_training_key(),
+            now=self._clock.utc_now(),
+            duration_minutes=duration_minutes,
+            direction_scope=TrainingDirection(direction),
+        )
+        await self.async_request_refresh()
+
+    async def async_stop_regulation_training(self) -> None:
+        """Stop and persist a completed passive training capture."""
+
+        session = self._training_recorder.stop(now=self._clock.utc_now())
+        if session is not None and session.samples:
+            await self._save_regulation_training_session(session.as_dict())
+        await self.async_request_refresh()
+
+    async def _save_regulation_training_session(
+        self, session: dict[str, Any]
+    ) -> None:
+        previous_sessions = self._training_sessions
+        self._training_sessions = [*previous_sessions, session][-5:]
+        try:
+            result = await self._training_store.save(
+                {"schema_version": 1, "sessions": self._training_sessions}
+            )
+            if result.status.value != "saved":
+                raise OSError(result.error or "training session save failed")
+        except Exception:  # pragma: no cover - HA storage failure boundary
+            self._training_sessions = previous_sessions
+            _LOGGER.exception("Could not save regulation training session")
+
+    async def _capture_regulation_training_sample(
+        self,
+        *,
+        now: datetime,
+        details: dict[str, Any],
+        observed_charge_w: float,
+        observed_discharge_w: float,
+    ) -> None:
+        """Collect allowlisted snapshots and persist when the timer expires."""
+
+        if not self._training_recorder.active:
+            return
+        session = self._training_recorder.tick(now=now)
+        if session is not None:
+            if session.samples:
+                await self._save_regulation_training_session(session.as_dict())
+            return
+        sample_details = {
+            **details,
+            "battery_charge_w": observed_charge_w,
+            "battery_discharge_w": observed_discharge_w,
+        }
+        self._training_recorder.record(
+            self._training_recorder.sample_from_details(
+                timestamp=now, details=sample_details
+            )
+        )
 
     @property
     def debug_last_package_path(self) -> str | None:
@@ -8238,6 +8378,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 else "none"
             )
 
+            await self._capture_regulation_training_sample(
+                now=now,
+                details=details,
+                observed_charge_w=float(battery_charge_w),
+                observed_discharge_w=float(battery_discharge_w),
+            )
             await self._async_capture_debug_sample(now=now, details=details)
 
             return {
@@ -8258,6 +8404,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "recommendation": recommendation,
                 "debug": "OK",
                 **self._debug_status_data(),
+                **self._training_status_data(),
                 "details": details,
                 "grid_power_w": (
                     self._shelly_grid_power_w

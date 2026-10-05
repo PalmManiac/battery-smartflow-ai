@@ -224,6 +224,28 @@ class NativeZendureRuntime:
 
         return self._selected_device
 
+    def regulation_training_context(self) -> dict[str, str | None] | None:
+        """Return private identity context for per-device training storage."""
+
+        if self._selected_device is None:
+            return None
+        device = self._inventory.devices.get(self._selected_device)
+        if device is None:
+            return None
+        state = self._states.get(self._selected_device)
+        transport = self._active_control_transport() or device.selected_transport
+        firmware = (
+            str(state.firmware.value)
+            if state is not None and state.firmware.valid
+            else None
+        )
+        return {
+            "device_id": self._selected_device,
+            "transport": transport.value,
+            "device_model": device.model or "unknown",
+            "firmware_context": firmware,
+        }
+
     def selected_capacity(self):
         """Use only packs of the selected system, never a legacy setting."""
         from .native_capacity import native_capacity

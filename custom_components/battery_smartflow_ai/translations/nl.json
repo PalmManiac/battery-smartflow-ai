@@ -813,6 +813,12 @@
       "debug_sample_count": {"name": "Opgenomen debugvoorbeelden"},
       "debug_last_package": {"name": "Laatste debugpakket"},
       "debug_last_error": {"name": "Laatste debugfout"},
+      "regulation_training_active": {
+        "name": "Regelingstraining actief",
+        "state": {"no": "Nee", "yes": "Ja"}
+      },
+      "regulation_training_sample_count": {"name": "Regelingstrainingsmonsters"},
+      "regulation_training_saved_sessions": {"name": "Opgeslagen trainingssessies"},
       "fault_level_status": {
         "name": "Foutstatus",
         "state": {

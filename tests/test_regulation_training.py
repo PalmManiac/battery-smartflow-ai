@@ -6,15 +6,43 @@ from datetime import datetime, timezone
 
 from custom_components.battery_smartflow_ai.core.models import ZendureTransport
 from custom_components.battery_smartflow_ai.regulation_training import (
+    PassiveTrainingRecorder,
     RegulationDirectionMetrics,
     RegulationDirectionParameters,
     RegulationProfile,
     RegulationProfileKey,
     RegulationProfileState,
+    TrainingDirection,
+    TrainingSample,
 )
 
 
 class RegulationTrainingModelTests(unittest.TestCase):
+    def _key(self) -> RegulationProfileKey:
+        return RegulationProfileKey(
+            device_id="internal-device-id",
+            transport=ZendureTransport.ZENSDK,
+            device_model="SolarFlow 2400 AC",
+            firmware_context="2.0.1",
+        )
+
+    def _sample(self, minute: int, direction: str) -> TrainingSample:
+        return TrainingSample(
+            timestamp=datetime(2026, 10, 5, 12, minute, tzinfo=timezone.utc),
+            direction=direction,
+            grid_import_w=300.0,
+            grid_export_w=0.0,
+            soc_pct=55.0,
+            pv_w=1200.0,
+            requested_charge_w=500.0 if direction == "charge" else 0.0,
+            requested_discharge_w=400.0 if direction == "discharge" else 0.0,
+            observed_charge_w=450.0 if direction == "charge" else 0.0,
+            observed_discharge_w=350.0 if direction == "discharge" else 0.0,
+            grid_valid=True,
+            pv_valid=True,
+            command_skipped=False,
+        )
+
     def test_profile_is_scoped_to_device_transport_model_and_firmware(self) -> None:
         key = RegulationProfileKey(
             device_id="internal-device-id",
@@ -86,6 +114,86 @@ class RegulationTrainingModelTests(unittest.TestCase):
         )
 
         self.assertIs(profile.state, RegulationProfileState.SHADOW)
+
+    def test_recorder_is_manual_bounded_and_separates_directions(self) -> None:
+        recorder = PassiveTrainingRecorder(max_samples=2)
+        started = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+        recorder.start(
+            key=self._key(),
+            now=started,
+            duration_minutes=10,
+            direction_scope=TrainingDirection.CHARGE,
+        )
+        recorder.record(self._sample(1, "charge"))
+        recorder.record(self._sample(2, "discharge"))
+        recorder.record(self._sample(3, "charge"))
+        recorder.record(self._sample(4, "charge"))
+
+        session = recorder.stop(
+            now=datetime(2026, 10, 5, 12, 5, tzinfo=timezone.utc)
+        )
+
+        self.assertFalse(recorder.active)
+        self.assertEqual(len(session.samples), 2)
+        self.assertEqual(session.dropped_sample_count, 1)
+        self.assertTrue(all(item.direction == "charge" for item in session.samples))
+        self.assertEqual(session.profile().state, RegulationProfileState.SHADOW)
+        self.assertEqual(session.profile().discharge_metrics.sample_count, 0)
+        self.assertLessEqual(session.profile().charge_metrics.confidence, 0.5)
+
+    def test_auto_stop_and_serialization_keep_context_and_allowlisted_values(self) -> None:
+        recorder = PassiveTrainingRecorder()
+        started = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+        recorder.start(
+            key=self._key(),
+            now=started,
+            duration_minutes=10,
+            direction_scope=TrainingDirection.BOTH,
+        )
+        sample = recorder.sample_from_details(
+            timestamp=started,
+            details={
+                "soc": 55,
+                "pv_w": 1200,
+                "deficit": 300,
+                "surplus": 0,
+                "grid_sensor_valid": True,
+                "pv_sensor_valid": True,
+                "regulation_command_ac_mode": "input",
+                "regulation_command_input_limit_w": 500,
+                "regulation_command_output_limit_w": 0,
+                "battery_charge_w": 450,
+                "battery_discharge_w": 0,
+                "regulation_command_skipped": False,
+                "password": "must-not-be-recorded",
+            },
+        )
+        recorder.record(sample)
+        session = recorder.tick(now=started.replace(minute=10))
+
+        serialized = session.as_dict()
+        self.assertEqual(serialized["key"]["transport"], "zensdk")
+        self.assertEqual(serialized["profile"]["state"], "shadow")
+        self.assertEqual(serialized["samples"][0]["direction"], "charge")
+        self.assertNotIn("password", json.dumps(serialized))
+        self.assertFalse(recorder.active)
+
+    def test_recorder_rejects_unbounded_or_naive_session_configuration(self) -> None:
+        recorder = PassiveTrainingRecorder()
+        with self.assertRaisesRegex(ValueError, "timezone-aware"):
+            recorder.start(
+                key=self._key(),
+                now=datetime(2026, 10, 5, 12, 0),
+                duration_minutes=10,
+                direction_scope=TrainingDirection.BOTH,
+            )
+        with self.assertRaisesRegex(ValueError, "duration"):
+            recorder.start(
+                key=self._key(),
+                now=datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc),
+                duration_minutes=999,
+                direction_scope=TrainingDirection.BOTH,
+            )
 
 
 if __name__ == "__main__":
