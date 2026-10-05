@@ -258,6 +258,10 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertFalse(result.accepted)
         self.assertEqual(calls, ["http://192.168.1.44/properties/write"])
+        self.assertEqual(result.result, "transport_error")
+        self.assertEqual(result.address_source, "device_list_ip")
+        self.assertEqual(result.error_type, "TimeoutError")
+        self.assertIsNotNone(result.elapsed_seconds)
 
     async def test_reads_private_ip_and_returns_transport_tagged_report(self):
         data = await make_bootstrap()

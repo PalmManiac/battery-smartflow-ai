@@ -257,15 +257,22 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
             calls.append(url)
             return Response({"success": False}, 503)
 
-        result = await ZendureZenSdkCommandAdapter(
+        adapter = ZendureZenSdkCommandAdapter(
             data, post, manager, clock=lambda: NOW
-        ).execute(authorized(output_command()))
+        )
+        result = await adapter.execute(authorized(output_command()))
 
         self.assertEqual(result.status, ZenSdkCommandStatus.TRANSPORT_ERROR)
         self.assertEqual(result.http_status, 503)
         self.assertEqual(result.requests_sent, 1)
         self.assertEqual(len(calls), 1)
         self.assertEqual(len(result.verification_ids), 1)
+        diagnostics = adapter.diagnostics()
+        self.assertEqual(diagnostics["result"], "http_error")
+        self.assertEqual(diagnostics["http_status"], 503)
+        self.assertEqual(diagnostics["address_source"], "device_list_ip")
+        self.assertEqual(diagnostics["properties"], ["outputLimit"])
+        self.assertNotIn("url", diagnostics)
         for command_id in result.verification_ids:
             tracked = manager.get(command_id)
             self.assertEqual(

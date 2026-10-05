@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
@@ -96,6 +96,7 @@ ZENSDK_POLL_INTERVAL = 5.0
 ZENSDK_OFFLINE_AFTER_FAILURES = 3
 ZENSDK_MAX_DATA_AGE = 30.0
 ZENSDK_MAX_RETRY_INTERVAL = 60.0
+ZENSDK_DEBUG_ATTEMPT_LIMIT = 120
 LEGACY_GROUPED_CONTROL_MAX_DATA_AGE = 180.0
 _LEGACY_GROUPED_CONTROL_MODELS = frozenset(
     {"hyper2000", "hub2000", "solarflowhub2000"}
@@ -166,6 +167,7 @@ class NativeZendureRuntime:
         self._zensdk_last_success: dict[str, datetime] = {}
         self._zensdk_next_poll: dict[str, float] = {}
         self._zensdk_poll_delay: dict[str, float] = {}
+        self._zensdk_attempt_history: list[dict[str, Any]] = []
         self._hems_gate = ZendureHemsCommandGate()
         self._first_write_result: NativeWriteVerification | None = None
         self._write_lock = asyncio.Lock()
@@ -217,6 +219,30 @@ class NativeZendureRuntime:
         if state is None or not _fresh_native_state(state, device=device):
             return None
         return state
+
+    def debug_state_snapshot(self) -> dict[str, Any]:
+        """Return every normalized measurement for discovered systems and packs."""
+
+        system_ids = sorted(set(self._states).union(self._inventory.devices))
+        states = {}
+        for system_id in system_ids:
+            state = self._states.get(system_id)
+            states[system_id] = {
+                "normalized_state": asdict(state) if state is not None else None,
+                "raw_properties_by_transport": (
+                    self._normalizer.debug_property_snapshot(system_id)
+                    if self._normalizer is not None else {}
+                ),
+            }
+        devices_without_state = sorted(
+            set(self._inventory.devices).difference(self._states)
+        )
+        return {
+            "status": "captured" if states else "no_state_received",
+            "selected_device": self._selected_device,
+            "systems": states,
+            "devices_without_state": devices_without_state,
+        }
 
     @property
     def selected_device_id(self) -> str | None:
@@ -747,6 +773,11 @@ class NativeZendureRuntime:
                 "error": self._error,
                 "zensdk_poll_interval_seconds": ZENSDK_POLL_INTERVAL,
                 "zensdk_devices": self._zensdk_diagnostics(),
+                "zensdk_attempt_history": list(self._zensdk_attempt_history),
+                "zensdk_last_write": (
+                    self._zensdk_command_adapter.diagnostics()
+                    if self._zensdk_command_adapter is not None else None
+                ),
                 "hems_devices": [
                     {
                         "device_id": system_id,
@@ -874,7 +905,7 @@ class NativeZendureRuntime:
                 self._write_sequence += 1
                 outcome = await async_write_zensdk_property(
                     self._bootstrap, self._selected_device, prop, int(value),
-                    self._write_sequence, self._post_json,
+                    self._write_sequence, self._post_zensdk_write,
                 )
                 return TransportWriteResult(outcome.accepted, outcome.http_status)
 
@@ -1170,7 +1201,7 @@ class NativeZendureRuntime:
             )
             self._zensdk_command_adapter = ZendureZenSdkCommandAdapter(
                 bootstrap,
-                self._post_json,
+                self._post_zensdk_write,
                 self._command_verification,
             )
             zensdk = await async_read_zensdk_reports(
@@ -1297,6 +1328,15 @@ class NativeZendureRuntime:
             payload = await response.json(content_type=None)
         return _JsonPayloadResponse(payload, response.status)
 
+    async def _post_zensdk_write(
+        self, url: str, **kwargs: Any
+    ) -> _JsonPayloadResponse:
+        """Capture the LAN write's HTTP status without waiting on a body parse."""
+
+        session = async_get_clientsession(self._hass)
+        async with session.post(url, **kwargs) as response:
+            return _JsonPayloadResponse(None, response.status)
+
     async def _get_json(self, url: str, **kwargs: Any) -> _JsonPayloadResponse:
         session = async_get_clientsession(self._hass)
         async with session.get(url, **kwargs) as response:
@@ -1390,6 +1430,19 @@ class NativeZendureRuntime:
         )
 
     def _record_zensdk_cycle(self, result: ZenSdkReadResult) -> None:
+        recorded_at = datetime.now(timezone.utc)
+        for attempt in result.attempts:
+            self._zensdk_attempt_history.append(
+                {
+                    "recorded_at": recorded_at,
+                    "device_id": attempt.device_candidate_id,
+                    "address_source": attempt.address_source,
+                    "result": attempt.result,
+                    "http_status": attempt.http_status,
+                }
+            )
+        if len(self._zensdk_attempt_history) > ZENSDK_DEBUG_ATTEMPT_LIMIT:
+            del self._zensdk_attempt_history[:-ZENSDK_DEBUG_ATTEMPT_LIMIT]
         successful: dict[str, datetime] = {}
         for message in result.messages:
             device_id = message.device_candidate_id

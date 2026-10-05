@@ -241,6 +241,7 @@ from .debug_exporter import DebugExportError, export_debug_package
 from .debug_sample_builder import (
     build_debug_sample,
     configured_entity_availability,
+    configured_entity_snapshot,
 )
 from .price_currency import (
     PriceCurrency,
@@ -2289,6 +2290,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 details=details,
                 configured_entities=self._debug_configured_entities(),
                 entity_availability=self._debug_entity_availability(),
+                entity_snapshot=configured_entity_snapshot(
+                    self._debug_configured_entities(), self.hass.states.get
+                ),
+                native_state=self._debug_native_state_snapshot(),
             ),
             now=now,
         )
@@ -2310,6 +2315,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:  # pragma: no cover - defensive diagnostic boundary
             _LOGGER.exception("Could not capture native Zendure debug diagnostics")
             return {"status": "diagnostics_unavailable"}
+        return dict(data) if isinstance(data, Mapping) else {}
+
+    def _debug_native_state_snapshot(self) -> dict[str, Any]:
+        """Return all normalized measurements for the selected device and packs."""
+
+        native = getattr(self, "native_zendure", None)
+        snapshot = getattr(native, "debug_state_snapshot", None)
+        if not callable(snapshot):
+            return {}
+        try:
+            data = snapshot()
+        except Exception:  # pragma: no cover - defensive diagnostic boundary
+            _LOGGER.exception("Could not capture native Zendure state snapshot")
+            return {"status": "snapshot_unavailable"}
         return dict(data) if isinstance(data, Mapping) else {}
 
     def _attr(self, entity_id: str | None, attr: str) -> Any:

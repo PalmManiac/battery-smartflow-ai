@@ -14,6 +14,7 @@ from custom_components.battery_smartflow_ai.debug_sample_builder import (  # noq
     build_debug_sample,
     build_entity_diagnostics,
     configured_entity_availability,
+    configured_entity_snapshot,
 )
 
 
@@ -265,6 +266,45 @@ class DebugSampleBuilderTests(unittest.TestCase):
         result = sample.as_dict()
         self.assertEqual(result["raw_values"]["soc"], 40.0)
         self.assertTrue(result["strategy"]["automatic"]["strategy_active"])
+
+    def test_captures_unclassified_details_and_native_state(self) -> None:
+        sample = build_debug_sample(
+            timestamp=self.now,
+            details={
+                "new_sensor_or_state": {"value": 12, "validity": "valid"},
+                "soc": 55,
+            },
+            native_state={"device_state": {"pv_power_w": {"value": 42}}},
+        ).as_dict()
+
+        self.assertEqual(
+            sample["additional"]["new_sensor_or_state"]["value"], 12
+        )
+        self.assertEqual(sample["native_state"]["device_state"]["pv_power_w"]["value"], 42)
+
+    def test_configured_entity_snapshot_captures_state_and_safe_metadata(self) -> None:
+        class State:
+            state = "123.4"
+            attributes = {
+                "unit_of_measurement": "W",
+                "device_class": "power",
+                "state_class": "measurement",
+                "ip_address": "192.168.1.20",
+                "friendly_name": "Private Entity Name",
+            }
+            last_changed = self.now
+            last_updated = self.now
+
+        snapshot = configured_entity_snapshot(
+            {"grid_power": "sensor.private_grid_power"},
+            lambda _entity_id: State(),
+        )
+
+        self.assertEqual(snapshot["grid_power"]["state"], "123.4")
+        self.assertEqual(snapshot["grid_power"]["attributes"]["unit_of_measurement"], "W")
+        self.assertNotIn("ip_address", snapshot["grid_power"]["attributes"])
+        self.assertNotIn("friendly_name", snapshot["grid_power"]["attributes"])
+        self.assertNotIn("entity_id", snapshot["grid_power"])
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import ipaddress
 import json
 import re
+import time
 from typing import Any, Awaitable, Callable, Mapping, Protocol
 from urllib.parse import urlsplit
 
@@ -54,6 +55,9 @@ class ZenSdkWriteResult:
     accepted: bool
     http_status: int | None
     result: str
+    address_source: str | None = None
+    error_type: str | None = None
+    elapsed_seconds: float | None = None
 
 
 async def async_write_zensdk_property(
@@ -135,7 +139,8 @@ async def async_write_zensdk_properties(
         return ZenSdkWriteResult(False, None, "no_local_address")
     # A read may try another address, but a write is sent exactly once.  A
     # timeout is ambiguous and must never cause an automatic duplicate POST.
-    _source, host = addresses[0]
+    source, host = addresses[0]
+    started = time.monotonic()
     try:
         response = await asyncio.wait_for(
             post_json(
@@ -152,9 +157,18 @@ async def async_write_zensdk_properties(
         return ZenSdkWriteResult(
             200 <= status < 300, status,
             "transport_ok" if 200 <= status < 300 else "http_error",
+            address_source=source,
+            elapsed_seconds=round(time.monotonic() - started, 3),
         )
-    except Exception:
-        return ZenSdkWriteResult(False, None, "transport_error")
+    except Exception as error:
+        return ZenSdkWriteResult(
+            False,
+            None,
+            "transport_error",
+            address_source=source,
+            error_type=type(error).__name__,
+            elapsed_seconds=round(time.monotonic() - started, 3),
+        )
 
 
 def _valid_direction_group(properties: Mapping[str, int]) -> bool:

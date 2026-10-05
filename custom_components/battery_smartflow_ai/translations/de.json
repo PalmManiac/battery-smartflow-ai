@@ -293,7 +293,7 @@
       },
       "debug_start": {
         "title": "Debug-Aufzeichnung starten",
-        "description": "Diese Supportfunktion nur zur Fehlersuche verwenden. Technische Zustände und konfigurierte Entity-IDs werden zeitlich begrenzt aufgezeichnet; Passwörter, Tokens und API-Schlüssel werden gefiltert. Den Fortschritt zeigen die Debug-Statussensoren in der Geräteansicht von Battery SmartFlow AI. Unter /config/bsfai/debug/ werden höchstens 10 Pakete aufbewahrt.",
+        "description": "Diese Supportfunktion nur zur Fehlersuche verwenden. Zeitlich begrenzt werden konfigurierte Sensorwerte, Geräte- und Akkupack-Telemetrie sowie technische Lese- und Schreibdiagnosen aufgezeichnet. Das kann auch Energie- und Preiswerte enthalten. Passwörter, Tokens und API-Schlüssel werden gefiltert; prüfe das Paket vor dem Teilen trotzdem auf private Angaben. Den Fortschritt zeigen die Debug-Statussensoren. Unter /config/bsfai/debug/ werden höchstens 10 Pakete aufbewahrt.",
         "data": {"duration_minutes": "Aufzeichnungsdauer"},
         "data_description": {"duration_minutes": "10, 30, 60 oder 120 Minuten auswählen. Die Aufzeichnung stoppt und exportiert automatisch."}
       },
