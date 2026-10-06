@@ -41,13 +41,14 @@ from .const import (
     SETTING_FORECAST_BASE_LOAD,
     DEFAULT_FORECAST_BASE_LOAD,
 )
-from .price_currency import price_input_profile
+from .device_profiles import get_profile_config
 from .factor_display import (
     discount_pct_to_valley_factor,
     markup_pct_to_peak_factor,
     peak_factor_to_markup_pct,
     valley_factor_to_discount_pct,
 )
+from .price_currency import price_input_profile
 
 
 PRICE_NUMBER_KEYS = frozenset(
@@ -56,6 +57,11 @@ PRICE_NUMBER_KEYS = frozenset(
         SETTING_VERY_EXPENSIVE_THRESHOLD,
     }
 )
+
+POWER_LIMIT_PROFILE_FIELDS = {
+    SETTING_MAX_CHARGE: "MAX_INPUT_W",
+    SETTING_MAX_DISCHARGE: "MAX_OUTPUT_W",
+}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -236,6 +242,20 @@ def _default_for_key(key: str, price_currency=None) -> float:
     return float(defaults.get(key, 0.0))
 
 
+def _power_limit_maximum(coordinator, key: str) -> float:
+    """Return the fixed hardware ceiling for a configurable power limit."""
+
+    profile_field = POWER_LIMIT_PROFILE_FIELDS[key]
+    profile_key = getattr(coordinator, "device_profile_key", "SF2400AC")
+    profile = get_profile_config(profile_key)
+    fallback = (
+        DEFAULT_MAX_CHARGE
+        if key == SETTING_MAX_CHARGE
+        else DEFAULT_MAX_DISCHARGE
+    )
+    return max(0.0, float(profile.get(profile_field, fallback)))
+
+
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: ConfigEntry,
@@ -292,6 +312,12 @@ class ZendureSmartFlowNumber(NumberEntity):
             self._attr_native_unit_of_measurement = (
                 coordinator.price_currency.price_unit
             )
+        elif description.runtime_key in POWER_LIMIT_PROFILE_FIELDS:
+            self._attr_native_min_value = 0.0
+            self._attr_native_max_value = _power_limit_maximum(
+                coordinator, description.runtime_key
+            )
+            self._attr_mode = "box"
 
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = {
@@ -327,10 +353,15 @@ class ZendureSmartFlowNumber(NumberEntity):
             return peak_factor_to_markup_pct(value)
         if self.entity_description.factor_percentage_kind == "valley_discount":
             return valley_factor_to_discount_pct(value)
+        if self.entity_description.runtime_key in POWER_LIMIT_PROFILE_FIELDS:
+            return min(max(0.0, value), self.native_max_value)
         return value
 
     async def async_set_native_value(self, value: float) -> None:
         value = float(value)
+
+        if self.entity_description.runtime_key in POWER_LIMIT_PROFILE_FIELDS:
+            value = min(max(0.0, value), self.native_max_value)
 
         if self.entity_description.factor_percentage_kind == "peak_markup":
             value = markup_pct_to_peak_factor(value)
