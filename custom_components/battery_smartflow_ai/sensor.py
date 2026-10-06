@@ -2470,11 +2470,7 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
     def _handle_coordinator_update(self) -> None:
         """Keep recorder-facing entities attribute-free in normal operation."""
 
-        if self.entity_description.runtime_key == "native_zendure_device_count":
-            self._attr_extra_state_attributes = (
-                self.coordinator.native_zendure.overview_attributes()
-            )
-        elif self.entity_description.runtime_key == "regulation_training_result":
+        if self.entity_description.runtime_key == "regulation_training_result":
             evaluation = (self.coordinator.data or {}).get(
                 "regulation_training_evaluation"
             )

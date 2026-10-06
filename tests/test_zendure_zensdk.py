@@ -94,6 +94,36 @@ async def make_bootstrap(
 
 
 class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_message_count_sensor_is_rate_limited_for_recorder(self):
+        runtime = NativeZendureRuntime(
+            SimpleNamespace(), app_token="configured", selected_device=None,
+            notify=lambda: None,
+        )
+        runtime._normalizer = SimpleNamespace(apply=lambda _message: None)
+        message = SimpleNamespace(
+            device_candidate_id=None,
+            transport="unknown",
+            received_at=datetime.now(timezone.utc),
+        )
+
+        runtime._apply_messages((message,))
+        self.assertEqual(
+            runtime.sensor_data()["native_zendure_message_count"], 1
+        )
+
+        runtime._apply_messages((message, message))
+        self.assertEqual(runtime._processed_messages, 3)
+        self.assertEqual(
+            runtime.sensor_data()["native_zendure_message_count"], 1
+        )
+
+        runtime._last_message_count_sensor_update -= 300.0
+        runtime._apply_messages((message,))
+        self.assertEqual(runtime._processed_messages, 4)
+        self.assertEqual(
+            runtime.sensor_data()["native_zendure_message_count"], 4
+        )
+
     async def test_startup_transport_selection_can_disable_cloud_mqtt_for_zensdk(self):
         data = await make_bootstrap()
         candidate_id = data.devices[0].candidate.candidate_id
