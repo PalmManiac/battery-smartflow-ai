@@ -139,8 +139,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.23"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=37"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.24"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=38"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -201,8 +201,23 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.23"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=37"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.24"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=38"', dashboard)
+
+    def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('"training_entries": training_entries', dashboard)
+        self.assertIn('_regulation_training_active"', dashboard)
+        self.assertIn('data-view="settings"', frontend)
+        self.assertIn('data-training-start=', frontend)
+        self.assertIn('data-training-stop=', frontend)
+        self.assertIn('this._hass.callService("battery_smartflow_ai", service, data)', frontend)
+        self.assertIn('data-reconfigure-entry=', frontend)
+        self.assertIn('/config/integrations/integration/battery_smartflow_ai#config_entry=', frontend)
 
 
 if __name__ == "__main__":

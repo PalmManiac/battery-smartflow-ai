@@ -271,6 +271,7 @@
           "expert": "Expertenmodus",
           "dashboard": "HEMS-Dashboard",
           "native_zendure": "Natives Zendure",
+          "training": "Regelungstraining",
           "debug": "Debug-Modus"
         }
       },
@@ -290,6 +291,24 @@
         "data_description": {
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative PV-Kontextschwellen und weitere PV-bezogene Logik verwendet."
         }
+      },
+      "training_start": {
+        "title": "Passives Regelungstraining starten",
+        "description": "Das Training beobachtet ausschließlich den realen Betrieb. Es ändert keine Live-Regelparameter und sendet keine experimentellen Befehle. Das Ergebnis bleibt ein Shadow-Vorschlag.",
+        "data": {"duration_minutes": "Trainingsdauer", "direction": "Richtung"},
+        "data_description": {"duration_minutes": "Wähle 10, 30, 60, 120 Minuten oder 1440 Minuten (24 Stunden).", "direction": "Erfasse beide Richtungen oder nur Laden beziehungsweise Entladen."}
+      },
+      "training_stop": {
+        "title": "Regelungstraining aktiv",
+        "description": "Das Training endet planmäßig um {training_end}. Bisher erfasste Samples: {sample_count}. Bestätige, um es jetzt zu beenden und die Daten auszuwerten."
+      },
+      "training_started": {
+        "title": "Regelungstraining gestartet",
+        "description": "Das passive Training läuft. Es ändert keine Live-Regelparameter. Bestätige, um zum Einstellungsmenü zurückzukehren."
+      },
+      "training_stopped": {
+        "title": "Regelungstraining beendet",
+        "description": "Die aufgezeichnete Sitzung wurde im Shadow-Modus ausgewertet. Es wurden keine Vorschlagswerte aktiviert. Bestätige, um zum Einstellungsmenü zurückzukehren."
       },
       "debug_start": {
         "title": "Debug-Aufzeichnung starten",

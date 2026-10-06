@@ -105,10 +105,13 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn('menu_options=', source)
         self.assertIn('native_configured', source)
         self.assertIn('"debug"', source)
+        self.assertIn('"training"', source)
         self.assertIn("async_step_debug_start", methods)
         self.assertIn("async_step_debug_stop", methods)
         self.assertIn("async_step_debug_started", methods)
         self.assertIn("async_step_debug_stopped", methods)
+        self.assertIn("async_step_training_start", methods)
+        self.assertIn("async_step_training_stop", methods)
         self.assertIn("async_start_debug_recording", methods["async_step_debug_start"])
         self.assertIn("async_stop_debug_recording", methods["async_step_debug_stop"])
         self.assertNotIn("async_create_entry", methods["async_step_debug_start"])
@@ -117,6 +120,10 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertNotIn("async_create_entry", methods["async_step_debug_stopped"])
         self.assertIn("async_step_debug_started", methods["async_step_debug_start"])
         self.assertIn("async_step_debug_stopped", methods["async_step_debug_stop"])
+        self.assertIn("async_start_regulation_training", methods["async_step_training_start"])
+        self.assertIn("async_stop_regulation_training", methods["async_step_training_stop"])
+        self.assertNotIn("async_create_entry", methods["async_step_training_start"])
+        self.assertNotIn("async_create_entry", methods["async_step_training_stop"])
 
 
 if __name__ == "__main__":

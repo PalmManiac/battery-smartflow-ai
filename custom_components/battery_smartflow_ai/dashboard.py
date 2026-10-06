@@ -35,7 +35,7 @@ _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.23"
+DASHBOARD_VERSION = "1.0.24"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -107,12 +107,34 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
 
     power_sources = []
     forecast_sources = []
+    training_entries = []
     sensor_entities: dict[str, list[str]] = {key: [] for key in _DASHBOARD_SENSOR_KEYS}
     forecast_source_keys = set()
     entity_registry = er.async_get(hass)
     for entry in entries:
         if entry is None:
             continue
+        training_entries.append(
+            {
+                "entry_id": entry.entry_id,
+                "title": entry.title,
+                "active_entity": entity_registry.async_get_entity_id(
+                    "sensor",
+                    DOMAIN,
+                    f"{DOMAIN}_{entry.entry_id}_regulation_training_active",
+                ),
+                "samples_entity": entity_registry.async_get_entity_id(
+                    "sensor",
+                    DOMAIN,
+                    f"{DOMAIN}_{entry.entry_id}_regulation_training_sample_count",
+                ),
+                "result_entity": entity_registry.async_get_entity_id(
+                    "sensor",
+                    DOMAIN,
+                    f"{DOMAIN}_{entry.entry_id}_regulation_training_result",
+                ),
+            }
+        )
         data = entry.data
         configured_forecasts = data.get(CONF_PV_FORECAST_CONFIG_ENTRIES, ()) or ()
         if isinstance(configured_forecasts, str):
@@ -206,7 +228,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="BSFAI Portal",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=37",
+        module_url=f"{_PANEL_URL}?v=38",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,
@@ -214,6 +236,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             "power_sources": power_sources,
             "forecast_sources": forecast_sources,
             "sensor_entities": sensor_entities,
+            "training_entries": training_entries,
             "system_signal_entity_ids": [
                 registry_entry.entity_id
                 for registry_entry in entity_registry.entities.values()
