@@ -84,6 +84,15 @@ class SensorAttributeBudgetTests(unittest.TestCase):
 
         self.assertIn("self._attr_extra_state_attributes = None", source)
         self.assertNotIn("profile_overrides\"] =", source)
+        tree = ast.parse(source)
+        update_method = next(
+            ast.get_source_segment(source, node)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_handle_coordinator_update"
+        )
+        self.assertNotIn('runtime_key == "native_zendure_device_count"', update_method)
+        self.assertNotIn("overview_attributes()", update_method)
 
 
 if __name__ == "__main__":

@@ -97,6 +97,7 @@ ZENSDK_OFFLINE_AFTER_FAILURES = 3
 ZENSDK_MAX_DATA_AGE = 30.0
 ZENSDK_MAX_RETRY_INTERVAL = 60.0
 ZENSDK_DEBUG_ATTEMPT_LIMIT = 120
+NATIVE_MESSAGE_COUNT_SENSOR_UPDATE_INTERVAL = 300.0
 LEGACY_GROUPED_CONTROL_MAX_DATA_AGE = 180.0
 _LEGACY_GROUPED_CONTROL_MODELS = frozenset(
     {"hyper2000", "hub2000", "solarflowhub2000"}
@@ -159,6 +160,8 @@ class NativeZendureRuntime:
         self._states: dict[str, Any] = {}
         self._normalizer: NativeSourceFusion | None = None
         self._processed_messages = 0
+        self._reported_message_count = 0
+        self._last_message_count_sensor_update: float | None = None
         self._last_processed_message: Any | None = None
         self._last_received_at: Any | None = None
         self._bootstrap: Any | None = None
@@ -450,7 +453,7 @@ class NativeZendureRuntime:
                 else "disabled_zha_active"
             ),
             "native_zendure_device_count": len(self._inventory.devices),
-            "native_zendure_message_count": self._processed_messages,
+            "native_zendure_message_count": self._reported_message_count,
             "native_zendure_last_message": (
                 self._last_received_at
                 or (self._transport.last_message_at if self._transport else None)
@@ -1758,6 +1761,14 @@ class NativeZendureRuntime:
                 message.received_at for message in messages
             )
             self._processed_messages += len(messages)
+            now_monotonic = asyncio.get_running_loop().time()
+            if (
+                self._last_message_count_sensor_update is None
+                or now_monotonic - self._last_message_count_sensor_update
+                >= NATIVE_MESSAGE_COUNT_SENSOR_UPDATE_INTERVAL
+            ):
+                self._reported_message_count = self._processed_messages
+                self._last_message_count_sensor_update = now_monotonic
 
     def _control_transport_ready(self, transport: ZendureTransport) -> bool:
         if transport is ZendureTransport.ZENSDK:
