@@ -88,3 +88,38 @@ stop_regulation_training:
       selector:
         config_entry:
           integration: battery_smartflow_ai
+
+apply_regulation_training_candidate:
+  name: Apply regulation training candidate
+  description: >-
+    Apply the explicitly reviewed charge/discharge proportional gain candidate
+    for the same device and transport as the training run. This is experimental;
+    the comparison is a screening estimate, not a guaranteed improvement.
+  fields:
+    entry_id:
+      required: false
+      description: Required only when more than one Battery SmartFlow AI config entry is loaded.
+      selector:
+        config_entry:
+          integration: battery_smartflow_ai
+    confirm:
+      required: true
+      description: Explicitly confirms applying the proposed controller gains.
+      selector:
+        boolean:
+
+reset_regulation_training_candidate:
+  name: Reset regulation training candidate
+  description: Remove the applied training gains and restore the configured device profile.
+  fields:
+    entry_id:
+      required: false
+      description: Required only when more than one Battery SmartFlow AI config entry is loaded.
+      selector:
+        config_entry:
+          integration: battery_smartflow_ai
+    confirm:
+      required: true
+      description: Explicitly confirms restoring the configured device profile.
+      selector:
+        boolean:

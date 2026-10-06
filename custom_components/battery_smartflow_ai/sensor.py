@@ -2479,7 +2479,19 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                 "regulation_training_evaluation"
             )
             self._attr_extra_state_attributes = (
-                {"shadow_evaluation": evaluation}
+                {
+                    "shadow_evaluation": evaluation,
+                    "candidate_active": bool(
+                        (self.coordinator.data or {}).get(
+                            "regulation_training_candidate_active", False
+                        )
+                    ),
+                    "candidate_available": bool(
+                        (self.coordinator.data or {}).get(
+                            "regulation_training_candidate_available", False
+                        )
+                    ),
+                }
                 if isinstance(evaluation, dict)
                 else None
             )

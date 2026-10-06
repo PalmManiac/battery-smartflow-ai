@@ -41,6 +41,54 @@ MAX_STORED_TRAINING_SESSIONS = 5
 MAX_STORED_TRAINING_SAMPLES = 22_000
 
 
+def candidate_gain_parameters(evaluation: Mapping[str, Any]) -> dict[str, float]:
+    """Validate and extract only proposed bounded Kp gains from an evaluation."""
+
+    if evaluation.get("status") != "candidate_proposed":
+        raise ValueError("No regulation training candidate is available")
+    parameters: dict[str, float] = {}
+    for direction, prefix in (("charge", "CHARGE"), ("discharge", "DISCHARGE")):
+        outcome = evaluation.get(direction)
+        if not isinstance(outcome, Mapping) or outcome.get("decision") != "proposed":
+            continue
+        proposed = outcome.get("parameters")
+        if not isinstance(proposed, Mapping):
+            continue
+        for key, option_key in (
+            ("kp_up", f"{prefix}_KP_UP"),
+            ("kp_down", f"{prefix}_KP_DOWN"),
+        ):
+            value = proposed.get(key)
+            if value is None:
+                continue
+            numeric = _finite_number(value)
+            if numeric is None or not 0.1 <= numeric <= 2.0:
+                raise ValueError("Training candidate gain is outside safe bounds")
+            parameters[option_key] = round(numeric, 4)
+    if not parameters:
+        raise ValueError("Training candidate contains no applicable gains")
+    return parameters
+
+
+def training_candidate_scope_matches(
+    stored_key: Any, current_key: Mapping[str, Any]
+) -> bool:
+    """Match stable device/transport identity; tolerate unknown firmware."""
+
+    if not isinstance(stored_key, Mapping):
+        return False
+    for field in ("device_id", "transport", "device_model"):
+        if stored_key.get(field) != current_key.get(field):
+            return False
+    stored_firmware = stored_key.get("firmware_context")
+    current_firmware = current_key.get("firmware_context")
+    return (
+        stored_firmware is None
+        or current_firmware is None
+        or stored_firmware == current_firmware
+    )
+
+
 def retain_training_sessions(
     sessions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:

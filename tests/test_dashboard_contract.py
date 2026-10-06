@@ -139,7 +139,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.25"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.26"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=39"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
@@ -201,7 +201,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.25"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.26"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=39"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
@@ -227,12 +227,14 @@ class DashboardContractTests(unittest.TestCase):
         )
 
         self.assertIn('"regulation_training_evaluation": public_evaluation', coordinator)
-        self.assertIn('{"shadow_evaluation": evaluation}', sensor)
+        self.assertIn('"shadow_evaluation": evaluation', sensor)
         self.assertIn('resultState?.attributes?.shadow_evaluation', frontend)
         self.assertIn('result.relative_improvement', frontend)
         self.assertIn('result.baseline_score', frontend)
         self.assertIn('result.candidate_score', frontend)
         self.assertIn('training_score_explain', frontend)
+        self.assertIn('data-training-candidate-action="apply"', frontend)
+        self.assertIn('data-training-candidate-action="reset"', frontend)
 
 
 if __name__ == "__main__":

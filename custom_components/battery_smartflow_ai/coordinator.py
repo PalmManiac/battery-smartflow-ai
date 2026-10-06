@@ -54,6 +54,7 @@ from .const import (
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
     CONF_DEVICE_PROFILE,
     CONF_PROFILE_OVERRIDES,
+    CONF_REGULATION_TRAINING_CANDIDATE,
     CONF_INSTALLED_PV_WP,
     CONF_EXPERT_MODE_ENABLED,
     CONF_FEED_IN_TARIFF,
@@ -235,7 +236,9 @@ from .regulation_training import (
     PassiveTrainingRecorder,
     RegulationProfileKey,
     TrainingDirection,
+    candidate_gain_parameters,
     retain_training_sessions,
+    training_candidate_scope_matches,
 )
 from .regulation_shadow_evaluator import evaluate_training_session
 from .debug_exporter import DebugExportError, export_debug_package
@@ -500,6 +503,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._training_sessions: list[dict[str, Any]] = []
         self._training_last_result = "not_trained"
         self._training_last_evaluation: dict[str, Any] | None = None
+        self._training_active_key: dict[str, Any] | None = None
         self._debug_last_package: str | None = None
         self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
@@ -2059,6 +2063,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "regulation_training_saved_sessions": len(self._training_sessions),
             "regulation_training_result": self._training_last_result,
             "regulation_training_evaluation": public_evaluation,
+            "regulation_training_candidate_active": self._training_candidate_is_active(),
+            "regulation_training_candidate_available": self._training_candidate_is_available(),
         }
 
     async def async_load_regulation_training(self) -> None:
@@ -2084,6 +2090,82 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._training_last_result = str(
                         evaluation.get("status", "not_trained")
                     )
+
+    def _candidate_parameters_from_session(
+        self, session: Mapping[str, Any]
+    ) -> dict[str, float]:
+        """Return bounded proportional gains from an explicitly proposed run."""
+
+        evaluation = session.get("shadow_evaluation")
+        if not isinstance(evaluation, Mapping):
+            raise TypeError("No regulation training evaluation is available")
+        return candidate_gain_parameters(evaluation)
+
+    def _training_candidate_is_active(self) -> bool:
+        candidate = self.entry.options.get(CONF_REGULATION_TRAINING_CANDIDATE)
+        return bool(
+            isinstance(candidate, Mapping)
+            and isinstance(self._training_active_key, dict)
+            and training_candidate_scope_matches(
+                candidate.get("key"), self._training_active_key
+            )
+            and isinstance(candidate.get("parameters"), Mapping)
+            and candidate.get("parameters")
+        )
+
+    def _training_candidate_is_available(self) -> bool:
+        if self._training_recorder.active or not self._training_sessions:
+            return False
+        try:
+            return self._training_sessions[-1].get("key") == self._regulation_training_key().as_dict() and bool(
+                self._candidate_parameters_from_session(self._training_sessions[-1])
+            )
+        except (KeyError, TypeError, ValueError):
+            return False
+
+    def _rebuild_regulation_power_config(self) -> None:
+        self._regulation_power_controller.config = build_regulation_power_config(
+            self._get_active_profile(),
+            capabilities=self._device_profile.capabilities,
+            price_step=price_input_profile(self.price_currency).step,
+        )
+
+    async def async_apply_regulation_training_candidate(self) -> None:
+        """Persist and activate the last reviewed candidate for this device only."""
+
+        if self._training_recorder.active:
+            raise ValueError("Stop regulation training before applying a candidate")
+        if not self._training_sessions:
+            raise ValueError("No completed regulation training session is available")
+        session = self._training_sessions[-1]
+        key = self._regulation_training_key().as_dict()
+        if session.get("key") != key:
+            raise ValueError("The latest training candidate belongs to a different device or transport")
+        parameters = self._candidate_parameters_from_session(session)
+        options = dict(self.entry.options)
+        options[CONF_REGULATION_TRAINING_CANDIDATE] = {
+            "key": key,
+            "parameters": parameters,
+            "trained_at": session.get("completed_at"),
+        }
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+        self._training_active_key = key
+        self._rebuild_regulation_power_config()
+        await self.async_request_refresh()
+
+    async def async_reset_regulation_training_candidate(self) -> None:
+        """Remove learned gains and return to the normal configured profile."""
+
+        if self._training_recorder.active:
+            raise ValueError("Stop regulation training before resetting the candidate")
+        options = dict(self.entry.options)
+        if CONF_REGULATION_TRAINING_CANDIDATE not in options:
+            raise ValueError("No applied regulation training candidate is active")
+        options.pop(CONF_REGULATION_TRAINING_CANDIDATE, None)
+        self.hass.config_entries.async_update_entry(self.entry, options=options)
+        self._training_active_key = None
+        self._rebuild_regulation_power_config()
+        await self.async_request_refresh()
 
     def _regulation_training_key(self) -> RegulationProfileKey:
         """Build an internal, V6-ready per-device and per-transport key."""
@@ -2391,7 +2473,45 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         overrides = self.entry.options.get(CONF_PROFILE_OVERRIDES, {})
         if not isinstance(overrides, dict):
             overrides = {}
-        return merge_profile_with_overrides(self.device_profile_key, overrides)
+        profile = merge_profile_with_overrides(self.device_profile_key, overrides)
+        candidate = self.entry.options.get(CONF_REGULATION_TRAINING_CANDIDATE)
+        previous_key = self._training_active_key
+        active_key = None
+        parameters: dict[str, float] = {}
+        if (
+            isinstance(candidate, Mapping)
+            and isinstance(candidate.get("parameters"), Mapping)
+        ):
+            try:
+                current_key = self._regulation_training_key().as_dict()
+                if training_candidate_scope_matches(
+                    candidate.get("key"), current_key
+                ):
+                    parameters = {
+                        str(name): float(value)
+                        for name, value in candidate["parameters"].items()
+                        if name in {"CHARGE_KP_UP", "CHARGE_KP_DOWN", "DISCHARGE_KP_UP", "DISCHARGE_KP_DOWN"}
+                    }
+                    if parameters and all(
+                        math.isfinite(value) and 0.1 <= value <= 2.0
+                        for value in parameters.values()
+                    ):
+                        active_key = current_key
+                    else:
+                        parameters = {}
+            except (KeyError, TypeError, ValueError):
+                # A native device may not be discovered until after startup.
+                # The candidate is re-checked on subsequent coordinator cycles.
+                pass
+        self._training_active_key = active_key
+        profile.update(parameters)
+        if previous_key != active_key and hasattr(self, "_regulation_power_controller"):
+            self._regulation_power_controller.config = build_regulation_power_config(
+                profile,
+                capabilities=self._device_profile.capabilities,
+                price_step=price_input_profile(self.price_currency).step,
+            )
+        return profile
 
     def _get_installed_pv_wp(self) -> float:
         try:
