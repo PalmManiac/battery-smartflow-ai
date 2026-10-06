@@ -290,6 +290,7 @@
           "expert": "Expert mode",
           "dashboard": "HEMS dashboard",
           "native_zendure": "Native Zendure",
+          "training": "Regulation training",
           "debug": "Debug mode"
         }
       },
@@ -349,6 +350,24 @@
         "data_description": {
           "installed_pv_wp": "Installed theoretical PV module power of the system in Wp. This value is used for relative PV-context thresholds and other PV-related logic."
         }
+      },
+      "training_start": {
+        "title": "Start passive regulation training",
+        "description": "Training observes real operation only. It does not change live regulation parameters or send experimental commands. The result remains a shadow proposal.",
+        "data": {"duration_minutes": "Training duration", "direction": "Direction"},
+        "data_description": {"duration_minutes": "Choose 10, 30, 60, 120 minutes or 1440 minutes (24 hours).", "direction": "Capture both directions or only charging/discharging."}
+      },
+      "training_stop": {
+        "title": "Regulation training active",
+        "description": "Training is scheduled to end at {training_end}. Samples collected so far: {sample_count}. Confirm to stop now and evaluate the captured data."
+      },
+      "training_started": {
+        "title": "Regulation training started",
+        "description": "Passive training is running. It does not change live regulation parameters. Confirm to return to the settings menu."
+      },
+      "training_stopped": {
+        "title": "Regulation training stopped",
+        "description": "The captured session has been evaluated in shadow mode. No proposed values were activated. Confirm to return to the settings menu."
       },
       "debug_start": {
         "title": "Start debug recording",

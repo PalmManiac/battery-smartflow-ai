@@ -2179,6 +2179,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return self._debug_recorder.status
 
     @property
+    def regulation_training_status(self) -> dict[str, Any]:
+        """Return the sparse training status for HA controls."""
+
+        return self._training_recorder.status
+
+    @property
     def debug_recorder_for_reload(self) -> DebugRecorder:
         """Return the in-memory recorder so an options reload can reuse it."""
 

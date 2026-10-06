@@ -52,6 +52,40 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._scheduleRender();
         return;
       }
+      const trainingStart = nodeFor("[data-training-start]");
+      if (trainingStart) {
+        const entryId = trainingStart.dataset.trainingStart;
+        const duration = this.shadowRoot.querySelector(
+          `[data-training-duration="${CSS.escape(entryId)}"]`
+        );
+        const direction = this.shadowRoot.querySelector(
+          `[data-training-direction="${CSS.escape(entryId)}"]`
+        );
+        this._callTraining("start_regulation_training", trainingStart, {
+          entry_id: entryId,
+          duration_minutes: Number(duration && duration.value),
+          direction: direction ? direction.value : "both",
+        });
+        return;
+      }
+      const trainingStop = nodeFor("[data-training-stop]");
+      if (trainingStop) {
+        this._callTraining("stop_regulation_training", trainingStop, {
+          entry_id: trainingStop.dataset.trainingStop,
+        });
+        return;
+      }
+      const configureEntry = nodeFor("[data-reconfigure-entry]");
+      if (configureEntry) {
+        const entryId = encodeURIComponent(configureEntry.dataset.reconfigureEntry);
+        const path = `/config/integrations/integration/battery_smartflow_ai#config_entry=${entryId}`;
+        if (this._hass && typeof this._hass.navigate === "function") {
+          this._hass.navigate(path);
+        } else {
+          window.location.assign(path);
+        }
+        return;
+      }
       const historyButton = nodeFor("[data-history-entity]");
       if (historyButton) {
         this._openHistory(historyButton.dataset.historyEntity);
@@ -170,6 +204,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       return german ? "zusätzliche Status- und Diagnosesensoren" : "additional status and diagnostic sensors";
     }
     const labels = {
+      training_title: ["Regelungstraining", "Regulation training"], training_description: ["Das passive Training beobachtet reale Lade- und Entladevorgänge. Es ändert keine Live-Regelparameter.", "Passive training observes real charge and discharge behavior. It does not change live regulation parameters."], training_duration: ["Trainingsdauer", "Training duration"], training_direction: ["Zu erfassende Richtung", "Direction to capture"], training_both: ["Laden und Entladen", "Charge and discharge"], training_charge: ["Nur Laden", "Charge only"], training_discharge: ["Nur Entladen", "Discharge only"], training_status: ["Status", "Status"], training_samples: ["Erfasste Samples", "Samples captured"], training_result: ["Letztes Ergebnis", "Last result"], training_active: ["Training läuft", "Training active"], training_idle: ["Kein Training aktiv", "No training active"], training_result_not_trained: ["Noch nicht ausgewertet", "Not evaluated yet"], training_result_training: ["Training läuft", "Training in progress"], training_result_candidate_proposed: ["Shadow-Kandidat verfügbar", "Shadow candidate available"], training_result_no_improvement: ["Keine Verbesserung erkannt", "No improvement found"], training_result_insufficient_data: ["Weitere Trainingsdaten erforderlich", "More training data needed"], start_training: ["Training starten", "Start training"], stop_training: ["Training beenden", "Stop training"], configure_entry: ["Integration einstellen / rekonfigurieren", "Configure / reconfigure integration"], no_training_entries: ["Keine geladene BSFAI-Instanz gefunden.", "No loaded BSFAI instance found."], training_started: ["Training gestartet", "Training started"], training_stopped: ["Training beendet", "Training stopped"], training_failed: ["Aktion fehlgeschlagen", "Action failed"], menu_settings: ["Einstellungen", "Settings"],
       overview: ["Übersicht", "Overview"], energy: ["Energie & Prognose", "Energy & forecast"], economics: ["Wirtschaftlichkeit", "Economics"], controls: ["Steuerung", "Controls"],
       subtitle: ["Energiefluss, Speicher und Systemstatus", "Energy flow, storage and system status"], live: ["LIVE · aktualisiert", "LIVE · updated"], energy_overview: ["Energieübersicht", "Energy overview"], live_values: ["Aktuelle Home-Assistant-Werte", "Live Home Assistant values"],
       battery: ["AKKU", "BATTERY"], pv_power: ["PV-LEISTUNG", "PV POWER"], battery_power: ["AKKULEISTUNG", "BATTERY POWER"], grid_power: ["NETZLEISTUNG", "GRID POWER"], current_price: ["AKTUELLER PREIS", "CURRENT PRICE"], waiting_entity: ["Warte auf passenden Sensor", "Waiting for matching entity"], no_data: ["Noch keine Daten", "No data yet"],
@@ -643,6 +678,42 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }, 1800);
   }
 
+  _callTraining(service, button, data) {
+    button.disabled = true;
+    const start = service === "start_regulation_training";
+    button.textContent = this._t("saving");
+    this._hass.callService("battery_smartflow_ai", service, data).then(() => {
+      button.textContent = this._t(start ? "training_started" : "training_stopped");
+      this._scheduleRender();
+    }).catch((error) => {
+      button.textContent = this._t("training_failed");
+      button.title = String(error);
+    }).finally(() => {
+      window.setTimeout(() => {
+        if (!button.isConnected) return;
+        button.disabled = false;
+        button.textContent = this._t(start ? "start_training" : "stop_training");
+      }, 1800);
+    });
+  }
+
+  _trainingView() {
+    const entries = this._panel?.config?.training_entries || [];
+    if (!entries.length) {
+      return `<section class="section"><div class="empty">${this._escape(this._t("no_training_entries"))}</div></section>`;
+    }
+    const cards = entries.map((entry) => {
+      const entryId = this._escape(entry.entry_id);
+      const activeState = entry.active_entity && this._hass.states[entry.active_entity];
+      const active = activeState?.state === "yes";
+      const samplesState = entry.samples_entity && this._hass.states[entry.samples_entity];
+      const resultState = entry.result_entity && this._hass.states[entry.result_entity];
+      const resultKey = `training_result_${resultState?.state || "not_trained"}`;
+      return `<article class="control-card"><h3>${this._escape(entry.title || this._t("system"))}</h3><p class="explain">${this._escape(this._t("training_description"))}</p><div class="detail-row"><span>${this._escape(this._t("training_status"))}</span><strong>${this._escape(this._t(active ? "training_active" : "training_idle"))}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_samples"))}</span><strong>${this._escape(samplesState?.state || "0")}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_result"))}</span><strong>${this._escape(this._t(resultKey))}</strong></div><label for="training-duration-${entryId}">${this._escape(this._t("training_duration"))}</label><select data-training-duration="${entryId}" id="training-duration-${entryId}"><option value="10">10 min</option><option value="30">30 min</option><option value="60">60 min</option><option value="120">120 min</option><option value="1440" selected>24 h</option></select><label for="training-direction-${entryId}">${this._escape(this._t("training_direction"))}</label><select data-training-direction="${entryId}" id="training-direction-${entryId}"><option value="both" selected>${this._escape(this._t("training_both"))}</option><option value="charge">${this._escape(this._t("training_charge"))}</option><option value="discharge">${this._escape(this._t("training_discharge"))}</option></select><button class="apply" type="button" data-training-start="${entryId}" ${active ? "disabled" : ""}>${this._escape(this._t("start_training"))}</button><button class="apply" type="button" data-training-stop="${entryId}" ${active ? "" : "disabled"}>${this._escape(this._t("stop_training"))}</button><button class="apply" type="button" data-reconfigure-entry="${entryId}">${this._escape(this._t("configure_entry"))}</button></article>`;
+    }).join("");
+    return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("training_title"))}</h2><small>${this._escape(this._t("training_description"))}</small></div><div class="control-grid">${cards}</div></section>`;
+  }
+
   _metricCard(title, entityId, fallbackTerms = []) {
     let entity = entityId && this._hass && this._hass.states[entityId];
     if (!entity || ["unknown", "unavailable"].includes(entity.state)) {
@@ -1085,8 +1156,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
       ? this._energyView(entities)
       : this._view === "economics"
         ? this._economicsView(entities)
-        : this._view === "controls"
+      : this._view === "controls"
           ? this._controls(entities)
+          : this._view === "settings"
+            ? this._trainingView()
         : `${this._healthSummary(systems)}<section class="section"><div class="section-head"><h2>${this._escape(this._t("topology"))}</h2><small>${systems.length} ${this._escape(this._t("systems"))} · ${packCount} ${this._escape(this._t("packs"))}</small></div>
           ${systems.length ? `<div class="systems">${systems.map((system, systemIndex) => {
             const systemEntities = this._deviceEntities(entities, system.name, null);
@@ -1140,7 +1213,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       <main class="shell">
         <header><div><h1>Battery SmartFlow AI Portal</h1><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
         <section class="section"><div class="section-head"><h2>${this._escape(this._t("energy_overview"))}</h2><small>${this._escape(this._t("live_values"))}</small></div><div class="metric-groups">${cards}</div></section>
-        <nav aria-label="${this._escape(this._t("dashboard_views"))}"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">${this._escape(this._t("overview"))}</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">${this._escape(this._t("energy"))}</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">${this._escape(this._t("economics"))}</button><button class="tab ${this._view === "controls" ? "active" : ""}" data-view="controls">${this._escape(this._t("controls"))}</button></nav>
+        <nav aria-label="${this._escape(this._t("dashboard_views"))}"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">${this._escape(this._t("overview"))}</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">${this._escape(this._t("energy"))}</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">${this._escape(this._t("economics"))}</button><button class="tab ${this._view === "controls" ? "active" : ""}" data-view="controls">${this._escape(this._t("controls"))}</button><button class="tab ${this._view === "settings" ? "active" : ""}" data-view="settings">${this._escape(this._t("menu_settings"))}</button></nav>
         ${activeContent}
         <p class="footer">${this._escape(this._t("footer"))}</p>
       </main>`;

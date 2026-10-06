@@ -186,6 +186,10 @@ class TranslationCoverageTests(unittest.TestCase):
             "debug_stop",
             "debug_started",
             "debug_stopped",
+            "training_start",
+            "training_stop",
+            "training_started",
+            "training_stopped",
             "expert",
             "expert_cell_voltage",
             "expert_cell_voltage_config",
@@ -204,11 +208,22 @@ class TranslationCoverageTests(unittest.TestCase):
                 self.assertEqual(set(steps), expected_steps)
                 self.assertEqual(
                     set(steps["init"]["menu_options"]),
-                    {"general", "dashboard", "expert", "native_zendure", "debug"},
+                    {
+                        "general",
+                        "dashboard",
+                        "expert",
+                        "native_zendure",
+                        "training",
+                        "debug",
+                    },
                 )
                 self.assertEqual(
                     set(steps["debug_start"]["data"]),
                     {"duration_minutes"},
+                )
+                self.assertEqual(
+                    set(steps["training_start"]["data"]),
+                    {"duration_minutes", "direction"},
                 )
                 self.assertEqual(
                     set(steps["general"]["data"]),

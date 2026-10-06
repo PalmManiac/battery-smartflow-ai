@@ -1087,7 +1087,14 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         )
         return self.async_show_menu(
             step_id="init",
-            menu_options=["general", "expert", "dashboard", "native_zendure", "debug"],
+            menu_options=[
+                "general",
+                "expert",
+                "dashboard",
+                "native_zendure",
+                "training",
+                "debug",
+            ],
         )
 
     async def async_step_dashboard(self, user_input: dict[str, Any] | None = None):
@@ -1495,6 +1502,102 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         """Return the loaded coordinator for this options-flow entry."""
 
         return self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+
+    async def async_step_training(self, user_input: dict[str, Any] | None = None):
+        """Route to the training action without changing integration options."""
+
+        coordinator = self._debug_coordinator()
+        if coordinator is None:
+            return self.async_abort(reason="debug_integration_not_loaded")
+        if coordinator.regulation_training_status["active"]:
+            return await self.async_step_training_stop()
+        return await self.async_step_training_start()
+
+    async def async_step_training_start(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Start a bounded passive training session from the settings menu."""
+
+        coordinator = self._debug_coordinator()
+        if coordinator is None:
+            return self.async_abort(reason="debug_integration_not_loaded")
+        if coordinator.regulation_training_status["active"]:
+            return await self.async_step_training_stop()
+
+        if user_input is not None:
+            await coordinator.async_start_regulation_training(
+                duration_minutes=int(user_input["duration_minutes"]),
+                direction=str(user_input["direction"]),
+            )
+            return await self.async_step_training_started()
+
+        return self.async_show_form(
+            step_id="training_start",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("duration_minutes", default="1440"):
+                        selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=["10", "30", "60", "120", "1440"],
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
+                    vol.Required("direction", default="both"):
+                        selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=["both", "charge", "discharge"],
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
+                }
+            ),
+        )
+
+    async def async_step_training_stop(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Confirm and stop the active passive training session."""
+
+        coordinator = self._debug_coordinator()
+        if coordinator is None:
+            return self.async_abort(reason="debug_integration_not_loaded")
+        status = coordinator.regulation_training_status
+        if not status["active"]:
+            return await self.async_step_init()
+        if user_input is not None:
+            await coordinator.async_stop_regulation_training()
+            return await self.async_step_training_stopped()
+
+        return self.async_show_form(
+            step_id="training_stop",
+            data_schema=vol.Schema({}),
+            description_placeholders={
+                "training_end": str(status["ends_at"] or "—"),
+                "sample_count": str(status["sample_count"]),
+            },
+        )
+
+    async def async_step_training_started(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Confirm that passive training started without writing options."""
+
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="training_started", data_schema=vol.Schema({})
+        )
+
+    async def async_step_training_stopped(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Confirm that training stopped and return to integration settings."""
+
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="training_stopped", data_schema=vol.Schema({})
+        )
 
     async def async_step_debug(self, user_input: dict[str, Any] | None = None):
         """Route to the current recording action without changing options."""

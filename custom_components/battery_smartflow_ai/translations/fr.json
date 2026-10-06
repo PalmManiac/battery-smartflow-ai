@@ -271,6 +271,7 @@
           "dashboard": "Tableau de bord HEMS",
           "expert": "Mode expert",
           "native_zendure": "Test Zendure natif",
+          "training": "Entraînement de régulation",
           "debug": "Mode débogage"
         }
       },
@@ -290,6 +291,24 @@
         "data_description": {
           "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils relatifs du contexte PV et d’autres logiques liées au PV."
         }
+      },
+      "training_start": {
+        "title": "Démarrer l’entraînement passif de la régulation",
+        "description": "L’entraînement observe uniquement le fonctionnement réel. Il ne modifie pas les paramètres de régulation actifs et n’envoie aucune commande expérimentale. Le résultat reste une proposition shadow.",
+        "data": {"duration_minutes": "Durée de l’entraînement", "direction": "Direction"},
+        "data_description": {"duration_minutes": "Choisissez 10, 30, 60, 120 minutes ou 1440 minutes (24 heures).", "direction": "Enregistrer les deux directions ou uniquement la charge ou la décharge."}
+      },
+      "training_stop": {
+        "title": "Entraînement de régulation actif",
+        "description": "L’entraînement doit se terminer à {training_end}. Échantillons collectés : {sample_count}. Confirmez pour l’arrêter maintenant et évaluer les données."
+      },
+      "training_started": {
+        "title": "Entraînement de régulation démarré",
+        "description": "L’entraînement passif est en cours. Il ne modifie pas les paramètres de régulation actifs. Validez pour revenir au menu des paramètres."
+      },
+      "training_stopped": {
+        "title": "Entraînement de régulation arrêté",
+        "description": "La session enregistrée a été évaluée en mode shadow. Aucune valeur proposée n’a été activée. Validez pour revenir au menu des paramètres."
       },
       "debug_start": {
         "title": "Démarrer l’enregistrement de débogage",

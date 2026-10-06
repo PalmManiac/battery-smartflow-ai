@@ -271,6 +271,7 @@
           "dashboard": "HEMS-dashboard",
           "expert": "Expertmodus",
           "native_zendure": "Native Zendure-test",
+          "training": "Regelingstraining",
           "debug": "Debugmodus"
         }
       },
@@ -290,6 +291,24 @@
         "data_description": {
           "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve PV-contextdrempels en andere PV-logica."
         }
+      },
+      "training_start": {
+        "title": "Passieve regelingstraining starten",
+        "description": "De training observeert alleen het werkelijke gedrag. Er worden geen actieve regelparameters gewijzigd en geen experimentele opdrachten verzonden. Het resultaat blijft een shadow-voorstel.",
+        "data": {"duration_minutes": "Trainingsduur", "direction": "Richting"},
+        "data_description": {"duration_minutes": "Kies 10, 30, 60, 120 minuten of 1440 minuten (24 uur).", "direction": "Leg beide richtingen vast of alleen laden of ontladen."}
+      },
+      "training_stop": {
+        "title": "Regelingstraining actief",
+        "description": "De training eindigt volgens planning om {training_end}. Vastgelegde samples: {sample_count}. Bevestig om nu te stoppen en de gegevens te evalueren."
+      },
+      "training_started": {
+        "title": "Regelingstraining gestart",
+        "description": "De passieve training loopt. Er worden geen actieve regelparameters gewijzigd. Bevestig om terug te keren naar het instellingenmenu."
+      },
+      "training_stopped": {
+        "title": "Regelingstraining gestopt",
+        "description": "De vastgelegde sessie is geëvalueerd in shadow-modus. Er zijn geen voorgestelde waarden geactiveerd. Bevestig om terug te keren naar het instellingenmenu."
       },
       "debug_start": {
         "title": "Debugopname starten",
