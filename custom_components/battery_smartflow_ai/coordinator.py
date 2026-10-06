@@ -235,6 +235,7 @@ from .regulation_training import (
     PassiveTrainingRecorder,
     RegulationProfileKey,
     TrainingDirection,
+    retain_training_sessions,
 )
 from .regulation_shadow_evaluator import evaluate_training_session
 from .debug_exporter import DebugExportError, export_debug_package
@@ -2123,7 +2124,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     metrics["confidence"] = outcome["confidence"]
                     metrics["overshoot_rate"] = outcome["overshoot_rate"]
         previous_sessions = self._training_sessions
-        self._training_sessions = [*previous_sessions, session][-5:]
+        self._training_sessions = retain_training_sessions(
+            [*previous_sessions, session]
+        )
         try:
             result = await self._training_store.save(
                 {"schema_version": 1, "sessions": self._training_sessions}

@@ -33,8 +33,35 @@ class TrainingDirection(StrEnum):
     DISCHARGE = "discharge"
 
 
-ALLOWED_TRAINING_MINUTES = frozenset({10, 30, 60, 120})
-MAX_TRAINING_SAMPLES = 7200
+ALLOWED_TRAINING_MINUTES = frozenset({10, 30, 60, 120, 1440})
+# The recent observed capture rate was about 326 samples per 30 minutes.
+# 20,000 samples leave headroom for a complete 24-hour run at that rate.
+MAX_TRAINING_SAMPLES = 20_000
+MAX_STORED_TRAINING_SESSIONS = 5
+MAX_STORED_TRAINING_SAMPLES = 22_000
+
+
+def retain_training_sessions(
+    sessions: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Keep recent sessions within count and aggregate sample budgets."""
+
+    retained = sessions[-MAX_STORED_TRAINING_SESSIONS:]
+
+    def sample_count(session: Mapping[str, Any]) -> int:
+        try:
+            return max(0, int(session.get("sample_count", 0)))
+        except (TypeError, ValueError):
+            samples = session.get("samples")
+            return len(samples) if isinstance(samples, list) else 0
+
+    while (
+        len(retained) > 1
+        and sum(sample_count(session) for session in retained)
+        > MAX_STORED_TRAINING_SAMPLES
+    ):
+        retained = retained[1:]
+    return retained
 
 
 def _aware(value: datetime) -> None:

@@ -47,7 +47,9 @@ verify_native_write:
 
 start_regulation_training:
   name: Start passive regulation training
-  description: Record real charge/discharge behavior for a limited time. This never changes regulation settings or sends experimental commands.
+  description: >-
+    Record real charge/discharge behavior for a limited time (up to 24 hours).
+    This never changes regulation settings or sends experimental commands.
   fields:
     entry_id:
       required: false
@@ -57,6 +59,7 @@ start_regulation_training:
           integration: battery_smartflow_ai
     duration_minutes:
       required: true
+      description: Select 10, 30, 60, 120 minutes, or 1440 minutes (24 hours).
       selector:
         select:
           options:
@@ -64,6 +67,7 @@ start_regulation_training:
             - "30"
             - "60"
             - "120"
+            - "1440"
     direction:
       required: false
       default: both

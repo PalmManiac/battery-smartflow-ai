@@ -151,7 +151,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
                 {
                     vol.Optional("entry_id"): str,
                     vol.Required("duration_minutes"): vol.All(
-                        vol.Coerce(int), vol.In({10, 30, 60, 120})
+                        vol.Coerce(int), vol.In({10, 30, 60, 120, 1440})
                     ),
                     vol.Optional("direction", default="both"): vol.In(
                         {"both", "charge", "discharge"}

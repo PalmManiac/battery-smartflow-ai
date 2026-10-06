@@ -41,7 +41,7 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn("start_debug_recording:", services)
         self.assertIn("stop_debug_recording:", services)
         self.assertIn("integration: battery_smartflow_ai", services)
-        for duration in (10, 30, 60, 120):
+        for duration in (10, 30, 60, 120, 1440):
             self.assertIn(f'- "{duration}"', services)
 
         self.assertNotIn("            - 10\n", services)
