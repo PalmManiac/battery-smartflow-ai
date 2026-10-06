@@ -131,7 +131,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('href="/" data-home', frontend)
         self.assertIn('this._hass.navigate("/")', frontend)
         self.assertIn('sidebar_title="BSFAI Portal"', dashboard)
-        self.assertIn("<h1>Battery SmartFlow AI Portal</h1>", frontend)
+        self.assertNotIn("<h1>Battery SmartFlow AI Portal</h1>", frontend)
         self.assertIn("_findBatterySoc(this._entities(), entityId)", frontend)
         self.assertIn('terms.includes("soc")', frontend)
         self.assertIn('entity.entity_id.startsWith("sensor.")', frontend)
@@ -139,13 +139,13 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.26"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=39"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.27"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=40"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
         self.assertIn("row.lc ?? row.lu ?? row.last_changed", frontend)
-        self.assertIn(".history-card:hover{border-color:var(--cyan)}", frontend)
+        self.assertIn(".history-card:hover{border-color:var(--cyan);box-shadow:", frontend)
         self.assertNotIn("transform:translateY(-1px)", frontend)
         self.assertIn("row.lu ?? row.last_changed", frontend)
 
@@ -201,8 +201,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.26"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=39"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.27"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=40"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -218,6 +218,23 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('this._hass.callService("battery_smartflow_ai", service, data)', frontend)
         self.assertIn('data-reconfigure-entry=', frontend)
         self.assertIn('/config/integrations/integration/battery_smartflow_ai#config_entry=', frontend)
+
+    def test_training_dashboard_labels_are_localized_and_redundant_branding_is_removed(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        for label in (
+            'menu_settings: ["Einstellungen & Training", "Settings & training"]',
+            'training_title: ["Regelungstraining", "Regulation training"]',
+            'start_training: ["Training starten", "Start training"]',
+            'training_result_candidate_proposed:',
+            'configure_entry: ["Integration konfigurieren", "Configure integration"]',
+        ):
+            self.assertIn(label, frontend)
+        self.assertIn("entries.length > 1", frontend)
+        self.assertNotIn("<h1>Battery SmartFlow AI Portal</h1>", frontend)
+        self.assertIn(".history-card:hover{border-color:var(--cyan);box-shadow:", frontend)
 
     def test_training_dashboard_shows_directional_shadow_estimates(self) -> None:
         coordinator = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
