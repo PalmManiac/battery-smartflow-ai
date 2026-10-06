@@ -14,6 +14,7 @@ from custom_components.battery_smartflow_ai.regulation_training import (
     RegulationProfileState,
     TrainingDirection,
     TrainingSample,
+    retain_training_sessions,
 )
 
 
@@ -206,6 +207,40 @@ class RegulationTrainingModelTests(unittest.TestCase):
                 duration_minutes=999,
                 direction_scope=TrainingDirection.BOTH,
             )
+
+    def test_recorder_supports_and_auto_stops_after_24_hours(self) -> None:
+        recorder = PassiveTrainingRecorder()
+        started = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+        recorder.start(
+            key=self._key(),
+            now=started,
+            duration_minutes=1440,
+            direction_scope=TrainingDirection.BOTH,
+        )
+        recorder.record(self._sample(1, "charge"))
+
+        end = datetime(2026, 10, 6, 12, 0, tzinfo=timezone.utc)
+        self.assertEqual(recorder.status["ends_at"], end.isoformat())
+        self.assertIsNone(
+            recorder.tick(now=datetime(2026, 10, 6, 11, 59, tzinfo=timezone.utc))
+        )
+        session = recorder.tick(now=end)
+
+        self.assertIsNotNone(session)
+        self.assertEqual(session.completed_at, end)
+        self.assertEqual(len(session.samples), 1)
+        self.assertFalse(recorder.active)
+
+    def test_training_storage_keeps_recent_sessions_with_sample_budget(self) -> None:
+        sessions = [
+            {"sample_count": 12_000, "label": "old"},
+            {"sample_count": 8_000, "label": "middle"},
+            {"sample_count": 15_000, "label": "new"},
+        ]
+
+        retained = retain_training_sessions(sessions)
+
+        self.assertEqual([item["label"] for item in retained], ["new"])
 
 
 if __name__ == "__main__":
