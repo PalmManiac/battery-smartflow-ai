@@ -2474,6 +2474,15 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
             self._attr_extra_state_attributes = (
                 self.coordinator.native_zendure.overview_attributes()
             )
+        elif self.entity_description.runtime_key == "regulation_training_result":
+            evaluation = (self.coordinator.data or {}).get(
+                "regulation_training_evaluation"
+            )
+            self._attr_extra_state_attributes = (
+                {"shadow_evaluation": evaluation}
+                if isinstance(evaluation, dict)
+                else None
+            )
         else:
             self._attr_extra_state_attributes = None
         super()._handle_coordinator_update()

@@ -499,6 +499,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._training_sessions: list[dict[str, Any]] = []
         self._training_last_result = "not_trained"
+        self._training_last_evaluation: dict[str, Any] | None = None
         self._debug_last_package: str | None = None
         self._debug_last_error: str | None = None
         self._automatic_strategy = AutomaticStrategy()
@@ -2017,6 +2018,38 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Expose only small lifecycle counters, never raw training samples."""
 
         status = self._training_recorder.status
+        evaluation = self._training_last_evaluation
+        public_evaluation = None
+        if isinstance(evaluation, dict):
+            direction_fields = (
+                "sample_count",
+                "response_event_count",
+                "confidence",
+                "baseline_score",
+                "candidate_score",
+                "overshoot_rate",
+                "relative_improvement",
+                "selected_gain_factor",
+                "parameters",
+                "decision",
+            )
+            public_evaluation = {
+                key: evaluation[key]
+                for key in ("status", "method", "interpretation", "score_unit")
+                if key in evaluation
+            }
+            public_evaluation["live_parameters_changed"] = False
+            for direction in ("charge", "discharge"):
+                result = evaluation.get(direction)
+                public_evaluation[direction] = (
+                    {
+                        key: result[key]
+                        for key in direction_fields
+                        if key in result
+                    }
+                    if isinstance(result, dict)
+                    else None
+                )
         return {
             "regulation_training_active": status["active"],
             "regulation_training_started_at": status["started_at"],
@@ -2025,6 +2058,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "regulation_training_sample_count": status["sample_count"],
             "regulation_training_saved_sessions": len(self._training_sessions),
             "regulation_training_result": self._training_last_result,
+            "regulation_training_evaluation": public_evaluation,
         }
 
     async def async_load_regulation_training(self) -> None:
@@ -2046,6 +2080,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if self._training_sessions:
                 evaluation = self._training_sessions[-1].get("shadow_evaluation")
                 if isinstance(evaluation, dict):
+                    self._training_last_evaluation = evaluation
                     self._training_last_result = str(
                         evaluation.get("status", "not_trained")
                     )
@@ -2101,6 +2136,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             await self._save_regulation_training_session(session.as_dict())
         elif session is not None:
             self._training_last_result = "insufficient_data"
+            self._training_last_evaluation = None
         await self.async_request_refresh()
 
     async def _save_regulation_training_session(
@@ -2109,7 +2145,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         evaluation = evaluate_training_session(session)
         session["shadow_evaluation"] = evaluation
         previous_result = self._training_last_result
+        previous_evaluation = self._training_last_evaluation
         self._training_last_result = evaluation["status"]
+        self._training_last_evaluation = evaluation
         profile = session.get("profile")
         if isinstance(profile, dict):
             profile["state"] = evaluation["state"]
@@ -2136,6 +2174,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:  # pragma: no cover - HA storage failure boundary
             self._training_sessions = previous_sessions
             self._training_last_result = previous_result
+            self._training_last_evaluation = previous_evaluation
             _LOGGER.exception("Could not save regulation training session")
 
     async def _capture_regulation_training_sample(
