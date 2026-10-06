@@ -44,6 +44,8 @@ SERVICE_STOP_DEBUG_RECORDING = "stop_debug_recording"
 SERVICE_VERIFY_NATIVE_WRITE = "verify_native_write"
 SERVICE_START_REGULATION_TRAINING = "start_regulation_training"
 SERVICE_STOP_REGULATION_TRAINING = "stop_regulation_training"
+SERVICE_APPLY_REGULATION_TRAINING_CANDIDATE = "apply_regulation_training_candidate"
+SERVICE_RESET_REGULATION_TRAINING_CANDIDATE = "reset_regulation_training_candidate"
 
 
 class _DisabledNativeRuntime:
@@ -170,6 +172,38 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             async_stop_regulation_training,
             schema=vol.Schema({vol.Optional("entry_id"): str}),
         )
+    if not hass.services.has_service(DOMAIN, SERVICE_APPLY_REGULATION_TRAINING_CANDIDATE):
+        async def async_apply_regulation_training_candidate(call: ServiceCall) -> None:
+            coordinator = _coordinator_for_call(hass, call)
+            await coordinator.async_apply_regulation_training_candidate()
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_APPLY_REGULATION_TRAINING_CANDIDATE,
+            async_apply_regulation_training_candidate,
+            schema=vol.Schema(
+                {
+                    vol.Optional("entry_id"): str,
+                    vol.Required("confirm"): vol.In({True}),
+                }
+            ),
+        )
+    if not hass.services.has_service(DOMAIN, SERVICE_RESET_REGULATION_TRAINING_CANDIDATE):
+        async def async_reset_regulation_training_candidate(call: ServiceCall) -> None:
+            coordinator = _coordinator_for_call(hass, call)
+            await coordinator.async_reset_regulation_training_candidate()
+
+        hass.services.async_register(
+            DOMAIN,
+            SERVICE_RESET_REGULATION_TRAINING_CANDIDATE,
+            async_reset_regulation_training_candidate,
+            schema=vol.Schema(
+                {
+                    vol.Optional("entry_id"): str,
+                    vol.Required("confirm"): vol.In({True}),
+                }
+            ),
+        )
     return True
 
 
@@ -183,9 +217,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = ZendureSmartFlowCoordinator(
         hass, entry, debug_recorder=handed_off_recorder
     )
-    load_training = getattr(coordinator, "async_load_regulation_training", None)
-    if callable(load_training):
-        await load_training()
     if cv is None:
         coordinator.native_zendure = _DisabledNativeRuntime()
     else:
@@ -223,6 +254,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ),
             notify=coordinator.async_update_listeners,
         )
+    load_training = getattr(coordinator, "async_load_regulation_training", None)
+    if callable(load_training):
+        await load_training()
     hass.data[DOMAIN][entry.entry_id] = coordinator
 
     initialize_direct_shelly = getattr(

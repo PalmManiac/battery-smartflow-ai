@@ -108,6 +108,7 @@ CONF_BATTERY_AC_POWER_ENTITY = "battery_ac_power_entity"
 # --- New for V3.2.0 ---
 CONF_INSTALLED_PV_WP = "installed_pv_wp"
 CONF_PROFILE_OVERRIDES = "profile_overrides"
+CONF_REGULATION_TRAINING_CANDIDATE = "regulation_training_candidate"
 
 # --- New for V3.5.0 ---
 CONF_EXPERT_MODE_ENABLED = "expert_mode_enabled"

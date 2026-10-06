@@ -75,6 +75,17 @@ class BatterySmartFlowDashboard extends HTMLElement {
         });
         return;
       }
+      const candidateAction = nodeFor("[data-training-candidate-action]");
+      if (candidateAction) {
+        const apply = candidateAction.dataset.trainingCandidateAction === "apply";
+        if (!window.confirm(this._t(apply ? "training_apply_confirm" : "training_reset_confirm"))) return;
+        this._callTraining(
+          apply ? "apply_regulation_training_candidate" : "reset_regulation_training_candidate",
+          candidateAction,
+          { entry_id: candidateAction.dataset.entryId, confirm: true },
+        );
+        return;
+      }
       const configureEntry = nodeFor("[data-reconfigure-entry]");
       if (configureEntry) {
         const entryId = encodeURIComponent(configureEntry.dataset.reconfigureEntry);
@@ -204,7 +215,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       return german ? "zusätzliche Status- und Diagnosesensoren" : "additional status and diagnostic sensors";
     }
     const labels = {
-      training_title: ["Regelungstraining", "Regulation training"], training_description: ["Das passive Training beobachtet reale Lade- und Entladevorgänge. Es ändert keine Live-Regelparameter.", "Passive training observes real charge and discharge behavior. It does not change live regulation parameters."], training_duration: ["Trainingsdauer", "Training duration"], training_direction: ["Zu erfassende Richtung", "Direction to capture"], training_both: ["Laden und Entladen", "Charge and discharge"], training_charge: ["Nur Laden", "Charge only"], training_discharge: ["Nur Entladen", "Discharge only"], training_status: ["Status", "Status"], training_samples: ["Erfasste Samples", "Samples captured"], training_result: ["Letztes Ergebnis", "Last result"], training_active: ["Training läuft", "Training active"], training_idle: ["Kein Training aktiv", "No training active"], training_result_not_trained: ["Noch nicht ausgewertet", "Not evaluated yet"], training_result_training: ["Training läuft", "Training in progress"], training_result_candidate_proposed: ["Shadow-Kandidat verfügbar", "Shadow candidate available"], training_result_no_improvement: ["Keine Verbesserung erkannt", "No improvement found"], training_result_insufficient_data: ["Weitere Trainingsdaten erforderlich", "More training data needed"], training_comparison: ["Shadow-Schätzung – kein Live-Test", "Shadow estimate — not a live test"], training_direction_charge: ["Ladeverhalten", "Charging response"], training_direction_discharge: ["Entladeverhalten", "Discharging response"], training_baseline: ["Bisherige Regelung", "Current regulation"], training_candidate: ["Kandidat", "Candidate"], training_improvement: ["Geschätzte Verringerung des Netzfehlers", "Estimated reduction in grid error"], training_confidence: ["Daten-Konfidenz", "Data confidence"], training_samples_direction: ["Auswertbare Messpunkte", "Usable samples"], training_response_events: ["Befehlswechsel", "Command changes"], training_gain: ["Vorgeschlagener Verstärkungsfaktor", "Proposed gain factor"], training_candidate_rejected: ["Kein Kandidat zur Übernahme empfohlen", "No candidate recommended for adoption"], training_need_more_data: ["Für diese Richtung reichen die Daten noch nicht aus.", "There is not enough data for this direction yet."], training_score_explain: ["Wert = vereinfachter vorhergesagter mittlerer Netzfehler in Watt. Die Prozentzahl ist eine Screening-Schätzung, keine garantierte reale Verbesserung oder Zeitersparnis.", "Score = simplified predicted mean grid error in watts. The percentage is a screening estimate, not a guaranteed real-world improvement or time saving."], training_overshoot: ["Geschätzte Überschwingrate des Kandidaten", "Candidate overshoot estimate"], start_training: ["Training starten", "Start training"], stop_training: ["Training beenden", "Stop training"], configure_entry: ["Integration einstellen / rekonfigurieren", "Configure / reconfigure integration"], no_training_entries: ["Keine geladene BSFAI-Instanz gefunden.", "No loaded BSFAI instance found."], training_started: ["Training gestartet", "Training started"], training_stopped: ["Training beendet", "Training stopped"], training_failed: ["Aktion fehlgeschlagen", "Action failed"], menu_settings: ["Einstellungen", "Settings"],
+      training_apply: ["Vorschlag übernehmen", "Apply candidate"], training_reset: ["Auf Geräteprofil zurücksetzen", "Restore device profile"], training_apply_confirm: ["Den vorgeschlagenen Kandidaten jetzt für diese BSFAI-Instanz aktivieren? Die Prognose ist eine vereinfachte Schätzung, keine Garantie. Du kannst jederzeit zum Geräteprofil zurückkehren.", "Apply this candidate to this BSFAI instance now? The estimate is simplified and not a guarantee. You can restore the device profile at any time."], training_reset_confirm: ["Den angewendeten Trainingskandidaten entfernen und zum Geräteprofil zurückkehren?", "Remove the applied training candidate and restore the device profile?"], training_candidate_active: ["Trainingskandidat ist aktiv", "Training candidate is active"], training_result_candidate_active: ["Trainingskandidat aktiv", "Training candidate active"], training_applied: ["Kandidat aktiviert", "Candidate applied"], training_reset_done: ["Geräteprofil wiederhergestellt", "Device profile restored"],
       overview: ["Übersicht", "Overview"], energy: ["Energie & Prognose", "Energy & forecast"], economics: ["Wirtschaftlichkeit", "Economics"], controls: ["Steuerung", "Controls"],
       subtitle: ["Energiefluss, Speicher und Systemstatus", "Energy flow, storage and system status"], live: ["LIVE · aktualisiert", "LIVE · updated"], energy_overview: ["Energieübersicht", "Energy overview"], live_values: ["Aktuelle Home-Assistant-Werte", "Live Home Assistant values"],
       battery: ["AKKU", "BATTERY"], pv_power: ["PV-LEISTUNG", "PV POWER"], battery_power: ["AKKULEISTUNG", "BATTERY POWER"], grid_power: ["NETZLEISTUNG", "GRID POWER"], current_price: ["AKTUELLER PREIS", "CURRENT PRICE"], waiting_entity: ["Warte auf passenden Sensor", "Waiting for matching entity"], no_data: ["Noch keine Daten", "No data yet"],
@@ -680,10 +691,15 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _callTraining(service, button, data) {
     button.disabled = true;
-    const start = service === "start_regulation_training";
+    const feedback = {
+      start_regulation_training: ["training_started", "start_training"],
+      stop_regulation_training: ["training_stopped", "stop_training"],
+      apply_regulation_training_candidate: ["training_applied", "training_apply"],
+      reset_regulation_training_candidate: ["training_reset_done", "training_reset"],
+    }[service] || ["training_failed", "apply"];
     button.textContent = this._t("saving");
     this._hass.callService("battery_smartflow_ai", service, data).then(() => {
-      button.textContent = this._t(start ? "training_started" : "training_stopped");
+      button.textContent = this._t(feedback[0]);
       this._scheduleRender();
     }).catch((error) => {
       button.textContent = this._t("training_failed");
@@ -692,7 +708,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       window.setTimeout(() => {
         if (!button.isConnected) return;
         button.disabled = false;
-        button.textContent = this._t(start ? "start_training" : "stop_training");
+        button.textContent = this._t(feedback[1]);
       }, 1800);
     });
   }
@@ -708,10 +724,19 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const active = activeState?.state === "yes";
       const samplesState = entry.samples_entity && this._hass.states[entry.samples_entity];
       const resultState = entry.result_entity && this._hass.states[entry.result_entity];
-      const resultKey = `training_result_${resultState?.state || "not_trained"}`;
       const evaluation = resultState?.attributes?.shadow_evaluation;
+      const candidateActive = resultState?.attributes?.candidate_active === true;
+      const resultKey = candidateActive
+        ? "training_result_candidate_active"
+        : `training_result_${resultState?.state || "not_trained"}`;
+      const candidateAvailable = resultState?.attributes?.candidate_available === true;
+      const candidateAction = candidateActive
+        ? `<button class="apply" type="button" data-training-candidate-action="reset" data-entry-id="${entryId}" ${active ? "disabled" : ""}>${this._escape(this._t("training_reset"))}</button>`
+        : candidateAvailable && evaluation?.status === "candidate_proposed"
+          ? `<button class="apply" type="button" data-training-candidate-action="apply" data-entry-id="${entryId}">${this._escape(this._t("training_apply"))}</button>`
+          : "";
       const comparison = evaluation
-        ? `<section class="training-comparison"><h4>${this._escape(this._t("training_comparison"))}</h4><div class="training-directions">${this._trainingDirectionResult("charge", evaluation.charge)}${this._trainingDirectionResult("discharge", evaluation.discharge)}</div><p class="training-score-note">${this._escape(this._t("training_score_explain"))}</p></section>`
+        ? `<section class="training-comparison"><h4>${this._escape(this._t("training_comparison"))}</h4><div class="training-directions">${this._trainingDirectionResult("charge", evaluation.charge)}${this._trainingDirectionResult("discharge", evaluation.discharge)}</div><p class="training-score-note">${this._escape(this._t("training_score_explain"))}</p>${candidateActive ? `<p class="training-muted">${this._escape(this._t("training_candidate_active"))}</p>` : ""}${candidateAction}</section>`
         : "";
       return `<article class="control-card"><h3>${this._escape(entry.title || this._t("system"))}</h3><p class="explain">${this._escape(this._t("training_description"))}</p><div class="detail-row"><span>${this._escape(this._t("training_status"))}</span><strong>${this._escape(this._t(active ? "training_active" : "training_idle"))}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_samples"))}</span><strong>${this._escape(samplesState?.state || "0")}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_result"))}</span><strong>${this._escape(this._t(resultKey))}</strong></div>${comparison}<label for="training-duration-${entryId}">${this._escape(this._t("training_duration"))}</label><select data-training-duration="${entryId}" id="training-duration-${entryId}"><option value="10">10 min</option><option value="30">30 min</option><option value="60">60 min</option><option value="120">120 min</option><option value="1440" selected>24 h</option></select><label for="training-direction-${entryId}">${this._escape(this._t("training_direction"))}</label><select data-training-direction="${entryId}" id="training-direction-${entryId}"><option value="both" selected>${this._escape(this._t("training_both"))}</option><option value="charge">${this._escape(this._t("training_charge"))}</option><option value="discharge">${this._escape(this._t("training_discharge"))}</option></select><button class="apply" type="button" data-training-start="${entryId}" ${active ? "disabled" : ""}>${this._escape(this._t("start_training"))}</button><button class="apply" type="button" data-training-stop="${entryId}" ${active ? "" : "disabled"}>${this._escape(this._t("stop_training"))}</button><button class="apply" type="button" data-reconfigure-entry="${entryId}">${this._escape(this._t("configure_entry"))}</button></article>`;
     }).join("");
