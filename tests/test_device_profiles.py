@@ -3,13 +3,63 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import dataclass
+import importlib
 from pathlib import Path
+import sys
+from types import SimpleNamespace
+from types import ModuleType
 import unittest
 
 from support import bootstrap
 
 
 bootstrap()
+
+ha_components = ModuleType("homeassistant.components")
+ha_components.__path__ = []
+number_component = ModuleType("homeassistant.components.number")
+
+
+@dataclass(frozen=True, kw_only=True)
+class NumberEntityDescription:
+    key: str
+    translation_key: str
+    native_min_value: float = 0.0
+    native_max_value: float = 100.0
+    native_step: float = 1.0
+    native_unit_of_measurement: str | None = None
+    suggested_display_precision: int | None = None
+    mode: str | None = None
+    icon: str | None = None
+
+
+class NumberEntity:
+    @property
+    def native_max_value(self):
+        return getattr(
+            self,
+            "_attr_native_max_value",
+            self.entity_description.native_max_value,
+        )
+
+
+number_component.NumberEntity = NumberEntity
+number_component.NumberEntityDescription = NumberEntityDescription
+ha_components.number = number_component
+sys.modules.setdefault("homeassistant.components", ha_components)
+sys.modules.setdefault("homeassistant.components.number", number_component)
+
+ha_helpers = ModuleType("homeassistant.helpers")
+ha_helpers.__path__ = []
+ha_entity_platform = ModuleType("homeassistant.helpers.entity_platform")
+ha_entity_platform.AddEntitiesCallback = object
+ha_entity_registry = ModuleType("homeassistant.helpers.entity_registry")
+ha_entity_registry.async_get = lambda _hass: None
+ha_helpers.entity_registry = ha_entity_registry
+sys.modules.setdefault("homeassistant.helpers", ha_helpers)
+sys.modules.setdefault("homeassistant.helpers.entity_platform", ha_entity_platform)
+sys.modules.setdefault("homeassistant.helpers.entity_registry", ha_entity_registry)
 
 from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E402
     DEVICE_PROFILE_MODELS,
@@ -28,6 +78,11 @@ from custom_components.battery_smartflow_ai.mode_arbiter import (  # noqa: E402
 from custom_components.battery_smartflow_ai.regulation_power_controller import (  # noqa: E402
     build_regulation_power_config,
 )
+number_module = importlib.import_module(
+    "custom_components.battery_smartflow_ai.number"
+)
+NUMBERS = number_module.NUMBERS
+ZendureSmartFlowNumber = number_module.ZendureSmartFlowNumber
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,7 +127,7 @@ class MixDeviceProfileTests(unittest.TestCase):
                 for field in inherited_fields:
                     self.assertEqual(profile[field], SF2400AC_PROFILE[field])
 
-    def test_power_setting_entities_allow_4000_w(self) -> None:
+    def test_power_setting_descriptions_cover_largest_supported_model(self) -> None:
         tree = ast.parse(NUMBER_SOURCE.read_text(encoding="utf-8"))
         maximum_by_key: dict[str, float] = {}
 
@@ -95,6 +150,71 @@ class MixDeviceProfileTests(unittest.TestCase):
         ):
             with self.subTest(setting=setting):
                 self.assertEqual(maximum_by_key[setting], 4000.0)
+
+    def test_charge_and_discharge_numbers_use_model_hardware_limits(self) -> None:
+        descriptions = {
+            description.runtime_key: description
+            for description in NUMBERS
+        }
+        models = {
+            "SF2400Pro": (2400.0, 2400.0),
+            "SF800Pro": (1000.0, 800.0),
+            "SF4000MixAC+": (4000.0, 4000.0),
+        }
+
+        for model, expected_limits in models.items():
+            with self.subTest(model=model):
+                coordinator = SimpleNamespace(
+                    device_profile_key=model,
+                    runtime_settings={
+                        "max_charge": 4000.0,
+                        "max_discharge": 4000.0,
+                    },
+                    price_currency=None,
+                )
+                entry = SimpleNamespace(entry_id="test-entry", options={})
+                charge = ZendureSmartFlowNumber(
+                    entry, coordinator, descriptions["max_charge"]
+                )
+                discharge = ZendureSmartFlowNumber(
+                    entry, coordinator, descriptions["max_discharge"]
+                )
+
+                self.assertEqual(charge.native_max_value, expected_limits[0])
+                self.assertEqual(discharge.native_max_value, expected_limits[1])
+                self.assertEqual(charge.native_value, expected_limits[0])
+                self.assertEqual(discharge.native_value, expected_limits[1])
+                self.assertEqual(charge._attr_mode, "box")
+                self.assertEqual(discharge._attr_mode, "box")
+
+
+class PowerLimitNumberTests(unittest.IsolatedAsyncioTestCase):
+    async def test_direct_value_submission_is_clamped_to_model_ceiling(self):
+        coordinator = SimpleNamespace(
+            device_profile_key="SF2400Pro",
+            runtime_settings={"max_discharge": 1200.0},
+            price_currency=None,
+        )
+        options_updates = []
+        entry = SimpleNamespace(entry_id="test-entry", options={})
+        entity = ZendureSmartFlowNumber(
+            entry,
+            coordinator,
+            next(item for item in NUMBERS if item.runtime_key == "max_discharge"),
+        )
+        entity.hass = SimpleNamespace(
+            config_entries=SimpleNamespace(
+                async_update_entry=lambda _entry, *, options: options_updates.append(
+                    options
+                )
+            )
+        )
+        entity.async_write_ha_state = lambda: None
+
+        await entity.async_set_native_value(4000.0)
+
+        self.assertEqual(coordinator.runtime_settings["max_discharge"], 2400.0)
+        self.assertEqual(options_updates[0]["max_discharge"], 2400.0)
 
 
 class TypedDeviceProfileTests(unittest.TestCase):
