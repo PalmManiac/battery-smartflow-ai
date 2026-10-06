@@ -139,12 +139,13 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.27"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=40"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.28"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=41"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
         self.assertIn("row.lc ?? row.lu ?? row.last_changed", frontend)
+        self.assertIn(".history-card{cursor:pointer;border-color:#16c4df80;box-shadow:", frontend)
         self.assertIn(".history-card:hover{border-color:var(--cyan);box-shadow:", frontend)
         self.assertNotIn("transform:translateY(-1px)", frontend)
         self.assertIn("row.lu ?? row.last_changed", frontend)
@@ -201,8 +202,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.27"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=40"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.28"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=41"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -234,6 +235,7 @@ class DashboardContractTests(unittest.TestCase):
             self.assertIn(label, frontend)
         self.assertIn("entries.length > 1", frontend)
         self.assertNotIn("<h1>Battery SmartFlow AI Portal</h1>", frontend)
+        self.assertIn(".history-card{cursor:pointer;border-color:#16c4df80;box-shadow:", frontend)
         self.assertIn(".history-card:hover{border-color:var(--cyan);box-shadow:", frontend)
 
     def test_training_dashboard_shows_directional_shadow_estimates(self) -> None:
