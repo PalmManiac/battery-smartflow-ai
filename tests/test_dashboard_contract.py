@@ -139,8 +139,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.28"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=41"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.29"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=42"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -202,8 +202,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.28"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=41"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.29"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=42"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -254,6 +254,19 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('training_score_explain', frontend)
         self.assertIn('data-training-candidate-action="apply"', frontend)
         self.assertIn('data-training-candidate-action="reset"', frontend)
+
+    def test_training_results_include_accessible_visual_score_comparison(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('class="training-score-chart" role="img"', frontend)
+        self.assertIn('class="training-score-track"', frontend)
+        self.assertIn('training_estimated_improvement:', frontend)
+        self.assertIn('training_estimated_regression:', frontend)
+        self.assertIn('training_estimated_no_change:', frontend)
+        self.assertIn(".training-score-track i.candidate.better", frontend)
+        self.assertIn(".training-score-track i.candidate.worse", frontend)
 
 
 if __name__ == "__main__":
