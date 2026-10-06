@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from base64 import b64encode
 from datetime import datetime, timedelta, timezone
 import sys
@@ -9,6 +10,7 @@ from types import SimpleNamespace
 from types import ModuleType
 import unittest
 from dataclasses import replace
+from unittest.mock import patch
 
 from support import bootstrap as bootstrap_test_environment
 
@@ -621,6 +623,31 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         target._zensdk_failures["failing"] = 0
         target._schedule_zensdk_poll("failing", 190.0)
         self.assertEqual(target._zensdk_poll_delay["failing"], 5.0)
+
+    async def test_poll_backoff_starts_after_slow_request_completes(self):
+        target = NativeZendureRuntime(SimpleNamespace(), app_token="configured",
+                                     selected_device=None, notify=lambda: None)
+        target._bootstrap = object()
+        target._zensdk_next_poll["device"] = 0.0
+
+        async def slow_failure(*_args, **_kwargs):
+            await asyncio.sleep(0.05)
+            return ZenSdkReadResult(
+                (), (ZenSdkReadAttempt("device", "device_list_ip", "timeout"),)
+            )
+
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        with patch(
+            "custom_components.battery_smartflow_ai.native_zendure_runtime.async_read_zensdk_reports",
+            slow_failure,
+        ):
+            await target._async_poll_zensdk(now_monotonic=0.0)
+        completed = loop.time()
+
+        self.assertEqual(target._zensdk_poll_delay["device"], 10.0)
+        self.assertGreaterEqual(target._zensdk_next_poll["device"], completed + 9.99)
+        self.assertGreater(target._zensdk_next_poll["device"], started + 10.0)
 
     def test_cloud_capture_failure_is_nonfatal_after_selected_zensdk_success(self):
         target = NativeZendureRuntime(

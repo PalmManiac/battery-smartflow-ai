@@ -1396,10 +1396,15 @@ class NativeZendureRuntime:
             self._get_json,
             candidate_ids=frozenset(due),
         )
+        # Start the retry delay after the request finishes. Measuring it from
+        # the poll's start can consume the whole backoff while trying the
+        # device-list IP and derived hostname sequentially, causing immediate
+        # retries after slow timeouts.
+        completed = asyncio.get_running_loop().time()
         self._record_zensdk_cycle(result)
         self._apply_messages(result.messages)
         for candidate_id in due:
-            self._schedule_zensdk_poll(candidate_id, current)
+            self._schedule_zensdk_poll(candidate_id, completed)
 
     def _initialize_zensdk_schedule(self, now_monotonic: float) -> None:
         """Schedule every supported local device independently."""
