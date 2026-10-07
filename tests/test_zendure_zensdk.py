@@ -705,6 +705,50 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(target._capture_failure_is_fatal("subscribe_failed"))
 
+    def test_dashboard_topology_keeps_inventory_without_volatile_timestamps(self):
+        target = NativeZendureRuntime.__new__(NativeZendureRuntime)
+
+        def overview_attributes():
+            return {
+                "systems": [
+                    {
+                        "id": "DEVICE_PUBLIC",
+                        "name": "SolarFlow",
+                        "model": "SolarFlow 2400 AC",
+                        "profile": "sf2400ac",
+                        "selected": True,
+                        "migration_binding": "not_bound",
+                        "online": True,
+                        "status": "online",
+                        "transport": "zensdk",
+                        "observed_transport": "zensdk",
+                        "data_age_seconds": 0.3,
+                        "last_data_at": "2026-10-07T12:00:00Z",
+                        "hems_last_updated": "2026-10-07T12:00:00Z",
+                        "packs": [
+                            {
+                                "id": "PACK_PUBLIC",
+                                "model": "AB3000",
+                                "serial_number": "must-not-leak",
+                            }
+                        ],
+                    }
+                ]
+            }
+
+        target.overview_attributes = overview_attributes
+
+        attributes = target.topology_attributes()
+
+        self.assertEqual(len(attributes["systems"]), 1)
+        system = attributes["systems"][0]
+        self.assertEqual(system["model"], "SolarFlow 2400 AC")
+        self.assertEqual(system["packs"], [{"id": "PACK_PUBLIC", "model": "AB3000"}])
+        self.assertNotIn("data_age_seconds", system)
+        self.assertNotIn("last_data_at", system)
+        self.assertNotIn("hems_last_updated", system)
+        self.assertNotIn("serial_number", system["packs"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

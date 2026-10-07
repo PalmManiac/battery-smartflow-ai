@@ -9,6 +9,17 @@ COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
 
 
 class DashboardContractTests(unittest.TestCase):
+    def test_topology_reads_inventory_without_false_health_warning(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Array.isArray(entity.attributes.systems)", frontend)
+        self.assertIn(
+            "ages.length > 0 && ages.length < systems.length",
+            frontend,
+        )
+
     def test_static_dashboard_route_registration_is_serialized(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
 

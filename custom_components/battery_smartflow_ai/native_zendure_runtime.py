@@ -537,6 +537,42 @@ class NativeZendureRuntime:
             ),
         }
 
+    def topology_attributes(self) -> dict[str, Any]:
+        """Return stable inventory metadata for the dashboard topology.
+
+        The full overview includes per-message timestamps and ages. Publishing
+        those on a recorder-facing entity causes unnecessary state writes, so
+        expose only the hierarchy and low-frequency status fields here.
+        """
+
+        overview = self.overview_attributes()
+        system_fields = (
+            "id",
+            "name",
+            "model",
+            "profile",
+            "selected",
+            "migration_binding",
+            "online",
+            "status",
+            "transport",
+            "observed_transport",
+        )
+        return {
+            "systems": [
+                {
+                    **{key: system[key] for key in system_fields if key in system},
+                    "packs": [
+                        {key: pack[key] for key in ("id", "model") if key in pack}
+                        for pack in system.get("packs", [])
+                        if isinstance(pack, dict)
+                    ],
+                }
+                for system in overview.get("systems", [])
+                if isinstance(system, dict)
+            ]
+        }
+
     def hardware_overview(self):
         """Return the privacy-safe native hierarchy used by HA entities."""
 
