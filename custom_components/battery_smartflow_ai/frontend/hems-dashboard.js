@@ -568,7 +568,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const offline = systems.length - online;
     const ages = systems.map((system) => system.data_age_seconds == null ? NaN : Number(system.data_age_seconds)).filter((age) => Number.isFinite(age) && age >= 0);
     const oldest = ages.length ? Math.max(...ages) : null;
-    const needsAttention = offline > 0 || ages.length < systems.length;
+    const needsAttention = offline > 0 || (
+      ages.length > 0 && ages.length < systems.length
+    );
     return `<section class="section health-summary ${needsAttention ? "attention" : "healthy"}" aria-label="${this._escape(this._t("system_health"))}"><div class="section-head"><h2>${this._escape(this._t("system_health"))}</h2><span class="health-state">${this._escape(this._t(needsAttention ? "attention" : "all_online"))}</span></div><div class="health-grid"><article><small>${this._escape(this._t("online_systems"))}</small><strong>${online} / ${systems.length}</strong></article><article><small>${this._escape(this._t("offline_systems"))}</small><strong>${offline}</strong></article><article><small>${this._escape(this._t("oldest_telemetry"))}</small><strong>${this._escape(oldest == null ? this._t("unavailable") : this._formatAge(oldest))}</strong></article></div></section>`;
   }
 

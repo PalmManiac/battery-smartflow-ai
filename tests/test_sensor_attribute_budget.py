@@ -79,7 +79,7 @@ class SensorAttributeBudgetTests(unittest.TestCase):
             {name for name in method_names if name.startswith("_build_") and name.endswith("_attributes")}
         )
 
-    def test_every_coordinator_update_clears_extra_state_attributes(self) -> None:
+    def test_native_topology_keeps_only_low_churn_inventory_attributes(self) -> None:
         source = SENSOR.read_text(encoding="utf-8")
 
         self.assertIn("self._attr_extra_state_attributes = None", source)
@@ -91,8 +91,24 @@ class SensorAttributeBudgetTests(unittest.TestCase):
             if isinstance(node, ast.FunctionDef)
             and node.name == "_handle_coordinator_update"
         )
-        self.assertNotIn('runtime_key == "native_zendure_device_count"', update_method)
+        self.assertIn('runtime_key == "native_zendure_device_count"', update_method)
+        self.assertIn("topology_attributes()", update_method)
         self.assertNotIn("overview_attributes()", update_method)
+
+        runtime = (
+            ROOT
+            / "custom_components"
+            / "battery_smartflow_ai"
+            / "native_zendure_runtime.py"
+        ).read_text(encoding="utf-8")
+        topology_method = runtime[
+            runtime.index("def topology_attributes"):
+            runtime.index("def hardware_overview")
+        ]
+        self.assertIn('"packs"', topology_method)
+        self.assertNotIn('"data_age_seconds"', topology_method)
+        self.assertNotIn('"last_data_at"', topology_method)
+        self.assertNotIn('"hems_last_updated"', topology_method)
 
 
 if __name__ == "__main__":
