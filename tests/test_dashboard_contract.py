@@ -150,8 +150,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.29"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=42"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.30"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=43"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -213,8 +213,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.29"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=42"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.30"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=43"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -227,9 +227,14 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('data-view="settings"', frontend)
         self.assertIn('data-training-start=', frontend)
         self.assertIn('data-training-stop=', frontend)
-        self.assertIn('this._hass.callService("battery_smartflow_ai", service, data)', frontend)
         self.assertIn('data-reconfigure-entry=', frontend)
         self.assertIn('/config/integrations/integration/battery_smartflow_ai#config_entry=', frontend)
+        self.assertIn('data-dashboard-setting="general"', frontend)
+        self.assertIn('data-dashboard-setting="expert"', frontend)
+        self.assertIn('data-dashboard-setting="debug-', frontend)
+        self.assertIn('config/config_entries/options/flow', frontend)
+        self.assertIn('"debug_active_entity": entity_registry.async_get_entity_id(', dashboard)
+        self.assertIn('this._hass.callService("battery_smartflow_ai", service, data)', frontend)
 
     def test_training_dashboard_labels_are_localized_and_redundant_branding_is_removed(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
@@ -238,6 +243,9 @@ class DashboardContractTests(unittest.TestCase):
 
         for label in (
             'menu_settings: ["Einstellungen & Training", "Settings & training"]',
+            'general_settings: ["Allgemein", "General"]',
+            'expert_settings: ["Expertenmodus", "Expert mode"]',
+            'debug_settings: ["Debug-Modus", "Debug mode"]',
             'training_title: ["Regelungstraining", "Regulation training"]',
             'start_training: ["Training starten", "Start training"]',
             'training_result_candidate_proposed:',
