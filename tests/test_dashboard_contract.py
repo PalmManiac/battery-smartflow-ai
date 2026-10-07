@@ -227,12 +227,12 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('data-view="settings"', frontend)
         self.assertIn('data-training-start=', frontend)
         self.assertIn('data-training-stop=', frontend)
-        self.assertIn('data-reconfigure-entry=', frontend)
-        self.assertIn('/config/integrations/integration/battery_smartflow_ai#config_entry=', frontend)
         self.assertIn('data-dashboard-setting="general"', frontend)
         self.assertIn('data-dashboard-setting="expert"', frontend)
         self.assertIn('data-dashboard-setting="debug-', frontend)
         self.assertIn('config/config_entries/options/flow', frontend)
+        self.assertIn('class="section option-editor"', frontend)
+        self.assertNotIn('/config/integrations/integration/battery_smartflow_ai#config_entry=', frontend)
         self.assertIn('"debug_active_entity": entity_registry.async_get_entity_id(', dashboard)
         self.assertIn('this._hass.callService("battery_smartflow_ai", service, data)', frontend)
 
@@ -249,7 +249,6 @@ class DashboardContractTests(unittest.TestCase):
             'training_title: ["Regelungstraining", "Regulation training"]',
             'start_training: ["Training starten", "Start training"]',
             'training_result_candidate_proposed:',
-            'configure_entry: ["Integration konfigurieren", "Configure integration"]',
         ):
             self.assertIn(label, frontend)
         self.assertIn("entries.length > 1", frontend)
