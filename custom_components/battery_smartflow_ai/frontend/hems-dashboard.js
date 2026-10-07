@@ -86,15 +86,40 @@ class BatterySmartFlowDashboard extends HTMLElement {
         );
         return;
       }
-      const configureEntry = nodeFor("[data-reconfigure-entry]");
-      if (configureEntry) {
-        const entryId = encodeURIComponent(configureEntry.dataset.reconfigureEntry);
-        const path = `/config/integrations/integration/battery_smartflow_ai#config_entry=${entryId}`;
-        if (this._hass && typeof this._hass.navigate === "function") {
-          this._hass.navigate(path);
+      const dashboardSetting = nodeFor("[data-dashboard-setting]");
+      if (dashboardSetting) {
+        const entryId = dashboardSetting.dataset.entryId;
+        const setting = dashboardSetting.dataset.dashboardSetting;
+        if (setting === "debug-start") {
+          if (!window.confirm(this._t("debug_warning"))) return;
+          const duration = this.shadowRoot.querySelector(`[data-debug-duration="${CSS.escape(entryId)}"]`);
+          this._callTraining("start_debug_recording", dashboardSetting, {
+            entry_id: entryId,
+            duration_minutes: Number(duration?.value || 10),
+          });
+        } else if (setting === "debug-stop") {
+          this._callTraining("stop_debug_recording", dashboardSetting, { entry_id: entryId });
         } else {
-          window.location.assign(path);
+          this._openOptionsFlow(entryId, setting);
         }
+        return;
+      }
+      const optionsNext = nodeFor("[data-options-next]");
+      if (optionsNext) {
+        this._submitOptionsFlow(optionsNext.dataset.optionsNext);
+        return;
+      }
+      if (nodeFor("[data-options-submit]")) {
+        this._submitOptionsFlow();
+        return;
+      }
+      if (nodeFor("[data-options-close]")) {
+        if (this._optionsFlowId) {
+          this._hass.callApi("DELETE", `config/config_entries/options/flow/${this._optionsFlowId}`).catch(() => {});
+        }
+        this._optionsFlowId = null;
+        this._optionsFlowBody = "";
+        this._scheduleRender();
         return;
       }
       const historyButton = nodeFor("[data-history-entity]");
@@ -215,7 +240,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
       return german ? "zusätzliche Status- und Diagnosesensoren" : "additional status and diagnostic sensors";
     }
     const labels = {
-      menu_settings: ["Einstellungen & Training", "Settings & training"], configure_entry: ["Integration konfigurieren", "Configure integration"],
+      menu_settings: ["Einstellungen & Training", "Settings & training"],
+      general_settings: ["Allgemein", "General"], expert_settings: ["Expertenmodus", "Expert mode"], debug_settings: ["Debug-Modus", "Debug mode"], settings_shortcuts: ["Einstellungen", "Settings"], settings_description: ["Diese Bereiche sind auch weiterhin über das Zahnrad-Menü erreichbar.", "These sections remain available from the gear menu as well."], debug_description: ["Technische Aufzeichnung für die Fehlersuche. Sie kann Sensor-, Geräte-, Energie- und Preiswerte enthalten. Prüfe das Paket vor dem Teilen auf private Informationen.", "Technical recording for troubleshooting. It may contain sensor, device, energy and price values. Review the package for private information before sharing."], debug_warning: ["Debug-Aufzeichnung starten? Sie kann Sensor-, Geräte-, Energie- und Preiswerte enthalten. Prüfe das Paket vor dem Teilen auf private Informationen.", "Start debug recording? It may contain sensor, device, energy and price values. Review the package for private information before sharing."], debug_active: ["Aufzeichnung läuft", "Recording active"], debug_idle: ["Keine Aufzeichnung aktiv", "No recording active"], debug_samples: ["Erfasste Datensätze", "Samples recorded"], debug_end: ["Endet", "Ends"], debug_duration: ["Aufzeichnungsdauer", "Recording duration"], debug_start: ["Debug-Aufzeichnung starten", "Start debug recording"], debug_stop: ["Aufzeichnung beenden und exportieren", "Stop and export recording"], debug_started: ["Aufzeichnung gestartet", "Recording started"], debug_stopped: ["Aufzeichnung beendet", "Recording stopped"], settings_saved: ["Einstellungen gespeichert.", "Settings saved."], settings_closed: ["Einstellungsdialog geschlossen.", "Settings dialog closed."], options_continue: ["Weiter", "Continue"], options_save: ["Speichern", "Save"], options_cancel: ["Schließen", "Close"],
       no_training_entries: ["Keine Regelungstrainings-Entität gefunden.", "No regulation training entity was found."],
       training_title: ["Regelungstraining", "Regulation training"], training_description: ["Das Training beobachtet Lade- und Entladephasen, ohne die aktive Regelung zu verändern.", "Training observes charge and discharge periods without changing active regulation."],
       training_status: ["Status", "Status"], training_active: ["Läuft", "Running"], training_idle: ["Inaktiv", "Idle"], training_samples: ["Trainingsdaten", "Training samples"], training_result: ["Ergebnis", "Result"], training_duration: ["Trainingsdauer", "Training duration"], training_direction: ["Trainingsrichtung", "Training direction"], training_both: ["Laden und Entladen", "Charge and discharge"], training_charge: ["Nur Laden", "Charging only"], training_discharge: ["Nur Entladen", "Discharging only"], start_training: ["Training starten", "Start training"], stop_training: ["Training beenden", "Stop training"],
@@ -700,6 +726,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
   _callTraining(service, button, data) {
     button.disabled = true;
     const feedback = {
+      start_debug_recording: ["debug_started", "debug_start"],
+      stop_debug_recording: ["debug_stopped", "debug_stop"],
       start_regulation_training: ["training_started", "start_training"],
       stop_regulation_training: ["training_stopped", "stop_training"],
       apply_regulation_training_candidate: ["training_applied", "training_apply"],
@@ -721,6 +749,122 @@ class BatterySmartFlowDashboard extends HTMLElement {
     });
   }
 
+  async _openOptionsFlow(entryId, stepId) {
+    try {
+      const flow = await this._hass.callApi("POST", "config/config_entries/options/flow", {
+        handler: entryId,
+      });
+      this._optionsFlowId = flow.flow_id;
+      const step = await this._hass.callApi("POST", `config/config_entries/options/flow/${flow.flow_id}`, {
+        next_step_id: stepId,
+      });
+      this._renderOptionsFlow(step);
+    } catch (error) {
+      this._showNotice(String(error));
+    }
+  }
+
+  _optionsFieldLabel(name) {
+    const labels = {
+      installed_pv_wp: ["Installierte PV-Leistung (Wp)", "Installed PV power (Wp)"],
+      expert_mode_enabled: ["Expertenmodus aktivieren", "Enable expert mode"],
+      learned_planning_enabled: ["Lernende Ladeplanung aktivieren", "Enable learned charge planning"],
+      full_charge_maintenance_enabled: ["Regelmäßige Vollladung aktivieren", "Enable periodic full charge"],
+      full_charge_maintenance_interval_days: ["Intervall in Tagen", "Interval in days"],
+      cell_voltage_protection_enabled: ["Zellspannungs-Schutz aktivieren", "Enable cell-voltage protection"],
+      cell_voltage_warning: ["Warnschwelle (V)", "Warning threshold (V)"],
+      cell_voltage_cutoff: ["Abschaltschwelle (V)", "Cutoff threshold (V)"],
+      cell_voltage_resume: ["Fortsetzen ab (V)", "Resume threshold (V)"],
+      lowest_cell_voltage_pack_1: ["Niedrigste Zellspannung Akku-Pack 1", "Lowest cell voltage battery pack 1"],
+      lowest_cell_voltage_pack_2: ["Niedrigste Zellspannung Akku-Pack 2", "Lowest cell voltage battery pack 2"],
+      lowest_cell_voltage_pack_3: ["Niedrigste Zellspannung Akku-Pack 3", "Lowest cell voltage battery pack 3"],
+      lowest_cell_voltage_pack_4: ["Niedrigste Zellspannung Akku-Pack 4", "Lowest cell voltage battery pack 4"],
+      lowest_cell_voltage_pack_5: ["Niedrigste Zellspannung Akku-Pack 5", "Lowest cell voltage battery pack 5"],
+      lowest_cell_voltage_pack_6: ["Niedrigste Zellspannung Akku-Pack 6", "Lowest cell voltage battery pack 6"],
+      native_capacity_override_kwh: ["Manuelle Kapazitätskorrektur (kWh)", "Manual capacity override (kWh)"],
+    }[name];
+    if (labels) return labels[String(this._hass?.locale?.language || "").toLowerCase().startsWith("de") ? 0 : 1];
+    return name.replaceAll("_", " ");
+  }
+
+  _renderOptionsFlow(step) {
+    if (!step || step.type === "abort" || step.type === "create_entry") {
+      const finished = step?.type === "create_entry";
+      this._optionsFlowId = null;
+      this._scheduleRender();
+      this._showNotice(this._t(finished ? "settings_saved" : "settings_closed"));
+      return;
+    }
+    const title = step.step_id === "general" ? this._t("general_settings") : this._t("expert_settings");
+    let content = "";
+    if (step.type === "menu") {
+      const menuLabel = { general: "general_settings", expert: "expert_settings", debug: "debug_settings" };
+      content = (step.menu_options || []).filter((option) => menuLabel[option]).map((option) => `<button class="apply" type="button" data-options-next="${this._escape(option)}">${this._escape(this._t(menuLabel[option]))}</button>`).join("");
+    } else if (step.type === "form") {
+      const fields = (step.data_schema || []).map((field) => {
+        const selector = field.selector || {};
+        const fieldType = Object.keys(selector)[0];
+        const config = selector[fieldType] || {};
+        const name = this._escape(field.name);
+        const label = this._escape(this._optionsFieldLabel(field.name));
+        const value = field.default ?? field.value ?? "";
+        if (fieldType === "boolean") return `<label class="option-field"><span>${label}</span><input type="checkbox" data-option-field="${name}" ${value ? "checked" : ""}></label>`;
+        if (fieldType === "select") {
+          const options = (config.options || []).map((option) => {
+            const optionValue = typeof option === "object" ? option.value : option;
+            const optionLabel = typeof option === "object" ? (option.label || option.value) : option;
+            return `<option value="${this._escape(optionValue)}" ${String(optionValue) === String(value) ? "selected" : ""}>${this._escape(optionLabel)}</option>`;
+          }).join("");
+          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}">${options}</select></label>`;
+        }
+        if (fieldType === "entity") {
+          const domain = config.domain || "sensor";
+          const entities = Object.keys(this._hass?.states || {}).filter((entityId) => !domain || entityId.startsWith(`${domain}.`)).sort();
+          const options = [`<option value="">—</option>`, ...entities.map((entityId) => `<option value="${this._escape(entityId)}" ${entityId === value ? "selected" : ""}>${this._escape(this._hass.states[entityId]?.attributes?.friendly_name || entityId)}</option>`)].join("");
+          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}">${options}</select></label>`;
+        }
+        const number = fieldType === "number";
+        return `<label class="option-field"><span>${label}</span><input data-option-field="${name}" type="${number ? "number" : "text"}" value="${this._escape(value)}" ${config.min !== undefined ? `min="${config.min}"` : ""} ${config.max !== undefined ? `max="${config.max}"` : ""} ${config.step !== undefined ? `step="${config.step}"` : ""}></label>`;
+      }).join("");
+      content = `${fields}<button class="apply" type="button" data-options-submit>${this._escape(step.step_id === "general" || step.step_id === "expert_cell_voltage_config" ? this._t("options_save") : this._t("options_continue"))}</button>`;
+    }
+    this._optionsFlowTitle = title;
+    this._optionsFlowBody = content;
+    this._scheduleRender();
+  }
+
+  async _submitOptionsFlow(nextStepId = null) {
+    const data = {};
+    if (nextStepId) {
+      data.next_step_id = nextStepId;
+    } else {
+      const userInput = {};
+      this.shadowRoot.querySelectorAll("[data-option-field]").forEach((field) => {
+        userInput[field.dataset.optionField] = field.type === "checkbox" ? field.checked
+          : field.type === "number" ? Number(field.value) : field.value;
+      });
+      Object.assign(data, userInput);
+    }
+    try {
+      this._renderOptionsFlow(await this._hass.callApi(
+        "POST",
+        `config/config_entries/options/flow/${this._optionsFlowId}`,
+        data,
+      ));
+    } catch (error) {
+      this._showNotice(String(error));
+    }
+  }
+
+  _showNotice(message) {
+    this._notice = String(message || "");
+    this._scheduleRender();
+    window.setTimeout(() => {
+      this._notice = "";
+      this._scheduleRender();
+    }, 3000);
+  }
+
   _trainingView() {
     const entries = this._panel?.config?.training_entries || [];
     if (!entries.length) {
@@ -730,6 +874,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const entryId = this._escape(entry.entry_id);
       const activeState = entry.active_entity && this._hass.states[entry.active_entity];
       const active = activeState?.state === "yes";
+      const debugState = entry.debug_active_entity && this._hass.states[entry.debug_active_entity];
+      const debugActive = ["yes", "on", "true"].includes(String(debugState?.state || "").toLowerCase());
+      const debugSamples = entry.debug_samples_entity && this._hass.states[entry.debug_samples_entity]?.state || "0";
+      const debugEnds = entry.debug_ends_entity && this._hass.states[entry.debug_ends_entity]?.state || "—";
+      const settingsShortcuts = `<section class="settings-shortcuts"><h3>${this._escape(this._t("settings_shortcuts"))}</h3><p class="muted">${this._escape(this._t("settings_description"))}</p><div class="settings-actions"><button class="apply" type="button" data-dashboard-setting="general" data-entry-id="${entryId}">${this._escape(this._t("general_settings"))}</button><button class="apply" type="button" data-dashboard-setting="expert" data-entry-id="${entryId}">${this._escape(this._t("expert_settings"))}</button></div></section><section class="debug-panel"><h3>${this._escape(this._t("debug_settings"))}</h3><p class="muted">${this._escape(this._t("debug_description"))}</p><div class="detail-row"><span>${this._escape(this._t("training_status"))}</span><strong>${this._escape(this._t(debugActive ? "debug_active" : "debug_idle"))}</strong></div>${debugActive ? `<div class="detail-row"><span>${this._escape(this._t("debug_samples"))}</span><strong>${this._escape(debugSamples)}</strong></div><div class="detail-row"><span>${this._escape(this._t("debug_end"))}</span><strong>${this._escape(debugEnds)}</strong></div>` : `<label for="debug-duration-${entryId}">${this._escape(this._t("debug_duration"))}</label><select id="debug-duration-${entryId}" data-debug-duration="${entryId}"><option value="10">10 min</option><option value="30">30 min</option><option value="60">60 min</option><option value="120">120 min</option></select>`}<button class="apply" type="button" data-dashboard-setting="debug-${debugActive ? "stop" : "start"}" data-entry-id="${entryId}">${this._escape(this._t(debugActive ? "debug_stop" : "debug_start"))}</button></section>`;
       const samplesState = entry.samples_entity && this._hass.states[entry.samples_entity];
       const resultState = entry.result_entity && this._hass.states[entry.result_entity];
       const evaluation = resultState?.attributes?.shadow_evaluation;
@@ -749,9 +898,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const entryHeading = entries.length > 1
         ? `<h3>${this._escape(entry.title || this._t("system"))}</h3>`
         : "";
-      return `<article class="control-card">${entryHeading}<div class="detail-row"><span>${this._escape(this._t("training_status"))}</span><strong>${this._escape(this._t(active ? "training_active" : "training_idle"))}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_samples"))}</span><strong>${this._escape(samplesState?.state || "0")}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_result"))}</span><strong>${this._escape(this._t(resultKey))}</strong></div>${comparison}<label for="training-duration-${entryId}">${this._escape(this._t("training_duration"))}</label><select data-training-duration="${entryId}" id="training-duration-${entryId}"><option value="10">10 min</option><option value="30">30 min</option><option value="60">60 min</option><option value="120">120 min</option><option value="1440" selected>24 h</option></select><label for="training-direction-${entryId}">${this._escape(this._t("training_direction"))}</label><select data-training-direction="${entryId}" id="training-direction-${entryId}"><option value="both" selected>${this._escape(this._t("training_both"))}</option><option value="charge">${this._escape(this._t("training_charge"))}</option><option value="discharge">${this._escape(this._t("training_discharge"))}</option></select><button class="apply" type="button" data-training-start="${entryId}" ${active ? "disabled" : ""}>${this._escape(this._t("start_training"))}</button><button class="apply" type="button" data-training-stop="${entryId}" ${active ? "" : "disabled"}>${this._escape(this._t("stop_training"))}</button><button class="apply" type="button" data-reconfigure-entry="${entryId}">${this._escape(this._t("configure_entry"))}</button></article>`;
+      return `<article class="control-card">${entryHeading}${settingsShortcuts}<div class="detail-row"><span>${this._escape(this._t("training_status"))}</span><strong>${this._escape(this._t(active ? "training_active" : "training_idle"))}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_samples"))}</span><strong>${this._escape(samplesState?.state || "0")}</strong></div><div class="detail-row"><span>${this._escape(this._t("training_result"))}</span><strong>${this._escape(this._t(resultKey))}</strong></div>${comparison}<label for="training-duration-${entryId}">${this._escape(this._t("training_duration"))}</label><select data-training-duration="${entryId}" id="training-duration-${entryId}"><option value="10">10 min</option><option value="30">30 min</option><option value="60">60 min</option><option value="120">120 min</option><option value="1440" selected>24 h</option></select><label for="training-direction-${entryId}">${this._escape(this._t("training_direction"))}</label><select data-training-direction="${entryId}" id="training-direction-${entryId}"><option value="both" selected>${this._escape(this._t("training_both"))}</option><option value="charge">${this._escape(this._t("training_charge"))}</option><option value="discharge">${this._escape(this._t("training_discharge"))}</option></select><button class="apply" type="button" data-training-start="${entryId}" ${active ? "disabled" : ""}>${this._escape(this._t("start_training"))}</button><button class="apply" type="button" data-training-stop="${entryId}" ${active ? "" : "disabled"}>${this._escape(this._t("stop_training"))}</button></article>`;
     }).join("");
-    return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("training_title"))}</h2><small>${this._escape(this._t("training_description"))}</small></div><div class="control-grid">${cards}</div></section>`;
+    const flowEditor = this._optionsFlowId ? `<section class="section option-editor"><div class="section-head"><h2>${this._escape(this._optionsFlowTitle || this._t("settings_shortcuts"))}</h2><small>${this._escape(this._t("settings_description"))}</small></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section>` : "";
+    const notice = this._notice ? `<p class="settings-notice" role="status">${this._escape(this._notice)}</p>` : "";
+    return `${notice}${flowEditor}<section class="section"><div class="section-head"><h2>${this._escape(this._t("training_title"))}</h2><small>${this._escape(this._t("training_description"))}</small></div><div class="control-grid">${cards}</div></section>`;
   }
 
   _trainingDirectionResult(direction, result) {
@@ -1284,6 +1435,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .section{background:#1b1e21;border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}.section h2{font-size:17px;margin:0}.section-head small,.muted{color:var(--muted)}
         nav{display:flex;gap:8px;margin:8px 0 18px;border-bottom:1px solid var(--line);padding-bottom:12px}.tab{border:1px solid #41464b;background:#25292d;color:#c4c8cc;border-radius:8px;padding:9px 15px;font:inherit;cursor:pointer}.tab.active{border-color:#2388ad;background:#183847;color:#e5f8fc}.tab:focus-visible,.apply:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}.metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}.metric{min-height:125px;padding:18px;border:1px solid #41464b;border-top:3px solid var(--cyan);border-radius:11px;background:#292d31;display:flex;flex-direction:column;gap:11px}.metric:nth-child(2){border-top-color:var(--green)}.metric:nth-child(3){border-top-color:var(--amber)}.metric span{font-size:11px;letter-spacing:.11em;color:#b1b5b9}.metric strong{font-size:clamp(21px,2vw,30px);font-variant-numeric:tabular-nums}.metric small{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .reading-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}.reading{min-height:105px;padding:15px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:8px}.reading span{color:#bdc2c6;font-size:12px}.reading strong{font-size:22px;font-variant-numeric:tabular-nums}.reading small{color:var(--muted);line-height:1.35}.forecast-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:14px}.forecast-group{min-width:0;padding:12px;border:1px solid #343a40;border-radius:11px;background:#202428}.forecast-group h3{font-size:13px;color:#c7cbd0;margin:0 0 10px}.forecast-group .reading{min-height:92px;padding:12px}.forecast-group .reading-grid{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}.flow-grid{display:grid;gap:8px}.flow-row{display:grid;grid-template-columns:minmax(130px,1fr) 3fr minmax(85px,.7fr);gap:14px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}.flow-row span{color:#c3c7ca}.flow-row strong{text-align:right;font-variant-numeric:tabular-nums}.flow-track{height:9px;background:#30353a;border-radius:999px;overflow:hidden}.flow-track i{display:block;width:48%;height:100%;background:linear-gradient(90deg,#1bb7df,#54d08a);border-radius:999px}.explain{color:var(--muted);font-size:12px;line-height:1.5;margin:14px 0 0}.subsection{margin-top:18px}.subsection h3{font-size:14px;color:#c7cbd0;margin:0 0 10px}.control-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:11px}.control-card{min-width:0;padding:14px;border:1px solid #41464b;border-radius:10px;background:#272b2f;display:flex;flex-direction:column;gap:10px}.control-card label{font-size:13px;color:#d1d5d8}.control-card select,.control-card input{width:100%;min-width:0;background:#171a1d;color:#eef0f1;border:1px solid #4b535a;border-radius:7px;padding:10px;font:inherit}.number-control{display:flex;align-items:center;gap:8px}.number-control span{color:var(--muted);min-width:30px}.control-card small{color:var(--muted);font-size:11px}.apply{align-self:flex-end;border:1px solid #247b9b;background:#153746;color:#dff8ff;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer}.apply:disabled{opacity:.65;cursor:wait}
+        .settings-shortcuts,.debug-panel{padding:12px;border:1px solid #3f6578;border-radius:9px;background:#20282d}.settings-shortcuts h3,.debug-panel h3{margin:0;font-size:14px}.settings-actions{display:flex;flex-wrap:wrap;gap:8px}.settings-actions .apply{align-self:auto}.debug-panel .apply{margin-top:7px}.settings-notice{padding:10px 14px;border:1px solid #3f6578;border-radius:8px;background:#1e3440;color:#dff8ff}.option-editor{max-width:100%}.option-editor-body{display:grid;gap:10px}.option-editor .apply{margin-top:10px}.option-field{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:10px 0;padding:10px;border:1px solid #343a40;border-radius:7px;background:#24282c}.option-field input[type=checkbox]{width:24px;height:24px}.option-field input:not([type=checkbox]),.option-field select{max-width:55%}.option-editor .apply[data-options-next]{display:block;width:100%;text-align:left;align-self:stretch}
         .metric-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}.metric-group{padding:13px;border:1px solid #343a40;border-radius:11px;background:#202428}.metric-group h3{font-size:13px;color:#c7cbd0;margin:0 0 10px}.metric-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:10px}.metric-grid .metric{min-height:108px;padding:15px}.metric-grid .metric:nth-child(2){border-top-color:var(--green)}.metric-grid .metric:nth-child(3){border-top-color:var(--amber)}
         .systems{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:14px}.system-card{min-width:0;position:relative;padding:17px;background:#172b3a;border:1px solid #2476a8;border-left:4px solid var(--cyan);border-radius:11px}.system-head,.pack-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.system-head>div:first-child,.pack-head>div:first-child{min-width:0;overflow-wrap:anywhere}.system-head strong,.pack-head strong{font-size:16px}.system-head small,.pack-head small,.device-meta{display:block;color:#b7c4ce;margin-top:6px}.system-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.status{border:1px solid #40604c;background:#20352a;color:#a8e5ba;border-radius:999px;padding:5px 9px;font-size:11px;white-space:nowrap}.status.offline{border-color:#744849;background:#3a2526;color:#f2aaaa}.packs{margin:15px 0 0 14px;padding-left:16px;border-left:1px solid #388ebc;display:grid;gap:9px}.pack-card{min-width:0;position:relative;padding:12px;background:#202b35;border:1px solid #475563;border-radius:9px}.pack-card.has-soc{background:#202b35}.pack-card.has-soc::before{content:"";position:absolute;z-index:0;inset:4px;box-sizing:border-box;background:var(--soc-fill);border:1px solid var(--soc-border);border-radius:5px;clip-path:inset(0 calc(100% - var(--soc-level)) 0 0 round 5px);pointer-events:none}.pack-head{position:relative;z-index:1}.pack-card[data-soc-band="low"]{--soc-fill:rgba(240,118,91,.28);--soc-border:rgba(196,72,48,.85)}.pack-card[data-soc-band="medium"]{--soc-fill:rgba(240,195,78,.24);--soc-border:rgba(178,132,25,.85)}.pack-card[data-soc-band="high"]{--soc-fill:rgba(86,207,131,.24);--soc-border:rgba(37,145,77,.85)}.pack-card strong{display:block}.pack-card small{display:block;color:#aeb8c1;margin-top:5px}.details-toggle{border:1px solid #3f6578;background:#1a3442;color:#d9f5fb;border-radius:7px;padding:6px 9px;font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}.details-toggle:hover,.details-toggle:focus-visible{border-color:var(--cyan);outline:2px solid var(--cyan);outline-offset:2px}.hover-details{display:none;position:absolute;z-index:5;left:12px;top:calc(100% + 9px);width:min(380px,calc(100vw - 56px));padding:14px;background:#f7f8fa;color:#20242a;border:1px solid #d7dce2;border-radius:10px;box-shadow:0 12px 35px #0008}.system-card.details-open>.hover-details,.pack-card.details-open>.hover-details{display:block}@media(hover:hover){.system-card:hover:not(:has(.pack-card:hover))>.hover-details,.pack-card:hover>.hover-details{display:block}}.hover-details h3{margin:0 0 9px;font-size:14px}.detail-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #e5e7eb;font-size:12px}.detail-row span{color:#59616a}.detail-row strong{text-align:right;overflow-wrap:anywhere}.empty{color:var(--muted);padding:18px;border:1px dashed #485058;border-radius:10px}.inventory{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:8px}.entity{min-width:0;display:flex;justify-content:space-between;gap:12px;padding:11px 12px;border-bottom:1px solid #34383d}.entity span{color:#c2c6ca;overflow-wrap:anywhere}.entity strong{font-weight:550;text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}.signal-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr))}.signal-entity{display:grid;grid-template-columns:minmax(0,1fr) minmax(5rem,auto);align-items:start}.signal-value{max-width:45%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.footer{color:#858c92;font-size:12px;margin:16px 2px}
         .health-summary{border-left:4px solid var(--green)}.health-summary.attention{border-left-color:var(--amber)}.health-state{border:1px solid #40604c;background:#20352a;color:#a8e5ba;border-radius:999px;padding:6px 10px;font-size:12px;white-space:nowrap}.health-summary.attention .health-state{border-color:#78633b;background:#3a3120;color:#f4d78b}.health-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.health-grid article{display:flex;flex-direction:column;gap:7px;padding:12px 14px;background:#25292d;border:1px solid #3a3f44;border-radius:9px}.health-grid small{color:var(--muted)}.health-grid strong{font-size:18px;font-variant-numeric:tabular-nums}

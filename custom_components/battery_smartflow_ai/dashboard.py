@@ -35,7 +35,7 @@ _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.29"
+DASHBOARD_VERSION = "1.0.30"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -133,6 +133,21 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
                     DOMAIN,
                     f"{DOMAIN}_{entry.entry_id}_regulation_training_result",
                 ),
+                "debug_active_entity": entity_registry.async_get_entity_id(
+                    "sensor",
+                    DOMAIN,
+                    f"{DOMAIN}_{entry.entry_id}_debug_recording_active",
+                ),
+                "debug_samples_entity": entity_registry.async_get_entity_id(
+                    "sensor",
+                    DOMAIN,
+                    f"{DOMAIN}_{entry.entry_id}_debug_sample_count",
+                ),
+                "debug_ends_entity": entity_registry.async_get_entity_id(
+                    "sensor",
+                    DOMAIN,
+                    f"{DOMAIN}_{entry.entry_id}_debug_recording_ends_at",
+                ),
             }
         )
         data = entry.data
@@ -228,7 +243,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="BSFAI Portal",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=42",
+        module_url=f"{_PANEL_URL}?v=43",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,
