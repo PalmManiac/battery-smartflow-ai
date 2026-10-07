@@ -8,10 +8,6 @@ credentials remain inside the transport boundary.
 from __future__ import annotations
 
 import asyncio
-from collections import deque
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import StrEnum
 import hashlib
 import ipaddress
 import json
@@ -19,20 +15,26 @@ import logging
 import random
 import socket
 import ssl
-from typing import Any, Callable, Mapping, Protocol
+import threading
+import time
+from collections import deque
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import StrEnum
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
-from .cloud import CloudMqttCredentials, ZendureCloudBootstrap
-from .privacy import ZendureDiagnosticSanitizer
 from ...native_command_verification import NativeCommandVerificationManager
 from ...native_device_command_gate import AuthorizedNativeCommand
+from .cloud import CloudMqttCredentials, ZendureCloudBootstrap
 from .cloud_mqtt_commands import (
     CloudCommandResult,
     CloudCommandStatus,
     CloudPropertyWrite,
     ZendureCloudCommandAdapter,
 )
-
+from .privacy import ZendureDiagnosticSanitizer
 
 CLOUD_STATE_METADATA_KEYS = frozenset(
     {
@@ -53,6 +55,7 @@ CLOUD_STATE_METADATA_KEYS = frozenset(
 _LOGGER = logging.getLogger(__name__)
 _MAX_RETAINED_MESSAGES = 10_000
 _COMMAND_READBACK_TIMEOUT_SECONDS = 15.0
+_SUBSCRIPTION_ACK_TIMEOUT_SECONDS = 5.0
 
 
 class CloudMqttError(Exception):
@@ -178,6 +181,7 @@ class ZendureCloudMqttTransport:
         self._reconnect_count = 0
         self._last_disconnect_category = "none"
         self._reconnect_task: asyncio.Task[None] | None = None
+        self._connect_task: asyncio.Task[None] | None = None
         self._session_number = 0
         self._request_message_id = 0
         self._last_message_at: datetime | None = None
@@ -352,6 +356,10 @@ class ZendureCloudMqttTransport:
                 await task
             except asyncio.CancelledError:
                 pass
+        connect_task, self._connect_task = self._connect_task, None
+        if connect_task is not None and connect_task is not asyncio.current_task():
+            connect_task.cancel()
+            await asyncio.gather(connect_task, return_exceptions=True)
         session, self._session = self._session, None
         if session is not None:
             self._last_connection_phase = str(
@@ -418,26 +426,38 @@ class ZendureCloudMqttTransport:
             return
         if self._session is None:
             return
+        task = self._connect_task
+        if task is not None and not task.done():
+            return
+        self._connect_task = asyncio.create_task(self._complete_connection())
+
+    async def _complete_connection(self) -> None:
+        """Wait for broker SUBACKs before treating Cloud MQTT as ready."""
+
+        session = self._session
+        if self._stopping or session is None:
+            return
         try:
             requested_topics = self.topics
             try:
-                self._session.subscribe(requested_topics)
-            except CloudMqttError:
+                await asyncio.to_thread(session.subscribe, requested_topics)
+            except CloudMqttError as error:
                 fallback_topics = self._device_topics()
                 if requested_topics != ("#",) or not fallback_topics:
                     raise
                 _LOGGER.warning(
-                    "Zendure Cloud MQTT wildcard subscription unavailable; "
-                    "falling back to device-scoped topics"
+                    "Zendure Cloud MQTT wildcard subscription was not accepted "
+                    "(%s); falling back to device-scoped topics",
+                    error.reason,
                 )
-                self._session.subscribe(fallback_topics)
+                await asyncio.to_thread(session.subscribe, fallback_topics)
                 requested_topics = fallback_topics
             self._subscribed_topics = requested_topics
             for device_id, _candidate_id, product_id in self._routes:
                 if product_id is None:
                     continue
                 self._request_message_id += 1
-                self._session.request_all(
+                session.request_all(
                     product_id,
                     device_id,
                     self._request_message_id,
@@ -449,6 +469,8 @@ class ZendureCloudMqttTransport:
             )
             self._connect_failure = error.reason
             self._connected.set()
+            return
+        if self._stopping or session is not self._session:
             return
         self._state = ConnectionState.CONNECTED
         self._connected.set()
@@ -743,6 +765,11 @@ class PahoReadOnlyMqttSession:
         self._on_connect: ConnectCallback | None = None
         self._on_disconnect: DisconnectCallback | None = None
         self._on_message: MessageCallback | None = None
+        self._subscription_condition = threading.Condition()
+        self._subscription_results: dict[int, bool] = {}
+        self._subscription_ack_count = 0
+        self._subscription_rejected_count = 0
+        self._subscription_status = "not_requested"
 
     @staticmethod
     def _client_id(credentials: CloudMqttCredentials) -> str:
@@ -766,6 +793,13 @@ class PahoReadOnlyMqttSession:
                 self._last_disconnect_packet_from_server
             ),
             "last_disconnect_reason_code": self._last_disconnect_reason_code,
+            "subscription_status": getattr(
+                self, "_subscription_status", "not_requested"
+            ),
+            "subscription_ack_count": getattr(self, "_subscription_ack_count", 0),
+            "subscription_rejected_count": getattr(
+                self, "_subscription_rejected_count", 0
+            ),
         }
 
     def set_callbacks(
@@ -779,6 +813,7 @@ class PahoReadOnlyMqttSession:
         self._on_message = on_message
         self._client.on_connect = self._paho_connect
         self._client.on_disconnect = self._paho_disconnect
+        self._client.on_subscribe = self._paho_subscribe
         self._client.on_message = self._paho_message
         self._client.on_socket_open = self._paho_socket_open
         self._client.on_socket_register_write = self._paho_register_write
@@ -790,10 +825,56 @@ class PahoReadOnlyMqttSession:
         self._client.loop_start()
 
     def subscribe(self, topics: tuple[str, ...]) -> None:
+        if not topics:
+            raise CloudMqttError("subscribe_failed")
+        with self._subscription_condition:
+            self._subscription_results.clear()
+            self._subscription_status = "awaiting_ack"
+        self._connection_phase = "mqtt_subscribe_pending"
+        message_ids: list[int] = []
         for topic in topics:
             result, _mid = self._client.subscribe(topic, qos=0)
             if result != 0:
+                self._subscription_status = "request_failed"
                 raise CloudMqttError("subscribe_failed")
+            message_ids.append(_mid)
+        deadline = time.monotonic() + _SUBSCRIPTION_ACK_TIMEOUT_SECONDS
+        with self._subscription_condition:
+            acknowledged = self._subscription_condition.wait_for(
+                lambda: all(mid in self._subscription_results for mid in message_ids),
+                timeout=max(0.0, deadline - time.monotonic()),
+            )
+            if not acknowledged:
+                self._subscription_status = "ack_timeout"
+                self._connection_phase = "mqtt_suback_timeout"
+                raise CloudMqttError("subscribe_timeout")
+            accepted = all(self._subscription_results[mid] for mid in message_ids)
+            if not accepted:
+                self._subscription_status = "rejected"
+                self._connection_phase = "mqtt_suback_rejected"
+                raise CloudMqttError("subscribe_rejected")
+            self._subscription_status = "accepted"
+            self._connection_phase = "mqtt_suback_accepted"
+
+    def _paho_subscribe(
+        self,
+        _client: Any,
+        _userdata: Any,
+        message_id: int,
+        reason_codes: Any,
+        _properties: Any,
+    ) -> None:
+        if not isinstance(reason_codes, (list, tuple)):
+            reason_codes = (reason_codes,)
+        accepted = bool(reason_codes) and all(
+            _subscription_reason_success(code) for code in reason_codes
+        )
+        with self._subscription_condition:
+            self._subscription_results[message_id] = accepted
+            self._subscription_ack_count += 1
+            if not accepted:
+                self._subscription_rejected_count += 1
+            self._subscription_condition.notify_all()
 
     def request_all(
         self,
@@ -927,6 +1008,20 @@ def _reason_code_success(reason_code: Any) -> bool:
         return int(value) == 0
     except (TypeError, ValueError):
         return str(reason_code).strip().casefold() == "success"
+
+
+def _subscription_reason_success(reason_code: Any) -> bool:
+    """Accept only MQTT SUBACK grants (QoS 0-2), not merely CONNACK success."""
+
+    is_failure = getattr(reason_code, "is_failure", None)
+    if isinstance(is_failure, bool):
+        return not is_failure
+    value = getattr(reason_code, "value", reason_code)
+    try:
+        return int(value) in {0, 1, 2}
+    except (TypeError, ValueError, OverflowError):
+        text = str(reason_code).strip().casefold()
+        return text in {"granted qos 0", "granted qos 1", "granted qos 2"}
 
 
 def _disconnect_packet_from_server(flags: Any) -> bool | None:

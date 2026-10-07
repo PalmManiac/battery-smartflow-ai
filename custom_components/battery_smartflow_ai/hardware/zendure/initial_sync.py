@@ -616,5 +616,7 @@ def _safe_failure_reason(error: Exception) -> str:
         "mqtt_dependency_missing",
         "no_routable_devices",
         "subscribe_failed",
+        "subscribe_rejected",
+        "subscribe_timeout",
     }
     return str(reason) if reason in allowed else "mqtt_connect_failed"

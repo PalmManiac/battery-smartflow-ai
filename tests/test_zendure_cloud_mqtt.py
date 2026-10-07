@@ -3,16 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-from base64 import b64encode
-from datetime import datetime, timezone
 import inspect
 import json
-from pathlib import Path
 import socket
-from types import SimpleNamespace
+import threading
 import unittest
+from base64 import b64encode
+from datetime import datetime, timezone
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud import ZendureCloudClient
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (
+    ZendureCloudClient,
+)
 from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     CloudMqttError,
     ConnectionState,
@@ -20,16 +24,18 @@ from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     PahoZendureCloudMqttSession,
     ZendureCloudMqttTransport,
     _bsfai_client_id,
+    _disconnect_packet_from_server,
     _get_all_request,
     _parse_broker_url,
     _property_write_request,
-    _reason_code_success,
-    _disconnect_packet_from_server,
     _reason_code_number,
+    _reason_code_success,
     _safe_peer_scope,
     _safe_socket_family,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt_commands import CloudPropertyWrite
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt_commands import (
+    CloudPropertyWrite,
+)
 
 
 class Response:
@@ -89,6 +95,13 @@ class WildcardRejectedSession(FakeSession):
     def subscribe(self, topics):
         if topics == ("#",):
             raise CloudMqttError("subscribe_failed")
+        self.subscriptions = topics
+
+
+class BrokerWildcardRejectedSession(FakeSession):
+    def subscribe(self, topics):
+        if topics == ("#",):
+            raise CloudMqttError("subscribe_rejected")
         self.subscriptions = topics
 
 
@@ -167,6 +180,87 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             ),
         )
         await transport.async_stop()
+
+    async def test_broker_suback_rejection_falls_back_to_device_topics(self):
+        sessions = []
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=lambda credentials: (
+                sessions.append(BrokerWildcardRejectedSession(credentials))
+                or sessions[-1]
+            ),
+            clock=lambda: self.now,
+        )
+        await transport.async_start()
+        self.assertEqual(transport.state, ConnectionState.CONNECTED)
+        self.assertEqual(
+            sessions[0].subscriptions,
+            (
+                "/product-a/main-1/#",
+                "/product-b/main-2/#",
+                "iot/product-a/main-1/#",
+                "iot/product-b/main-2/#",
+            ),
+        )
+        await transport.async_stop()
+
+    def test_paho_suback_acceptance_and_rejection(self):
+        session = object.__new__(PahoReadOnlyMqttSession)
+        session._subscription_condition = threading.Condition()
+        session._subscription_results = {}
+        session._subscription_ack_count = 0
+        session._subscription_rejected_count = 0
+        session._subscription_status = "not_requested"
+        session._connection_phase = "mqtt_connack_accepted"
+        session._tls = False
+        session._endpoint_scope = "unknown"
+        session._socket_family = "unknown"
+        session._connect_packet_sent = False
+        session._last_disconnect_packet_from_server = None
+        session._last_disconnect_reason_code = None
+        session._client = SimpleNamespace(subscribe=lambda _topic, qos: (0, 17))
+
+        def granted(_topic, qos):
+            session._paho_subscribe(None, None, 17, [0], None)
+            return (0, 17)
+
+        session._client.subscribe = granted
+        session.subscribe(("#",))
+        self.assertEqual(session.connection_diagnostics["subscription_status"], "accepted")
+
+        def rejected(_topic, qos):
+            session._paho_subscribe(None, None, 18, [128], None)
+            return (0, 18)
+
+        session._client.subscribe = rejected
+        with self.assertRaisesRegex(CloudMqttError, "subscribe_rejected"):
+            session.subscribe(("#",))
+        self.assertEqual(session.connection_diagnostics["subscription_rejected_count"], 1)
+
+    def test_paho_suback_timeout_is_classified(self):
+        session = object.__new__(PahoReadOnlyMqttSession)
+        session._subscription_condition = threading.Condition()
+        session._subscription_results = {}
+        session._subscription_ack_count = 0
+        session._subscription_rejected_count = 0
+        session._subscription_status = "not_requested"
+        session._connection_phase = "mqtt_connack_accepted"
+        session._tls = False
+        session._endpoint_scope = "unknown"
+        session._socket_family = "unknown"
+        session._connect_packet_sent = False
+        session._last_disconnect_packet_from_server = None
+        session._last_disconnect_reason_code = None
+        session._client = SimpleNamespace(subscribe=lambda _topic, qos: (0, 17))
+        with (
+            patch(
+                "custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt._SUBSCRIPTION_ACK_TIMEOUT_SECONDS",
+                0.01,
+            ),
+            self.assertRaisesRegex(CloudMqttError, "subscribe_timeout"),
+        ):
+            session.subscribe(("#",))
+        self.assertEqual(session.connection_diagnostics["subscription_status"], "ack_timeout")
 
     async def test_initial_incremental_unknown_and_invalid_payloads_are_retained(self):
         transport = ZendureCloudMqttTransport(self.data, session_factory=self.factory, clock=lambda: self.now)
@@ -275,7 +369,10 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         await transport.async_start()
         self.sessions[0].drop()
         for _attempt in range(20):
-            if len(self.sessions) >= 2:
+            if (
+                len(self.sessions) >= 2
+                and transport.state is ConnectionState.CONNECTED
+            ):
                 break
             await asyncio.sleep(0.01)
         self.assertGreaterEqual(len(self.sessions), 2)
@@ -316,7 +413,10 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(transport.state, ConnectionState.RECONNECTING)
         self.assertEqual(len(logs.output), 1)
         session.on_connect(True, None)
-        await asyncio.sleep(0)
+        for _attempt in range(20):
+            if transport.state is ConnectionState.CONNECTED:
+                break
+            await asyncio.sleep(0.01)
         self.assertEqual(transport.state, ConnectionState.CONNECTED)
         diagnostics = transport.connection_diagnostics
         self.assertEqual(diagnostics["disconnect_count"], 1)
