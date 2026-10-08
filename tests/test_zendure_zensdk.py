@@ -695,6 +695,41 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(target._zensdk_health(device, now)["available"])
         self.assertEqual(target._zensdk_failures[device], 0)
 
+    def test_watchdog_reports_active_zensdk_probe_and_non_direct_transports(self):
+        now = datetime.now(timezone.utc)
+        device = "zensdk:device-1"
+        target = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device=device,
+            notify=lambda: None,
+            control_transport="zensdk",
+        )
+        target._zensdk_last_attempt_at[device] = now
+        target._zensdk_last_success[device] = now
+        target._zensdk_last_result[device] = "success"
+        self.assertEqual(target.sensor_data()["native_zendure_watchdog"], "online")
+
+        target._zensdk_failures[device] = 1
+        self.assertEqual(target.sensor_data()["native_zendure_watchdog"], "degraded")
+        target._zensdk_failures[device] = 3
+        self.assertEqual(target.sensor_data()["native_zendure_watchdog"], "offline")
+
+        cloud = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device=device,
+            notify=lambda: None,
+            control_transport="cloud_mqtt",
+        )
+        self.assertEqual(
+            cloud.sensor_data()["native_zendure_watchdog"], "not_supported"
+        )
+        cloud._zensdk_last_attempt_at[device] = now
+        cloud._zensdk_last_success[device] = now
+        cloud._zensdk_last_result[device] = "success"
+        self.assertEqual(cloud.sensor_data()["native_zendure_watchdog"], "online")
+
     def test_poll_backoff_is_bounded_and_independent_per_device(self):
         target = NativeZendureRuntime(SimpleNamespace(), app_token="configured",
                                      selected_device=None, notify=lambda: None)

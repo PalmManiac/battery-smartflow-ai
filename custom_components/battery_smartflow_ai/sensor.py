@@ -1815,6 +1815,7 @@ NATIVE_ZENDURE_SENSOR_KEYS = frozenset(
         "native_zendure_last_message",
         "native_zendure_last_capture",
         "native_zendure_error",
+        "native_zendure_watchdog",
     }
 )
 
@@ -1880,6 +1881,15 @@ SENSORS += (
         translation_key="native_zendure_error",
         runtime_key="native_zendure_error",
         icon="mdi:alert-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZendureSensorEntityDescription(
+        key="native_zendure_watchdog",
+        translation_key="native_zendure_watchdog",
+        runtime_key="native_zendure_watchdog",
+        device_class=SensorDeviceClass.ENUM,
+        options=["online", "degraded", "offline", "not_supported", "unknown"],
+        icon="mdi:lan-check",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
 )
@@ -2399,6 +2409,14 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success
+
+    @property
+    def extra_state_attributes(self):
+        if self.entity_description.runtime_key != "native_zendure_watchdog":
+            return None
+        return self.coordinator.native_zendure.sensor_data().get(
+            "native_zendure_watchdog_attributes"
+        )
 
     @property
     def native_value(self):

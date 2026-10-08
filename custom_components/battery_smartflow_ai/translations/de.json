@@ -489,6 +489,7 @@
     "sensor": {
       "grid_power": {"name": "Netzleistung"},
       "native_zendure_status": {"name": "Status nativer Zendure-Test", "state": {"disabled": "Nicht eingerichtet", "discovering": "Geräte werden gesucht", "connecting": "Verbindung wird hergestellt", "capturing": "Erstdaten werden erfasst", "observing": "Beobachtung aktiv", "error": "Fehler"}}, "native_zendure_control": {"name": "Native Zendure-Steuerung", "state": {"disabled_zha_active": "Deaktiviert", "native_transport_not_ready": "Keine Daten", "native_local_handover_cloud_active": "Cloud", "native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Lokal", "native_local_unsupported": "Nicht unterstützt"}}, "native_zendure_device_count": {"name": "Gefundene native Zendure-Geräte"}, "native_zendure_message_count": {"name": "Empfangene native Zendure-Nachrichten"}, "native_zendure_last_message": {"name": "Letzte native Zendure-Nachricht"}, "native_zendure_last_capture": {"name": "Paket des nativen Zendure-Erstabgleichs"}, "native_zendure_error": {"name": "Fehler nativer Zendure-Test"},
+      "native_zendure_watchdog": {"name": "Zendure-Hardwareverbindung", "state": {"online": "Erreichbar", "degraded": "Verbindung instabil", "offline": "Nicht erreichbar", "not_supported": "Direktprüfung nicht verfügbar", "unknown": "Unbekannt"}},
       "native_hardware_pack_count": {"name":"Batterieanzahl"},
       "native_hardware_capacity_kwh": {"name":"Nennkapazität"},
       "native_hardware_power_w": {"name":"Batterieleistung"},
