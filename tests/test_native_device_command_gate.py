@@ -330,6 +330,19 @@ class NativeDeviceCommandGateTests(unittest.IsolatedAsyncioTestCase):
             self.assertIn(reason, result.reasons)
             self.assertFalse(result.accepted)
 
+    async def test_stale_protection_snapshot_does_not_permanently_block_commands(self):
+        result = ready_gate().evaluate(
+            NativeCommandRequest(DEVICE_ID, TRANSPORT, command()),
+            context(
+                states={
+                    DEVICE_ID: state(
+                        protection=MeasuredValue.absent(ValueValidity.STALE)
+                    )
+                }
+            ),
+        )
+        self.assertTrue(result.accepted)
+
     async def test_hems_active_unknown_and_stale_block_at_central_gate(self):
         for measured, reason in (
             (valid(True), "zendure_hems_active"),

@@ -1,4 +1,4 @@
-"""Central fail-closed gate for every future native Zendure command."""
+"""Central safety gate for every future native Zendure command."""
 
 from __future__ import annotations
 
@@ -215,12 +215,20 @@ class NativeDeviceCommandGate:
                 reasons.append("device_offline")
             if not context.required_state_valid:
                 reasons.append("required_state_stale")
-            if not state.protection_active.valid:
+            if (
+                not state.protection_active.valid
+                and state.protection_active.validity is not ValueValidity.STALE
+            ):
                 reasons.append(
                     _validity_reason("protection_state", state.protection_active.validity)
                 )
-            elif state.protection_active.value:
+            elif (
+                state.protection_active.valid
+                and state.protection_active.value
+            ):
                 reasons.append("protection_active")
+            # A protection event is actionable while fresh. Once stale, it is
+            # no longer evidence that the device is currently protected.
 
         hems = self._hems_gate.decision(request.device_id)
         if not hems.command_allowed:

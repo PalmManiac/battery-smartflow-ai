@@ -790,7 +790,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
         self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
 
-    async def test_stale_soc_or_protection_state_still_blocks_commands(self):
+    async def test_stale_soc_blocks_but_stale_protection_snapshot_does_not(self):
         for field in ("soc_pct", "protection_active"):
             with self.subTest(field=field):
                 current = state(output_w=250, discharge_w=0)
@@ -809,9 +809,13 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
                     should_write_input=False, should_write_output=True,
                 ))
 
-                self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
-                self.assertEqual(result.reason, "native_state_not_fresh")
-                self.assertEqual(target._zensdk_command_adapter.commands, [])
+                if field == "soc_pct":
+                    self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+                    self.assertEqual(result.reason, "native_state_not_fresh")
+                    self.assertEqual(target._zensdk_command_adapter.commands, [])
+                else:
+                    self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+                    self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
 
     def test_fresh_local_telemetry_does_not_require_online_marker(self):
         """Hyper Legacy MQTT can deliver fresh telemetry without online state."""
