@@ -289,6 +289,56 @@ class Maintenance431Tests(unittest.TestCase):
             )
         )
 
+    def test_yielded_learned_binding_has_price_hysteresis(self) -> None:
+        now = datetime(2026, 8, 4, 11, 30, tzinfo=timezone.utc)
+        commit = ChargeCommitState(
+            active=True,
+            phase="yielded",
+            commit_type="learned",
+            source_reason="learned_charge_window_active",
+            latest_start=now + timedelta(hours=1),
+            requested_power_w=800.0,
+        )
+
+        # A strategy result that flips back to charge just below the boundary
+        # must not undo the discharge handoff.
+        self.assertTrue(
+            learned_commit_should_yield_to_discharge(
+                commit=commit,
+                now=now,
+                selected_reason="learned_charge_window_active",
+                current_price=0.287,
+                effective_discharge_threshold=0.289,
+                price_hysteresis=0.0001,
+            )
+        )
+        self.assertFalse(
+            learned_commit_should_yield_to_discharge(
+                commit=commit,
+                now=now,
+                selected_reason="learned_charge_window_active",
+                current_price=0.285,
+                effective_discharge_threshold=0.289,
+                price_hysteresis=0.0001,
+            )
+        )
+
+    def test_yielded_learned_binding_stays_paused_without_price_context(self) -> None:
+        now = datetime(2026, 8, 4, 11, 30, tzinfo=timezone.utc)
+        commit = ChargeCommitState(
+            active=True,
+            phase="yielded",
+            commit_type="learned",
+            latest_start=now + timedelta(hours=1),
+        )
+        self.assertTrue(
+            learned_commit_should_yield_to_discharge(
+                commit=commit,
+                now=now,
+                selected_reason="learned_charge_window_active",
+            )
+        )
+
     def test_economic_discharge_beats_normal_learned_charge(self) -> None:
         now = datetime(2026, 8, 4, 11, 30, tzinfo=timezone.utc)
         prices = [

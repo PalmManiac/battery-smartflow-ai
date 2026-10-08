@@ -1551,6 +1551,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ):
             return base_decision
 
+        if str(commit.phase or "") == "yielded":
+            return DecisionResult(
+                action="idle",
+                ac_mode="output",
+                charge_w=0.0,
+                discharge_w=0.0,
+                reason="charge_commit_waiting_price",
+                target_soc=commit.target_soc,
+                current_peak_threshold=base_decision.current_peak_threshold,
+                current_valley_threshold=base_decision.current_valley_threshold,
+                economic_discharge_threshold=(
+                    base_decision.economic_discharge_threshold
+                ),
+                effective_discharge_threshold=(
+                    base_decision.effective_discharge_threshold
+                ),
+            )
+
         # Other AC/grid charge decisions stay postponed while the learned binding
         # is explicitly waiting for its original price condition.
         return DecisionResult(
@@ -1753,6 +1771,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 current_phase = str(
                     commit.phase or "waiting"
                 )
+                yield_latched = current_phase == "yielded"
 
                 forced = learned_commit_is_forced(
                     commit=commit,
@@ -1797,13 +1816,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     commit=commit,
                     now=now_utc,
                     selected_reason=str(decision.reason or ""),
+                    current_price=price_now,
+                    effective_discharge_threshold=(
+                        effective_discharge_threshold
+                    ),
+                    price_hysteresis=float(
+                        self.price_comparison_tolerance
+                    ),
+                    yield_latched=yield_latched,
                 ):
-                    commit.phase = "waiting"
+                    commit.phase = "yielded"
 
                 commit.updated_at = now_utc
                 self._store_charge_commit(commit)
 
-                if commit.phase == "waiting":
+                if commit.phase in {"waiting", "yielded"}:
                     return self._waiting_charge_commit_decision(
                         base_decision=decision,
                         commit=commit,
@@ -1978,7 +2005,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             else:
                 self._persist["charge_commit_price_per_kwh"] = None
                 
-            if new_commit.phase == "waiting":
+            if new_commit.phase in {"waiting", "yielded"}:
                 return self._waiting_charge_commit_decision(
                     base_decision=decision,
                     commit=new_commit,
