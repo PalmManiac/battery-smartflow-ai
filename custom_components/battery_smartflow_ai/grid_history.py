@@ -87,6 +87,7 @@ class GridHistory:
         *,
         grid_import_w: float,
         grid_export_w: float,
+        valid: bool = True,
     ) -> GridHistoryState:
         """Add a new sample and return the current history state.
 
@@ -97,6 +98,29 @@ class GridHistory:
         Returns:
             GridHistoryState with signed current power, averages and counters.
         """
+
+        if not valid:
+            # An unavailable reading is not a real zero-watt measurement. Keep
+            # the last valid context without adding a false sample that could
+            # distort the controller's averages or fast-change detection.
+            current = self._samples[-1] if self._samples else 0.0
+            return GridHistoryState(
+                grid_now_w=round(float(current), 2),
+                grid_avg_short_w=round(
+                    self._avg_last(self.config.short_samples), 2
+                ),
+                grid_avg_medium_w=round(
+                    self._avg_last(self.config.medium_samples), 2
+                ),
+                grid_delta_w=0.0,
+                stable_import_cycles=int(self._stable_import_cycles),
+                stable_export_cycles=int(self._stable_export_cycles),
+                near_target_cycles=int(self._near_target_cycles),
+                fast_load_rise_detected=False,
+                fast_load_drop_detected=False,
+                post_load_drop_hold_active=False,
+                post_output_overshoot_hold_active=False,
+            )
 
         import_w = max(0.0, float(grid_import_w or 0.0))
         export_w = max(0.0, float(grid_export_w or 0.0))
