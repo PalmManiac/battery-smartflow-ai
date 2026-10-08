@@ -2065,7 +2065,7 @@ def _fresh_native_state(
     maximum_age_seconds: float = 30.0,
     device: MainDevice | None = None,
 ) -> bool:
-    """Require fresh control-safety data; HEMS freshness has its own gate.
+    """Require fresh SoC control data; HEMS/protection have their own gates.
 
     The HEMS activity fallback deliberately keeps the timestamp of the last
     observed activity.  Once its quiet confirmation window has elapsed that
@@ -2076,10 +2076,11 @@ def _fresh_native_state(
 
     # The legacy Local MQTT protocol does not publish an explicit online flag.
     # Its transport state can therefore be ``unknown`` even while fresh, valid
-    # SoC and protection telemetry is arriving.  Requiring that optional flag
-    # would turn such a healthy device into ``soc_invalid``.  A recent SoC and
-    # protection state are the actual safety prerequisites; their timestamps
-    # also prove that the device is still communicating.
+    # SoC telemetry is arriving. Requiring that optional flag would turn such
+    # a healthy device into ``soc_invalid``. A recent SoC timestamp also proves
+    # that the device is still communicating. Protection has its own gate;
+    # stale protection snapshots are handled there without indefinitely
+    # blocking commands.
     # Hyper/Hub 2000 legacy firmware reports safety values in grouped,
     # infrequent updates. Match the normalizer's bounded 180-second window
     # only for these explicitly identified models; every other device keeps
@@ -2096,7 +2097,7 @@ def _fresh_native_state(
             maximum_age_seconds, LEGACY_GROUPED_CONTROL_MAX_DATA_AGE
         )
     now = datetime.now(timezone.utc)
-    required = (state.soc_pct, state.protection_active)
+    required = (state.soc_pct,)
     return all(
         item.valid
         and item.observed_at is not None

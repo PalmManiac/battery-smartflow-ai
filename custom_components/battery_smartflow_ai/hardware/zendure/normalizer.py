@@ -378,10 +378,6 @@ class ZendureCloudNormalizer:
                 payload,
                 observed_at,
             )
-            self._refresh_confirmed_cloud_error_state(
-                self._device_values[system_id],
-                message,
-            )
             properties = payload.get("properties")
             if isinstance(properties, Mapping):
                 self._apply_properties(
@@ -438,7 +434,9 @@ class ZendureCloudNormalizer:
         ZenSDK-class devices may report a non-zero ``faultLevel`` during
         healthy operation.  Cloud MQTT supplies the authoritative current
         error state separately through ``event/error``: an empty data list
-        with ``offData=0`` means that no error is active.
+        with ``offData=0`` means that no error is active.  Routine property
+        reports do not refresh this event snapshot; it expires under the same
+        bounded freshness policy as other telemetry.
         """
 
         if not topic.endswith("/event/error"):
@@ -454,31 +452,6 @@ class ZendureCloudNormalizer:
             ValueValidity.VALID,
             observed_at,
         )
-
-    @staticmethod
-    def _refresh_confirmed_cloud_error_state(
-        values: dict[str, _Observed],
-        message: CloudMqttMessage,
-    ) -> None:
-        """Keep a confirmed Cloud error snapshot fresh with device reports.
-
-        Zendure sends ``event/error`` as a state snapshot, not with every
-        report.  A subsequent inbound properties report confirms that the
-        device is still communicating on the same Cloud session, so the last
-        explicit error state remains current.  Outbound ``getAll`` requests
-        and retained data deliberately do not extend this safety window.
-        """
-
-        if (
-            message.transport != "cloud_mqtt"
-            or message.retained
-            or not message.topic.endswith("/properties/report")
-        ):
-            return
-        confirmed = values.get("is_error")
-        if confirmed is None or confirmed.validity is not ValueValidity.VALID:
-            return
-        confirmed.observed_at = message.received_at
 
     def set_hems_monitoring(
         self,
@@ -833,6 +806,13 @@ def _device_protection_state(*, fault_code, is_error):
     if is_error.valid:
         return MeasuredValue.available(
             float(is_error.value) != 0,
+            observed_at=is_error.observed_at,
+        )
+    if is_error.validity is ValueValidity.STALE:
+        # A saved Cloud error event must not remain a permanent control lock.
+        # Surface it as stale and let the command gate apply its bounded policy.
+        return MeasuredValue.absent(
+            ValueValidity.STALE,
             observed_at=is_error.observed_at,
         )
     return _fault_block(fault_code)

@@ -336,17 +336,18 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.state.protection_active.valid)
         self.assertTrue(result.state.protection_active.value)
 
-    async def test_cloud_device_report_refreshes_confirmed_error_state(self):
+    async def test_cloud_device_report_does_not_refresh_error_snapshot(self):
         normalizer = ZendureCloudNormalizer(
             self.bootstrap, stale_after_seconds=30
         )
-        normalizer.apply(
+        initial = normalizer.apply(
             report(
                 self.at,
-                {"offData": 0, "eventId": 3, "data": []},
+                {"offData": 1, "eventId": 3, "data": []},
                 topic="event/error",
             )
         )
+        self.assertTrue(initial.state.protection_active.value)
 
         refreshed_at = self.at + timedelta(seconds=31)
         result = normalizer.apply(
@@ -357,9 +358,9 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             now=refreshed_at,
         )
 
-        self.assertTrue(result.state.protection_active.valid)
-        self.assertFalse(result.state.protection_active.value)
-        self.assertEqual(result.state.protection_active.observed_at, refreshed_at)
+        self.assertFalse(result.state.protection_active.valid)
+        self.assertEqual(result.state.protection_active.validity, ValueValidity.STALE)
+        self.assertEqual(result.state.protection_active.observed_at, self.at)
 
     async def test_cloud_getall_echo_cannot_refresh_confirmed_error_state(self):
         normalizer = ZendureCloudNormalizer(
