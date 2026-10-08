@@ -2413,7 +2413,7 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         if self.entity_description.runtime_key != "native_zendure_watchdog":
-            return None
+            return self._attr_extra_state_attributes
         return self.coordinator.native_zendure.sensor_data().get(
             "native_zendure_watchdog_attributes"
         )
