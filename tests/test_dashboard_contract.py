@@ -274,6 +274,18 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('data-training-candidate-action="apply"', frontend)
         self.assertIn('data-training-candidate-action="reset"', frontend)
 
+    def test_watchdog_attributes_do_not_hide_dashboard_sensor_attributes(self) -> None:
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        sensor_entity = sensor.split("class ZendureSmartFlowSensor", 1)[1]
+        property_body = sensor_entity.split(
+            "    def extra_state_attributes(self):", 1
+        )[1].split("\n    @property", 1)[0]
+
+        self.assertIn('runtime_key != "native_zendure_watchdog"', property_body)
+        self.assertIn("return self._attr_extra_state_attributes", property_body)
+        self.assertIn('"native_zendure_device_count"', sensor)
+        self.assertIn('"regulation_training_result"', sensor)
+
     def test_training_results_include_accessible_visual_score_comparison(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"
