@@ -58,6 +58,7 @@ ChargeCommitPhase = Literal[
     "waiting",
     "active",
     "forced",
+    "yielded",
     "completed",
     "aborted",
 ]
@@ -97,6 +98,10 @@ class ChargeCommitState:
     # forced:
     #   The latest possible start has been reached. Charging must continue
     #   so the required energy can still be available before the deadline.
+    #
+    # yielded:
+    #   A non-forced learned charge temporarily yielded to economic discharge.
+    #   It remains paused through the discharge threshold's hysteresis band.
     #
     # completed / aborted:
     #   Terminal diagnostic states. The persisted active flag is False.

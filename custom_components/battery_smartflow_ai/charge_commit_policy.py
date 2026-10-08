@@ -20,6 +20,8 @@ ECONOMIC_DISCHARGE_REASONS = {
     "price_based_discharge",
 }
 
+LEARNED_DISCHARGE_YIELD_HYSTERESIS_RATIO = 0.01
+
 
 def completed_charge_stop_decision(
     *,
@@ -204,11 +206,39 @@ def learned_commit_should_yield_to_discharge(
     commit: ChargeCommitState,
     now: datetime,
     selected_reason: str,
+    current_price: float | None = None,
+    effective_discharge_threshold: float | None = None,
+    price_hysteresis: float = 0.0,
+    yield_latched: bool = False,
 ) -> bool:
-    """Return whether a non-forced learned binding must pause for discharge."""
+    """Return whether a non-forced learned binding must pause for discharge.
 
-    return bool(
-        str(commit.commit_type or "") == "learned"
-        and not learned_commit_is_forced(commit=commit, now=now)
-        and str(selected_reason or "") in ECONOMIC_DISCHARGE_REASONS
-    )
+    Once yielded, keep the binding paused until price falls below the discharge
+    threshold by a meaningful hysteresis margin. This prevents alternating
+    strategy results at the exact same threshold from restarting AC charging.
+    """
+
+    if (
+        str(commit.commit_type or "") != "learned"
+        or learned_commit_is_forced(commit=commit, now=now)
+    ):
+        return False
+
+    if str(selected_reason or "") in ECONOMIC_DISCHARGE_REASONS:
+        return True
+
+    if not yield_latched and str(commit.phase or "") != "yielded":
+        return False
+
+    try:
+        price = float(current_price)
+        threshold = float(effective_discharge_threshold)
+        hysteresis = max(
+            float(price_hysteresis or 0.0),
+            abs(threshold) * LEARNED_DISCHARGE_YIELD_HYSTERESIS_RATIO,
+        )
+    except (TypeError, ValueError):
+        # Missing/invalid price context must not immediately undo a yield.
+        return True
+
+    return price >= threshold - hysteresis
