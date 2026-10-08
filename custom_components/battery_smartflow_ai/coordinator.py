@@ -163,6 +163,7 @@ from .learned_planning import (
     learned_typical_charge_power_w,
 )
 from .grid_history import GridHistory, build_grid_history_config
+from .grid_sensor_grace import GridSensorGapGrace
 from .charge_source_allocator import ChargeSourceAllocator
 from .charge_commit_policy import (
     current_inactive_commit_abort_reason,
@@ -544,6 +545,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._command_effectiveness_config = CommandEffectivenessConfig()
         self._clock = clock or HomeAssistantClock()
+        self._grid_sensor_gap_grace = GridSensorGapGrace(
+            grace_seconds=max(5.0, float(UPDATE_INTERVAL) * 1.5)
+        )
 
         self._state_store = HomeAssistantStateStore(
             hass,
@@ -4654,6 +4658,68 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "strategy_priority": 800,
         }
 
+    async def _hold_active_output_during_grid_gap(
+        self,
+        *,
+        now: datetime,
+        elapsed_seconds: float,
+        held_output_w: float,
+        ai_mode: str,
+    ) -> dict[str, Any]:
+        """Preserve the existing automatic discharge briefly during a grid gap.
+
+        This deliberately issues no device command and never increases output.
+        If grid data remains unavailable beyond the grace window, the caller
+        falls through to the normal safe-idle path.
+        """
+
+        grace_seconds = self._grid_sensor_gap_grace.grace_seconds
+        details = {
+            "strategy_state": "discharge_active_grid_sensor_gap",
+            "visible_state": "discharging",
+            "strategic_reason": "grid_sensor_invalid_grace_hold",
+            "technical_reason": "grid_sensor_invalid_grace_hold",
+            "grid_sensor_valid": False,
+            "grid_sensor_gap_elapsed_seconds": round(
+                max(0.0, float(elapsed_seconds)), 2
+            ),
+            "grid_sensor_gap_grace_seconds": round(grace_seconds, 2),
+            "grid_sensor_gap_action": "hold_previous_output_without_increase",
+            "held_output_limit_w": round(max(0.0, float(held_output_w)), 1),
+            "regulation_command_path": "transient_grid_gap_hold",
+        }
+        await self._async_capture_debug_sample(now=now, details=details)
+
+        return {
+            "status": STATUS_SENSOR_INVALID,
+            "ai_status": self._map_ai_status(
+                ai_mode,
+                "discharge",
+                "grid_sensor_invalid_grace_hold",
+            ),
+            "recommendation": RECO_DISCHARGE,
+            "debug": "GRID_SENSOR_INVALID_GRACE_HOLD",
+            **self._debug_status_data(),
+            **self._training_status_data(),
+            "details": details,
+            "decision_reason": "grid_sensor_invalid_grace_hold",
+            "next_action_time": None,
+            "next_action_state": "discharging_active",
+            "device_profile": self.device_profile_key,
+            "season_mode": (
+                "summer"
+                if ai_mode == AI_MODE_SUMMER
+                else self._persist.get("season_mode", "winter")
+            ),
+            "fault_level_status": "warning",
+            "engine_health": "grid_sensor_invalid",
+            "strategy_state": "discharge_active_grid_sensor_gap",
+            "visible_state": "discharging",
+            "strategic_reason": "grid_sensor_invalid_grace_hold",
+            "technical_reason": "grid_sensor_invalid_grace_hold",
+            "strategy_priority": 800,
+        }
+
     async def _async_update_data(self) -> dict[str, Any]:
         # Include periodic cycles in the same throttle so grid events cannot
         # cause a second control evaluation immediately after one just ran.
@@ -4996,12 +5062,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 and grid_import_raw is not None
                 and grid_export_raw is not None
             )
+            grid_sensor_gap_seconds = self._grid_sensor_gap_grace.observe(
+                now=self._clock.monotonic(),
+                valid=grid_sensor_valid,
+            )
             grid_import = float(grid_import_raw or 0.0)
             grid_export = float(grid_export_raw or 0.0)
                 
             grid_history_state = self._grid_history.update(
                 grid_import_w=float(grid_import or 0.0),
                 grid_export_w=float(grid_export or 0.0),
+                valid=grid_sensor_valid,
             )
 
             import_market_price = self._get_import_market_price(now)
@@ -5945,13 +6016,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             }
 
             if critical_data_reason:
+                critical_reason = str(decision.reason or "sensor_invalid")
+                previous_output_w = max(
+                    0.0,
+                    float(self._persist.get("last_set_output_w", 0.0) or 0.0),
+                )
+                active_discharge = bool(
+                    self._persist.get("power_state") == "discharging"
+                    and previous_output_w > 0.0
+                )
+                automatic_mode = ai_mode in {
+                    AI_MODE_AUTOMATIC,
+                    AI_MODE_SUMMER,
+                }
+                if (
+                    critical_reason == "grid_sensor_invalid"
+                    and self._grid_sensor_gap_grace.may_hold_discharge(
+                        elapsed_seconds=grid_sensor_gap_seconds,
+                        automatic_mode=automatic_mode,
+                        active_discharge=active_discharge,
+                    )
+                ):
+                    return await self._hold_active_output_during_grid_gap(
+                        now=now,
+                        elapsed_seconds=grid_sensor_gap_seconds,
+                        held_output_w=previous_output_w,
+                        ai_mode=ai_mode,
+                    )
+
                 if bool(self._persist.get("charge_commit_active", False)):
                     self._clear_charge_commit(
-                        str(decision.reason or "sensor_invalid")
+                        critical_reason
                     )
 
                 return await self._enter_safe_idle(
-                    reason=str(decision.reason or "sensor_invalid"),
+                    reason=critical_reason,
                     raw_values={
                         "soc": float(soc),
                         "pv_w": float(pv_w),
