@@ -282,7 +282,10 @@ class DashboardContractTests(unittest.TestCase):
         )[1].split("\n    @property", 1)[0]
 
         self.assertIn('runtime_key != "native_zendure_watchdog"', property_body)
-        self.assertIn("return self._attr_extra_state_attributes", property_body)
+        self.assertIn(
+            'return getattr(self, "_attr_extra_state_attributes", None)',
+            property_body,
+        )
         self.assertIn('"native_zendure_device_count"', sensor)
         self.assertIn('"regulation_training_result"', sensor)
 
