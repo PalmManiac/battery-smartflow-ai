@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import asyncio
-from base64 import b64encode
-from datetime import datetime, timedelta, timezone
 import sys
-from types import SimpleNamespace
-from types import ModuleType
 import unittest
+from base64 import b64encode
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
+from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 from support import bootstrap as bootstrap_test_environment
-
 
 bootstrap_test_environment()
 
@@ -23,26 +21,27 @@ aiohttp_module.async_get_clientsession = lambda _hass: None
 sys.modules.setdefault("homeassistant.helpers", helpers_module)
 sys.modules.setdefault("homeassistant.helpers.aiohttp_client", aiohttp_module)
 
+from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
+    DeviceControlState,
+    ZendureTransport,
+)
 from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
+)
+from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (  # noqa: E402
+    ZendureCloudNormalizer,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (  # noqa: E402
     ZenSdkReadAttempt,
     ZenSdkReadResult,
     _candidate_addresses,
     async_read_zensdk_reports,
-    async_write_zensdk_property,
     async_write_zensdk_properties,
-)
-from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (  # noqa: E402
-    ZendureCloudNormalizer,
-)
-from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
-    DeviceControlState,
-    ZendureTransport,
+    async_write_zensdk_property,
 )
 from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
     NativeZendureRuntime,
+    _zensdk_read_write_path_comparison,
 )
 
 
@@ -53,6 +52,73 @@ class Response:
 
     async def json(self):
         return self.data
+
+
+class ZenSdkReadWritePathComparisonTests(unittest.TestCase):
+    def test_reports_matching_and_mismatching_sources_without_network_address(self):
+        attempts = [
+            {
+                "device_id": "device-a",
+                "recorded_at": "2026-10-08T08:00:00Z",
+                "address_source": "device_list_ip",
+                "result": "timeout",
+                "http_status": None,
+            },
+            {
+                "device_id": "device-a",
+                "recorded_at": "2026-10-08T08:00:05Z",
+                "address_source": "derived_local_hostname",
+                "result": "success",
+                "http_status": 200,
+            },
+        ]
+        write = {
+            "device_id": "device-a",
+            "recorded_at": "2026-10-08T08:00:06Z",
+            "address_source": "device_list_ip",
+            "result": "transport_error",
+            "http_status": None,
+            "error_type": "TimeoutError",
+            "elapsed_seconds": 4.0,
+            "url": "http://192.168.1.44/properties/write",
+        }
+
+        comparison = _zensdk_read_write_path_comparison(
+            "device-a", attempts, write
+        )
+
+        self.assertTrue(comparison["same_device"])
+        self.assertFalse(comparison["address_source_match"])
+        self.assertEqual(
+            comparison["last_successful_read"]["address_source"],
+            "derived_local_hostname",
+        )
+        self.assertEqual(
+            comparison["last_write"]["address_source"], "device_list_ip"
+        )
+        self.assertNotIn("url", comparison["last_write"])
+        self.assertNotIn("192.168.1.44", repr(comparison))
+
+    def test_does_not_compare_different_devices_or_missing_paths(self):
+        comparison = _zensdk_read_write_path_comparison(
+            "selected-device",
+            [
+                {
+                    "device_id": "other-device",
+                    "address_source": "device_list_ip",
+                    "result": "success",
+                }
+            ],
+            {
+                "device_id": "write-device",
+                "address_source": "device_list_ip",
+                "result": "transport_error",
+            },
+        )
+
+        self.assertFalse(comparison["same_device"])
+        self.assertIsNone(comparison["last_successful_read"])
+        self.assertIsNone(comparison["address_source_match"])
 
 
 async def make_bootstrap(

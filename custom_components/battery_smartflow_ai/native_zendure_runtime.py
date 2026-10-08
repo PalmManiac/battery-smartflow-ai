@@ -4,45 +4,28 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
+from .core.full_charge_maintenance import FullChargeMaintenanceInput
 from .core.models import (
     BatteryPackIdentity,
     CommandExecutionResult,
     CommandExecutionStatus,
     DeviceCommand,
     DeviceControlState,
-    DeviceOperatingMode,
     DeviceInventory,
+    DeviceOperatingMode,
     MainDevice,
     NativeDeviceIdentity,
     ValueValidity,
     ZendureTransport,
-)
-from .core.full_charge_maintenance import FullChargeMaintenanceInput
-from .native_command_verification import (
-    EffectStatus,
-    NativeCommandVerificationManager,
-)
-from .native_device_command_gate import (
-    NativeCommandContext,
-    NativeCommandRequest,
-    NativeDeviceCommandGate,
-)
-from .native_device_overview import (
-    build_native_device_overview,
-    with_control_state,
-)
-from .native_transport_metrics import NativeTransportMetrics
-from .native_transport_router import (
-    NativeTransportRouter,
-    automatic_control_transport,
 )
 from .hardware.zendure.cloud import ZendureCloudClient
 from .hardware.zendure.cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
@@ -69,10 +52,6 @@ from .hardware.zendure.local_mqtt import (
     ZendureLocalMqttTransport,
 )
 from .hardware.zendure.local_mqtt_commands import LocalMqttCommandStatus
-from .native_source_fusion import NativeSourceFusion
-from .native_capacity import native_capacity
-from .native_statistics import NativeEnergyAccumulator
-from .soc_plausibility import evaluate_soc_for_accounting
 from .hardware.zendure.privacy import ZendureDiagnosticSanitizer
 from .hardware.zendure.zensdk import (
     ZenSdkReadResult,
@@ -83,6 +62,28 @@ from .hardware.zendure.zensdk_commands import (
     ZendureZenSdkCommandAdapter,
     ZenSdkCommandStatus,
 )
+from .native_capacity import native_capacity
+from .native_command_verification import (
+    EffectStatus,
+    NativeCommandVerificationManager,
+)
+from .native_device_command_gate import (
+    NativeCommandContext,
+    NativeCommandRequest,
+    NativeDeviceCommandGate,
+)
+from .native_device_overview import (
+    build_native_device_overview,
+    with_control_state,
+)
+from .native_source_fusion import NativeSourceFusion
+from .native_statistics import NativeEnergyAccumulator
+from .native_transport_metrics import NativeTransportMetrics
+from .native_transport_router import (
+    NativeTransportRouter,
+    automatic_control_transport,
+)
+from .soc_plausibility import evaluate_soc_for_accounting
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -816,6 +817,16 @@ class NativeZendureRuntime:
                 "zensdk_last_write": (
                     self._zensdk_command_adapter.diagnostics()
                     if self._zensdk_command_adapter is not None else None
+                ),
+                "zensdk_read_write_path_comparison": (
+                    _zensdk_read_write_path_comparison(
+                        self._selected_device,
+                        self._zensdk_attempt_history,
+                        (
+                            self._zensdk_command_adapter.diagnostics()
+                            if self._zensdk_command_adapter is not None else None
+                        ),
+                    )
                 ),
                 "hems_devices": [
                     {
@@ -2295,3 +2306,83 @@ def _command_result(
     status: CommandExecutionStatus, reason: str
 ) -> CommandExecutionResult:
     return CommandExecutionResult(status=status, reason=reason)
+
+
+def _zensdk_read_write_path_comparison(
+    selected_device: str | None,
+    attempts: list[dict[str, Any]],
+    last_write: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    """Summarize whether the selected ZenSDK read and write paths align.
+
+    Only address-source labels are exported; private IPs and hostnames are
+    never part of this comparison. The full attempt and write diagnostics are
+    retained elsewhere in the same native debug snapshot.
+    """
+
+    raw_write = dict(last_write) if isinstance(last_write, Mapping) else None
+    write_device = (
+        str(raw_write.get("device_id"))
+        if raw_write is not None and raw_write.get("device_id") is not None
+        else None
+    )
+    write = (
+        {
+            key: raw_write[key]
+            for key in (
+                "recorded_at", "device_id", "properties", "result",
+                "http_status", "address_source", "error_type",
+                "elapsed_seconds",
+            )
+            if key in raw_write
+        }
+        if raw_write is not None else None
+    )
+    target_device = write_device or selected_device
+    matching_attempts = [
+        item for item in attempts
+        if isinstance(item, Mapping)
+        and item.get("device_id") == target_device
+    ]
+    last_attempt = matching_attempts[-1] if matching_attempts else None
+    last_success = next(
+        (
+            item for item in reversed(matching_attempts)
+            if item.get("result") == "success"
+        ),
+        None,
+    )
+
+    def read_summary(item: Mapping[str, Any] | None) -> dict[str, Any] | None:
+        if item is None:
+            return None
+        return {
+            "device_id": item.get("device_id"),
+            "recorded_at": item.get("recorded_at"),
+            "address_source": item.get("address_source"),
+            "result": item.get("result"),
+            "http_status": item.get("http_status"),
+        }
+
+    read_source = (
+        last_success.get("address_source") if last_success is not None else None
+    )
+    write_source = write.get("address_source") if write is not None else None
+    same_device = bool(
+        selected_device is not None
+        and write_device is not None
+        and selected_device == write_device
+    )
+    return {
+        "selected_device_id": selected_device,
+        "write_device_id": write_device,
+        "same_device": same_device if write_device is not None else None,
+        "last_read_attempt": read_summary(last_attempt),
+        "last_successful_read": read_summary(last_success),
+        "last_write": write,
+        "address_source_match": (
+            read_source == write_source
+            if read_source is not None and write_source is not None and same_device
+            else None
+        ),
+    }
