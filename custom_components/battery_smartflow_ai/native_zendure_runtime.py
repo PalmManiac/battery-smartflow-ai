@@ -169,6 +169,7 @@ class NativeZendureRuntime:
         self._zensdk_failures: dict[str, int] = {}
         self._zensdk_last_result: dict[str, str] = {}
         self._zensdk_last_success: dict[str, datetime] = {}
+        self._zensdk_last_attempt_at: dict[str, datetime] = {}
         self._zensdk_next_poll: dict[str, float] = {}
         self._zensdk_poll_delay: dict[str, float] = {}
         self._zensdk_attempt_history: list[dict[str, Any]] = []
@@ -446,6 +447,7 @@ class NativeZendureRuntime:
             self._local_transport = None
 
     def sensor_data(self) -> dict[str, Any]:
+        watchdog = self._watchdog_data()
         return {
             "native_zendure_status": self._status,
             "native_zendure_control": (
@@ -463,6 +465,8 @@ class NativeZendureRuntime:
                 Path(self._capture_path).name if self._capture_path else None
             ),
             "native_zendure_error": self._error,
+            "native_zendure_watchdog": watchdog["status"],
+            "native_zendure_watchdog_attributes": watchdog,
             "native_zendure_first_write": (
                 self._first_write_result.status.value
                 if self._first_write_result is not None else "not_run"
@@ -1515,6 +1519,7 @@ class NativeZendureRuntime:
             for candidate_id in attempted
         }
         for candidate_id in attempted:
+            self._zensdk_last_attempt_at[candidate_id] = recorded_at
             self._zensdk_last_result[candidate_id] = last_results[candidate_id]
             if candidate_id in successful:
                 self._zensdk_failures[candidate_id] = 0
@@ -1768,6 +1773,74 @@ class NativeZendureRuntime:
             "available": status == "available",
             "data_age_seconds": round(age, 3) if age is not None else None,
             "maximum_data_age_seconds": ZENSDK_MAX_DATA_AGE,
+        }
+
+    def _watchdog_data(self) -> dict[str, Any]:
+        """Summarize selected-device reachability without relying on sensor age alone."""
+
+        candidate_id = self._selected_device
+        configured_transport = self._configured_transport or self._startup_transport()
+        probe_supported = (
+            candidate_id is not None
+            and (
+                candidate_id in self._zensdk_last_result
+                or configured_transport is ZendureTransport.ZENSDK
+            )
+        )
+        if not probe_supported:
+            return {
+                "status": "not_supported",
+                "transport": (
+                    configured_transport.value
+                    if configured_transport is not None
+                    else "unknown"
+                ),
+                "last_probe": None,
+                "last_success": None,
+                "consecutive_failures": None,
+                "last_result": None,
+                "probe_interval_seconds": None,
+            }
+
+        if candidate_id is None:
+            return {
+                "status": "unknown",
+                "transport": ZendureTransport.ZENSDK.value,
+                "last_probe": None,
+                "last_success": None,
+                "consecutive_failures": None,
+                "last_result": None,
+                "probe_interval_seconds": ZENSDK_POLL_INTERVAL,
+            }
+
+        now = datetime.now(timezone.utc)
+        last_probe = self._zensdk_last_attempt_at.get(candidate_id)
+        last_success = self._zensdk_last_success.get(candidate_id)
+        failures = self._zensdk_failures.get(candidate_id, 0)
+        last_result = self._zensdk_last_result.get(candidate_id)
+        success_age = (
+            (now - last_success).total_seconds() if last_success is not None else None
+        )
+        if failures >= ZENSDK_OFFLINE_AFTER_FAILURES or (
+            success_age is not None and success_age > ZENSDK_MAX_DATA_AGE
+        ):
+            status = "offline"
+        elif last_result is None:
+            status = "unknown"
+        elif failures:
+            status = "degraded"
+        elif last_result == "success" and success_age is not None:
+            status = "online"
+        else:
+            status = "degraded"
+        return {
+            "status": status,
+            "transport": ZendureTransport.ZENSDK.value,
+            "last_probe": last_probe,
+            "last_success": last_success,
+            "consecutive_failures": failures,
+            "last_result": last_result,
+            "probe_interval_seconds": ZENSDK_POLL_INTERVAL,
         }
 
     def _apply_messages(self, messages: tuple[Any, ...]) -> None:

@@ -604,6 +604,16 @@
       "native_zendure_error": {
         "name": "Native Zendure error"
       },
+      "native_zendure_watchdog": {
+        "name": "Zendure hardware connection",
+        "state": {
+          "online": "Online",
+          "degraded": "Connection unstable",
+          "offline": "Offline",
+          "not_supported": "Direct check unavailable",
+          "unknown": "Unknown"
+        }
+      },
       "native_hardware_pack_count": {
         "name": "Battery count"
       },

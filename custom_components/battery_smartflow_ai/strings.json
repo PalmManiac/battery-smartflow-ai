@@ -531,6 +531,7 @@
       "native_zendure_last_message": {"name": "Last native Zendure message"},
       "native_zendure_last_capture": {"name": "Native Zendure initial-sync package"},
       "native_zendure_error": {"name": "Native Zendure error"},
+      "native_zendure_watchdog": {"name": "Zendure hardware connection", "state": {"online": "Online", "degraded": "Connection unstable", "offline": "Offline", "not_supported": "Direct check unavailable", "unknown": "Unknown"}},
       "native_hardware_pack_count": {"name":"Battery count"},
       "native_hardware_capacity_kwh": {"name":"Nominal capacity"},
       "native_hardware_power_w": {"name":"Battery power"},
