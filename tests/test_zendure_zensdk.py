@@ -244,6 +244,42 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
             {"sn": "serial-real-1", "properties": {"outputLimit": 301}, "id": 7},
         )
 
+    async def test_write_falls_back_after_pre_send_connector_error(self):
+        data = await make_bootstrap(
+            product_model="SolarFlow 800 Pro", product_key="R3mn8U"
+        )
+        calls = []
+        connector_error = type(
+            "ClientConnectorError",
+            (OSError,),
+            {"__module__": "aiohttp.client_exceptions"},
+        )
+
+        async def post(url, **kwargs):
+            calls.append((url, kwargs))
+            if "192.168.1.44" in url:
+                raise connector_error("connection refused")
+            return Response({"success": True}, 200)
+
+        result = await async_write_zensdk_property(
+            data, "cloud_mqtt:device-real-1", "outputLimit", 301, 7, post
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(result.address_source, "derived_local_hostname")
+        self.assertEqual(
+            [url for url, _kwargs in calls],
+            [
+                "http://192.168.1.44/properties/write",
+                "http://zendure-SolarFlow800Pro-serial-real-1.local/properties/write",
+            ],
+        )
+        self.assertEqual(calls[1][1]["json"], {
+            "sn": "serial-real-1",
+            "properties": {"outputLimit": 301},
+            "id": 7,
+        })
+
     async def test_verified_zensdk_models_are_not_rejected_by_low_level_writer(self):
         verified_models = (
             ("SolarFlow 2400 Pro", "unknown-product"),
