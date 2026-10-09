@@ -25,6 +25,7 @@ from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     ZendureCloudMqttTransport,
     _bsfai_client_id,
     _disconnect_packet_from_server,
+    _function_invoke_request,
     _get_all_request,
     _parse_broker_url,
     _property_write_request,
@@ -34,6 +35,7 @@ from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     _safe_socket_family,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt_commands import (
+    CloudFunctionInvocation,
     CloudPropertyWrite,
 )
 
@@ -380,11 +382,20 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(hasattr(transport, "publish"))
         self.assertFalse(hasattr(transport, "command"))
         public = {name for name, _ in inspect.getmembers(type(transport), inspect.isfunction) if not name.startswith("_")}
-        self.assertEqual(public, {"async_execute_authorized", "async_start", "async_stop"})
+        self.assertEqual(
+            public,
+            {
+                "async_execute_authorized",
+                "async_start",
+                "async_stop",
+            },
+        )
         self.assertEqual(len(self.sessions[0].state_requests), 2)
         self.assertEqual(len(self.sessions[1].state_requests), 2)
         diagnostics = transport.connection_diagnostics
         self.assertEqual(diagnostics["disconnect_count"], 1)
+
+
         self.assertEqual(diagnostics["reconnect_count"], 1)
         self.assertEqual(
             diagnostics["last_disconnect_category"],
@@ -658,6 +669,76 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             }, "messageId": 8,
             "deviceId": "main-1", "timestamp": 1788444001,
         })
+
+
+class CloudMqttFunctionInvokeTests(unittest.TestCase):
+    def test_serializes_hyper_device_automation_object_invoke(self):
+        topic, payload = _function_invoke_request(
+            "product-a",
+            "device-a",
+            CloudFunctionInvocation(
+                "deviceAutomation",
+                ({
+                    "autoModelProgram": 2,
+                    "autoModelValue": {
+                        "chargingType": 0,
+                        "chargingPower": 0,
+                        "freq": 0,
+                        "outPower": 250,
+                    },
+                    "msgType": 1,
+                    "autoModel": 8,
+                },),
+                {"outputLimit": 250.0},
+                include_device_key=True,
+            ),
+            17,
+            100,
+        )
+        self.assertEqual(topic, "iot/product-a/device-a/function/invoke")
+        self.assertEqual(
+            json.loads(payload),
+            {
+                "function": "deviceAutomation",
+                "arguments": [{
+                    "autoModelProgram": 2,
+                    "autoModelValue": {
+                        "chargingType": 0,
+                        "chargingPower": 0,
+                        "freq": 0,
+                        "outPower": 250,
+                    },
+                    "msgType": 1,
+                    "autoModel": 8,
+                }],
+                "messageId": 17,
+                "deviceId": "device-a",
+                "deviceKey": "device-a",
+                "timestamp": 100,
+            },
+        )
+
+    def test_rejects_unapproved_function_and_argument_shape(self):
+        with self.assertRaisesRegex(CloudMqttError, "unsupported_function"):
+            _function_invoke_request(
+                "product-a",
+                "device-a",
+                CloudFunctionInvocation("arbitrary", {}, {}),
+                1,
+                100,
+            )
+        with self.assertRaisesRegex(CloudMqttError, "invalid_legacy_arguments"):
+            _function_invoke_request(
+                "product-a",
+                "device-a",
+                CloudFunctionInvocation(
+                    "deviceAutomation",
+                    ({"anything": 1},),
+                    {},
+                ),
+                1,
+                100,
+            )
 
 
 if __name__ == "__main__":

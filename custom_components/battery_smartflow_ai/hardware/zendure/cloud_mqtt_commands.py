@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
-import math
-from typing import Callable, Mapping, Protocol
+from typing import Any, Protocol
 
 from ...core.models import ZendureTransport
-from ...native_command_verification import NativeCommandVerificationManager, ReadbackPolicy
+from ...native_command_verification import (
+    NativeCommandVerificationManager,
+    ReadbackPolicy,
+)
 from ...native_device_command_gate import AuthorizedNativeCommand
 from .cloud import ZendureCloudBootstrap
-from .device_matrix import VerificationLevel, resolve_zendure_device
+from .device_matrix import (
+    CloudCommandProtocol,
+    VerificationLevel,
+    resolve_zendure_device,
+)
 
 
 class CloudCommandStatus(StrEnum):
@@ -42,12 +50,42 @@ class CloudCommandResult:
     writes_sent: int = 0
 
 
+@dataclass(frozen=True, slots=True)
+class CloudFunctionInvocation:
+    """One allow-listed model command routed through function/invoke."""
+
+    function: str
+    arguments: Mapping[str, Any] | tuple[Mapping[str, Any], ...]
+    expected_properties: Mapping[str, float]
+    include_device_key: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class CloudCommandPlan:
+    """Validated wire plan for one native setpoint command."""
+
+    product_id: str
+    device_id: str
+    property_writes: tuple[CloudPropertyWrite, ...]
+    invocation: CloudFunctionInvocation | None
+    protocol: CloudCommandProtocol
+
+
 class CloudPropertyPublisher(Protocol):
     def write_properties(
         self,
         product_id: str,
         device_id: str,
         writes: tuple[CloudPropertyWrite, ...],
+    ) -> bool: ...
+
+    def invoke_function(
+        self,
+        product_id: str,
+        device_id: str,
+        invocation: CloudFunctionInvocation,
+        message_id: int,
+        timestamp: int,
     ) -> bool: ...
 
 
@@ -61,10 +99,29 @@ def map_cloud_command(
     first_message_id: int,
     timestamp: int,
 ) -> tuple[str, str, tuple[CloudPropertyWrite, ...]]:
-    """Map a gate-issued command to small ordered writes for one exact device."""
+    """Map a property-protocol command, preserving its historical return shape."""
+
+    plan = plan_cloud_command(
+        authorized, bootstrap,
+        first_message_id=first_message_id,
+        timestamp=timestamp,
+    )
+    if plan.invocation is not None:
+        raise ValueError("function_invoke_required")
+    return plan.product_id, plan.device_id, plan.property_writes
+
+
+def plan_cloud_command(
+    authorized: AuthorizedNativeCommand,
+    bootstrap: ZendureCloudBootstrap,
+    *,
+    first_message_id: int,
+    timestamp: int,
+) -> CloudCommandPlan:
+    """Map only known model/protocol combinations to typed Cloud commands."""
 
     if not isinstance(authorized, AuthorizedNativeCommand):
-        raise ValueError("gate_authorization_required")
+        raise TypeError("gate_authorization_required")
     if authorized.transport is not ZendureTransport.CLOUD_MQTT:
         raise ValueError("wrong_transport")
     device = next((item for item in bootstrap.devices if item.candidate.candidate_id == authorized.device_id), None)
@@ -78,7 +135,6 @@ def map_cloud_command(
         raise ValueError("model_not_approved")
     if matrix.transport(ZendureTransport.CLOUD_MQTT).write is not VerificationLevel.VERIFIED:
         raise ValueError("transport_not_approved")
-
     command = authorized.command
     requested: list[tuple[str, int]] = []
     directional_write = any((
@@ -100,6 +156,86 @@ def map_cloud_command(
             else 0
         )
         active_limit = input_limit if command.ac_mode == "input" else output_limit
+        if matrix.cloud_command_protocol is CloudCommandProtocol.DEVICE_AUTOMATION_OBJECT:
+            if input_limit > 0 and matrix.profile_key != "Hyper 2000":
+                raise ValueError("legacy_charge_not_supported")
+            if input_limit > 0:
+                program = 1
+                auto_value: Any = {
+                    "chargingType": 1,
+                    "price": 2,
+                    "chargingPower": input_limit,
+                    "prices": [1] * 24,
+                    "outPower": 0,
+                    "freq": 0,
+                }
+            elif output_limit > 0:
+                program = 2
+                auto_value = {
+                    "chargingType": 0,
+                    "chargingPower": 0,
+                    "freq": 0,
+                    "outPower": output_limit,
+                }
+            else:
+                program = 0
+                auto_value = {
+                    "chargingType": 0,
+                    "chargingPower": 0,
+                    "freq": 0,
+                    "outPower": 0,
+                }
+            requested.extend(_soc_property_writes(command))
+            expected = {
+                "inputLimit": float(input_limit),
+                "outputLimit": float(output_limit),
+            }
+            return CloudCommandPlan(
+                identity.product_id,
+                identity.device_id,
+                _property_writes(
+                    requested, matrix, first_message_id, timestamp
+                ),
+                CloudFunctionInvocation(
+                    "deviceAutomation",
+                    ({
+                        "autoModelProgram": program,
+                        "autoModelValue": auto_value,
+                        "msgType": 1,
+                        "autoModel": 8 if program else 0,
+                    },),
+                    expected,
+                    include_device_key=True,
+                ),
+                matrix.cloud_command_protocol,
+            )
+        if matrix.cloud_command_protocol is CloudCommandProtocol.DEVICE_AUTOMATION_VALUE:
+            if input_limit > 0:
+                raise ValueError("legacy_charge_not_supported")
+            requested.extend(_soc_property_writes(command))
+            output_value = float(output_limit)
+            arguments = (
+                {
+                    "autoModelProgram": 2 if output_limit > 0 else 0,
+                    "autoModelValue": int(output_limit),
+                    "msgType": 1,
+                    "autoModel": 8 if output_limit > 0 else 0,
+                },
+            )
+            return CloudCommandPlan(
+                identity.product_id,
+                identity.device_id,
+                _property_writes(
+                    requested, matrix, first_message_id, timestamp
+                ),
+                CloudFunctionInvocation(
+                    "deviceAutomation",
+                    arguments,
+                    {"outputLimit": output_value, "inputLimit": 0.0},
+                    include_device_key=True,
+                ),
+                matrix.cloud_command_protocol,
+            )
         # Zendure directional control is one complete command. A bare limit
         # write can update the stored setpoint without starting Smart Mode.
         requested.extend((
@@ -108,19 +244,38 @@ def map_cloud_command(
             ("outputLimit", output_limit),
             ("inputLimit", input_limit),
         ))
+    requested.extend(_soc_property_writes(command))
+    if not requested:
+        raise ValueError("empty_command")
+
+    return CloudCommandPlan(
+        identity.product_id,
+        identity.device_id,
+        _property_writes(requested, matrix, first_message_id, timestamp),
+        None,
+        matrix.cloud_command_protocol,
+    )
+
+
+def _soc_property_writes(command) -> list[tuple[str, int]]:
+    requested: list[tuple[str, int]] = []
     if command.should_write_min_soc:
         requested.append(("minSoc", _soc_tenths(command.min_soc_pct)))
     if command.should_write_max_soc:
         requested.append(("socSet", _soc_tenths(command.max_soc_pct)))
-    if not requested:
-        raise ValueError("empty_command")
+    return requested
 
+
+def _property_writes(
+    requested: list[tuple[str, int]], matrix, first_message_id: int,
+    timestamp: int,
+) -> tuple[CloudPropertyWrite, ...]:
     writes = []
     for offset, (property_name, value) in enumerate(requested):
         if matrix.property_write_level(ZendureTransport.CLOUD_MQTT, property_name) is not VerificationLevel.VERIFIED:
             raise ValueError(f"property_not_approved:{property_name}")
         writes.append(CloudPropertyWrite(property_name, value, first_message_id + offset, timestamp))
-    return identity.product_id, identity.device_id, tuple(writes)
+    return tuple(writes)
 
 
 class ZendureCloudCommandAdapter:
@@ -140,16 +295,17 @@ class ZendureCloudCommandAdapter:
 
         now = self._clock()
         try:
-            product_id, device_id, writes = map_cloud_command(
+            plan = plan_cloud_command(
                 authorized, self._bootstrap, first_message_id=self._message_id + 1,
                 timestamp=int(now.timestamp()),
             )
         except ValueError as error:
             return CloudCommandResult(CloudCommandStatus.REJECTED, str(error))
-        self._message_id += len(writes)
+        property_writes = list(plan.property_writes)
+        self._message_id += len(property_writes) + (1 if plan.invocation else 0)
         verification_ids: list[str] = []
         prepared: list[tuple[CloudPropertyWrite, str]] = []
-        for write in writes:
+        for write in property_writes:
             verification = self._verification.prepare(
                 device_id=authorized.device_id, command_type=write.property_name,
                 target_key=write.property_name, transport=ZendureTransport.CLOUD_MQTT,
@@ -162,8 +318,14 @@ class ZendureCloudCommandAdapter:
             self._verification.sent(verification.command_id, at=now)
             prepared.append((write, verification.command_id))
         try:
-            ok = self._publisher.write_properties(product_id, device_id, writes)
-        except Exception:
+            ok = (
+                self._publisher.write_properties(
+                    plan.product_id, plan.device_id, tuple(property_writes)
+                )
+                if property_writes
+                else True
+            )
+        except Exception:  # noqa: BLE001 - isolate publisher/backend failures
             ok = False
         for _write, command_id in prepared:
             self._verification.transport_result(
@@ -178,8 +340,56 @@ class ZendureCloudCommandAdapter:
                 tuple(verification_ids),
                 0,
             )
-        sent = len(writes)
-        return CloudCommandResult(CloudCommandStatus.SENT, "awaiting_readback", tuple(verification_ids), sent)
+        sent = len(property_writes)
+        if plan.invocation is not None:
+            invocation_verifications: list[tuple[str, str]] = []
+            for property_name, value in plan.invocation.expected_properties.items():
+                verification = self._verification.prepare(
+                    device_id=authorized.device_id,
+                    command_type=plan.invocation.function,
+                    target_key=property_name,
+                    transport=ZendureTransport.CLOUD_MQTT,
+                    requested_value=value,
+                    final_value=value,
+                    readback=ReadbackPolicy(property_name, value, 1.0),
+                    prepared_at=now,
+                    max_attempts=1,
+                )
+                self._verification.gate(verification.command_id, accepted=True, at=now)
+                self._verification.sent(verification.command_id, at=now)
+                invocation_verifications.append((property_name, verification.command_id))
+            try:
+                invoked = self._publisher.invoke_function(
+                    plan.product_id,
+                    plan.device_id,
+                    plan.invocation,
+                    self._message_id,
+                    int(now.timestamp()),
+                )
+            except Exception:  # noqa: BLE001 - isolate publisher/backend failures
+                invoked = False
+            for _property_name, command_id in invocation_verifications:
+                self._verification.transport_result(
+                    command_id,
+                    ok=invoked,
+                    status="mqtt_invoke_accepted" if invoked else "mqtt_invoke_failed",
+                    at=self._clock(),
+                )
+            if not invoked:
+                return CloudCommandResult(
+                    CloudCommandStatus.TRANSPORT_ERROR,
+                    "invoke_failed",
+                    tuple(verification_ids + [item[1] for item in invocation_verifications]),
+                    sent,
+                )
+            sent += 1
+            verification_ids.extend(item[1] for item in invocation_verifications)
+        return CloudCommandResult(
+            CloudCommandStatus.SENT,
+            "awaiting_readback",
+            tuple(verification_ids),
+            sent,
+        )
 
     def observe_properties(
         self,
@@ -214,7 +424,7 @@ def _whole_watts(value: float) -> int:
     number = float(value)
     if not math.isfinite(number) or number < 0:
         raise ValueError("invalid_power_value")
-    return int(round(number))
+    return round(number)
 
 
 def _soc_tenths(value: float | None) -> int:
@@ -223,4 +433,4 @@ def _soc_tenths(value: float | None) -> int:
     number = float(value)
     if number < 0 or number > 100:
         raise ValueError("invalid_soc_value")
-    return int(round(number * 10))
+    return round(number * 10)

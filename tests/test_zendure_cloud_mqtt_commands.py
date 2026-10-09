@@ -3,21 +3,28 @@
 from __future__ import annotations
 
 import asyncio
+import unittest
 from base64 import b64encode
 from datetime import datetime, timedelta, timezone
-import unittest
 
-from custom_components.battery_smartflow_ai.core.models import DeviceCommand, ZendureTransport
-from custom_components.battery_smartflow_ai.native_command_verification import (
-    CommandVerificationStatus,
-    NativeCommandVerificationManager,
+from custom_components.battery_smartflow_ai.core.models import (
+    DeviceCommand,
+    ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.native_device_command_gate import AuthorizedNativeCommand
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud import ZendureCloudClient
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (
+    ZendureCloudClient,
+)
 from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt_commands import (
     CloudCommandStatus,
     ZendureCloudCommandAdapter,
     map_cloud_command,
+)
+from custom_components.battery_smartflow_ai.native_command_verification import (
+    CommandVerificationStatus,
+    NativeCommandVerificationManager,
+)
+from custom_components.battery_smartflow_ai.native_device_command_gate import (
+    AuthorizedNativeCommand,
 )
 
 
@@ -46,6 +53,16 @@ class Publisher:
         self.calls = []
     def write_properties(self, product_id, device_id, writes):
         self.calls.append((product_id, device_id, writes))
+        return self.result
+
+    def invoke_function(
+        self, product_id, device_id, invocation, message_id, timestamp
+    ):
+        if not hasattr(self, "invocations"):
+            self.invocations = []
+        self.invocations.append(
+            (product_id, device_id, invocation, message_id, timestamp)
+        )
         return self.result
 
 
@@ -184,6 +201,67 @@ class CloudCommandMappingTests(unittest.TestCase):
         text = repr(verification.diagnostics()) + repr(result)
         for secret in ("main-1", "serial-1", "product-a", "client-secret", "user-secret", "pass-secret"):
             self.assertNotIn(secret, text)
+
+    def test_hyper_cloud_uses_legacy_device_automation_protocol(self):
+        data = asyncio.run(bootstrap("Hyper 2000"))
+        publisher = Publisher()
+        now = datetime(2026, 9, 4, 16, 0, tzinfo=timezone.utc)
+        adapter = ZendureCloudCommandAdapter(
+            data, publisher, NativeCommandVerificationManager(), clock=lambda: now
+        )
+
+        def output(value):
+            return envelope(
+                DeviceCommand(
+                    "output", output_limit_w=value,
+                    should_write_mode=False,
+                    should_write_input=False,
+                    should_write_output=True,
+                )
+            )
+
+        first = adapter.execute(output(250))
+        second = adapter.execute(output(300))
+        self.assertEqual(first.status, CloudCommandStatus.SENT)
+        self.assertEqual(second.status, CloudCommandStatus.SENT)
+        self.assertEqual(publisher.calls, [])
+        self.assertEqual(len(publisher.invocations), 2)
+        self.assertEqual(
+            publisher.invocations[0][2].function, "deviceAutomation"
+        )
+        self.assertEqual(
+            publisher.invocations[0][2].arguments[0]["autoModelValue"],
+            {"chargingType": 0, "chargingPower": 0, "freq": 0, "outPower": 250},
+        )
+        self.assertEqual(
+            publisher.invocations[1][2].arguments[0]["autoModelValue"]["outPower"],
+            300,
+        )
+        self.assertEqual(publisher.invocations[0][3], 1)
+        self.assertEqual(publisher.invocations[1][3], 2)
+
+    def test_hyper_cloud_charge_uses_legacy_device_automation_program(self):
+        data = asyncio.run(bootstrap("Hyper 2000"))
+        publisher = Publisher()
+        adapter = ZendureCloudCommandAdapter(
+            data, publisher, NativeCommandVerificationManager()
+        )
+        result = adapter.execute(
+            envelope(
+                DeviceCommand(
+                    "input",
+                    input_limit_w=600,
+                    should_write_mode=False,
+                    should_write_input=True,
+                    should_write_output=False,
+                )
+            )
+        )
+        self.assertEqual(result.status, CloudCommandStatus.SENT)
+        arguments = publisher.invocations[0][2].arguments[0]
+        self.assertEqual(arguments["autoModelProgram"], 1)
+        self.assertEqual(arguments["autoModelValue"]["chargingPower"], 600)
+        self.assertEqual(arguments["autoModelValue"]["prices"], [1] * 24)
 
 
 if __name__ == "__main__":
