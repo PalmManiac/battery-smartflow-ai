@@ -1,4 +1,4 @@
-"""Strictly read-only local ZenSDK report collection for V5 field tests."""
+"""Local ZenSDK report collection and approved command dispatch."""
 
 from __future__ import annotations
 
@@ -93,7 +93,7 @@ async def async_write_zensdk_properties(
     *,
     timeout: float = DEFAULT_ZENSDK_TIMEOUT,
 ) -> ZenSdkWriteResult:
-    """Write one complete allow-listed command group in exactly one POST."""
+    """Write one command group; never retry a request with ambiguous delivery."""
 
     property_names = frozenset(properties)
     direction_names = frozenset(
@@ -137,38 +137,55 @@ async def async_write_zensdk_properties(
     addresses = _candidate_addresses(raw, identity.product_model, identity.serial_number)
     if not addresses:
         return ZenSdkWriteResult(False, None, "no_local_address")
-    # A read may try another address, but a write is sent exactly once.  A
-    # timeout is ambiguous and must never cause an automatic duplicate POST.
-    source, host = addresses[0]
     started = time.monotonic()
-    try:
-        response = await asyncio.wait_for(
-            post_json(
-                f"http://{host}{ZENSDK_WRITE_PATH}",
-                json={
-                    "sn": identity.serial_number,
-                    "properties": dict(properties),
-                    "id": int(request_id),
-                },
-            ),
-            timeout=timeout,
-        )
-        status = int(response.status)
-        return ZenSdkWriteResult(
-            200 <= status < 300, status,
-            "transport_ok" if 200 <= status < 300 else "http_error",
-            address_source=source,
-            elapsed_seconds=round(time.monotonic() - started, 3),
-        )
-    except Exception as error:
-        return ZenSdkWriteResult(
-            False,
-            None,
-            "transport_error",
-            address_source=source,
-            error_type=type(error).__name__,
-            elapsed_seconds=round(time.monotonic() - started, 3),
-        )
+    for index, (source, host) in enumerate(addresses):
+        try:
+            response = await asyncio.wait_for(
+                post_json(
+                    f"http://{host}{ZENSDK_WRITE_PATH}",
+                    json={
+                        "sn": identity.serial_number,
+                        "properties": dict(properties),
+                        "id": int(request_id),
+                    },
+                ),
+                timeout=timeout,
+            )
+            status = int(response.status)
+            return ZenSdkWriteResult(
+                200 <= status < 300, status,
+                "transport_ok" if 200 <= status < 300 else "http_error",
+                address_source=source,
+                elapsed_seconds=round(time.monotonic() - started, 3),
+            )
+        except Exception as error:  # noqa: BLE001 - normalize transport failures
+            # aiohttp's connector errors occur before an HTTP connection is
+            # established, so the device cannot have received this command.
+            # Only then is trying the next validated address safe. Timeouts,
+            # disconnects after connect, and HTTP errors remain single-shot.
+            if (
+                _is_pre_send_connector_error(error)
+                and index + 1 < len(addresses)
+            ):
+                continue
+            return ZenSdkWriteResult(
+                False,
+                None,
+                "transport_error",
+                address_source=source,
+                error_type=type(error).__name__,
+                elapsed_seconds=round(time.monotonic() - started, 3),
+            )
+
+
+def _is_pre_send_connector_error(error: Exception) -> bool:
+    """Identify aiohttp failures raised before a connection can send a POST."""
+
+    return any(
+        base.__name__ == "ClientConnectorError"
+        and base.__module__.startswith("aiohttp.")
+        for base in type(error).__mro__
+    )
 
 
 def _valid_direction_group(properties: Mapping[str, int]) -> bool:
