@@ -151,7 +151,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.31"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.32"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=44"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
@@ -214,7 +214,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.31"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.32"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=44"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:

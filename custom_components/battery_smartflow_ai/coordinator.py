@@ -2074,6 +2074,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if key in evaluation
             }
             public_evaluation["live_parameters_changed"] = False
+            reversal_hysteresis = evaluation.get("reversal_hysteresis")
+            if isinstance(reversal_hysteresis, dict):
+                public_evaluation["reversal_hysteresis"] = reversal_hysteresis
             for direction in ("charge", "discharge"):
                 result = evaluation.get(direction)
                 public_evaluation[direction] = (

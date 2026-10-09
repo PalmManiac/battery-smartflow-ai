@@ -35,7 +35,7 @@ _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.31"
+DASHBOARD_VERSION = "1.0.32"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",

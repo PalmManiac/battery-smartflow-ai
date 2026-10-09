@@ -168,6 +168,14 @@ class RegulationTrainingModelTests(unittest.TestCase):
                 "regulation_command_skipped": False,
                 "regulation_error_w": 120,
                 "regulation_target_import_w": 10,
+                "ai_mode": "automatic",
+                "manual_action": "standby",
+                "regulation_strategy_intent": "pv_charge",
+                "regulation_strategy_force": False,
+                "regulation_strategy_priority": 400,
+                "regulation_mode_allowed": True,
+                "regulation_discharge_allowed": True,
+                "regulation_mode_arbiter_reason": "stable_export",
                 "effective_charge_kp_up": 0.65,
                 "effective_charge_kp_down": 0.45,
                 "effective_charge_max_step_up": 550,
@@ -185,6 +193,10 @@ class RegulationTrainingModelTests(unittest.TestCase):
         self.assertEqual(serialized["samples"][0]["direction"], "charge")
         self.assertEqual(serialized["samples"][0]["grid_error_w"], 120)
         self.assertEqual(serialized["samples"][0]["baseline_kp_up"], 0.65)
+        self.assertEqual(serialized["samples"][0]["strategy_intent"], "pv_charge")
+        self.assertEqual(serialized["samples"][0]["strategy_priority"], 400)
+        self.assertFalse(serialized["samples"][0]["strategy_force"])
+        self.assertTrue(serialized["samples"][0]["mode_allowed"])
         self.assertEqual(
             serialized["samples"][0]["baseline_max_step_down_w"], 300
         )

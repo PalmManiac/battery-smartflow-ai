@@ -151,6 +151,14 @@ class TrainingSample:
     baseline_max_step_up_w: float | None = None
     baseline_max_step_down_w: float | None = None
     baseline_deadband_w: float | None = None
+    ai_mode: str | None = None
+    manual_action: str | None = None
+    strategy_intent: str | None = None
+    strategy_force: bool | None = None
+    strategy_priority: int | None = None
+    mode_allowed: bool | None = None
+    discharge_allowed: bool | None = None
+    mode_arbiter_reason: str | None = None
 
     def __post_init__(self) -> None:
         _aware(self.timestamp)
@@ -158,7 +166,19 @@ class TrainingSample:
             raise ValueError("direction must be charge, discharge, or idle")
         for name, value in asdict(self).items():
             if (
-                name in {"timestamp", "direction"}
+                name
+                in {
+                    "timestamp",
+                    "direction",
+                    "ai_mode",
+                    "manual_action",
+                    "strategy_intent",
+                    "strategy_force",
+                    "strategy_priority",
+                    "mode_allowed",
+                    "discharge_allowed",
+                    "mode_arbiter_reason",
+                }
                 or isinstance(value, bool)
                 or value is None
             ):
@@ -368,6 +388,41 @@ class PassiveTrainingRecorder:
             ),
             baseline_deadband_w=_finite_number(
                 details.get(f"effective_{direction}_deadband_w")
+            ),
+            ai_mode=(str(details["ai_mode"]) if details.get("ai_mode") else None),
+            manual_action=(
+                str(details["manual_action"]) if details.get("manual_action") else None
+            ),
+            strategy_intent=(
+                str(details["regulation_strategy_intent"])
+                if details.get("regulation_strategy_intent")
+                else None
+            ),
+            strategy_force=(
+                bool(details["regulation_strategy_force"])
+                if "regulation_strategy_force" in details
+                else None
+            ),
+            strategy_priority=(
+                int(details["regulation_strategy_priority"])
+                if _finite_number(details.get("regulation_strategy_priority"))
+                is not None
+                else None
+            ),
+            mode_allowed=(
+                bool(details["regulation_mode_allowed"])
+                if "regulation_mode_allowed" in details
+                else None
+            ),
+            discharge_allowed=(
+                bool(details["regulation_discharge_allowed"])
+                if "regulation_discharge_allowed" in details
+                else None
+            ),
+            mode_arbiter_reason=(
+                str(details["regulation_mode_arbiter_reason"])
+                if details.get("regulation_mode_arbiter_reason")
+                else None
             ),
         )
 
