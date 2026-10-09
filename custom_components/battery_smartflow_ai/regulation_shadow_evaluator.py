@@ -11,6 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from statistics import median
 from typing import Any
 
@@ -21,6 +22,9 @@ MIN_RESPONSE_EVENTS = 3
 MIN_RELATIVE_IMPROVEMENT = 0.03
 MAX_REPLAY_OVERSHOOT_RATE = 0.10
 _GAIN_FACTORS = (0.8, 0.9, 1.0, 1.1, 1.2)
+REVERSAL_THRESHOLD_WATT_SECONDS = 3_000.0
+MAX_REVERSAL_SAMPLE_GAP_SECONDS = 30.0
+MAX_AUTOMATIC_STRATEGY_PRIORITY = 400
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,6 +239,182 @@ def _evaluate_direction(
     )
 
 
+def _sample_direction(sample: Mapping[str, Any]) -> tuple[str, float] | None:
+    """Return a commanded direction and magnitude, or None for idle samples."""
+
+    charge = max(0.0, _number(sample.get("requested_charge_w")) or 0.0)
+    discharge = max(0.0, _number(sample.get("requested_discharge_w")) or 0.0)
+    if charge > 0.0 and discharge <= 0.0:
+        return "charge", charge
+    if discharge > 0.0 and charge <= 0.0:
+        return "discharge", discharge
+    return None
+
+
+def _reversal_hysteresis_shadow(
+    samples: list[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Estimate a 3 kWs reversal hold on ordinary automatic regulation only.
+
+    This deliberately reports withheld command energy and hold time, not a
+    claimed grid-error improvement: the passive sample stream cannot reproduce
+    the counterfactual physical response of the battery or home load.
+    """
+
+    timed: list[tuple[datetime, Mapping[str, Any]]] = []
+    for sample in samples:
+        raw_timestamp = sample.get("timestamp")
+        if not isinstance(raw_timestamp, str):
+            continue
+        try:
+            timestamp = datetime.fromisoformat(raw_timestamp)
+        except ValueError:
+            continue
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            continue
+        timed.append((timestamp, sample))
+    timed.sort(key=lambda item: item[0])
+
+    def eligible(sample: Mapping[str, Any]) -> bool:
+        return (
+            sample.get("ai_mode") == "automatic"
+            and sample.get("manual_action") == "standby"
+            and sample.get("strategy_intent") in {"pv_charge", "cover_deficit"}
+            and sample.get("strategy_force") is False
+            and _number(sample.get("strategy_priority")) is not None
+            and _number(sample.get("strategy_priority"))
+            <= MAX_AUTOMATIC_STRATEGY_PRIORITY
+            and sample.get("mode_allowed") is True
+            and sample.get("discharge_allowed") is True
+            and sample.get("grid_valid") is True
+            and sample.get("command_skipped") is False
+        )
+
+    eligible_samples = 0
+    observed_reversals = 0
+    eligible_reversals = 0
+    override_reversals = 0
+    held_reversals = 0
+    released_reversals = 0
+    held_seconds = 0.0
+    held_energy_ws = 0.0
+    max_hold_seconds = 0.0
+    previous: tuple[datetime, str, float, Mapping[str, Any]] | None = None
+    locked_direction: str | None = None
+    pending_direction: str | None = None
+    pending_ws = 0.0
+    pending_seconds = 0.0
+
+    for timestamp, sample in timed:
+        command = _sample_direction(sample)
+        if command is None:
+            previous = None
+            locked_direction = None
+            pending_direction = None
+            pending_ws = 0.0
+            pending_seconds = 0.0
+            continue
+        direction, watts = command
+        is_eligible = eligible(sample)
+        if is_eligible:
+            eligible_samples += 1
+        if previous is None:
+            if is_eligible:
+                locked_direction = direction
+            previous = (timestamp, direction, watts, sample)
+            continue
+
+        previous_time, previous_direction, previous_watts, previous_sample = previous
+        elapsed = (timestamp - previous_time).total_seconds()
+        if elapsed <= 0.0 or elapsed > MAX_REVERSAL_SAMPLE_GAP_SECONDS:
+            previous = (timestamp, direction, watts, sample)
+            locked_direction = direction if is_eligible else None
+            pending_direction = None
+            pending_ws = 0.0
+            pending_seconds = 0.0
+            continue
+
+        direction_changed = direction != previous_direction
+        if direction_changed:
+            observed_reversals += 1
+            if not (is_eligible and eligible(previous_sample)):
+                override_reversals += 1
+                previous = (timestamp, direction, watts, sample)
+                locked_direction = direction if is_eligible else None
+                pending_direction = None
+                pending_ws = 0.0
+                pending_seconds = 0.0
+                continue
+            eligible_reversals += 1
+
+        if not is_eligible or not eligible(previous_sample):
+            previous = (timestamp, direction, watts, sample)
+            locked_direction = direction if is_eligible else None
+            pending_direction = None
+            pending_ws = 0.0
+            pending_seconds = 0.0
+            continue
+
+        if locked_direction is None:
+            locked_direction = direction
+        if direction == locked_direction:
+            # A rapid return to the original direction cancels an uncompleted
+            # hold, matching the intent of a reversal dead-time.
+            if pending_direction is not None:
+                interval_ws = previous_watts * elapsed
+                held_energy_ws += interval_ws
+                held_seconds += elapsed
+                max_hold_seconds = max(
+                    max_hold_seconds, pending_seconds + elapsed
+                )
+            pending_direction = None
+            pending_ws = 0.0
+            pending_seconds = 0.0
+        elif direction != pending_direction:
+            pending_direction = direction
+            pending_ws = 0.0
+            pending_seconds = 0.0
+            held_reversals += 1
+        else:
+            interval_ws = ((previous_watts + watts) / 2.0) * elapsed
+            pending_ws += interval_ws
+            pending_seconds += elapsed
+            held_energy_ws += interval_ws
+            held_seconds += elapsed
+            max_hold_seconds = max(max_hold_seconds, pending_seconds)
+            if pending_ws >= REVERSAL_THRESHOLD_WATT_SECONDS:
+                locked_direction = pending_direction
+                pending_direction = None
+                pending_ws = 0.0
+                pending_seconds = 0.0
+                released_reversals += 1
+        previous = (timestamp, direction, watts, sample)
+
+    status = "simulated" if eligible_samples >= 2 else "insufficient_data"
+    return {
+        "status": status,
+        "method": "automatic_reversal_watt_seconds_shadow_v1",
+        "threshold_watt_seconds": REVERSAL_THRESHOLD_WATT_SECONDS,
+        "sample_count": len(timed),
+        "eligible_sample_count": eligible_samples,
+        "observed_reversal_count": observed_reversals,
+        "eligible_reversal_count": eligible_reversals,
+        "override_reversal_count": override_reversals,
+        "held_reversal_count": held_reversals,
+        "released_reversal_count": released_reversals,
+        "estimated_hold_seconds": round(held_seconds, 2),
+        "estimated_withheld_energy_wh": round(held_energy_ws / 3600.0, 3),
+        "maximum_hold_seconds": round(max_hold_seconds, 2),
+        "live_parameters_changed": False,
+        "interpretation": (
+            "Shadow-only estimate for ordinary automatic PV/load regulation. "
+            "Manual actions, forced or higher-priority strategies, denied mode "
+            "changes, and discharge-protection states are excluded. Withheld "
+            "energy and hold time are not a prediction of grid-error improvement."
+        ),
+    }
+
+
 def evaluate_training_session(session: Mapping[str, Any]) -> dict[str, Any]:
     """Replay a finished session and return non-active charge/discharge proposals."""
 
@@ -264,6 +444,7 @@ def evaluate_training_session(session: Mapping[str, Any]) -> dict[str, Any]:
             "baseline gains; it does not simulate full device or grid dynamics."
         ),
         "live_parameters_changed": False,
+        "reversal_hysteresis": _reversal_hysteresis_shadow(samples),
         "charge": charge.as_dict(),
         "discharge": discharge.as_dict(),
     }

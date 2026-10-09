@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from custom_components.battery_smartflow_ai.regulation_shadow_evaluator import (
     evaluate_training_session,
@@ -8,6 +9,32 @@ from custom_components.battery_smartflow_ai.regulation_shadow_evaluator import (
 
 
 class RegulationShadowEvaluatorTests(unittest.TestCase):
+    @staticmethod
+    def _reversal_samples(*, override_at_reversal: bool = False) -> list[dict]:
+        started = datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)
+        samples = []
+        for index in range(45):
+            direction = "charge" if index < 5 else "discharge"
+            sample = {
+                "timestamp": (started + timedelta(seconds=index)).isoformat(),
+                "direction": direction,
+                "ai_mode": "automatic",
+                "manual_action": "standby",
+                "strategy_intent": "cover_deficit" if direction == "discharge" else "pv_charge",
+                "strategy_force": False,
+                "strategy_priority": 400,
+                "mode_allowed": True,
+                "discharge_allowed": True,
+                "grid_valid": True,
+                "command_skipped": False,
+                "requested_charge_w": 100.0 if direction == "charge" else 0.0,
+                "requested_discharge_w": 100.0 if direction == "discharge" else 0.0,
+            }
+            if override_at_reversal and index == 5:
+                sample["manual_action"] = "discharge"
+            samples.append(sample)
+        return samples
+
     @staticmethod
     def _samples(*, kp_up: float = 0.5, kp_down: float = 0.5) -> list[dict]:
         samples = []
@@ -58,6 +85,29 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
         self.assertEqual(result["status"], "insufficient_data")
         self.assertEqual(result["charge"]["decision"], "insufficient_data")
         self.assertIsNone(result["charge"]["candidate_score"])
+
+    def test_reversal_hold_is_simulated_without_changing_live_regulation(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._reversal_samples()}
+        )["reversal_hysteresis"]
+
+        self.assertEqual(result["status"], "simulated")
+        self.assertEqual(result["threshold_watt_seconds"], 3000)
+        self.assertEqual(result["eligible_reversal_count"], 1)
+        self.assertEqual(result["held_reversal_count"], 1)
+        self.assertEqual(result["released_reversal_count"], 1)
+        self.assertAlmostEqual(result["estimated_hold_seconds"], 30)
+        self.assertAlmostEqual(result["estimated_withheld_energy_wh"], 0.833)
+        self.assertFalse(result["live_parameters_changed"])
+
+    def test_manual_reversal_is_counted_as_override_not_delayed(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._reversal_samples(override_at_reversal=True)}
+        )["reversal_hysteresis"]
+
+        self.assertEqual(result["override_reversal_count"], 1)
+        self.assertEqual(result["eligible_reversal_count"], 0)
+        self.assertEqual(result["held_reversal_count"], 0)
 
 
 if __name__ == "__main__":
