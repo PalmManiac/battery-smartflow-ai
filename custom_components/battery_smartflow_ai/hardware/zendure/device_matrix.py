@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-import re
 from types import MappingProxyType
-from typing import Mapping
 
 from ...core.models import DeviceProfile, NativeDeviceIdentity, ZendureTransport
 from ...device_profiles import DEVICE_PROFILE_MODELS
@@ -19,6 +19,14 @@ class VerificationLevel(StrEnum):
     REFERENCE_ONLY = "reference_only"
     UNKNOWN = "unknown"
     UNSUPPORTED = "unsupported"
+
+
+class CloudCommandProtocol(StrEnum):
+    """Wire-level command family used by a model on Zendure Cloud MQTT."""
+
+    PROPERTIES = "properties"
+    DEVICE_AUTOMATION_OBJECT = "device_automation_object"
+    DEVICE_AUTOMATION_VALUE = "device_automation_value"
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +64,7 @@ class ZendureDeviceMatrixEntry:
     neutral_pack_targets: frozenset[str]
     hems_status: VerificationLevel
     calibration: CalibrationCapability
+    cloud_command_protocol: CloudCommandProtocol = CloudCommandProtocol.PROPERTIES
     native_control_approved: bool = False
 
     def __post_init__(self) -> None:
@@ -236,6 +245,7 @@ def _entry(
     canonical_model: str,
     *aliases: str,
     product_ids: tuple[str, ...] = (),
+    cloud_command_protocol: CloudCommandProtocol = CloudCommandProtocol.PROPERTIES,
     zensdk_verified: bool = False,
     local_mqtt_verified: bool = False,
     local_mqtt_input_verified: bool = True,
@@ -323,6 +333,7 @@ def _entry(
                 "Zendure-HA nextCalibration is derived, not a device due date",
             ),
         ),
+        cloud_command_protocol=cloud_command_protocol,
         native_control_approved=True,
     )
 
@@ -396,6 +407,7 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 "Hyper 2000",
                 "Hyper 2000",
                 "Hyper2000",
+                cloud_command_protocol=CloudCommandProtocol.DEVICE_AUTOMATION_OBJECT,
                 local_mqtt_verified=True,
             ),
             _entry(
@@ -404,6 +416,7 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 "SolarFlow Hub2000",
                 "Hub 2000",
                 "Hub2000",
+                cloud_command_protocol=CloudCommandProtocol.DEVICE_AUTOMATION_VALUE,
                 local_mqtt_verified=True,
                 local_mqtt_input_verified=False,
             ),

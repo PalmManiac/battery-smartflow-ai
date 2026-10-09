@@ -819,7 +819,7 @@ class NativeZendureRuntime:
                 "zensdk_devices": self._zensdk_diagnostics(),
                 "zensdk_attempt_history": list(self._zensdk_attempt_history),
                 "zensdk_last_write": (
-                    self._zensdk_command_adapter.diagnostics()
+                    getattr(self._zensdk_command_adapter, "diagnostics", lambda: None)()
                     if self._zensdk_command_adapter is not None else None
                 ),
                 "zensdk_read_write_path_comparison": (
@@ -827,7 +827,7 @@ class NativeZendureRuntime:
                         self._selected_device,
                         self._zensdk_attempt_history,
                         (
-                            self._zensdk_command_adapter.diagnostics()
+                            getattr(self._zensdk_command_adapter, "diagnostics", lambda: None)()
                             if self._zensdk_command_adapter is not None else None
                         ),
                     )

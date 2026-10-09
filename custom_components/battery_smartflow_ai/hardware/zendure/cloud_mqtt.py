@@ -31,6 +31,7 @@ from .cloud import CloudMqttCredentials, ZendureCloudBootstrap
 from .cloud_mqtt_commands import (
     CloudCommandResult,
     CloudCommandStatus,
+    CloudFunctionInvocation,
     CloudPropertyWrite,
     ZendureCloudCommandAdapter,
 )
@@ -134,6 +135,15 @@ class CloudMqttSession(Protocol):
         product_id: str,
         device_id: str,
         writes: tuple[CloudPropertyWrite, ...],
+    ) -> bool: ...
+
+    def invoke_function(
+        self,
+        product_id: str,
+        device_id: str,
+        invocation: CloudFunctionInvocation,
+        message_id: int,
+        timestamp: int,
     ) -> bool: ...
 
     def disconnect(self) -> None: ...
@@ -683,6 +693,58 @@ def _property_write_request(
     )
 
 
+def _function_invoke_request(
+    product_id: str,
+    device_id: str,
+    invocation: CloudFunctionInvocation,
+    message_id: int,
+    timestamp: int,
+) -> tuple[str, str]:
+    """Serialize one known legacy invocation; never expose generic publishing."""
+
+    if not product_id or not device_id or message_id < 1 or timestamp < 1:
+        raise CloudMqttError("invalid_invoke_address")
+    if invocation.function == "deviceAutomation":
+        if (
+            not isinstance(invocation.arguments, tuple)
+            or len(invocation.arguments) != 1
+            or set(invocation.arguments[0])
+            != {"autoModelProgram", "autoModelValue", "msgType", "autoModel"}
+        ):
+            raise CloudMqttError("invalid_legacy_arguments")
+        auto_value = invocation.arguments[0]["autoModelValue"]
+        if isinstance(auto_value, Mapping):
+            allowed_value_keys = {
+                "chargingType", "price", "chargingPower", "prices", "outPower", "freq"
+            }
+            if set(auto_value) - allowed_value_keys:
+                raise CloudMqttError("invalid_legacy_arguments")
+            if "prices" in auto_value and (
+                not isinstance(auto_value["prices"], list)
+                or len(auto_value["prices"]) != 24
+                or any(not isinstance(item, int) for item in auto_value["prices"])
+            ):
+                raise CloudMqttError("invalid_legacy_arguments")
+        elif not isinstance(auto_value, int) or isinstance(auto_value, bool):
+            raise CloudMqttError("invalid_legacy_arguments")
+    else:
+        raise CloudMqttError("unsupported_function")
+
+    payload: dict[str, Any] = {
+        "function": invocation.function,
+        "arguments": invocation.arguments,
+        "messageId": message_id,
+        "deviceId": device_id,
+        "timestamp": timestamp,
+    }
+    if invocation.include_device_key:
+        payload["deviceKey"] = device_id
+    return (
+        f"iot/{product_id}/{device_id}/function/invoke",
+        json.dumps(payload, separators=(",", ":")),
+    )
+
+
 def _identity_values(value: Any) -> set[str]:
     found: set[str] = set()
     if isinstance(value, Mapping):
@@ -903,6 +965,26 @@ class PahoReadOnlyMqttSession:
         writes: tuple[CloudPropertyWrite, ...],
     ) -> bool:
         topic, payload = _property_write_request(product_id, device_id, writes)
+        result = self._client.publish(topic, payload, qos=0, retain=False)
+        result_code = getattr(result, "rc", None)
+        if result_code is None:
+            try:
+                result_code = result[0]
+            except (IndexError, TypeError):
+                return False
+        return result_code == 0
+
+    def invoke_function(
+        self,
+        product_id: str,
+        device_id: str,
+        invocation: CloudFunctionInvocation,
+        message_id: int,
+        timestamp: int,
+    ) -> bool:
+        topic, payload = _function_invoke_request(
+            product_id, device_id, invocation, message_id, timestamp
+        )
         result = self._client.publish(topic, payload, qos=0, retain=False)
         result_code = getattr(result, "rc", None)
         if result_code is None:
