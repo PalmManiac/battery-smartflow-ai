@@ -24,6 +24,7 @@ from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
     DIRECT_SHELLY_POLL_INTERVAL_S,
+    DIRECT_SHELLY_REQUEST_TIMEOUT_S,
     GRID_EVENT_REFRESH_MIN_INTERVAL_S,
     INTEGRATION_VERSION,
     # config keys
@@ -3215,7 +3216,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if mode == GRID_MODE_SHELLY_PRO_3EM_MODBUS:
                 reading = await async_read_shelly_pro_3em_modbus(
                     host=self._shelly_pro_3em_host,
-                    timeout_seconds=1.5,
+                    timeout_seconds=DIRECT_SHELLY_REQUEST_TIMEOUT_S,
                 )
             elif mode == GRID_MODE_SHELLY_PRO_3EM:
                 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -3225,7 +3226,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     host=self._shelly_pro_3em_host,
                     password=self._shelly_pro_3em_password,
                     auth=self._shelly_digest,
-                    timeout_seconds=1.5,
+                    timeout_seconds=DIRECT_SHELLY_REQUEST_TIMEOUT_S,
                 )
             else:
                 from homeassistant.helpers.aiohttp_client import async_get_clientsession

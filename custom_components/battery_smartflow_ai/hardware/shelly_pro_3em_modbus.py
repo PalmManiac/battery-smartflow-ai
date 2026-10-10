@@ -6,6 +6,7 @@ import asyncio
 import secrets
 import struct
 
+from ..const import DIRECT_SHELLY_REQUEST_TIMEOUT_S
 from .shelly_pro_3em import (
     ShellyPro3EMError,
     ShellyPro3EMReading,
@@ -66,7 +67,7 @@ def parse_shelly_pro_3em_modbus_registers(
 async def async_read_shelly_pro_3em_modbus(
     *,
     host: str,
-    timeout_seconds: float = 1.5,
+    timeout_seconds: float = DIRECT_SHELLY_REQUEST_TIMEOUT_S,
 ) -> ShellyPro3EMReading:
     """Read one contiguous block of signed active-power input registers.
 

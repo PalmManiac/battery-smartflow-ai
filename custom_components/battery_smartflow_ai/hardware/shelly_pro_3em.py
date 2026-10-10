@@ -9,6 +9,8 @@ import secrets
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+from ..const import DIRECT_SHELLY_REQUEST_TIMEOUT_S
+
 
 class ShellyPro3EMError(Exception):
     """Raised when the Shelly Pro 3EM cannot provide a valid reading."""
@@ -145,7 +147,7 @@ async def async_read_shelly_pro_3em_power(
     host: str,
     password: str = "",
     auth: ShellyDigestSession | None = None,
-    timeout_seconds: float = 3.0,
+    timeout_seconds: float = DIRECT_SHELLY_REQUEST_TIMEOUT_S,
 ) -> float:
     """Poll the documented Gen2 EM.GetStatus endpoint over the local network."""
 
@@ -166,7 +168,7 @@ async def async_read_shelly_pro_3em_reading(
     host: str,
     password: str = "",
     auth: ShellyDigestSession | None = None,
-    timeout_seconds: float = 3.0,
+    timeout_seconds: float = DIRECT_SHELLY_REQUEST_TIMEOUT_S,
 ) -> ShellyPro3EMReading:
     """Poll the documented Gen2 EM.GetStatus endpoint over the local network."""
 
