@@ -33,10 +33,20 @@ from .const import (
 
 _PANEL_PATH = "battery-smartflow-ai"
 _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
+_SF2400AC_IMAGE_URL = "/battery_smartflow_ai/images/sf2400ac.png"
+_SF2400AC_PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf2400ac-plus.png"
+_SF2400ACPRO_IMAGE_URL = "/battery_smartflow_ai/images/sf2400acpro.png"
+_SF1600AC_PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf1600ac-plus.png"
+_HYPER2000_IMAGE_URL = "/battery_smartflow_ai/images/hyper2000.png"
+_HUB2000_IMAGE_URL = "/battery_smartflow_ai/images/hub2000.png"
+_SF800_IMAGE_URL = "/battery_smartflow_ai/images/sf800.png"
+_SF800PRO_IMAGE_URL = "/battery_smartflow_ai/images/sf800pro.png"
+_SF800PRO2_IMAGE_URL = "/battery_smartflow_ai/images/sf800pro2.png"
+_SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.33"
+DASHBOARD_VERSION = "1.0.34"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -237,9 +247,65 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
     registration_lock = hass.data.setdefault(_STATIC_PATH_LOCK_KEY, asyncio.Lock())
     async with registration_lock:
         if not hass.data.get(_STATIC_PATH_KEY):
-            panel_file = Path(__file__).parent / "frontend" / "hems-dashboard.js"
+            frontend_dir = Path(__file__).parent / "frontend"
             await hass.http.async_register_static_paths(
-                [StaticPathConfig(_PANEL_URL, str(panel_file), cache_headers=True)]
+                [
+                    StaticPathConfig(
+                        _PANEL_URL,
+                        str(frontend_dir / "hems-dashboard.js"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF2400AC_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf2400ac.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF2400AC_PLUS_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf2400ac-plus.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF2400ACPRO_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf2400acpro.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF1600AC_PLUS_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf1600ac-plus.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _HYPER2000_IMAGE_URL,
+                        str(frontend_dir / "images" / "hyper2000.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _HUB2000_IMAGE_URL,
+                        str(frontend_dir / "images" / "hub2000.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF800_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf800.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF800PRO_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf800pro.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF800PRO2_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf800pro2.png"),
+                        cache_headers=True,
+                    ),
+                    StaticPathConfig(
+                        _SF800PLUS_IMAGE_URL,
+                        str(frontend_dir / "images" / "sf800plus.png"),
+                        cache_headers=True,
+                    ),
+                ]
             )
             hass.data[_STATIC_PATH_KEY] = True
 
@@ -249,7 +315,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="BSFAI Portal",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=44",
+        module_url=f"{_PANEL_URL}?v=45",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,
