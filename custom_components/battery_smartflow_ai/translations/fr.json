@@ -845,7 +845,8 @@
           "training": "Entraînement en cours",
           "candidate_proposed": "Candidat Shadow disponible",
           "no_improvement": "Aucune amélioration sûre trouvée",
-          "insufficient_data": "Données d’entraînement supplémentaires nécessaires"
+          "insufficient_data": "Données d’entraînement supplémentaires nécessaires",
+          "interrupted": "Interrompu – données partielles enregistrées"
         }
       },
       "fault_level_status": {

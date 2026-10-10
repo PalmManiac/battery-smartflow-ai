@@ -236,9 +236,11 @@ from .debug_recorder import DebugRecorder
 from .regulation_training import (
     PassiveTrainingRecorder,
     RegulationProfileKey,
+    TRAINING_CHECKPOINT_INTERVAL,
     TrainingDirection,
-    candidate_gain_parameters,
+    recover_interrupted_training_session,
     retain_training_sessions,
+    training_session_candidate_parameters,
     training_candidate_scope_matches,
 )
 from .regulation_shadow_evaluator import evaluate_training_session
@@ -502,6 +504,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             key=f"{DOMAIN}_regulation_training_{entry.entry_id}",
         )
         self._training_sessions: list[dict[str, Any]] = []
+        self._training_checkpoint_last_at: datetime | None = None
         self._training_last_result = "not_trained"
         self._training_last_evaluation: dict[str, Any] | None = None
         self._training_active_key: dict[str, Any] | None = None
@@ -2096,13 +2099,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "regulation_training_sample_count": status["sample_count"],
             "regulation_training_saved_sessions": len(self._training_sessions),
             "regulation_training_result": self._training_last_result,
+            "regulation_training_interrupted": bool(
+                self._training_sessions
+                and self._training_sessions[-1].get("interrupted") is True
+            ),
             "regulation_training_evaluation": public_evaluation,
             "regulation_training_candidate_active": self._training_candidate_is_active(),
             "regulation_training_candidate_available": self._training_candidate_is_available(),
         }
 
     async def async_load_regulation_training(self) -> None:
-        """Load previously completed sessions; unfinished sessions never resume."""
+        """Load prior sessions and recover any checkpoint as interrupted."""
 
         try:
             result = await self._training_store.load()
@@ -2124,16 +2131,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._training_last_result = str(
                         evaluation.get("status", "not_trained")
                     )
+        active_session = stored.get("active_session")
+        if not isinstance(active_session, dict):
+            return
+        recovered = recover_interrupted_training_session(
+            active_session, interrupted_at=self._clock.utc_now()
+        )
+        if recovered is None:
+            _LOGGER.warning("Ignoring invalid persisted regulation training checkpoint")
+            return
+        await self._save_regulation_training_session(
+            recovered, interrupted=True
+        )
 
     def _candidate_parameters_from_session(
         self, session: Mapping[str, Any]
     ) -> dict[str, float]:
         """Return bounded proportional gains from an explicitly proposed run."""
 
-        evaluation = session.get("shadow_evaluation")
-        if not isinstance(evaluation, Mapping):
-            raise TypeError("No regulation training evaluation is available")
-        return candidate_gain_parameters(evaluation)
+        return training_session_candidate_parameters(session)
 
     def _training_candidate_is_active(self) -> bool:
         candidate = self.entry.options.get(CONF_REGULATION_TRAINING_CANDIDATE)
@@ -2172,6 +2188,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not self._training_sessions:
             raise ValueError("No completed regulation training session is available")
         session = self._training_sessions[-1]
+        if session.get("interrupted") is True:
+            raise ValueError("Interrupted training data cannot be applied")
         key = self._regulation_training_key().as_dict()
         if session.get("key") != key:
             raise ValueError("The latest training candidate belongs to a different device or transport")
@@ -2242,27 +2260,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             direction_scope=TrainingDirection(direction),
         )
         self._training_last_result = "training"
+        self._training_checkpoint_last_at = None
+        await self.async_checkpoint_regulation_training(force=True)
         await self.async_request_refresh()
 
     async def async_stop_regulation_training(self) -> None:
         """Stop and persist a completed passive training capture."""
 
         session = self._training_recorder.stop(now=self._clock.utc_now())
+        self._training_checkpoint_last_at = None
         if session is not None and session.samples:
             await self._save_regulation_training_session(session.as_dict())
         elif session is not None:
             self._training_last_result = "insufficient_data"
             self._training_last_evaluation = None
+            try:
+                await self._save_regulation_training_state(
+                    self._training_sessions, active_session=None
+                )
+            except Exception:  # pragma: no cover - HA storage failure boundary
+                _LOGGER.exception(
+                    "Could not clear empty regulation training checkpoint"
+                )
         await self.async_request_refresh()
 
     async def _save_regulation_training_session(
-        self, session: dict[str, Any]
+        self, session: dict[str, Any], *, interrupted: bool = False
     ) -> None:
         evaluation = evaluate_training_session(session)
         session["shadow_evaluation"] = evaluation
+        session["interrupted"] = interrupted
         previous_result = self._training_last_result
         previous_evaluation = self._training_last_evaluation
-        self._training_last_result = evaluation["status"]
+        self._training_last_result = (
+            "interrupted" if interrupted else evaluation["status"]
+        )
         self._training_last_evaluation = evaluation
         profile = session.get("profile")
         if isinstance(profile, dict):
@@ -2282,16 +2314,63 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             [*previous_sessions, session]
         )
         try:
-            result = await self._training_store.save(
-                {"schema_version": 1, "sessions": self._training_sessions}
+            await self._save_regulation_training_state(
+                self._training_sessions, active_session=None
             )
-            if result.status.value != "saved":
-                raise OSError(result.error or "training session save failed")
         except Exception:  # pragma: no cover - HA storage failure boundary
             self._training_sessions = previous_sessions
             self._training_last_result = previous_result
             self._training_last_evaluation = previous_evaluation
             _LOGGER.exception("Could not save regulation training session")
+
+    async def _save_regulation_training_state(
+        self,
+        sessions: list[dict[str, Any]],
+        *,
+        active_session: dict[str, Any] | None,
+    ) -> None:
+        """Atomically save completed sessions and the optional live checkpoint."""
+
+        result = await self._training_store.save(
+            {
+                "schema_version": 1,
+                "sessions": sessions,
+                "active_session": active_session,
+            }
+        )
+        if result.status.value != "saved":
+            raise OSError(result.error or "training state save failed")
+
+    async def async_checkpoint_regulation_training(
+        self, *, force: bool = False
+    ) -> None:
+        """Persist an active run at a bounded interval without ending it."""
+
+        if not self._training_recorder.active:
+            return
+        now = self._clock.utc_now()
+        if (
+            not force
+            and self._training_checkpoint_last_at is not None
+            and now - self._training_checkpoint_last_at
+            < TRAINING_CHECKPOINT_INTERVAL
+        ):
+            return
+        snapshot = self._training_recorder.snapshot(now=now)
+        if snapshot is None:
+            return
+        active_session = snapshot.as_dict()
+        active_session["checkpointed_at"] = now.isoformat()
+        active_session["ends_at"] = self._training_recorder.status["ends_at"]
+        try:
+            await self._save_regulation_training_state(
+                self._training_sessions, active_session=active_session
+            )
+        except Exception:  # pragma: no cover - HA storage failure boundary
+            _LOGGER.exception("Could not checkpoint regulation training session")
+        finally:
+            # Avoid a storage retry on every 10-second coordinator refresh.
+            self._training_checkpoint_last_at = now
 
     async def _capture_regulation_training_sample(
         self,
@@ -2301,7 +2380,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         observed_charge_w: float,
         observed_discharge_w: float,
     ) -> None:
-        """Collect allowlisted snapshots and persist when the timer expires."""
+        """Collect allowlisted snapshots and periodically checkpoint progress."""
 
         if not self._training_recorder.active:
             return
@@ -2309,6 +2388,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if session is not None:
             if session.samples:
                 await self._save_regulation_training_session(session.as_dict())
+            else:
+                self._training_last_result = "insufficient_data"
+                self._training_last_evaluation = None
+                try:
+                    await self._save_regulation_training_state(
+                        self._training_sessions, active_session=None
+                    )
+                except Exception:  # pragma: no cover - HA storage failure boundary
+                    _LOGGER.exception(
+                        "Could not clear empty regulation training checkpoint"
+                    )
+            self._training_checkpoint_last_at = None
             return
         sample_details = {
             **details,
@@ -2320,6 +2411,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 timestamp=now, details=sample_details
             )
         )
+        await self.async_checkpoint_regulation_training()
 
     @property
     def debug_last_package_path(self) -> str | None:

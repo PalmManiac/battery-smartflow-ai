@@ -913,7 +913,8 @@
           "training": "Training in progress",
           "candidate_proposed": "Shadow candidate available",
           "no_improvement": "No safe improvement found",
-          "insufficient_data": "More training data needed"
+          "insufficient_data": "More training data needed",
+          "interrupted": "Interrupted – partial data saved"
         }
       },
       "fault_level_status": {

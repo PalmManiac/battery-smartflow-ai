@@ -846,7 +846,8 @@
           "training": "Training läuft",
           "candidate_proposed": "Shadow-Kandidat verfügbar",
           "no_improvement": "Keine sichere Verbesserung gefunden",
-          "insufficient_data": "Weitere Trainingsdaten erforderlich"
+          "insufficient_data": "Weitere Trainingsdaten erforderlich",
+          "interrupted": "Unterbrochen – Teildaten gesichert"
         }
       },
       "fault_level_status": {

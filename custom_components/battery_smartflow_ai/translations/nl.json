@@ -845,7 +845,8 @@
           "training": "Training bezig",
           "candidate_proposed": "Shadow-kandidaat beschikbaar",
           "no_improvement": "Geen veilige verbetering gevonden",
-          "insufficient_data": "Meer trainingsgegevens nodig"
+          "insufficient_data": "Meer trainingsgegevens nodig",
+          "interrupted": "Onderbroken – gedeeltelijke gegevens opgeslagen"
         }
       },
       "fault_level_status": {

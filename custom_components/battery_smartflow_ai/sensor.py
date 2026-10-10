@@ -1930,6 +1930,7 @@ SENSORS += (
             "candidate_proposed",
             "no_improvement",
             "insufficient_data",
+            "interrupted",
         ],
         icon="mdi:chart-box-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -2507,6 +2508,11 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
                     "candidate_available": bool(
                         (self.coordinator.data or {}).get(
                             "regulation_training_candidate_available", False
+                        )
+                    ),
+                    "interrupted": bool(
+                        (self.coordinator.data or {}).get(
+                            "regulation_training_interrupted", False
                         )
                     ),
                 }
