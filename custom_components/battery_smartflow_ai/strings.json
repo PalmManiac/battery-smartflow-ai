@@ -111,7 +111,7 @@
           "grid_power_entity": "A single sensor with positive power for import and negative power for export.",
           "grid_import_entity": "Sensor with current grid import power in watts.",
           "grid_export_entity": "Sensor with current grid export power in watts.",
-          "shelly_pro_3em_host": "Local hostname or IP address of the Shelly Pro 3EM Gen2. Use a reserved/static address.",
+          "shelly_pro_3em_host": "Local hostname or IP address of the Shelly Pro 3EM Gen2. Use a reserved/static address. For Modbus TCP, enable Modbus in the Shelly settings (TCP port 502); Modbus does not use the optional HTTP password.",
           "shelly_pro_3em_password": "Optional device password. Shelly authentication uses the local SHA-256 digest challenge.",
           "shelly_3em_host": "Local hostname or IP address of the classic Shelly 3EM. Use a reserved/static address.",
           "shelly_3em_password": "Optional device password. Gen1 uses HTTP Basic authentication without encryption; use only on a trusted local network."
@@ -133,7 +133,7 @@
           "grid_power_entity": "A single sensor with positive power for import and negative power for export.",
           "grid_import_entity": "Sensor with current grid import power in watts.",
           "grid_export_entity": "Sensor with current grid export power in watts.",
-          "shelly_pro_3em_host": "Local hostname or IP address of the Shelly Pro 3EM Gen2. Use a reserved/static address.",
+          "shelly_pro_3em_host": "Local hostname or IP address of the Shelly Pro 3EM Gen2. Use a reserved/static address. For Modbus TCP, enable Modbus in the Shelly settings (TCP port 502); Modbus does not use the optional HTTP password.",
           "shelly_pro_3em_password": "Optional device password. Shelly authentication uses the local SHA-256 digest challenge.",
           "shelly_3em_host": "Local hostname or IP address of the classic Shelly 3EM. Use a reserved/static address.",
           "shelly_3em_password": "Optional device password. Gen1 uses HTTP Basic authentication without encryption; use only on a trusted local network."
@@ -444,7 +444,8 @@
         "none": "No grid sensor",
         "single": "One sensor (+ / −)",
         "split": "Two sensors (import and export)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local)",
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local HTTP)",
+        "shelly_pro_3em_modbus": "Shelly Pro 3EM Gen2 (Modbus TCP)",
         "shelly_3em": "Shelly 3EM Gen1 (local)"
       }
     }
@@ -524,6 +525,9 @@
     },
     "sensor": {
       "grid_power": {"name": "Grid power"},
+      "grid_phase_a_power": {"name": "Shelly grid phase A power"},
+      "grid_phase_b_power": {"name": "Shelly grid phase B power"},
+      "grid_phase_c_power": {"name": "Shelly grid phase C power"},
       "native_zendure_status": {"name": "Native Zendure test status", "state": {"disabled": "Not configured", "discovering": "Discovering devices", "connecting": "Connecting", "capturing": "Capturing initial data", "observing": "Observation active", "error": "Error"}},
       "native_zendure_control": {"name": "Native Zendure control", "state": {"disabled_zha_active": "Disabled", "native_transport_not_ready": "No data", "native_local_handover_cloud_active": "Cloud", "native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Local", "native_local_unsupported": "Not supported"}},
       "native_zendure_device_count": {"name": "Native Zendure devices found"},

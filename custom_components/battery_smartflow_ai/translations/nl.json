@@ -95,7 +95,7 @@
           "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
           "grid_import_entity": "Sensor met actuele netafname in watt.",
           "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
-          "shelly_pro_3em_host": "Lokale hostnaam of IP-adres van de Shelly Pro 3EM Gen2. Gebruik een gereserveerd of statisch adres.",
+          "shelly_pro_3em_host": "Lokale hostnaam of IP-adres van de Shelly Pro 3EM Gen2. Gebruik een gereserveerd of statisch adres. Schakel voor Modbus TCP Modbus in via de Shelly-instellingen (TCP-poort 502); Modbus gebruikt het optionele HTTP-wachtwoord niet.",
           "shelly_pro_3em_password": "Optioneel apparaatwachtwoord. Shelly gebruikt lokale SHA-256-digest-authenticatie.",
           "shelly_3em_host": "Lokale hostnaam of IP-adres van de klassieke Shelly 3EM. Gebruik een gereserveerd of statisch adres.",
           "shelly_3em_password": "Optioneel wachtwoord. Gen1 gebruikt HTTP Basic-authenticatie zonder versleuteling; gebruik dit alleen op een vertrouwd lokaal netwerk."
@@ -117,7 +117,7 @@
           "grid_power_entity": "Eén sensor met positief vermogen bij afname en negatief bij teruglevering.",
           "grid_import_entity": "Sensor met actuele netafname in watt.",
           "grid_export_entity": "Sensor met actuele netteruglevering in watt.",
-          "shelly_pro_3em_host": "Lokale hostnaam of IP-adres van de Shelly Pro 3EM Gen2. Gebruik een gereserveerd of statisch adres.",
+          "shelly_pro_3em_host": "Lokale hostnaam of IP-adres van de Shelly Pro 3EM Gen2. Gebruik een gereserveerd of statisch adres. Schakel voor Modbus TCP Modbus in via de Shelly-instellingen (TCP-poort 502); Modbus gebruikt het optionele HTTP-wachtwoord niet.",
           "shelly_pro_3em_password": "Optioneel apparaatwachtwoord. Shelly gebruikt lokale SHA-256-digest-authenticatie.",
           "shelly_3em_host": "Lokale hostnaam of IP-adres van de klassieke Shelly 3EM. Gebruik een gereserveerd of statisch adres.",
           "shelly_3em_password": "Optioneel wachtwoord. Gen1 gebruikt HTTP Basic-authenticatie zonder versleuteling; gebruik dit alleen op een vertrouwd lokaal netwerk."
@@ -408,7 +408,8 @@
         "none": "Geen netsensor",
         "single": "Eén sensor (+ / −)",
         "split": "Twee sensoren (afname en teruglevering)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokaal)",
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokale HTTP)",
+        "shelly_pro_3em_modbus": "Shelly Pro 3EM Gen2 (Modbus TCP)",
         "shelly_3em": "Shelly 3EM Gen1 (lokaal)"
       }
     }
@@ -488,6 +489,9 @@
     },
     "sensor": {
       "grid_power": {"name": "Netvermogen"},
+      "grid_phase_a_power": {"name": "Shelly-netvermogen fase A"},
+      "grid_phase_b_power": {"name": "Shelly-netvermogen fase B"},
+      "grid_phase_c_power": {"name": "Shelly-netvermogen fase C"},
       "native_zendure_status": {"name": "Status native Zendure-test", "state": {"disabled": "Niet ingesteld", "discovering": "Apparaten zoeken", "connecting": "Verbinden", "capturing": "Eerste gegevens verzamelen", "observing": "Observatie actief", "error": "Fout"}}, "native_zendure_control": {"name": "Native Zendure-besturing", "state": {"disabled_zha_active": "Uitgeschakeld", "native_transport_not_ready": "Geen gegevens", "native_local_handover_cloud_active": "Cloud", "native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Lokaal", "native_local_unsupported": "Niet ondersteund"}}, "native_zendure_device_count": {"name": "Gevonden native Zendure-apparaten"}, "native_zendure_message_count": {"name": "Ontvangen native Zendure-berichten"}, "native_zendure_last_message": {"name": "Laatste native Zendure-bericht"}, "native_zendure_last_capture": {"name": "Native Zendure-synchronisatiepakket"}, "native_zendure_error": {"name": "Native Zendure-fout"}, "native_zendure_watchdog": {"name": "Zendure-hardwareverbinding", "state": {"online": "Bereikbaar", "degraded": "Verbinding instabiel", "offline": "Niet bereikbaar", "not_supported": "Directe controle niet beschikbaar", "unknown": "Onbekend"}},
       "native_hardware_pack_count": {"name":"Battery count"},
       "native_hardware_capacity_kwh": {"name":"Nominal capacity"},

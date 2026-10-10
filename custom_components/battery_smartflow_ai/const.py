@@ -209,7 +209,17 @@ GRID_MODE_NONE = "none"
 GRID_MODE_SINGLE = "single"
 GRID_MODE_SPLIT = "split"
 GRID_MODE_SHELLY_PRO_3EM = "shelly_pro_3em"
+GRID_MODE_SHELLY_PRO_3EM_MODBUS = "shelly_pro_3em_modbus"
 GRID_MODE_SHELLY_3EM = "shelly_3em"
+GRID_MODE_DIRECT_SHELLY = (
+    GRID_MODE_SHELLY_PRO_3EM,
+    GRID_MODE_SHELLY_PRO_3EM_MODBUS,
+    GRID_MODE_SHELLY_3EM,
+)
+GRID_MODE_SHELLY_PRO_3EM_OPTIONS = (
+    GRID_MODE_SHELLY_PRO_3EM,
+    GRID_MODE_SHELLY_PRO_3EM_MODBUS,
+)
 
 # ==================================================
 # Runtime select modes (internal values remain EN)

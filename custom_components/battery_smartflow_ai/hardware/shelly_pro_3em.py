@@ -14,6 +14,16 @@ class ShellyPro3EMError(Exception):
     """Raised when the Shelly Pro 3EM cannot provide a valid reading."""
 
 
+@dataclass(frozen=True)
+class ShellyPro3EMReading:
+    """Signed total and per-phase active power, in watts."""
+
+    total_power_w: float
+    phase_a_power_w: float | None = None
+    phase_b_power_w: float | None = None
+    phase_c_power_w: float | None = None
+
+
 @dataclass
 class ShellyDigestSession:
     """Small RFC 7616 SHA-256 digest state for one Shelly HTTP endpoint."""
@@ -91,18 +101,34 @@ def validate_shelly_host(host: str) -> str:
 def parse_shelly_pro_3em_power(payload: object) -> float:
     """Return total grid power in watts (positive import, negative export)."""
 
+    return parse_shelly_pro_3em_reading(payload).total_power_w
+
+
+def parse_shelly_pro_3em_reading(payload: object) -> ShellyPro3EMReading:
+    """Parse total and per-phase active power from an EM.GetStatus payload."""
+
     if not isinstance(payload, dict):
         raise ShellyPro3EMError("invalid_status_payload")
 
+    phases: list[float | None] = []
+    for phase in "abc":
+        raw_phase = payload.get(f"{phase}_act_power")
+        if raw_phase is None:
+            phases.append(None)
+            continue
+        try:
+            phase_power = float(raw_phase)
+        except (TypeError, ValueError) as err:
+            raise ShellyPro3EMError("invalid_phase_power") from err
+        if not math.isfinite(phase_power):
+            raise ShellyPro3EMError("invalid_phase_power")
+        phases.append(phase_power)
+
     value = payload.get("total_act_power")
     if value is None:
-        phases = [payload.get(f"{phase}_act_power") for phase in "abc"]
         if any(phase is None for phase in phases):
             raise ShellyPro3EMError("missing_total_power")
-        try:
-            value = sum(float(phase) for phase in phases)
-        except (TypeError, ValueError) as err:
-            raise ShellyPro3EMError("invalid_total_power") from err
+        value = sum(phase for phase in phases if phase is not None)
 
     try:
         power = float(value)
@@ -110,7 +136,7 @@ def parse_shelly_pro_3em_power(payload: object) -> float:
         raise ShellyPro3EMError("invalid_total_power") from err
     if not math.isfinite(power):
         raise ShellyPro3EMError("invalid_total_power")
-    return power
+    return ShellyPro3EMReading(power, *phases)
 
 
 async def async_read_shelly_pro_3em_power(
@@ -121,6 +147,27 @@ async def async_read_shelly_pro_3em_power(
     auth: ShellyDigestSession | None = None,
     timeout_seconds: float = 3.0,
 ) -> float:
+    """Poll the documented Gen2 EM.GetStatus endpoint over the local network."""
+
+    return (
+        await async_read_shelly_pro_3em_reading(
+            session,
+            host=host,
+            password=password,
+            auth=auth,
+            timeout_seconds=timeout_seconds,
+        )
+    ).total_power_w
+
+
+async def async_read_shelly_pro_3em_reading(
+    session,
+    *,
+    host: str,
+    password: str = "",
+    auth: ShellyDigestSession | None = None,
+    timeout_seconds: float = 3.0,
+) -> ShellyPro3EMReading:
     """Poll the documented Gen2 EM.GetStatus endpoint over the local network."""
 
     normalized_host = validate_shelly_host(host)
@@ -155,7 +202,9 @@ async def async_read_shelly_pro_3em_power(
                 continue
             if response.status >= 400:
                 raise ShellyPro3EMError(f"http_{response.status}")
-            return parse_shelly_pro_3em_power(await response.json(content_type=None))
+            return parse_shelly_pro_3em_reading(
+                await response.json(content_type=None)
+            )
 
     raise ShellyPro3EMError("authentication_failed")
 

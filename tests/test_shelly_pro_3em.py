@@ -10,6 +10,7 @@ from custom_components.battery_smartflow_ai.hardware.shelly_pro_3em import (
     ShellyPro3EMError,
     async_read_shelly_pro_3em_power,
     parse_shelly_pro_3em_power,
+    parse_shelly_pro_3em_reading,
     validate_shelly_host,
 )
 
@@ -51,6 +52,20 @@ class ShellyPro3EMTests(unittest.TestCase):
             ),
             175.0,
         )
+
+    def test_http_reading_includes_each_phase_and_signed_total(self):
+        reading = parse_shelly_pro_3em_reading(
+            {
+                "total_act_power": 75,
+                "a_act_power": 100,
+                "b_act_power": -40,
+                "c_act_power": 15,
+            }
+        )
+        self.assertEqual(reading.total_power_w, 75)
+        self.assertEqual(reading.phase_a_power_w, 100)
+        self.assertEqual(reading.phase_b_power_w, -40)
+        self.assertEqual(reading.phase_c_power_w, 15)
 
     def test_missing_or_non_finite_power_is_rejected(self):
         with self.assertRaises(ShellyPro3EMError):
