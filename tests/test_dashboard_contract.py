@@ -1,8 +1,7 @@
 """Static contracts for the optional HEMS dashboard."""
 
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
@@ -145,6 +144,28 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn("const showForecast = forecastSources.length > 0 || forecastStatus === \"available\";", frontend)
         self.assertIn("this._scheduleRender();", frontend.split("set hass(hass) {", 1)[1].split("set narrow", 1)[0])
 
+    def test_energy_overview_has_colored_watermark_icons(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        for metric_type in (
+            "soc",
+            "pv",
+            "native-pv",
+            "battery-power",
+            "grid-power",
+            "grid-import",
+            "grid-export",
+            "offgrid",
+        ):
+            self.assertIn(f'data-metric="{metric_type}"', frontend)
+        self.assertIn('data-metric="grid-power"', frontend)
+        self.assertIn('--metric-accent:#f06b6b', frontend)
+        self.assertIn('class="metric-icon"', frontend)
+        self.assertIn("right:-18px;bottom:-43px;width:52%", frontend)
+        self.assertIn("drop-shadow(0 0 8px currentColor)", frontend)
+
     def test_history_view_uses_recorder_and_offers_mobile_home_navigation(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"
@@ -180,7 +201,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.34"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.35"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=45"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
@@ -308,7 +329,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.34"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.35"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=45"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
