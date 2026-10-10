@@ -285,6 +285,9 @@ UPDATE_INTERVAL = 10  # seconds
 # command attempt on every measurement.
 GRID_EVENT_REFRESH_MIN_INTERVAL_S = 5.0
 DIRECT_SHELLY_POLL_INTERVAL_S = 1.0
+# Allow brief local-network or device-response delays without letting a Shelly
+# request hang indefinitely. Poll scheduling remains independent at one second.
+DIRECT_SHELLY_REQUEST_TIMEOUT_S = 3.0
 
 DEFAULT_SOC_MIN = 12.0
 DEFAULT_SOC_MAX = 100.0  # Herstellerempfehlung ✔
