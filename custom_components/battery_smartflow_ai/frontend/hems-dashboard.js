@@ -1,4 +1,15 @@
 /* Battery SmartFlow AI's standalone HEMS dashboard. */
+const METRIC_ICONS = Object.freeze({
+  soc: '<path d="M16 4h-1V2H9v2H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 16H8V6h8v14z"/><path d="M10 8h4v2h-4zm0 4h4v2h-4zm0 4h4v2h-4z"/>',
+  pv: '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><circle cx="12" cy="12" r="3.5"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></g>',
+  "native-pv": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="m5 5-2 14h18L19 5H5zM4 15h16M8 5l-1 14m5-14v14m5-14 1 14"/><path d="M12 2v1.5m-2-1.5h4"/></g>',
+  "battery-power": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="M16 5h-1V3H9v2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/><path fill="currentColor" stroke="none" d="m13 7-4 6h3l-1 5 4-7h-3z"/></g>',
+  "grid-power": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="m12 2-8 20m8-20 8 20M7 15h10M8.5 11h7M10 7h4M6 18h12M12 2v4"/></g>',
+  "grid-import": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="m12 2-8 20m8-20 8 20M7 15h10M8.5 11h7M10 7h4M6 18h12"/><path d="M3 4v5m-2-2 2 2 2-2"/></g>',
+  "grid-export": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="m12 2-8 20m8-20 8 20M7 15h10M8.5 11h7M10 7h4M6 18h12"/><path d="M21 9V4m-2 2 2-2 2 2"/></g>',
+  offgrid: '<path d="M7 2v7h2V2H7zm8 0v7h2V2h-2zM5 10v2a7 7 0 0 0 6 6.93V22h2v-3.07A7 7 0 0 0 19 12v-2H5z"/>',
+});
+
 class BatterySmartFlowDashboard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
@@ -1014,7 +1025,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `<article class="training-direction"><div class="training-direction-head"><h4>${this._escape(title)}</h4>${outcome}</div>${scoreChart}${rejected}<div class="training-result-stats"><div><small>${this._escape(this._t("training_samples_direction"))}</small><strong>${this._escape(Number(result.sample_count).toLocaleString(locale))}</strong></div><div><small>${this._escape(this._t("training_response_events"))}</small><strong>${this._escape(Number(result.response_event_count).toLocaleString(locale))}</strong></div><div><small>${this._escape(this._t("training_confidence"))}</small><strong>${this._escape(confidence)}</strong></div>${overshoot}</div>${gainCard}</article>`;
   }
 
-  _metricCard(title, entityId, fallbackTerms = []) {
+  _metricCard(title, entityId, fallbackTerms = [], metricType = "generic") {
     let entity = entityId && this._hass && this._hass.states[entityId];
     if (!entity || ["unknown", "unavailable"].includes(entity.state)) {
       entity = this._find(this._entities(), fallbackTerms);
@@ -1023,7 +1034,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
       entity = this._findBatterySoc(this._entities(), entityId) || entity;
     }
     const history = entity ? ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"` : "";
-    return `<article class="metric${entity ? " history-card" : ""}"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(this._t("waiting_entity"))}</small>`}</article>`;
+    const icon = METRIC_ICONS[metricType]
+      ? `<svg class="metric-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${METRIC_ICONS[metricType]}</svg>`
+      : "";
+    return `<article class="metric${entity ? " history-card" : ""}" data-metric="${this._escape(metricType)}"${history}>${icon}<span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong>${entity ? `<small>${this._escape(this._t("show_history"))}</small>` : `<small>${this._escape(this._t("waiting_entity"))}</small>`}</article>`;
   }
 
   _isSocLimitEntity(entity) {
@@ -1424,16 +1438,16 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
     const groups = sources.map((source) => {
       const cards = [];
-      if (source.soc) cards.push(this._metricCard(this._t("battery"), source.soc, ["battery soc", "ladezustand", "akku soc", "soc"]));
-      if (source.pv) cards.push(this._metricCard(this._t("pv_power"), source.pv, ["pv power", "pv leistung", "solar power", "solarleistung"]));
-      if (source.native_pv) cards.push(this._metricCard(this._t("native_pv_source"), source.native_pv));
-      if (source.battery_power) cards.push(this._metricCard(this._t("battery_power"), source.battery_power, ["battery power", "batterieleistung", "native hardware power w"]));
-      if (source.grid_power) cards.push(this._metricCard(this._t("grid_power"), source.grid_power, ["grid power", "netzleistung", "netzbezug"]));
+      if (source.soc) cards.push(this._metricCard(this._t("battery"), source.soc, ["battery soc", "ladezustand", "akku soc", "soc"], "soc"));
+      if (source.pv) cards.push(this._metricCard(this._t("pv_power"), source.pv, ["pv power", "pv leistung", "solar power", "solarleistung"], "pv"));
+      if (source.native_pv) cards.push(this._metricCard(this._t("native_pv_source"), source.native_pv, [], "native-pv"));
+      if (source.battery_power) cards.push(this._metricCard(this._t("battery_power"), source.battery_power, ["battery power", "batterieleistung", "native hardware power w"], "battery-power"));
+      if (source.grid_power) cards.push(this._metricCard(this._t("grid_power"), source.grid_power, ["grid power", "netzleistung", "netzbezug"], "grid-power"));
       else {
-        if (source.grid_import) cards.push(this._metricCard(this._t("grid_import"), source.grid_import, ["grid import", "netzbezug", "bezug"]));
-        if (source.grid_export) cards.push(this._metricCard(this._t("grid_export"), source.grid_export, ["grid export", "netzeinspeisung", "einspeisung"]));
+        if (source.grid_import) cards.push(this._metricCard(this._t("grid_import"), source.grid_import, ["grid import", "netzbezug", "bezug"], "grid-import"));
+        if (source.grid_export) cards.push(this._metricCard(this._t("grid_export"), source.grid_export, ["grid export", "netzeinspeisung", "einspeisung"], "grid-export"));
       }
-      if (source.offgrid_power) cards.push(this._metricCard(this._t("offgrid_source"), source.offgrid_power, ["offgrid power", "off grid power", "off grid ausgang"]));
+      if (source.offgrid_power) cards.push(this._metricCard(this._t("offgrid_source"), source.offgrid_power, ["offgrid power", "off grid power", "off grid ausgang"], "offgrid"));
       if (!cards.length) return "";
       return `<section class="metric-group"><h3>${this._escape(source.name || this._t("system"))}</h3><div class="metric-grid">${cards.join("")}</div></section>`;
     }).filter(Boolean);
@@ -1441,14 +1455,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (groups.length) return groups.join("");
 
     const metrics = [
-      [this._t("battery"), ["ladezustand", "soc", "battery level"]],
-      [this._t("pv_power"), ["pv power", "pv-leistung", "solar power", "solarleis"]],
-      [this._t("battery_power"), ["batterieleistung", "battery power", "charge power"]],
-      [this._t("grid_power"), ["netz-leistung", "grid power", "netzbezug"]],
+      [this._t("battery"), ["ladezustand", "soc", "battery level"], "soc"],
+      [this._t("pv_power"), ["pv power", "pv-leistung", "solar power", "solarleis"], "pv"],
+      [this._t("battery_power"), ["batterieleistung", "battery power", "charge power"], "battery-power"],
+      [this._t("grid_power"), ["netz-leistung", "grid power", "netzbezug"], "grid-power"],
     ];
-    return metrics.map(([title, terms]) => {
+    return metrics.map(([title, terms, metricType]) => {
       const entity = this._find(entities, terms);
-      return this._metricCard(title, entity && entity.entity_id);
+      return this._metricCard(title, entity && entity.entity_id, [], metricType);
     }).join("");
   }
 
@@ -1540,6 +1554,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .training-comparison{padding:12px;border:1px solid #3f6578;border-radius:9px;background:#1e292e}.training-comparison>h4,.training-direction h4{margin:0 0 9px;font-size:13px}.training-directions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:8px}.training-direction{min-width:0;padding:12px;border:1px solid #41464b;border-radius:8px;background:#24292d}.training-direction-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}.training-direction-head h4{margin:3px 0 10px}.training-outcome{display:flex;align-items:baseline;gap:5px;padding:5px 9px;border:1px solid #3f6578;border-radius:999px;background:#1d3440;color:#bceffc;font-size:11px;white-space:nowrap}.training-outcome strong{font-size:15px;font-variant-numeric:tabular-nums}.training-outcome.better{border-color:#386c51;background:#1e382a;color:#a8e5ba}.training-outcome.worse{border-color:#765b37;background:#3a3020;color:#f4d78b}.training-score-chart{display:grid;gap:9px;padding:10px 0}.training-score-row{display:grid;grid-template-columns:minmax(105px,.9fr) minmax(60px,2fr) minmax(54px,auto);gap:9px;align-items:center;font-size:11px}.training-score-row>span{color:#c2c7cb}.training-score-row>strong{font-variant-numeric:tabular-nums;text-align:right}.training-score-track{height:10px;border-radius:999px;background:#343a40;overflow:hidden}.training-score-track i{display:block;height:100%;min-width:2px;border-radius:999px;background:linear-gradient(90deg,#19b9dc,#45c9e2)}.training-score-track i.candidate.better{background:linear-gradient(90deg,#36bd7a,#77dc9f)}.training-score-track i.candidate.worse{background:linear-gradient(90deg,#db9d42,#f1c36a)}.training-result-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(85px,1fr));gap:7px;margin-top:7px}.training-result-stats>div{display:flex;flex-direction:column;gap:4px;padding:8px;border:1px solid #383e43;border-radius:7px;background:#202428}.training-result-stats small{color:var(--muted);font-size:10px}.training-result-stats strong{font-size:13px;font-variant-numeric:tabular-nums}.training-gain{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:8px;padding:9px 10px;border-left:3px solid var(--cyan);border-radius:5px;background:#1d3038}.training-gain span{color:#c5d2d7;font-size:11px}.training-gain strong{font-variant-numeric:tabular-nums}.training-muted,.training-score-note{color:var(--muted);font-size:11px;line-height:1.45}.training-score-note{margin:9px 0 0}@media(max-width:520px){.training-score-row{grid-template-columns:minmax(78px,.9fr) minmax(35px,1.4fr) minmax(48px,auto);gap:6px}.training-direction{padding:9px}.training-outcome{gap:3px;padding:4px 7px;font-size:10px}.training-outcome strong{font-size:13px}}
         .system-device-image{display:block;width:min(270px,48vw);height:82px;object-fit:contain;object-position:left center}
         .watchdog-signal .signal-value{display:flex;align-items:center;justify-content:flex-end;gap:9px;max-width:none}.watchdog-light{display:inline-block;width:10px;height:10px;flex:0 0 10px;border-radius:50%;background:#8a9299;box-shadow:0 0 7px #8a929966}.watchdog-online .watchdog-light{background:#55d68b;box-shadow:0 0 10px #55d68b99}.watchdog-degraded .watchdog-light{background:#f4c45e;box-shadow:0 0 10px #f4c45e99}.watchdog-offline .watchdog-light{background:#f06b6b;box-shadow:0 0 10px #f06b6b99}
+        .metric-grid .metric{position:relative;isolation:isolate;overflow:hidden}.metric-grid .metric::after{content:"";position:absolute;z-index:0;right:-18px;bottom:-43px;width:52%;aspect-ratio:1;border-radius:50%;background:var(--metric-accent);opacity:.065;filter:blur(1px);box-shadow:0 0 28px var(--metric-accent);pointer-events:none}.metric-grid .metric>span,.metric-grid .metric>strong,.metric-grid .metric>small{position:relative;z-index:2}.metric-grid .metric-icon{position:absolute;z-index:1;right:12px;bottom:7px;width:clamp(52px,27%,78px);height:auto;color:var(--metric-accent);fill:currentColor;opacity:.19;filter:drop-shadow(0 0 8px currentColor) drop-shadow(0 0 17px currentColor);pointer-events:none}.metric-grid .metric-icon g{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7}.metric-grid .metric[data-metric="soc"]{--metric-accent:#16c4df}.metric-grid .metric[data-metric="pv"],.metric-grid .metric[data-metric="native-pv"]{--metric-accent:#56cf83}.metric-grid .metric[data-metric="battery-power"]{--metric-accent:#f0c34e}.metric-grid .metric[data-metric="grid-power"],.metric-grid .metric[data-metric="grid-import"],.metric-grid .metric[data-metric="grid-export"]{--metric-accent:#f06b6b}.metric-grid .metric[data-metric="offgrid"]{--metric-accent:#30c9d4}.metric-grid .metric[data-metric]{border-top-color:var(--metric-accent)}
       </style>
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
