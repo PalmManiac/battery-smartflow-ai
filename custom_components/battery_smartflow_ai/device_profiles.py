@@ -53,14 +53,6 @@ PROFILE_OVERRIDE_FIELDS = {
         "unit": "W",
         "icon": "mdi:flash",
     },
-    "SOC_DISCHARGE_RESUME_MARGIN": {
-        "label": "SoC Wiederfreigabe-Margin",
-        "min": 0.0,
-        "max": 15.0,
-        "step": 0.5,
-        "unit": "%",
-        "icon": "mdi:battery-sync",
-    },
     "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": {
         "label": "PV-Durchfluss Mindest-PV",
         "min": 20.0,
@@ -171,6 +163,28 @@ PROFILE_MIGRATION_OVERRIDE_FIELDS = {
     "MAX_STEP_UP",
     "MAX_STEP_DOWN",
 }
+
+DEPRECATED_PROFILE_OVERRIDE_FIELDS = frozenset(
+    {"SOC_DISCHARGE_RESUME_MARGIN"}
+)
+
+
+def remove_deprecated_profile_overrides(options: Mapping) -> dict:
+    """Drop profile overrides that are no longer user-configurable."""
+    cleaned_options = dict(options)
+    raw_overrides = cleaned_options.get("profile_overrides")
+    if not isinstance(raw_overrides, Mapping):
+        return cleaned_options
+
+    overrides = dict(raw_overrides)
+    for field in DEPRECATED_PROFILE_OVERRIDE_FIELDS:
+        overrides.pop(field, None)
+
+    if overrides:
+        cleaned_options["profile_overrides"] = overrides
+    else:
+        cleaned_options.pop("profile_overrides", None)
+    return cleaned_options
 
 
 # Optional: diese Felder sollen zwar sichtbar, aber nicht editierbar sein.

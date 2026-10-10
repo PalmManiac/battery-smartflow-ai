@@ -15,6 +15,7 @@ from .const import (
     PLATFORMS,
 )
 from .debug_recorder import DebugRecorderHandoff
+from .device_profiles import remove_deprecated_profile_overrides
 
 try:
     import homeassistant.helpers.config_validation as cv
@@ -324,7 +325,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Migrate old config entries to new version."""
     new_version = int(entry.version)
     new_data = dict(entry.data)
-    new_options = dict(entry.options)
+    new_options = remove_deprecated_profile_overrides(entry.options)
 
     if new_version == 1:
         # Falls pack_capacity_kwh noch nicht existiert → Default setzen
@@ -350,6 +351,12 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             dict(initial_v5_migration_state(entry.entry_id).as_dict()),
         )
         new_version = 4
+
+    if new_version == 4:
+        # The old options UI allowed a per-entry SoC discharge resume margin.
+        # Current device profiles own this value; remove stale user overrides.
+        new_options = remove_deprecated_profile_overrides(new_options)
+        new_version = 5
 
     if (
         new_version != entry.version

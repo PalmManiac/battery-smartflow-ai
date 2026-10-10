@@ -251,7 +251,7 @@ class TranslationCoverageTests(unittest.TestCase):
         self.assertNotIn("async_step_charge", method_names)
         self.assertNotIn("async_step_discharge", method_names)
 
-    def test_options_save_preserves_stored_profile_overrides(self) -> None:
+    def test_options_save_removes_deprecated_profile_overrides(self) -> None:
         tree = ast.parse((COMPONENT / "config_flow.py").read_text(encoding="utf-8"))
         build_method = next(
             node
@@ -260,7 +260,7 @@ class TranslationCoverageTests(unittest.TestCase):
             and node.name == "_build_merged_options"
         )
         method_source = ast.unparse(build_method)
-        self.assertIn("dict(self.config_entry.options)", method_source)
+        self.assertIn("remove_deprecated_profile_overrides", method_source)
         self.assertNotIn("CONF_PROFILE_OVERRIDES", method_source)
 
     def test_all_language_files_have_the_same_keys(self) -> None:

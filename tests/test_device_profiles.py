@@ -67,6 +67,7 @@ from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E4
     SF2400AC_PROFILE,
     get_device_profile,
     merge_profile_with_overrides,
+    remove_deprecated_profile_overrides,
     resolve_charge_limits,
 )
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
@@ -385,6 +386,7 @@ class TypedDeviceProfileTests(unittest.TestCase):
                 "CHARGE_DEADBAND_W": 44.0,
                 "MAX_INPUT_W": 9999.0,
                 "SUPPORTS_PASSTHROUGH": True,
+                "SOC_DISCHARGE_RESUME_MARGIN": 1.0,
             },
         )
 
@@ -392,6 +394,30 @@ class TypedDeviceProfileTests(unittest.TestCase):
         self.assertEqual(merged["CHARGE_DEADBAND_W"], 44.0)
         self.assertEqual(merged["MAX_INPUT_W"], 2400.0)
         self.assertFalse(merged["SUPPORTS_PASSTHROUGH"])
+        self.assertEqual(merged["SOC_DISCHARGE_RESUME_MARGIN"], 3.0)
+
+    def test_deprecated_soc_override_is_removed_without_dropping_other_options(self) -> None:
+        cleaned = remove_deprecated_profile_overrides(
+            {
+                "soc_min": 10.0,
+                "profile_overrides": {
+                    "SOC_DISCHARGE_RESUME_MARGIN": 1.0,
+                    "TARGET_IMPORT_W": 75.0,
+                },
+            }
+        )
+
+        self.assertEqual(
+            cleaned,
+            {"soc_min": 10.0, "profile_overrides": {"TARGET_IMPORT_W": 75.0}},
+        )
+
+    def test_deprecated_soc_override_removes_empty_override_container(self) -> None:
+        cleaned = remove_deprecated_profile_overrides(
+            {"profile_overrides": {"SOC_DISCHARGE_RESUME_MARGIN": 1.0}}
+        )
+
+        self.assertEqual(cleaned, {})
 
     def test_core_configs_prefer_typed_capabilities_over_mapping_flags(self) -> None:
         legacy = dict(DEVICE_PROFILES["SF2400AC"])

@@ -84,7 +84,10 @@ from .const import (
     SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
 )
 from .core.models import ZendureTransport
-from .device_profiles import DEVICE_PROFILE_MODELS
+from .device_profiles import (
+    DEVICE_PROFILE_MODELS,
+    remove_deprecated_profile_overrides,
+)
 from .forecast import async_energy_forecast_sources
 from .native_config_ui import (
     STORED_APP_TOKEN_MASK,
@@ -242,7 +245,7 @@ def _validate_feed_in_tariff(value: Any) -> float:
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Battery SmartFlow AI."""
 
-    VERSION = 4
+    VERSION = 5
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         return self.async_show_menu(step_id="user", menu_options=["native_login", "legacy"])
@@ -1023,7 +1026,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         self,
         user_input: dict[str, Any],
     ) -> dict[str, Any]:
-        merged_options = dict(self.config_entry.options)
+        merged_options = remove_deprecated_profile_overrides(
+            self.config_entry.options
+        )
 
         installed_pv_wp = user_input.get(
             CONF_INSTALLED_PV_WP,
