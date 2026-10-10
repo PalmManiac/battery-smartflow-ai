@@ -14,6 +14,7 @@ from custom_components.battery_smartflow_ai.regulation_training import (
     RegulationProfileState,
     TrainingDirection,
     TrainingSample,
+    recover_interrupted_training_session,
     retain_training_sessions,
 )
 
@@ -202,6 +203,58 @@ class RegulationTrainingModelTests(unittest.TestCase):
         )
         self.assertNotIn("password", json.dumps(serialized))
         self.assertFalse(recorder.active)
+
+    def test_snapshot_preserves_active_run_and_captured_samples(self) -> None:
+        recorder = PassiveTrainingRecorder()
+        started = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+        recorder.start(
+            key=self._key(),
+            now=started,
+            duration_minutes=1440,
+            direction_scope=TrainingDirection.BOTH,
+        )
+        recorder.record(self._sample(1, "charge"))
+
+        checkpoint = recorder.snapshot(
+            now=datetime(2026, 10, 5, 12, 15, tzinfo=timezone.utc)
+        )
+
+        self.assertIsNotNone(checkpoint)
+        self.assertTrue(recorder.active)
+        self.assertEqual(len(checkpoint.samples), 1)
+        self.assertEqual(checkpoint.started_at, started)
+        self.assertEqual(checkpoint.as_dict()["sample_count"], 1)
+
+        recorder.record(self._sample(2, "discharge"))
+        self.assertEqual(recorder.status["sample_count"], 2)
+
+    def test_checkpoint_recovery_marks_partial_run_and_keeps_captured_samples(self) -> None:
+        checkpoint = {
+            "key": self._key().as_dict(),
+            "started_at": "2026-10-05T12:00:00+00:00",
+            "ends_at": "2026-10-06T12:00:00+00:00",
+            "checkpointed_at": "2026-10-05T12:15:00+00:00",
+            "sample_count": 1,
+            "samples": [self._sample(1, "charge").as_dict()],
+            "profile": {"state": "shadow", "trained_at": "old"},
+        }
+
+        recovered = recover_interrupted_training_session(
+            checkpoint,
+            interrupted_at=datetime(2026, 10, 5, 12, 16, tzinfo=timezone.utc),
+        )
+
+        self.assertTrue(recovered["interrupted"])
+        self.assertEqual(recovered["sample_count"], 1)
+        self.assertEqual(recovered["completed_at"], "2026-10-05T12:01:00+00:00")
+        self.assertEqual(recovered["intended_ends_at"], checkpoint["ends_at"])
+        self.assertEqual(recovered["profile"]["trained_at"], recovered["completed_at"])
+        self.assertIsNone(
+            recover_interrupted_training_session(
+                {"samples": "malformed", "key": {}},
+                interrupted_at=datetime(2026, 10, 5, 12, 16, tzinfo=timezone.utc),
+            )
+        )
 
     def test_recorder_rejects_unbounded_or_naive_session_configuration(self) -> None:
         recorder = PassiveTrainingRecorder()

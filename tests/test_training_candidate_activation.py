@@ -5,6 +5,7 @@ import unittest
 from custom_components.battery_smartflow_ai.regulation_training import (
     candidate_gain_parameters,
     training_candidate_scope_matches,
+    training_session_candidate_parameters,
 )
 
 
@@ -39,6 +40,21 @@ class TrainingCandidateActivationTests(unittest.TestCase):
     def test_rejects_a_non_proposed_result(self) -> None:
         with self.assertRaisesRegex(ValueError, "No regulation training candidate"):
             self._parameters({"status": "no_improvement"})
+
+    def test_interrupted_session_candidate_is_not_applicable(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Interrupted training data"):
+            training_session_candidate_parameters(
+                {
+                    "interrupted": True,
+                    "shadow_evaluation": {
+                        "status": "candidate_proposed",
+                        "charge": {
+                            "decision": "proposed",
+                            "parameters": {"kp_up": 0.8},
+                        },
+                    },
+                }
+            )
 
     def test_rejects_non_finite_or_out_of_range_gains(self) -> None:
         for value in (float("nan"), 0.09, 2.01):

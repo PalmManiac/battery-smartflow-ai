@@ -39,6 +39,7 @@ ALLOWED_TRAINING_MINUTES = frozenset({10, 30, 60, 120, 1440})
 MAX_TRAINING_SAMPLES = 20_000
 MAX_STORED_TRAINING_SESSIONS = 5
 MAX_STORED_TRAINING_SAMPLES = 22_000
+TRAINING_CHECKPOINT_INTERVAL = timedelta(minutes=15)
 
 
 def candidate_gain_parameters(evaluation: Mapping[str, Any]) -> dict[str, float]:
@@ -68,6 +69,19 @@ def candidate_gain_parameters(evaluation: Mapping[str, Any]) -> dict[str, float]
     if not parameters:
         raise ValueError("Training candidate contains no applicable gains")
     return parameters
+
+
+def training_session_candidate_parameters(
+    session: Mapping[str, Any],
+) -> dict[str, float]:
+    """Extract an applicable candidate, rejecting partial interrupted runs."""
+
+    if session.get("interrupted") is True:
+        raise ValueError("Interrupted training data cannot be applied")
+    evaluation = session.get("shadow_evaluation")
+    if not isinstance(evaluation, Mapping):
+        raise TypeError("No regulation training evaluation is available")
+    return candidate_gain_parameters(evaluation)
 
 
 def training_candidate_scope_matches(
@@ -110,6 +124,39 @@ def retain_training_sessions(
     ):
         retained = retained[1:]
     return retained
+
+
+def recover_interrupted_training_session(
+    checkpoint: Mapping[str, Any], *, interrupted_at: datetime
+) -> dict[str, Any] | None:
+    """Convert a persisted active snapshot to an analyzable partial session."""
+
+    _aware(interrupted_at)
+    samples = checkpoint.get("samples")
+    key = checkpoint.get("key")
+    if not isinstance(samples, list) or not isinstance(key, dict):
+        return None
+    recovered = dict(checkpoint)
+    recovered["samples"] = [item for item in samples if isinstance(item, dict)]
+    recovered["sample_count"] = len(recovered["samples"])
+    recovered["interrupted"] = True
+    recovered["interrupted_at"] = interrupted_at.isoformat()
+    recovered["intended_ends_at"] = recovered.get("ends_at")
+    timestamps = [
+        item.get("timestamp")
+        for item in recovered["samples"]
+        if isinstance(item.get("timestamp"), str)
+    ]
+    recovered["completed_at"] = (
+        timestamps[-1]
+        if timestamps
+        else recovered.get("checkpointed_at")
+        or recovered.get("started_at")
+    )
+    profile = recovered.get("profile")
+    if isinstance(profile, dict):
+        recovered["profile"] = {**profile, "trained_at": recovered["completed_at"]}
+    return recovered
 
 
 def _aware(value: datetime) -> None:
@@ -323,6 +370,25 @@ class PassiveTrainingRecorder:
         self._samples.clear()
         self._dropped_sample_count = 0
         return session
+
+    def snapshot(self, *, now: datetime) -> TrainingSession | None:
+        """Return a serializable point-in-time copy without ending the run."""
+
+        if not self.active:
+            return None
+        _aware(now)
+        assert self._key is not None
+        assert self._started_at is not None
+        if now < self._started_at:
+            raise ValueError("Snapshot time must not be before training start")
+        return TrainingSession(
+            key=self._key,
+            started_at=self._started_at,
+            completed_at=min(now, self._ends_at or now),
+            direction_scope=self._direction_scope,
+            samples=tuple(self._samples),
+            dropped_sample_count=self._dropped_sample_count,
+        )
 
     def tick(self, *, now: datetime) -> TrainingSession | None:
         if not self.active:

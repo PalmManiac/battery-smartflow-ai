@@ -293,6 +293,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok:
         coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
         if coordinator:
+            checkpoint_training = getattr(
+                coordinator, "async_checkpoint_regulation_training", None
+            )
+            if callable(checkpoint_training):
+                await checkpoint_training(force=True)
             handoff: DebugRecorderHandoff = hass.data.setdefault(
                 f"{DOMAIN}_debug_recorder_handoff", DebugRecorderHandoff()
             )
