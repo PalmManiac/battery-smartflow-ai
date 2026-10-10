@@ -80,7 +80,14 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
                     entry_id="existing-entry-id",
                     version=1,
                     data={"soc_entity": "sensor.existing_soc", "custom": "keep"},
-                    options={"regulation_v42_enabled": False, "soc_min": 12.0},
+                    options={
+                        "regulation_v42_enabled": False,
+                        "soc_min": 12.0,
+                        "profile_overrides": {
+                            "SOC_DISCHARGE_RESUME_MARGIN": 1.0,
+                            "TARGET_IMPORT_W": 75.0,
+                        },
+                    },
                 )
 
                 assert await integration.async_setup_entry(hass, entry)
@@ -93,7 +100,7 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
 
                 assert await integration.async_migrate_entry(hass, entry)
                 update = hass.config_entries.updates[-1][1]
-                assert update["version"] == 4
+                assert update["version"] == 5
                 assert update["data"] == {
                     "soc_entity": "sensor.existing_soc",
                     "custom": "keep",
@@ -108,16 +115,27 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
                         "legacy_zha_enabled": True,
                     },
                 }
-                assert update["options"] == {"soc_min": 12.0}
+                assert update["options"] == {
+                    "soc_min": 12.0,
+                    "profile_overrides": {"TARGET_IMPORT_W": 75.0},
+                }
 
                 current = SimpleNamespace(
                     entry_id="current-entry-id", version=4,
                     data={"soc_entity": "sensor.current_soc"},
-                    options={"soc_min": 10.0},
+                    options={
+                        "soc_min": 10.0,
+                        "profile_overrides": {
+                            "SOC_DISCHARGE_RESUME_MARGIN": 1.0,
+                        },
+                    },
                 )
                 update_count = len(hass.config_entries.updates)
                 assert await integration.async_migrate_entry(hass, current)
-                assert len(hass.config_entries.updates) == update_count
+                assert len(hass.config_entries.updates) == update_count + 1
+                current_update = hass.config_entries.updates[-1][1]
+                assert current_update["version"] == 5
+                assert current_update["options"] == {"soc_min": 10.0}
 
                 assert await integration.async_unload_entry(hass, entry)
                 assert coordinator.shutdown
