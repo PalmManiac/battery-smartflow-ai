@@ -70,6 +70,9 @@ from .const import (
     GRID_MODE_SINGLE,
     GRID_MODE_SPLIT,
     GRID_MODE_SHELLY_PRO_3EM,
+    GRID_MODE_SHELLY_PRO_3EM_MODBUS,
+    GRID_MODE_SHELLY_PRO_3EM_OPTIONS,
+    GRID_MODE_DIRECT_SHELLY,
     GRID_MODE_SHELLY_3EM,
     LOWEST_CELL_VOLTAGE_CONFIG_KEYS,
     SETTING_BATTERY_PACKS,
@@ -110,7 +113,7 @@ EMPTY_ENTITY_VALUES = {
 def _shelly_grid_keys(grid_mode: str) -> tuple[str | None, str | None]:
     """Return the config keys for the selected locally polled Shelly model."""
 
-    if grid_mode == GRID_MODE_SHELLY_PRO_3EM:
+    if grid_mode in GRID_MODE_SHELLY_PRO_3EM_OPTIONS:
         return CONF_SHELLY_PRO_3EM_HOST, CONF_SHELLY_PRO_3EM_PASSWORD
     if grid_mode == GRID_MODE_SHELLY_3EM:
         return CONF_SHELLY_3EM_HOST, CONF_SHELLY_3EM_PASSWORD
@@ -880,6 +883,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     GRID_MODE_SINGLE,
                     GRID_MODE_SPLIT,
                     GRID_MODE_SHELLY_PRO_3EM,
+                    GRID_MODE_SHELLY_PRO_3EM_MODBUS,
                     GRID_MODE_SHELLY_3EM,
                 ],
                 translation_key="grid_mode",
@@ -939,7 +943,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 selector.EntitySelectorConfig(domain="sensor")
             )
 
-        if grid_mode in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM):
+        if grid_mode in GRID_MODE_DIRECT_SHELLY:
             host_key, password_key = _shelly_grid_keys(grid_mode)
             schema[
                 vol.Required(
@@ -952,14 +956,17 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if entry is not None
                 else None
             )
-            schema[
-                vol.Optional(
-                    password_key,
-                    default=(STORED_APP_TOKEN_MASK if stored_password else ""),
+            if grid_mode != GRID_MODE_SHELLY_PRO_3EM_MODBUS:
+                schema[
+                    vol.Optional(
+                        password_key,
+                        default=(STORED_APP_TOKEN_MASK if stored_password else ""),
+                    )
+                ] = selector.TextSelector(
+                    selector.TextSelectorConfig(
+                        type=selector.TextSelectorType.PASSWORD
+                    )
                 )
-            ] = selector.TextSelector(
-                selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
-            )
 
         if grid_mode == GRID_MODE_SPLIT:
             schema[

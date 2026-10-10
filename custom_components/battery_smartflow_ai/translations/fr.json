@@ -95,7 +95,7 @@
           "grid_power_entity": "Un capteur unique avec puissance positive en import et négative en export.",
           "grid_import_entity": "Capteur de puissance d’import réseau actuelle en watts.",
           "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
-          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique.",
+          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique. Pour Modbus TCP, activez Modbus dans les paramètres Shelly (port TCP 502) ; Modbus n’utilise pas le mot de passe HTTP facultatif.",
           "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256.",
           "shelly_3em_host": "Nom d’hôte ou adresse IP locale du Shelly 3EM classique. Utilisez une adresse réservée ou statique.",
           "shelly_3em_password": "Mot de passe facultatif. Gen1 utilise l’authentification HTTP Basic sans chiffrement ; utilisez-le uniquement sur un réseau local de confiance."
@@ -117,7 +117,7 @@
           "grid_power_entity": "Un capteur unique avec puissance positive en import et négative en export.",
           "grid_import_entity": "Capteur de puissance d’import réseau actuelle en watts.",
           "grid_export_entity": "Capteur de puissance d’export réseau actuelle en watts.",
-          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique.",
+          "shelly_pro_3em_host": "Nom d’hôte ou adresse IP locale du Shelly Pro 3EM Gen2. Utilisez une adresse réservée ou statique. Pour Modbus TCP, activez Modbus dans les paramètres Shelly (port TCP 502) ; Modbus n’utilise pas le mot de passe HTTP facultatif.",
           "shelly_pro_3em_password": "Mot de passe de l’appareil facultatif. Shelly utilise une authentification locale par digest SHA-256.",
           "shelly_3em_host": "Nom d’hôte ou adresse IP locale du Shelly 3EM classique. Utilisez une adresse réservée ou statique.",
           "shelly_3em_password": "Mot de passe facultatif. Gen1 utilise l’authentification HTTP Basic sans chiffrement ; utilisez-le uniquement sur un réseau local de confiance."
@@ -408,7 +408,8 @@
         "none": "Aucun capteur réseau",
         "single": "Un capteur (+ / −)",
         "split": "Deux capteurs (soutirage et injection)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (local)",
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (HTTP local)",
+        "shelly_pro_3em_modbus": "Shelly Pro 3EM Gen2 (Modbus TCP)",
         "shelly_3em": "Shelly 3EM Gen1 (local)"
       }
     }
@@ -488,6 +489,9 @@
     },
     "sensor": {
       "grid_power": {"name": "Puissance réseau"},
+      "grid_phase_a_power": {"name": "Puissance réseau Shelly phase A"},
+      "grid_phase_b_power": {"name": "Puissance réseau Shelly phase B"},
+      "grid_phase_c_power": {"name": "Puissance réseau Shelly phase C"},
       "native_zendure_status": {"name": "État du test Zendure natif", "state": {"disabled": "Non configuré", "discovering": "Recherche des appareils", "connecting": "Connexion", "capturing": "Collecte initiale", "observing": "Observation active", "error": "Erreur"}}, "native_zendure_control": {"name": "Contrôle Zendure natif", "state": {"disabled_zha_active": "Désactivé", "native_transport_not_ready": "Aucune donnée", "native_local_handover_cloud_active": "Cloud", "native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Local", "native_local_unsupported": "Non pris en charge"}}, "native_zendure_device_count": {"name": "Appareils Zendure natifs trouvés"}, "native_zendure_message_count": {"name": "Messages Zendure natifs reçus"}, "native_zendure_last_message": {"name": "Dernier message Zendure natif"}, "native_zendure_last_capture": {"name": "Paquet de synchronisation Zendure"}, "native_zendure_error": {"name": "Erreur Zendure native"}, "native_zendure_watchdog": {"name": "Connexion matérielle Zendure", "state": {"online": "Accessible", "degraded": "Connexion instable", "offline": "Inaccessible", "not_supported": "Vérification directe indisponible", "unknown": "Inconnu"}},
       "native_hardware_pack_count": {"name":"Battery count"},
       "native_hardware_capacity_kwh": {"name":"Nominal capacity"},

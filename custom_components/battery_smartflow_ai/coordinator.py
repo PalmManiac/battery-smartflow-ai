@@ -66,7 +66,9 @@ from .const import (
     GRID_MODE_SINGLE,
     GRID_MODE_SPLIT,
     GRID_MODE_SHELLY_PRO_3EM,
-    GRID_MODE_SHELLY_3EM,
+    GRID_MODE_SHELLY_PRO_3EM_MODBUS,
+    GRID_MODE_SHELLY_PRO_3EM_OPTIONS,
+    GRID_MODE_DIRECT_SHELLY,
     # settings keys (entry.options)
     SETTING_SOC_MIN,
     SETTING_SOC_MAX,
@@ -144,7 +146,11 @@ from .core.models.runtime import RuntimeSnapshot
 from .hardware.shelly_pro_3em import (
     ShellyDigestSession,
     ShellyPro3EMError,
-    async_read_shelly_pro_3em_power,
+    ShellyPro3EMReading,
+    async_read_shelly_pro_3em_reading,
+)
+from .hardware.shelly_pro_3em_modbus import (
+    async_read_shelly_pro_3em_modbus,
 )
 from .hardware.shelly_3em import (
     Shelly3EMError,
@@ -478,6 +484,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             entry.options.get(CONF_SHELLY_3EM_PASSWORD, "") or ""
         )
         self._shelly_grid_power_w: float | None = None
+        self._shelly_phase_power_w: dict[str, float | None] = {
+            "a": None,
+            "b": None,
+            "c": None,
+        }
         self._shelly_last_error: str | None = None
         self._shelly_last_read_at: datetime | None = None
         self._shelly_last_read_duration_s: float | None = None
@@ -725,10 +736,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Subscribe to meaningful selected-grid updates with bounded refreshes."""
 
         entity_ids = self.grid_event_entity_ids()
-        has_direct_shelly = self.entities.grid_mode in (
-            GRID_MODE_SHELLY_PRO_3EM,
-            GRID_MODE_SHELLY_3EM,
-        )
+        has_direct_shelly = self.entities.grid_mode in GRID_MODE_DIRECT_SHELLY
         if not entity_ids and not has_direct_shelly:
             return None
 
@@ -788,10 +796,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def async_initialize_direct_shelly_grid(self) -> None:
         """Acquire one initial Shelly sample before the first regulation cycle."""
 
-        if self.entities.grid_mode in (
-            GRID_MODE_SHELLY_PRO_3EM,
-            GRID_MODE_SHELLY_3EM,
-        ):
+        if self.entities.grid_mode in GRID_MODE_DIRECT_SHELLY:
             await self._async_refresh_shelly_grid_power()
 
     async def _async_poll_shelly_grid_power(self, _now=None) -> None:
@@ -3132,7 +3137,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if mode == GRID_MODE_NONE:
             return None, None
 
-        if mode in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM):
+        if mode in GRID_MODE_DIRECT_SHELLY:
             gp = self._shelly_grid_power_w
             if gp is None:
                 return None, None
@@ -3198,16 +3203,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         """Refresh the configured local Shelly grid reading."""
 
         mode = self.entities.grid_mode
-        if mode not in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM):
+        if mode not in GRID_MODE_DIRECT_SHELLY:
             return
 
         started = self._clock.monotonic()
-        model_name = "Shelly Pro 3EM" if mode == GRID_MODE_SHELLY_PRO_3EM else "Shelly 3EM"
+        if mode in GRID_MODE_SHELLY_PRO_3EM_OPTIONS:
+            model_name = "Shelly Pro 3EM"
+        else:
+            model_name = "Shelly 3EM"
         try:
-            from homeassistant.helpers.aiohttp_client import async_get_clientsession
+            if mode == GRID_MODE_SHELLY_PRO_3EM_MODBUS:
+                reading = await async_read_shelly_pro_3em_modbus(
+                    host=self._shelly_pro_3em_host,
+                    timeout_seconds=1.5,
+                )
+            elif mode == GRID_MODE_SHELLY_PRO_3EM:
+                from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-            if mode == GRID_MODE_SHELLY_PRO_3EM:
-                grid_power_w = await async_read_shelly_pro_3em_power(
+                reading = await async_read_shelly_pro_3em_reading(
                     async_get_clientsession(self.hass),
                     host=self._shelly_pro_3em_host,
                     password=self._shelly_pro_3em_password,
@@ -3215,13 +3228,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     timeout_seconds=1.5,
                 )
             else:
+                from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
                 grid_power_w = await async_read_shelly_3em_power(
                     async_get_clientsession(self.hass),
                     host=self._shelly_3em_host,
                     password=self._shelly_3em_password,
                     timeout_seconds=1.5,
                 )
-            self._shelly_grid_power_w = _to_float(grid_power_w, None)
+                reading = ShellyPro3EMReading(total_power_w=grid_power_w)
+            self._shelly_grid_power_w = _to_float(reading.total_power_w, None)
+            self._shelly_phase_power_w = {
+                "a": _to_float(reading.phase_a_power_w, None),
+                "b": _to_float(reading.phase_b_power_w, None),
+                "c": _to_float(reading.phase_c_power_w, None),
+            }
             self._shelly_last_read_at = (
                 self._clock.utc_now()
                 if self._shelly_grid_power_w is not None
@@ -3232,6 +3253,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         except Exception as err:
             self._shelly_grid_power_w = None
+            self._shelly_phase_power_w = {"a": None, "b": None, "c": None}
             self._shelly_last_read_at = None
             self._shelly_last_read_duration_s = max(
                 0.0, self._clock.monotonic() - started
@@ -3241,9 +3263,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if isinstance(err, (ShellyPro3EMError, Shelly3EMError))
                 else type(err).__name__
             )
+            transport_name = (
+                "Modbus TCP"
+                if mode == GRID_MODE_SHELLY_PRO_3EM_MODBUS
+                else "local HTTP"
+                if mode == GRID_MODE_SHELLY_PRO_3EM
+                else "local HTTP"
+            )
             if reason != self._shelly_last_error:
                 _LOGGER.warning(
-                    "Local %s grid reading is unavailable (%s)",
+                    "%s %s grid reading is unavailable (%s)",
+                    transport_name,
                     model_name,
                     reason,
                 )
@@ -5133,10 +5163,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             grid_import_raw, grid_export_raw = self._get_grid()
             if grid_acquisition_started is not None:
-                if self.entities.grid_mode in (
-                    GRID_MODE_SHELLY_PRO_3EM,
-                    GRID_MODE_SHELLY_3EM,
-                ):
+                if self.entities.grid_mode in GRID_MODE_DIRECT_SHELLY:
                     grid_acquisition_seconds = self._shelly_last_read_duration_s
                     if self._shelly_last_read_at is not None:
                         grid_state_age_seconds = max(
@@ -7730,9 +7757,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "surplus": float(grid_export),
                 "grid_power_w": (
                     self._shelly_grid_power_w
-                    if self.entities.grid_mode in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM)
+                    if self.entities.grid_mode in GRID_MODE_DIRECT_SHELLY
                     else None
                 ),
+                "grid_phase_a_power_w": self._shelly_phase_power_w["a"],
+                "grid_phase_b_power_w": self._shelly_phase_power_w["b"],
+                "grid_phase_c_power_w": self._shelly_phase_power_w["c"],
                 "grid_sensor_configured": bool(grid_sensor_configured),
                 "grid_sensor_valid": bool(grid_sensor_valid),
                 "soc_limits_valid": bool(soc_limits_valid),
@@ -8849,9 +8879,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "details": details,
                 "grid_power_w": (
                     self._shelly_grid_power_w
-                    if self.entities.grid_mode in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM)
+                    if self.entities.grid_mode in GRID_MODE_DIRECT_SHELLY
                     else None
                 ),
+                "grid_phase_a_power_w": self._shelly_phase_power_w["a"],
+                "grid_phase_b_power_w": self._shelly_phase_power_w["b"],
+                "grid_phase_c_power_w": self._shelly_phase_power_w["c"],
                 "decision_reason": decision.reason,
                 "next_action_time": next_action_time_state,
                 "next_action_state": next_action_state,

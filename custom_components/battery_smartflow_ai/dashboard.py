@@ -26,6 +26,7 @@ from .const import (
     CONF_SOC_ENTITY,
     DOMAIN,
     GRID_MODE_SHELLY_PRO_3EM,
+    GRID_MODE_SHELLY_PRO_3EM_MODBUS,
     GRID_MODE_SHELLY_3EM,
     INTEGRATION_VERSION,
 )
@@ -201,7 +202,11 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             "grid_export": data.get(CONF_GRID_EXPORT_ENTITY),
             "offgrid_power": data.get(CONF_OFFGRID_POWER_ENTITY),
         }
-        if data.get("grid_mode") in (GRID_MODE_SHELLY_PRO_3EM, GRID_MODE_SHELLY_3EM):
+        if data.get("grid_mode") in (
+            GRID_MODE_SHELLY_PRO_3EM,
+            GRID_MODE_SHELLY_PRO_3EM_MODBUS,
+            GRID_MODE_SHELLY_3EM,
+        ):
             sources["grid_power"] = entity_registry.async_get_entity_id(
                 "sensor",
                 DOMAIN,

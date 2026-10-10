@@ -95,7 +95,7 @@
           "grid_power_entity": "Ein einzelner Sensor mit positiver Leistung bei Bezug und negativer bei Einspeisung.",
           "grid_import_entity": "Sensor mit aktueller Netzbezugsleistung in Watt.",
           "grid_export_entity": "Sensor mit aktueller Netzeinspeisung in Watt.",
-          "shelly_pro_3em_host": "Lokaler Hostname oder lokale IP-Adresse des Shelly Pro 3EM Gen2. Eine reservierte/statische Adresse verwenden.",
+          "shelly_pro_3em_host": "Lokaler Hostname oder lokale IP-Adresse des Shelly Pro 3EM Gen2. Eine reservierte/statische Adresse verwenden. Für Modbus TCP Modbus in den Shelly-Einstellungen aktivieren (TCP-Port 502); Modbus verwendet das optionale HTTP-Passwort nicht.",
           "shelly_pro_3em_password": "Optionales Gerätepasswort. Shelly verwendet lokal eine SHA-256-Digest-Anmeldung.",
           "shelly_3em_host": "Lokaler Hostname oder lokale IP-Adresse des klassischen Shelly 3EM. Eine reservierte/statische Adresse verwenden.",
           "shelly_3em_password": "Optionales Gerätepasswort. Gen1 verwendet unverschlüsselte HTTP-Basic-Authentifizierung; nur im vertrauenswürdigen lokalen Netzwerk verwenden."
@@ -117,7 +117,7 @@
           "grid_power_entity": "Ein einzelner Sensor mit positiver Leistung bei Bezug und negativer bei Einspeisung.",
           "grid_import_entity": "Sensor mit aktueller Netzbezugsleistung in Watt.",
           "grid_export_entity": "Sensor mit aktueller Netzeinspeisung in Watt.",
-          "shelly_pro_3em_host": "Lokaler Hostname oder lokale IP-Adresse des Shelly Pro 3EM Gen2. Eine reservierte/statische Adresse verwenden.",
+          "shelly_pro_3em_host": "Lokaler Hostname oder lokale IP-Adresse des Shelly Pro 3EM Gen2. Eine reservierte/statische Adresse verwenden. Für Modbus TCP Modbus in den Shelly-Einstellungen aktivieren (TCP-Port 502); Modbus verwendet das optionale HTTP-Passwort nicht.",
           "shelly_pro_3em_password": "Optionales Gerätepasswort. Shelly verwendet lokal eine SHA-256-Digest-Anmeldung.",
           "shelly_3em_host": "Lokaler Hostname oder lokale IP-Adresse des klassischen Shelly 3EM. Eine reservierte/statische Adresse verwenden.",
           "shelly_3em_password": "Optionales Gerätepasswort. Gen1 verwendet unverschlüsselte HTTP-Basic-Authentifizierung; nur im vertrauenswürdigen lokalen Netzwerk verwenden."
@@ -408,7 +408,8 @@
         "none": "Kein Netzsensor",
         "single": "Ein Sensor (+ / −)",
         "split": "Zwei Sensoren (Bezug und Einspeisung)",
-        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokal)",
+        "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokales HTTP)",
+        "shelly_pro_3em_modbus": "Shelly Pro 3EM Gen2 (Modbus TCP)",
         "shelly_3em": "Shelly 3EM Gen1 (lokal)"
       }
     }
@@ -488,6 +489,9 @@
     },
     "sensor": {
       "grid_power": {"name": "Netzleistung"},
+      "grid_phase_a_power": {"name": "Shelly-Netzleistung Phase A"},
+      "grid_phase_b_power": {"name": "Shelly-Netzleistung Phase B"},
+      "grid_phase_c_power": {"name": "Shelly-Netzleistung Phase C"},
       "native_zendure_status": {"name": "Status nativer Zendure-Test", "state": {"disabled": "Nicht eingerichtet", "discovering": "Geräte werden gesucht", "connecting": "Verbindung wird hergestellt", "capturing": "Erstdaten werden erfasst", "observing": "Beobachtung aktiv", "error": "Fehler"}}, "native_zendure_control": {"name": "Native Zendure-Steuerung", "state": {"disabled_zha_active": "Deaktiviert", "native_transport_not_ready": "Keine Daten", "native_local_handover_cloud_active": "Cloud", "native_cloud_mqtt_active": "Cloud", "native_zensdk_active": "ZenSDK", "native_local_mqtt_active": "Lokal", "native_local_unsupported": "Nicht unterstützt"}}, "native_zendure_device_count": {"name": "Gefundene native Zendure-Geräte"}, "native_zendure_message_count": {"name": "Empfangene native Zendure-Nachrichten"}, "native_zendure_last_message": {"name": "Letzte native Zendure-Nachricht"}, "native_zendure_last_capture": {"name": "Paket des nativen Zendure-Erstabgleichs"}, "native_zendure_error": {"name": "Fehler nativer Zendure-Test"},
       "native_zendure_watchdog": {"name": "Zendure-Hardwareverbindung", "state": {"online": "Erreichbar", "degraded": "Verbindung instabil", "offline": "Nicht erreichbar", "not_supported": "Direktprüfung nicht verfügbar", "unknown": "Unbekannt"}},
       "native_hardware_pack_count": {"name":"Batterieanzahl"},

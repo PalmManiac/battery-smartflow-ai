@@ -29,7 +29,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
-    GRID_MODE_SHELLY_PRO_3EM,
+    GRID_MODE_SHELLY_PRO_3EM_OPTIONS,
     INTEGRATION_MANUFACTURER,
     INTEGRATION_MODEL,
     INTEGRATION_VERSION,
@@ -1806,6 +1806,42 @@ SENSORS += (
     ),
 )
 
+SHELLY_PRO_3EM_PHASE_SENSORS = (
+    ZendureSensorEntityDescription(
+        key="grid_phase_a_power",
+        translation_key="grid_phase_a_power",
+        runtime_key="grid_phase_a_power_w",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:alpha-a-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
+    ZendureSensorEntityDescription(
+        key="grid_phase_b_power",
+        translation_key="grid_phase_b_power",
+        runtime_key="grid_phase_b_power_w",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:alpha-b-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
+    ZendureSensorEntityDescription(
+        key="grid_phase_c_power",
+        translation_key="grid_phase_c_power",
+        runtime_key="grid_phase_c_power_w",
+        native_unit_of_measurement=UnitOfPower.WATT,
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:alpha-c-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
+)
+
 NATIVE_ZENDURE_SENSOR_KEYS = frozenset(
     {
         "native_zendure_status",
@@ -1964,6 +2000,11 @@ async def async_setup_entry(
         )
         for description in SENSORS
     ]
+    if coordinator.entities.grid_mode in GRID_MODE_SHELLY_PRO_3EM_OPTIONS:
+        entities.extend(
+            ZendureSmartFlowSensor(entry, coordinator, description)
+            for description in SHELLY_PRO_3EM_PHASE_SENSORS
+        )
     add_entities(entities)
 
     known_native_entities: set[tuple[str, str, str]] = set()

@@ -209,3 +209,37 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn(const.CONF_SHELLY_PRO_3EM_PASSWORD, result["options"])
         self.assertNotIn("options_updates", result)
+
+    async def test_shelly_modbus_reconfigure_uses_host_without_http_password(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        entry = SimpleNamespace(
+            data={
+                const.CONF_GRID_MODE: const.GRID_MODE_SHELLY_PRO_3EM_MODBUS,
+                const.CONF_SHELLY_PRO_3EM_HOST: "192.168.2.1",
+            },
+            options={const.CONF_SHELLY_PRO_3EM_PASSWORD: "old-password"},
+        )
+        flow._get_reconfigure_entry = lambda: entry
+        flow._user_input = dict(entry.data)
+
+        schema = flow._grid_schema(
+            const.GRID_MODE_SHELLY_PRO_3EM_MODBUS,
+            entry,
+        ).schema
+        self.assertFalse(
+            any(
+                key.schema == const.CONF_SHELLY_PRO_3EM_PASSWORD
+                for key in schema
+            )
+        )
+
+        result = await flow.async_step_reconfigure_grid(
+            {const.CONF_SHELLY_PRO_3EM_HOST: "192.168.2.150"}
+        )
+        self.assertEqual(result["type"], "abort")
+        self.assertEqual(
+            result["data"][const.CONF_SHELLY_PRO_3EM_HOST],
+            "192.168.2.150",
+        )
+        self.assertNotIn(const.CONF_SHELLY_PRO_3EM_PASSWORD, result["options"])
