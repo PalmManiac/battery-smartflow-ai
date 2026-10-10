@@ -1086,7 +1086,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return Math.min(100, Math.max(0, Number(candidates[0].state)));
   }
 
-  _topologyFlowDirection(system, systemCount) {
+  _topologyFlowDirection(system, systemCount, systemEntities, entities) {
     const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
     const normalizedSystem = this._searchText(`${system.name || ""} ${system.model || ""}`);
     const matchingSources = sources.filter((source) => {
@@ -1101,11 +1101,36 @@ class BatterySmartFlowDashboard extends HTMLElement {
         ? sources[0]
         : null;
     const powerEntity = source && source.battery_power && this._hass.states[source.battery_power];
-    if (!powerEntity || ["unknown", "unavailable"].includes(powerEntity.state)) return "";
-    const power = Number(powerEntity.state);
-    if (!Number.isFinite(power) || Math.abs(power) < 5) return "";
-    // The configured battery power sensor is positive during discharge.
-    return power > 0 ? "discharge" : "charge";
+    if (powerEntity && !["unknown", "unavailable"].includes(powerEntity.state)) {
+      const power = Number(powerEntity.state);
+      if (Number.isFinite(power) && Math.abs(power) >= 5) {
+        // The configured battery power sensor is positive during discharge.
+        return power > 0 ? "discharge" : "charge";
+      }
+    }
+
+    // The topology also shows native Zendure packs that aren't configured as
+    // dashboard power sources. Use their direct telemetry as a fallback.
+    const directionFrom = (items) => {
+      const totals = { charge: 0, discharge: 0 };
+      for (const entity of items) {
+        if (!entity.entity_id.startsWith("sensor.") || ["unknown", "unavailable"].includes(entity.state)) continue;
+        const text = this._searchText(`${entity.entity_id} ${this._label(entity)}`);
+        const direction = /charge power|charging power|ladeleistung/.test(text)
+          ? "charge"
+          : /discharge power|discharging power|entladeleistung/.test(text)
+            ? "discharge"
+            : "";
+        const value = Number(entity.state);
+        if (direction && Number.isFinite(value) && value >= 0) totals[direction] += value;
+      }
+      if (totals.charge < 5 && totals.discharge < 5) return "";
+      if (Math.abs(totals.charge - totals.discharge) < 5) return "";
+      return totals.discharge > totals.charge ? "discharge" : "charge";
+    };
+    const packEntities = (system.packs || []).flatMap((_, index) =>
+      this._deviceEntities(entities, system.name, index + 1));
+    return directionFrom(packEntities) || directionFrom(systemEntities || []);
   }
 
   _openHistory(entityId) {
@@ -1499,7 +1524,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         : `${this._healthSummary(systems)}<section class="section"><div class="section-head"><h2>${this._escape(this._t("topology"))}</h2><small>${systems.length} ${this._escape(this._t("systems"))} · ${packCount} ${this._escape(this._t("packs"))}</small></div>
           ${systems.length ? `<div class="systems">${systems.map((system, systemIndex) => {
             const systemEntities = this._deviceEntities(entities, system.name, null);
-            const flowDirection = this._topologyFlowDirection(system, systems.length);
+            const flowDirection = this._topologyFlowDirection(system, systems.length, systemEntities, entities);
             const deviceImage = this._topologyDeviceImage(system);
             const secondaryName = system.model || system.profile || "";
             const showSecondaryName = secondaryName &&
@@ -1555,6 +1580,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .system-device-image{display:block;width:min(270px,48vw);height:82px;object-fit:contain;object-position:left center}
         .watchdog-signal .signal-value{display:flex;align-items:center;justify-content:flex-end;gap:9px;max-width:none}.watchdog-light{display:inline-block;width:10px;height:10px;flex:0 0 10px;border-radius:50%;background:#8a9299;box-shadow:0 0 7px #8a929966}.watchdog-online .watchdog-light{background:#55d68b;box-shadow:0 0 10px #55d68b99}.watchdog-degraded .watchdog-light{background:#f4c45e;box-shadow:0 0 10px #f4c45e99}.watchdog-offline .watchdog-light{background:#f06b6b;box-shadow:0 0 10px #f06b6b99}
         .metric-grid .metric{position:relative;isolation:isolate;overflow:hidden}.metric-grid .metric::after{content:"";position:absolute;z-index:0;right:-18px;bottom:-43px;width:52%;aspect-ratio:1;border-radius:50%;background:var(--metric-accent);opacity:.065;filter:blur(1px);box-shadow:0 0 28px var(--metric-accent);pointer-events:none}.metric-grid .metric>span,.metric-grid .metric>strong,.metric-grid .metric>small{position:relative;z-index:2}.metric-grid .metric-icon{position:absolute;z-index:1;right:12px;bottom:7px;width:clamp(52px,27%,78px);height:auto;color:var(--metric-accent);fill:currentColor;opacity:.19;filter:drop-shadow(0 0 8px currentColor) drop-shadow(0 0 17px currentColor);pointer-events:none}.metric-grid .metric-icon g{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7}.metric-grid .metric[data-metric="soc"]{--metric-accent:#16c4df}.metric-grid .metric[data-metric="pv"],.metric-grid .metric[data-metric="native-pv"]{--metric-accent:#56cf83}.metric-grid .metric[data-metric="battery-power"]{--metric-accent:#f0c34e}.metric-grid .metric[data-metric="grid-power"],.metric-grid .metric[data-metric="grid-import"],.metric-grid .metric[data-metric="grid-export"]{--metric-accent:#f06b6b}.metric-grid .metric[data-metric="offgrid"]{--metric-accent:#30c9d4}.metric-grid .metric[data-metric]{border-top-color:var(--metric-accent)}
+        .pack-card.has-soc::after{opacity:0;background-image:radial-gradient(circle at 50% 50%,rgba(255,255,255,.78) 0 2px,rgba(255,255,255,.2) 3px,transparent 5px),radial-gradient(circle at 50% 50%,rgba(255,255,255,.62) 0 2px,rgba(255,255,255,.16) 3px,transparent 5px),radial-gradient(circle at 50% 50%,rgba(255,255,255,.48) 0 1.5px,transparent 4px);background-size:30px 24px,42px 34px,23px 31px;background-position:0 0,10px 7px,17px 13px;mix-blend-mode:screen}.pack-card.has-soc[data-flow="charge"]::after,.pack-card.has-soc[data-flow="discharge"]::after{opacity:.85;filter:drop-shadow(0 0 3px rgba(255,255,255,.42))}@media(prefers-reduced-motion:reduce){.pack-card.has-soc[data-flow]::after{animation:none;opacity:.7}}
       </style>
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
