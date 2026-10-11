@@ -173,6 +173,7 @@ from .grid_history import GridHistory, build_grid_history_config
 from .grid_sensor_grace import GridSensorGapGrace
 from .charge_source_allocator import ChargeSourceAllocator
 from .charge_commit_policy import (
+    automatic_peak_reserve_abort_reason,
     current_inactive_commit_abort_reason,
     completed_charge_stop_decision,
     learned_commit_is_forced,
@@ -1336,6 +1337,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if float(additional_battery_discharge_w or 0.0) > 50.0:
             return "additional_battery_discharging_blocks_charge"
+
+        peak_reserve_abort_reason = automatic_peak_reserve_abort_reason(
+            commit=commit,
+            automatic_peak_reserve_allowed=(
+                automatic_peak_reserve_allowed
+            ),
+        )
+        if peak_reserve_abort_reason is not None:
+            return peak_reserve_abort_reason
 
         # A falling live need must not replace an active binding's target SoC.
         # Only legacy targetless bindings retain the zero-need fail-safe.

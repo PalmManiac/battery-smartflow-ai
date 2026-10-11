@@ -1439,6 +1439,7 @@
           "target_unreachable_battery_full": "Ladeziel praktisch erreicht: Akku nimmt keine Ladeleistung mehr an",
           "target_nearly_reached_discharge_window": "Ladeziel wirtschaftlich ausreichend erreicht: Entladefenster aktiv",
           "learned_charge_no_longer_needed": "Lernplanung benötigt keine Netzladung mehr",
+          "automatic_peak_reserve_no_longer_allowed": "Automatische Strategie gibt die Peakreserve-Ladung nicht mehr frei",
           "deadline_passed": "Planungsfrist abgelaufen",
           "battery_full": "Akku voll",
           "price_window_expired": "Preisfenster abgelaufen",

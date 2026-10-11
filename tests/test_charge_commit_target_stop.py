@@ -6,9 +6,11 @@ import unittest
 from pathlib import Path
 
 from custom_components.battery_smartflow_ai.charge_commit_policy import (
+    automatic_peak_reserve_abort_reason,
     completed_charge_stop_decision,
 )
 from custom_components.battery_smartflow_ai.decision_engine import DecisionResult
+from custom_components.battery_smartflow_ai.strategy_state import ChargeCommitState
 
 
 class CompletedChargeStopDecisionTests(unittest.TestCase):
@@ -101,6 +103,77 @@ class CompletedChargeStopDecisionTests(unittest.TestCase):
         )
 
         self.assertIsNone(result)
+
+
+class AutomaticPeakReserveAbortTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.reserve_commit = ChargeCommitState(
+            active=True,
+            commit_type="reserve",
+            source_reason="summer_peak_reserve_charge",
+            target_soc=100.0,
+        )
+
+    def test_disallowed_automatic_peak_reserve_aborts_active_binding(self) -> None:
+        self.assertEqual(
+            automatic_peak_reserve_abort_reason(
+                commit=self.reserve_commit,
+                automatic_peak_reserve_allowed=False,
+            ),
+            "automatic_peak_reserve_no_longer_allowed",
+        )
+
+    def test_allowed_peak_reserve_keeps_binding(self) -> None:
+        self.assertIsNone(
+            automatic_peak_reserve_abort_reason(
+                commit=self.reserve_commit,
+                automatic_peak_reserve_allowed=True,
+            )
+        )
+
+    def test_learned_binding_is_not_affected(self) -> None:
+        learned_commit = ChargeCommitState(
+            active=True,
+            commit_type="learned",
+            source_reason="learned_charge_window_active",
+        )
+        self.assertIsNone(
+            automatic_peak_reserve_abort_reason(
+                commit=learned_commit,
+                automatic_peak_reserve_allowed=False,
+            )
+        )
+
+    def test_other_reserve_reason_is_not_affected(self) -> None:
+        other_reserve_commit = ChargeCommitState(
+            active=True,
+            commit_type="reserve",
+            source_reason="other_reserve_charge",
+        )
+        self.assertIsNone(
+            automatic_peak_reserve_abort_reason(
+                commit=other_reserve_commit,
+                automatic_peak_reserve_allowed=False,
+            )
+        )
+
+    def test_coordinator_uses_peak_reserve_abort_policy(self) -> None:
+        coordinator = (
+            Path(__file__).resolve().parents[1]
+            / "custom_components"
+            / "battery_smartflow_ai"
+            / "coordinator.py"
+        ).read_text(encoding="utf-8")
+        abort_start = coordinator.index(
+            "def _charge_commit_abort_reason("
+        )
+        abort_end = coordinator.index(
+            "def _committed_charge_decision(", abort_start
+        )
+        abort_method = coordinator[abort_start:abort_end]
+
+        self.assertIn("automatic_peak_reserve_abort_reason(", abort_method)
+        self.assertIn("automatic_peak_reserve_allowed", abort_method)
 
 
 if __name__ == "__main__":
