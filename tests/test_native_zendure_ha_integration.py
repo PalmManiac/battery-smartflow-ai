@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import ast
 import json
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
@@ -180,6 +179,36 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
             sensors = json.loads(path.read_text(encoding="utf-8"))["entity"]["sensor"]
             for key in ("decision_reason", "strategic_reason"):
                 self.assertIn("native_capacity_unavailable", sensors[key]["state"])
+
+    def test_grid_sensor_grace_hold_reason_is_a_translated_enum_state(self) -> None:
+        constants = ast.parse((COMPONENT / "const.py").read_text(encoding="utf-8"))
+        enum_names = {"DECISION_REASON_ENUMS", "STRATEGY_REASON_ENUMS"}
+        enum_values = {}
+        for node in constants.body:
+            if not isinstance(node, ast.Assign):
+                continue
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id in enum_names:
+                    enum_values[target.id] = ast.literal_eval(node.value)
+
+        for enum_name in enum_names:
+            self.assertIn(
+                "grid_sensor_invalid_grace_hold",
+                enum_values[enum_name],
+            )
+
+        for filename in ("strings.json", "de.json", "en.json", "fr.json", "nl.json"):
+            path = COMPONENT / (
+                filename
+                if filename == "strings.json"
+                else f"translations/{filename}"
+            )
+            sensors = json.loads(path.read_text(encoding="utf-8"))["entity"]["sensor"]
+            for key in ("decision_reason", "strategic_reason"):
+                self.assertIn(
+                    "grid_sensor_invalid_grace_hold",
+                    sensors[key]["state"],
+                )
 
     def test_serial_is_device_metadata_but_not_part_of_entity_identity(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
