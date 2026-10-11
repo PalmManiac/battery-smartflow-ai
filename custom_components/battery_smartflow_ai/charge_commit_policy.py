@@ -8,7 +8,6 @@ from typing import Any
 from .decision_engine import DecisionResult
 from .strategy_state import ChargeCommitState
 
-
 LEARNED_FORCED_REASONS = {
     "learned_charge_window_latest_start_reached",
     "learned_charge_window_deadline_too_close_start_now",
@@ -63,6 +62,25 @@ def completed_charge_stop_decision(
         economic_discharge_threshold=decision.economic_discharge_threshold,
         effective_discharge_threshold=decision.effective_discharge_threshold,
     )
+
+
+def automatic_peak_reserve_abort_reason(
+    *, commit: ChargeCommitState, automatic_peak_reserve_allowed: bool,
+) -> str | None:
+    """Abort an optional summer peak-reserve binding when strategy withdraws it.
+
+    Other reserve-like or mandatory bindings must keep their existing lifecycle;
+    this narrowly covers the discretionary automatic summer peak-reserve rule.
+    """
+    if (
+        bool(commit.active)
+        and str(commit.commit_type or "") == "reserve"
+        and str(commit.source_reason or "") == "summer_peak_reserve_charge"
+        and not bool(automatic_peak_reserve_allowed)
+    ):
+        return "automatic_peak_reserve_no_longer_allowed"
+
+    return None
 
 
 def learned_plan_charge_need_satisfied(
