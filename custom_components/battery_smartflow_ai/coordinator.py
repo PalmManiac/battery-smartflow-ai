@@ -19,7 +19,7 @@ from homeassistant.util import dt as dt_util
 
 from .ac_mode_options import canonical_ac_mode, resolve_ac_mode_option
 from .ai_status import map_ai_status
-from .soc_plausibility import evaluate_soc_for_accounting
+from .soc_plausibility import SocAccountingDecision, evaluate_soc_for_accounting
 from .const import (
     DOMAIN,
     UPDATE_INTERVAL,
@@ -171,6 +171,10 @@ from .learned_planning import (
 )
 from .grid_history import GridHistory, build_grid_history_config
 from .grid_sensor_grace import GridSensorGapGrace
+from .soc_sensor_grace import (
+    SOC_SENSOR_GAP_GRACE_SECONDS,
+    may_reuse_cached_soc_during_gap,
+)
 from .charge_source_allocator import ChargeSourceAllocator
 from .charge_commit_policy import (
     automatic_peak_reserve_abort_reason,
@@ -218,6 +222,7 @@ from .core.models import (
     DeviceCapabilities,
     DeviceCommand,
     ZendureTransport,
+    ValueValidity,
 )
 from .core.ports import Clock, DeviceBackend, DeviceBackendExecutionError
 from .regulation_power_controller import (
@@ -4920,16 +4925,25 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if pv is None:
                     pv = native_pv
 
-            if soc is None or not 0.0 <= float(soc) <= 100.0:
+            if soc is not None and (
+                not math.isfinite(float(soc))
+                or not 0.0 <= float(soc) <= 100.0
+            ):
                 return await self._enter_safe_idle(
                     reason="soc_invalid",
                     raw_values={
                         "soc_raw": self._state(self.entities.soc),
                         "pv_raw": self._state(self.entities.pv),
+                        "native_soc_validity": (
+                            str(native_soc.validity)
+                            if native_soc is not None
+                            else None
+                        ),
                     },
                 )
 
-            soc = float(soc)
+            if soc is not None:
+                soc = float(soc)
             pv_sensor_valid = pv is not None
             pv_w = float(pv or 0.0)
             native_pv_configured = native_state is not None or bool(self.entities.native_pv)
@@ -4945,60 +4959,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             profile = self._get_active_profile()
             device_capabilities = self._device_profile.capabilities
-
-            previous_soc = _to_float(self._persist.get("prev_soc"), None)
-            previous_soc_at = None
-            try:
-                previous_soc_at = dt_util.parse_datetime(
-                    str(self._persist.get("soc_accounting_last_accepted_at") or "")
-                )
-                if previous_soc_at is not None:
-                    previous_soc_at = dt_util.as_utc(previous_soc_at)
-            except (TypeError, ValueError):
-                previous_soc_at = None
-
-            soc_accounting = evaluate_soc_for_accounting(
-                raw_soc=soc,
-                previous_soc=previous_soc,
-                previous_at=previous_soc_at,
-                now=now,
-                capacity_kwh=battery_capacity_kwh,
-                max_charge_w=resolve_charge_limits(
-                    profile,
-                    configured_charge_w=DEFAULT_MAX_CHARGE,
-                    battery_packs=self._get_setting(
-                        SETTING_BATTERY_PACKS,
-                        DEFAULT_BATTERY_PACKS,
-                    ),
-                )[0],
-                max_discharge_w=float(
-                    profile.get("MAX_OUTPUT_W", DEFAULT_MAX_DISCHARGE)
-                    or DEFAULT_MAX_DISCHARGE
-                ),
-                pending_soc=_to_float(
-                    self._persist.get("soc_outlier_pending_soc"), None
-                ),
-                pending_count=int(
-                    self._persist.get("soc_outlier_pending_count", 0) or 0
-                ),
-            )
-            accounting_soc = float(soc_accounting.accounting_soc)
-            self._persist["soc_outlier_status"] = soc_accounting.status
-            self._persist["soc_outlier_pending_soc"] = soc_accounting.pending_soc
-            self._persist["soc_outlier_pending_count"] = soc_accounting.pending_count
-
-            delta_kwh = 0.0
-            if (
-                soc_accounting.accepted
-                and previous_soc is not None
-                and battery_capacity_kwh > 0
-            ):
-                delta_kwh = battery_capacity_kwh * (
-                    (accounting_soc - previous_soc) / 100.0
-                )
-            if soc_accounting.accepted:
-                self._persist["prev_soc"] = accounting_soc
-                self._persist["soc_accounting_last_accepted_at"] = now.isoformat()
 
             export_market_price = self._get_export_market_price(now)
             feed_in_tariff = float(
@@ -5140,7 +5100,164 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self.runtime_mode.get("ai_mode", AI_MODE_AUTOMATIC)
             )
             self.runtime_mode["ai_mode"] = ai_mode
+
+            previous_soc = _to_float(self._persist.get("prev_soc"), None)
+            previous_soc_at = None
+            try:
+                previous_soc_at = dt_util.parse_datetime(
+                    str(self._persist.get("soc_accounting_last_accepted_at") or "")
+                )
+                if previous_soc_at is not None:
+                    previous_soc_at = dt_util.as_utc(previous_soc_at)
+            except (TypeError, ValueError):
+                previous_soc_at = None
+
+            soc_sensor_gap_fallback = False
+            soc_sensor_gap_age_seconds: float | None = None
+            if soc is None:
+                now_utc = dt_util.as_utc(now)
+                if previous_soc_at is not None:
+                    soc_sensor_gap_age_seconds = (
+                        now_utc - previous_soc_at
+                    ).total_seconds()
+
+                last_input_w = max(
+                    0.0,
+                    float(self._persist.get("last_set_input_w", 0.0) or 0.0),
+                )
+                last_output_w = max(
+                    0.0,
+                    float(self._persist.get("last_set_output_w", 0.0) or 0.0),
+                )
+                power_state = str(self._persist.get("power_state") or "")
+                active_command = bool(
+                    (power_state == "charging" and last_input_w > 0.0)
+                    or (power_state == "discharging" and last_output_w > 0.0)
+                )
+                automatic_mode = ai_mode in {
+                    AI_MODE_AUTOMATIC,
+                    AI_MODE_SUMMER,
+                }
+                native_soc_gap_eligible = bool(
+                    native_soc is None
+                    or native_soc.validity
+                    in {
+                        ValueValidity.MISSING,
+                        ValueValidity.UNKNOWN,
+                        ValueValidity.UNAVAILABLE,
+                        ValueValidity.STALE,
+                        ValueValidity.NEVER_RECEIVED,
+                    }
+                )
+                native_device_not_offline = bool(
+                    native_state is None
+                    or (
+                        native_state.online.value is not False
+                        and native_state.online.validity is not ValueValidity.OFFLINE
+                    )
+                )
+                soc_sensor_gap_fallback = bool(
+                    previous_soc_at is not None
+                    and may_reuse_cached_soc_during_gap(
+                        age_seconds=(
+                            soc_sensor_gap_age_seconds
+                            if soc_sensor_gap_age_seconds is not None
+                            else float("inf")
+                        ),
+                        automatic_mode=automatic_mode,
+                        active_command=active_command,
+                        source_allows_grace=(
+                            native_soc_gap_eligible
+                            and native_device_not_offline
+                        ),
+                        cached_soc_pct=previous_soc,
+                        capacity_kwh=battery_capacity_kwh,
+                        soc_min_pct=float(soc_min),
+                        soc_max_pct=float(soc_max),
+                        max_charge_w=float(max_charge),
+                        max_discharge_w=float(max_discharge),
+                    )
+                )
+                if soc_sensor_gap_fallback:
+                    soc = float(previous_soc)
+                    soc_source = "last_valid_grace"
+                else:
+                    return await self._enter_safe_idle(
+                        reason="soc_invalid",
+                        raw_values={
+                            "soc_raw": self._state(self.entities.soc),
+                            "pv_raw": self._state(self.entities.pv),
+                            "soc_cached_value_pct": previous_soc,
+                            "soc_cached_age_seconds": soc_sensor_gap_age_seconds,
+                            "soc_sensor_gap_grace_seconds": (
+                                SOC_SENSOR_GAP_GRACE_SECONDS
+                            ),
+                            "native_soc_validity": (
+                                str(native_soc.validity)
+                                if native_soc is not None
+                                else None
+                            ),
+                        },
+                    )
+
             manual_action = str(self.runtime_mode.get("manual_action", MANUAL_STANDBY))
+
+            if soc_sensor_gap_fallback:
+                soc_accounting = SocAccountingDecision(
+                    accounting_soc=float(previous_soc),
+                    accepted=False,
+                    status="sensor_gap_hold",
+                    pending_soc=_to_float(
+                        self._persist.get("soc_outlier_pending_soc"), None
+                    ),
+                    pending_count=int(
+                        self._persist.get("soc_outlier_pending_count", 0) or 0
+                    ),
+                )
+            else:
+                soc_accounting = evaluate_soc_for_accounting(
+                    raw_soc=soc,
+                    previous_soc=previous_soc,
+                    previous_at=previous_soc_at,
+                    now=now,
+                    capacity_kwh=battery_capacity_kwh,
+                    max_charge_w=resolve_charge_limits(
+                        profile,
+                        configured_charge_w=DEFAULT_MAX_CHARGE,
+                        battery_packs=self._get_setting(
+                            SETTING_BATTERY_PACKS,
+                            DEFAULT_BATTERY_PACKS,
+                        ),
+                    )[0],
+                    max_discharge_w=float(
+                        profile.get("MAX_OUTPUT_W", DEFAULT_MAX_DISCHARGE)
+                        or DEFAULT_MAX_DISCHARGE
+                    ),
+                    pending_soc=_to_float(
+                        self._persist.get("soc_outlier_pending_soc"), None
+                    ),
+                    pending_count=int(
+                        self._persist.get("soc_outlier_pending_count", 0) or 0
+                    ),
+                )
+            accounting_soc = float(soc_accounting.accounting_soc)
+            if not soc_sensor_gap_fallback:
+                self._persist["soc_outlier_status"] = soc_accounting.status
+                self._persist["soc_outlier_pending_soc"] = soc_accounting.pending_soc
+                self._persist["soc_outlier_pending_count"] = soc_accounting.pending_count
+
+            delta_kwh = 0.0
+            if (
+                soc_accounting.accepted
+                and previous_soc is not None
+                and battery_capacity_kwh > 0
+            ):
+                delta_kwh = battery_capacity_kwh * (
+                    (accounting_soc - previous_soc) / 100.0
+                )
+            if soc_accounting.accepted and not soc_sensor_gap_fallback:
+                self._persist["prev_soc"] = accounting_soc
+                self._persist["soc_accounting_last_accepted_at"] = now.isoformat()
             
             # V4.3.0-dev5.7:
             # Strategic PV handover policy.
@@ -7859,6 +7976,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "economics_total": economics_total_snapshot.as_dict(),
                 **economics_runtime_values,
                 "soc_source": soc_source,
+                "soc_sensor_gap_fallback": bool(soc_sensor_gap_fallback),
+                "soc_sensor_gap_age_seconds": (
+                    round(soc_sensor_gap_age_seconds, 2)
+                    if soc_sensor_gap_fallback
+                    and soc_sensor_gap_age_seconds is not None
+                    else None
+                ),
+                "soc_sensor_gap_grace_seconds": (
+                    SOC_SENSOR_GAP_GRACE_SECONDS
+                ),
+                "soc_cached_value_pct": (
+                    previous_soc if soc_sensor_gap_fallback else None
+                ),
                 "battery_ac_power_raw": battery_power,
                 "battery_power_source": battery_power_source,
                 "battery_ac_power_sensor_valid": bool(
