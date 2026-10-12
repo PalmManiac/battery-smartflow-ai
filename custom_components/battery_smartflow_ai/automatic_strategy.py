@@ -4,7 +4,6 @@ from typing import Any
 
 from .regulation_models import SeasonContext, StrategyContext
 
-
 ECONOMIC_DISCHARGE_REASONS = {
     "adaptive_peak_discharge",
     "very_expensive_force_discharge",
@@ -17,6 +16,11 @@ ECONOMIC_DISCHARGE_NEUTRAL_HOLD_REASONS = {
     "standby",
     "learned_charge_window_wait",
 }
+
+PEAK_RESERVE_WEIGHT_ENTRY = 0.37
+PEAK_RESERVE_WEIGHT_EXIT = 0.35
+MIXED_PEAK_RESERVE_WEIGHT_ENTRY = 0.47
+MIXED_PEAK_RESERVE_WEIGHT_EXIT = 0.45
 
 
 def _clamp01(value: float) -> float:
@@ -147,9 +151,20 @@ class AutomaticStrategy:
     V4.3.0-dev5.1:
     Real PV, price, reserve and forecast weights are calculated for diagnostics.
 
-    The weights are not yet consumed by DecisionEngine and therefore must not
-    change charging or discharging behavior.
+    The weights are not direct charge/discharge targets. They only feed bounded
+    strategy-context permissions that DecisionEngine may subsequently evaluate.
     """
+
+    def __init__(self) -> None:
+        # Keep a small per-coordinator hysteresis so a one-point SoC change
+        # cannot repeatedly enable and abort an optional peak-reserve charge.
+        self._automatic_peak_reserve_allowed = False
+
+    def _remember_peak_reserve_permission(
+        self, allowed: bool, reason: str,
+    ) -> tuple[bool, str]:
+        self._automatic_peak_reserve_allowed = bool(allowed)
+        return self._automatic_peak_reserve_allowed, reason
 
     def _pv_weight(
         self,
@@ -481,45 +496,69 @@ class AutomaticStrategy:
         }
 
         if strong_pv and good_forecast:
-            return False, "pv_and_good_forecast_block_peak_reserve"
+            return self._remember_peak_reserve_permission(
+                False, "pv_and_good_forecast_block_peak_reserve"
+            )
 
         if (
             float(pv_weight) >= 0.85
             and good_forecast
         ):
-            return False, "strong_pv_blocks_peak_reserve"
+            return self._remember_peak_reserve_permission(
+                False, "strong_pv_blocks_peak_reserve"
+            )
 
         if forecast_reason in {
             "poor_pv_outlook",
             "forecast_energy_low",
         }:
-            return True, "poor_forecast_allows_peak_reserve"
+            return self._remember_peak_reserve_permission(
+                True, "poor_forecast_allows_peak_reserve"
+            )
 
         if reserve_reason in {
             "reserve_critical",
             "reserve_low",
         }:
-            return True, "low_reserve_allows_peak_reserve"
+            return self._remember_peak_reserve_permission(
+                True, "low_reserve_allows_peak_reserve"
+            )
 
         if (
             pv_reason in {
                 "no_current_pv",
                 "pv_contribution_low",
             }
-            and float(reserve_weight) >= 0.35
+            and float(reserve_weight)
+            >= (
+                PEAK_RESERVE_WEIGHT_EXIT
+                if self._automatic_peak_reserve_allowed
+                else PEAK_RESERVE_WEIGHT_ENTRY
+            )
         ):
-            return True, "weak_pv_and_reserve_need_allow_peak_reserve"
+            return self._remember_peak_reserve_permission(
+                True, "weak_pv_and_reserve_need_allow_peak_reserve"
+            )
 
         if (
             forecast_reason in {
                 "mixed_pv_outlook",
                 "forecast_energy_moderate",
             }
-            and float(reserve_weight) >= 0.45
+            and float(reserve_weight)
+            >= (
+                MIXED_PEAK_RESERVE_WEIGHT_EXIT
+                if self._automatic_peak_reserve_allowed
+                else MIXED_PEAK_RESERVE_WEIGHT_ENTRY
+            )
         ):
-            return True, "mixed_forecast_and_reserve_allow_peak_reserve"
+            return self._remember_peak_reserve_permission(
+                True, "mixed_forecast_and_reserve_allow_peak_reserve"
+            )
 
-        return False, "peak_reserve_context_not_required"
+        return self._remember_peak_reserve_permission(
+            False, "peak_reserve_context_not_required"
+        )
         
     def _automatic_valley_charge_permission(
         self,
@@ -694,6 +733,7 @@ class AutomaticStrategy:
         context_metadata = dict(metadata or {})
 
         if not bool(automatic_mode_active):
+            self._automatic_peak_reserve_allowed = False
             context_metadata.update(
                 {
                     "automatic_discharge_allowed": False,
