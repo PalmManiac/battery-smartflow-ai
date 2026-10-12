@@ -10,6 +10,11 @@ from .debug_package import DebugSample, redact_secrets
 
 _RAW_VALUE_KEYS = (
     "soc",
+    "soc_source",
+    "soc_sensor_gap_fallback",
+    "soc_sensor_gap_age_seconds",
+    "soc_sensor_gap_grace_seconds",
+    "soc_cached_value_pct",
     "pv_w",
     "pv_sensor_valid",
     "native_pv_w",

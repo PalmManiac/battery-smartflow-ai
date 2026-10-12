@@ -98,6 +98,7 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertEqual(allocation["charge_grid_requested_w"], 500.0)
         self.assertEqual(allocation["charge_device_input_w"], 900.0)
         self.assertEqual(result["regulation"]["grid_avg_short_w"], 110.0)
+
         self.assertNotIn("command_ac_mode", result["regulation"])
         self.assertEqual(result["planning"]["learned"]["status"], "ready")
         self.assertEqual(result["planning"]["forecast"]["pv_outlook"], "high")
@@ -120,6 +121,26 @@ class DebugSampleBuilderTests(unittest.TestCase):
         self.assertNotIn("entity_state", result["command"]["mode_write"])
         self.assertEqual(result["command"]["input_write"]["effective_w"], 500)
         self.assertEqual(result["command"]["effectiveness"]["status"], "effective")
+
+    def test_soc_gap_fallback_is_captured_with_its_age_and_source(self) -> None:
+        sample = build_debug_sample(
+            timestamp=self.now,
+            details={
+                "soc": 56.5,
+                "soc_source": "last_valid_grace",
+                "soc_sensor_gap_fallback": True,
+                "soc_sensor_gap_age_seconds": 42.0,
+                "soc_sensor_gap_grace_seconds": 120.0,
+                "soc_cached_value_pct": 56.5,
+            },
+        )
+
+        raw_values = sample.as_dict()["raw_values"]
+        self.assertEqual(raw_values["soc_source"], "last_valid_grace")
+        self.assertTrue(raw_values["soc_sensor_gap_fallback"])
+        self.assertEqual(raw_values["soc_sensor_gap_age_seconds"], 42.0)
+        self.assertEqual(raw_values["soc_sensor_gap_grace_seconds"], 120.0)
+        self.assertEqual(raw_values["soc_cached_value_pct"], 56.5)
 
     def test_groups_optional_control_timing_measurements(self) -> None:
         result = build_debug_sample(
