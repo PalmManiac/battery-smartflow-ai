@@ -185,6 +185,7 @@ from .charge_commit_policy import (
     learned_commit_should_yield_to_discharge,
     learned_plan_may_complete_active_commit,
     preserved_learned_commit_power,
+    strategic_reserve_price_conflict,
 )
 from .battery_protection import (
     cell_voltage_emergency_minimum_elapsed,
@@ -1275,6 +1276,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         reason: str,
         price_now: float | None,
         effective_discharge_threshold: float | None,
+        very_expensive_threshold: float | None,
     ) -> bool:
         """Return whether an optional reserve charge conflicts with discharge economics.
 
@@ -1283,32 +1285,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         Their decisions must therefore not be overridden afterwards by the simpler
         effective-discharge-threshold check.
 
-        The guard remains active for optional peak-reserve charging so that reserve
-        charging cannot start or continue inside an economic discharge window.
+        The guard remains active for optional peak-reserve charging so it cannot
+        start or continue inside either the configured forced-discharge range or
+        an effective economic-discharge window.
         """
 
         if reason not in CHARGE_COMMIT_RESERVE_REASONS:
             return False
 
-        current_price = _to_float(price_now, None)
-        discharge_threshold = _to_float(
-            effective_discharge_threshold,
-            None,
-        )
-
-        if current_price is None or discharge_threshold is None:
-            return False
-
-        if discharge_threshold <= 0.0:
-            return False
-
-        margin = max(
-            0.0,
-            float(self.price_comparison_tolerance),
-        )
-
-        return float(current_price) >= (
-            float(discharge_threshold) + margin
+        return strategic_reserve_price_conflict(
+            reason=reason,
+            price_now=price_now,
+            effective_discharge_threshold=(
+                effective_discharge_threshold
+            ),
+            very_expensive_threshold=very_expensive_threshold,
+            tolerance=float(self.price_comparison_tolerance),
         )
 
 
@@ -1326,6 +1318,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cell_voltage_emergency_active: bool,
         price_now: float | None,
         effective_discharge_threshold: float | None,
+        very_expensive_threshold: float | None,
         automatic_peak_reserve_allowed: bool,
         battery_charge_w: float,
         learned_charge_plan: Any | None,
@@ -1344,6 +1337,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if float(additional_battery_discharge_w or 0.0) > 50.0:
             return "additional_battery_discharging_blocks_charge"
+
+        target_soc = commit.target_soc
+        if target_soc is None:
+            target_soc = float(soc_max)
+
+        effective_target_soc = min(float(target_soc), float(soc_max))
+
+        # Target completion is authoritative even if this same SoC update also
+        # withdraws the hysteresis permission that originally allowed reserve.
+        if float(soc) >= effective_target_soc - 0.2:
+            if effective_target_soc >= float(soc_max) - 0.2:
+                return "max_soc_reached"
+            return "target_soc_reached"
 
         peak_reserve_abort_reason = automatic_peak_reserve_abort_reason(
             commit=commit,
@@ -1370,20 +1376,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             reason=str(commit.source_reason or ""),
             price_now=price_now,
             effective_discharge_threshold=effective_discharge_threshold,
+            very_expensive_threshold=very_expensive_threshold,
         ):
             return "price_condition_lost"
-
-        target_soc = commit.target_soc
-        if target_soc is None:
-            target_soc = float(soc_max)
-
-        effective_target_soc = min(float(target_soc), float(soc_max))
-
-        # Small tolerance avoids a commit flickering at exact target.
-        if float(soc) >= effective_target_soc - 0.2:
-            if effective_target_soc >= float(soc_max) - 0.2:
-                return "max_soc_reached"
-            return "target_soc_reached"
             
         # V4.3.0-dev5.8.4:
         # Once an active charge is practically complete, do not keep buying expensive
@@ -1712,6 +1707,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         cell_voltage_emergency_active: bool,
         price_now: float | None,
         effective_discharge_threshold: float | None,
+        very_expensive_threshold: float | None,
         automatic_peak_reserve_allowed: bool,
         battery_charge_w: float,
     ) -> DecisionResult:
@@ -1749,6 +1745,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 price_now=price_now,
                 effective_discharge_threshold=(
                     effective_discharge_threshold
+                ),
+                very_expensive_threshold=(
+                    very_expensive_threshold
                 ),
                 automatic_peak_reserve_allowed=bool(
                     automatic_peak_reserve_allowed
@@ -1909,6 +1908,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             reason=reason,
             price_now=price_now,
             effective_discharge_threshold=effective_discharge_threshold,
+            very_expensive_threshold=very_expensive_threshold,
         ):
             self._persist["charge_commit_abort_reason"] = (
                 "price_condition_lost"
@@ -6380,6 +6380,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     effective_discharge_threshold=(
                         decision.effective_discharge_threshold
                     ),
+                    very_expensive_threshold=float(very_expensive),
                     automatic_peak_reserve_allowed=bool(
                         automatic_strategy_context.metadata.get(
                             "automatic_peak_reserve_allowed",

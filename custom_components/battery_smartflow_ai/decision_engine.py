@@ -5,6 +5,10 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, List, Literal, Optional
 
+from .automatic_strategy import (
+    MIXED_PEAK_RESERVE_WEIGHT_EXIT,
+    PEAK_RESERVE_WEIGHT_EXIT,
+)
 from .const import MANUAL_CONST_DISCHARGE, MANUAL_PV_SURPLUS
 from .core.models.runtime import AiMode, DecisionContext, RuntimeSnapshot
 from .market_price import (
@@ -13,9 +17,8 @@ from .market_price import (
     MarketPricePoint,
     planning_price_points,
 )
+from .power_controller import PowerContext, PowerController
 from .price_math import peak_threshold
-from .power_controller import PowerController, PowerContext
-
 
 DeviceACMode = Literal["input", "output"]
 ActionType = Literal["idle", "charge", "discharge", "emergency", "passthrough"]
@@ -692,6 +695,11 @@ class ReserveChargeRule(BaseRule):
         price_now = engine._current_import_price(ctx)
         if price_now is None or not engine._import_price_points(ctx):
             return None
+
+        # Forced discharge and optional reserve charging must never compete in
+        # the same cycle. PeakRule is the authoritative action at this price.
+        if float(price_now) >= float(ctx.very_expensive_threshold):
+            return None
             
         # V4.2.8:
         # Peak-reserve charging must not be limited to the formal valley
@@ -706,7 +714,10 @@ class ReserveChargeRule(BaseRule):
         if target_soc is None:
             return None
 
-        if float(ctx.soc) >= float(target_soc):
+        # Use the same completion tolerance as the active charge commit so a
+        # small SoC fluctuation at the reserve boundary cannot start charging
+        # again immediately after the previous binding completed.
+        if float(ctx.soc) >= float(target_soc) - 0.2:
             return None
 
         expected_peak_price = engine._reserve_expected_peak_price(ctx)
@@ -2117,13 +2128,10 @@ class DecisionEngine:
     ) -> float | None:
         """Return the target SoC for strategic peak-reserve charging.
 
-        V4.3.0-dev5.6:
-        Once Automatic starts a strategic AC charge in a valid economical
-        pre-peak window, the configured maximum SoC is authoritative.
-
-        The former fixed 80/85/90/95 percent severity levels could end an
-        otherwise valid charge prematurely, even with a poor PV outlook and a
-        user-configured maximum SoC of 100 percent.
+        Strong reserve reasons retain the configured maximum. Weak-PV and
+        mixed-forecast permissions are SoC-hysteresis gates, so their reserve
+        charge target matches the corresponding exit boundary instead of
+        continuing toward an unrelated 100% target.
         """
 
         expected_peak = self._reserve_expected_peak_price(ctx)
@@ -2133,9 +2141,30 @@ class DecisionEngine:
         if not self._import_price_points(ctx):
             return None
 
-        return max(
+        reserve_target = max(
             float(ctx.soc_min),
             min(100.0, float(ctx.soc_max)),
+        )
+
+        exit_weight = {
+            "weak_pv_and_reserve_need_allow_peak_reserve": (
+                PEAK_RESERVE_WEIGHT_EXIT
+            ),
+            "mixed_forecast_and_reserve_allow_peak_reserve": (
+                MIXED_PEAK_RESERVE_WEIGHT_EXIT
+            ),
+        }.get(str(ctx.automatic_peak_reserve_reason or ""))
+
+        if exit_weight is not None:
+            usable_soc_at_exit = 1.0 - float(exit_weight)
+            reserve_target = float(ctx.soc_min) + (
+                usable_soc_at_exit
+                * (reserve_target - float(ctx.soc_min))
+            )
+
+        return max(
+            float(ctx.soc_min),
+            min(100.0, float(ctx.soc_max), reserve_target),
         )
 
 

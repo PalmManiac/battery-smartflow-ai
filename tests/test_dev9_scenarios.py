@@ -194,6 +194,127 @@ class Dev9ModeScenarios(unittest.TestCase):
         self.assertEqual(normalize_ai_mode("invalid"), AI_MODE_AUTOMATIC)
         self.assertEqual(normalize_ai_mode(AI_MODE_SUMMER), AI_MODE_SUMMER)
 
+
+    def test_force_discharge_price_wins_over_optional_reserve_charge(self) -> None:
+        prices = [
+            PricePoint(
+                start=NOW,
+                end=NOW + timedelta(minutes=15),
+                price=0.3545,
+            ),
+            PricePoint(
+                start=NOW + timedelta(minutes=15),
+                end=NOW + timedelta(minutes=30),
+                price=0.36,
+            ),
+            PricePoint(
+                start=NOW + timedelta(minutes=30),
+                end=NOW + timedelta(minutes=45),
+                price=0.37,
+            ),
+            PricePoint(
+                start=NOW + timedelta(minutes=45),
+                end=NOW + timedelta(minutes=60),
+                price=0.50,
+            ),
+            PricePoint(
+                start=NOW + timedelta(minutes=60),
+                end=NOW + timedelta(minutes=75),
+                price=0.49,
+            ),
+        ]
+        engine = DecisionEngine()
+        engine._compute_effective_discharge_threshold = lambda _ctx: 0.369
+
+        result = engine.evaluate(
+            context(
+                soc=66.0,
+                soc_min=10.0,
+                soc_max=100.0,
+                battery_capacity_kwh=9.22,
+                max_charge_w=2400.0,
+                max_discharge_w=2400.0,
+                very_expensive_threshold=0.25,
+                automatic_peak_reserve_allowed=True,
+                automatic_peak_reserve_reason=(
+                    "weak_pv_and_reserve_need_allow_peak_reserve"
+                ),
+                automatic_discharge_allowed=True,
+                import_market_price=import_market_price(0.3545, prices),
+            )
+        )
+
+        self.assertEqual(result.action, "discharge")
+        self.assertEqual(result.reason, "very_expensive_force_discharge")
+        selection = engine.last_strategy_selection
+        self.assertEqual(selection["selected_rule"], "PeakRule")
+        self.assertNotIn(
+            "summer_peak_reserve_charge",
+            [candidate["reason"] for candidate in selection["candidates"]],
+        )
+
+    def test_weak_reserve_targets_match_hysteresis_exit_soc(self) -> None:
+        engine = DecisionEngine()
+        base = {
+            "soc": 60.0,
+            "soc_min": 10.0,
+            "soc_max": 100.0,
+            "automatic_strategy_active": True,
+            "automatic_peak_reserve_allowed": True,
+        }
+
+        weak_pv_target = engine._reserve_target_soc(
+            context(
+                **base,
+                automatic_peak_reserve_reason=(
+                    "weak_pv_and_reserve_need_allow_peak_reserve"
+                ),
+            )
+        )
+        mixed_forecast_target = engine._reserve_target_soc(
+            context(
+                **base,
+                automatic_peak_reserve_reason=(
+                    "mixed_forecast_and_reserve_allow_peak_reserve"
+                ),
+            )
+        )
+        strong_reason_target = engine._reserve_target_soc(
+            context(
+                **base,
+                automatic_peak_reserve_reason=(
+                    "poor_forecast_allows_peak_reserve"
+                ),
+            )
+        )
+
+        self.assertAlmostEqual(weak_pv_target or 0.0, 68.5)
+        self.assertAlmostEqual(mixed_forecast_target or 0.0, 59.5)
+        self.assertEqual(strong_reason_target, 100.0)
+
+    def test_reserve_charge_does_not_restart_inside_completion_tolerance(self) -> None:
+        engine = DecisionEngine()
+        engine.evaluate(
+            context(
+                soc=68.4,
+                soc_min=10.0,
+                soc_max=100.0,
+                automatic_strategy_active=True,
+                automatic_peak_reserve_allowed=True,
+                automatic_peak_reserve_reason=(
+                    "weak_pv_and_reserve_need_allow_peak_reserve"
+                ),
+            )
+        )
+
+        self.assertNotIn(
+            "summer_peak_reserve_charge",
+            [
+                candidate["reason"]
+                for candidate in engine.last_strategy_selection["candidates"]
+            ],
+        )
+
     def test_automatic_decision_is_not_switched_by_season(self) -> None:
         engine = DecisionEngine()
         winter = engine.evaluate(context(season="winter"))
