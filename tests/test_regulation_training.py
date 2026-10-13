@@ -166,7 +166,8 @@ class RegulationTrainingModelTests(unittest.TestCase):
                 "regulation_command_output_limit_w": 0,
                 "battery_charge_w": 450,
                 "battery_discharge_w": 0,
-                "regulation_command_skipped": False,
+                "regulation_command_skipped": True,
+                "regulation_command_skip_reason": "unchanged_within_tolerance",
                 "regulation_error_w": 120,
                 "regulation_target_import_w": 10,
                 "ai_mode": "automatic",
@@ -194,6 +195,11 @@ class RegulationTrainingModelTests(unittest.TestCase):
         self.assertEqual(serialized["samples"][0]["direction"], "charge")
         self.assertEqual(serialized["samples"][0]["grid_error_w"], 120)
         self.assertEqual(serialized["samples"][0]["baseline_kp_up"], 0.65)
+        self.assertTrue(serialized["samples"][0]["command_skipped"])
+        self.assertEqual(
+            serialized["samples"][0]["command_skip_reason"],
+            "unchanged_within_tolerance",
+        )
         self.assertEqual(serialized["samples"][0]["strategy_intent"], "pv_charge")
         self.assertEqual(serialized["samples"][0]["strategy_priority"], 400)
         self.assertFalse(serialized["samples"][0]["strategy_force"])

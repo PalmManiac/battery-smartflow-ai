@@ -201,8 +201,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.38"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=48"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.39"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=49"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -345,8 +345,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.38"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=48"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.39"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=49"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -441,6 +441,31 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('training_estimated_no_change:', frontend)
         self.assertIn(".training-score-track i.candidate.better", frontend)
         self.assertIn(".training-score-track i.candidate.worse", frontend)
+
+    def test_training_dashboard_explains_sample_and_reversal_eligibility(self) -> None:
+        coordinator = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        for field in (
+            '"direction_sample_count"',
+            '"unchanged_command_sample_count"',
+            '"rejected_invalid_grid_count"',
+            '"rejected_missing_error_count"',
+            '"rejected_command_skip_count"',
+            '"valid_sample_ratio"',
+            '"minimum_confidence"',
+            '"insufficient_reasons"',
+        ):
+            self.assertIn(field, coordinator)
+        self.assertIn("eligibility_exclusion_counts", frontend)
+        self.assertIn('"training_reversal_eligible_samples"', frontend)
+        self.assertIn('"training_reason_low_confidence"', frontend)
+        self.assertIn('"training_confidence_summary"', frontend)
+        self.assertIn('DASHBOARD_VERSION = "1.0.39"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=49"', dashboard)
 
 
 if __name__ == "__main__":

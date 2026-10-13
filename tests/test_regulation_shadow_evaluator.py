@@ -10,7 +10,9 @@ from custom_components.battery_smartflow_ai.regulation_shadow_evaluator import (
 
 class RegulationShadowEvaluatorTests(unittest.TestCase):
     @staticmethod
-    def _reversal_samples(*, override_at_reversal: bool = False) -> list[dict]:
+    def _reversal_samples(
+        *, override_at_reversal: bool = False, unchanged_commands: bool = False
+    ) -> list[dict]:
         started = datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)
         samples = []
         for index in range(45):
@@ -26,17 +28,25 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
                 "mode_allowed": True,
                 "discharge_allowed": True,
                 "grid_valid": True,
-                "command_skipped": False,
+                "command_skipped": unchanged_commands,
                 "requested_charge_w": 100.0 if direction == "charge" else 0.0,
                 "requested_discharge_w": 100.0 if direction == "discharge" else 0.0,
             }
+            if unchanged_commands:
+                sample["command_skip_reason"] = "unchanged_within_tolerance"
             if override_at_reversal and index == 5:
                 sample["manual_action"] = "discharge"
             samples.append(sample)
         return samples
 
     @staticmethod
-    def _samples(*, kp_up: float = 0.5, kp_down: float = 0.5) -> list[dict]:
+    def _samples(
+        *,
+        kp_up: float = 0.5,
+        kp_down: float = 0.5,
+        skipped: bool = False,
+        skip_reason: str | None = "unchanged_within_tolerance",
+    ) -> list[dict]:
         samples = []
         for index in range(60):
             requested = 500.0 if (index // 6) % 2 == 0 else 600.0
@@ -44,7 +54,7 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
                 {
                     "direction": "charge",
                     "grid_valid": True,
-                    "command_skipped": False,
+                    "command_skipped": skipped,
                     "grid_error_w": 500.0,
                     "requested_charge_w": requested,
                     "requested_discharge_w": 0.0,
@@ -56,6 +66,10 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
                     "baseline_max_step_down_w": 1000.0,
                 }
             )
+            if skip_reason is not None:
+                samples[-1]["command_skip_reason"] = (
+                    skip_reason if skipped else "none"
+                )
         return samples
 
     def test_proposes_a_shadow_only_candidate_when_replay_improves(self) -> None:
@@ -86,6 +100,52 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
         self.assertEqual(result["charge"]["decision"], "insufficient_data")
         self.assertIsNone(result["charge"]["candidate_score"])
 
+    def test_unchanged_active_commands_remain_valid_observations(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._samples(skipped=True)}
+        )["charge"]
+
+        self.assertEqual(result["decision"], "proposed")
+        self.assertEqual(result["sample_count"], 60)
+        self.assertEqual(result["direction_sample_count"], 60)
+        self.assertEqual(result["unchanged_command_sample_count"], 60)
+        self.assertEqual(result["valid_sample_ratio"], 1.0)
+
+    def test_legacy_active_skipped_commands_are_inferred_as_unchanged(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._samples(skipped=True, skip_reason=None)}
+        )["charge"]
+
+        self.assertEqual(result["decision"], "proposed")
+        self.assertEqual(result["sample_count"], 60)
+        self.assertEqual(result["unchanged_command_sample_count"], 60)
+
+    def test_unrecognized_skipped_commands_stay_excluded_and_explain_why(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._samples(skipped=True, skip_reason="device_blocked")}
+        )["charge"]
+
+        self.assertEqual(result["decision"], "insufficient_data")
+        self.assertEqual(result["sample_count"], 0)
+        self.assertEqual(result["rejected_command_skip_count"], 60)
+        self.assertIn("confidence_below_threshold", result["insufficient_reasons"])
+
+    def test_direction_quality_reports_each_exclusion_class(self) -> None:
+        samples = self._samples()
+        samples[0]["grid_valid"] = False
+        samples[1]["grid_error_w"] = None
+        samples[2]["command_skipped"] = True
+        samples[2]["command_skip_reason"] = "device_blocked"
+
+        result = evaluate_training_session({"samples": samples})["charge"]
+
+        self.assertEqual(result["direction_sample_count"], 60)
+        self.assertEqual(result["sample_count"], 57)
+        self.assertEqual(result["valid_sample_ratio"], 0.95)
+        self.assertEqual(result["rejected_invalid_grid_count"], 1)
+        self.assertEqual(result["rejected_missing_error_count"], 1)
+        self.assertEqual(result["rejected_command_skip_count"], 1)
+
     def test_reversal_hold_is_simulated_without_changing_live_regulation(self) -> None:
         result = evaluate_training_session(
             {"samples": self._reversal_samples()}
@@ -108,6 +168,18 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
         self.assertEqual(result["override_reversal_count"], 1)
         self.assertEqual(result["eligible_reversal_count"], 0)
         self.assertEqual(result["held_reversal_count"], 0)
+        self.assertEqual(result["eligibility_exclusion_counts"]["manual_action"], 1)
+
+    def test_reversal_shadow_accepts_unchanged_active_commands(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._reversal_samples(unchanged_commands=True)}
+        )["reversal_hysteresis"]
+
+        self.assertEqual(result["status"], "simulated")
+        self.assertEqual(result["direction_sample_count"], 45)
+        self.assertEqual(result["eligible_sample_count"], 45)
+        self.assertEqual(result["unchanged_command_sample_count"], 45)
+        self.assertEqual(result["eligible_reversal_count"], 1)
 
 
 if __name__ == "__main__":
