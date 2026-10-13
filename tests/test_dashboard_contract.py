@@ -143,14 +143,30 @@ class DashboardContractTests(unittest.TestCase):
         )[0]
 
         self.assertIn('signed: true', live_flow)
-        self.assertIn('spec.signed && watts < 0 ? "reverse" : "forward"', frontend)
-        self.assertIn('flow === "reverse" ? "←"', frontend)
+        self.assertIn('flow === "forward" ? spec.from : flow === "reverse" ? spec.to : null', frontend)
+        self.assertIn('direction === "reverse" ? "←"', frontend)
         self.assertIn('kind: "battery"', live_flow)
         self.assertIn('kind: "grid"', live_flow)
         self.assertIn('title: "house_load_source"', live_flow)
         self.assertIn('"house_load": entity_registry.async_get_entity_id(', dashboard)
         self.assertIn('energy_flow_hint:', frontend)
         self.assertIn('if (liveFlow) return liveFlow;', frontend)
+
+    def test_energy_flow_diagram_animates_direction_and_grays_zero_flow(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('class="live-flow-map"', frontend)
+        self.assertIn('class="live-flow-track ${direction}"', frontend)
+        self.assertIn('.live-flow-track.idle{border-color:#626970;background:#51575d;box-shadow:none}', frontend)
+        self.assertIn('.live-flow-track.forward::after,.live-flow-track.reverse::after{opacity:.92}', frontend)
+        self.assertIn('.live-flow-track::after{animation:none;will-change:auto}', frontend)
+        self.assertIn('.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:live-flow-streaks', frontend)
+        self.assertIn('repeating-linear-gradient(110deg', frontend)
+        self.assertIn('animation-direction:reverse', frontend)
+        self.assertIn('@media(prefers-reduced-motion:reduce){.live-flow-track::after{animation:none', frontend)
+        self.assertIn('this._liveFlowNode(nodeKey, batteryDetail(nodeKey), spec.kind)', frontend)
 
     def test_irrelevant_pv_cards_hide_but_reappear_for_configured_or_live_data(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
@@ -220,8 +236,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.41"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=50"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.42"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=51"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -364,8 +380,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.41"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=50"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.42"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=51"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -486,8 +502,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"training_reversal_eligible_samples"', frontend)
         self.assertIn('"training_reason_low_confidence"', frontend)
         self.assertIn('"training_confidence_summary"', frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.41"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=50"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.42"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=51"', dashboard)
 
 
 if __name__ == "__main__":

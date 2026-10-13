@@ -1561,7 +1561,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `<div class="live-flow-node" data-node="${this._escape(labelKey)}"${nodeType ? ` data-node-type="${this._escape(nodeType)}"` : ""}>${svg}<span><strong>${this._escape(this._t(labelKey))}</strong>${detail ? `<small>${this._escape(detail)}</small>` : ""}</span></div>`;
   }
 
-  _liveFlowLane(spec, maxWatts, socText) {
+  _liveFlowBranch(spec, maxWatts, socText, side, row = 1) {
     let watts = this._powerWatts(spec.entity);
     if (spec.nonNegative && watts !== null && watts < -1) watts = null;
     let flow = watts === null ? "unavailable" : "idle";
@@ -1569,18 +1569,41 @@ class BatterySmartFlowDashboard extends HTMLElement {
       flow = spec.signed && watts < 0 ? "reverse" : "forward";
     }
     const amount = watts === null ? "— W" : `${Math.abs(watts).toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 1 })} W`;
-    const width = watts === null || maxWatts <= 0
-      ? 0
-      : Math.min(100, Math.abs(watts) / maxWatts * 100);
-    const arrow = flow === "forward" ? "→" : flow === "reverse" ? "←" : flow === "idle" ? "·" : "—";
+    const startsAt = flow === "forward" ? spec.from : flow === "reverse" ? spec.to : null;
+    const nodeKey = side === "right"
+      ? (spec.from === "node_bus" ? spec.to : spec.from)
+      : side === "left"
+        ? (spec.from === "node_bus" ? spec.to : spec.from)
+        : null;
+    const startsOnLeft = side === "left"
+      ? startsAt === nodeKey
+      : side === "right"
+        ? startsAt === "node_bus"
+        : startsAt === spec.from;
+    const direction = flow === "idle" || flow === "unavailable"
+      ? flow
+      : startsOnLeft ? "forward" : "reverse";
+    const arrow = direction === "forward" ? "→" : direction === "reverse" ? "←" : direction === "idle" ? "·" : "—";
     const status = flow === "idle" ? this._t("flow_idle") : flow === "unavailable" ? this._t("flow_unavailable") : "";
     const batteryDetail = (key) => key === "node_battery" && socText ? `${this._t("battery")}: ${socText}` : "";
     const history = spec.entity && spec.entity.entity_id && this._hass?.states?.[spec.entity.entity_id]
       ? ` data-history-entity="${this._escape(spec.entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${this._t(spec.title)} · ${amount} · ${this._t("show_history")}`)}"`
       : "";
     const value = watts === null ? this._t("flow_unavailable") : amount;
-    const accessibleDirection = flow === "forward" ? this._t("flow_forward") : flow === "reverse" ? this._t("flow_reverse") : status;
-    return `<div class="live-flow-row ${history ? "history-card" : ""}" data-flow="${this._escape(spec.kind)}"${history}>${this._liveFlowNode(spec.from, batteryDetail(spec.from), spec.kind)}<div class="live-flow-route ${flow}" role="img" aria-label="${this._escape(`${this._t(spec.title)} · ${accessibleDirection}`)}"><small>${this._escape(this._t(spec.title))}</small><div class="live-flow-track"><span>${arrow}</span><i style="width:${width}%"></i></div>${status ? `<small class="live-flow-status">${this._escape(status)}</small>` : ""}</div>${this._liveFlowNode(spec.to, batteryDetail(spec.to), spec.kind)}<strong class="live-flow-value">${this._escape(value)}</strong></div>`;
+    const accessibleDirection = direction === "forward" ? this._t("flow_forward") : direction === "reverse" ? this._t("flow_reverse") : status;
+    const strength = watts === null || maxWatts <= 0 ? 0 : Math.min(1, Math.abs(watts) / maxWatts);
+    const trackStyle = flow === "idle" || flow === "unavailable"
+      ? ""
+      : ` style="--flow-duration:${(2.1 - strength * 1.35).toFixed(2)}s;--flow-width:${(3 + strength * 3).toFixed(1)}px"`;
+    const connection = `<div class="live-flow-connection" role="img" aria-label="${this._escape(`${this._t(spec.title)} · ${accessibleDirection}`)}"><div class="live-flow-measure"><small>${this._escape(this._t(spec.title))}</small><strong>${this._escape(value)}</strong></div><div class="live-flow-track ${direction}"${trackStyle}><span class="live-flow-arrow">${arrow}</span></div>${status ? `<small class="live-flow-status">${this._escape(status)}</small>` : ""}</div>`;
+    const branch = `<div class="live-flow-branch side-${side} ${history ? "history-card" : ""}" data-flow="${this._escape(spec.kind)}"${side !== "full" ? ` style="--flow-row:${row}"` : ""}${history}>`;
+    if (side === "right") {
+      return `${branch}${connection}${this._liveFlowNode(nodeKey, batteryDetail(nodeKey), spec.kind)}</div>`;
+    }
+    if (side === "full") {
+      return `${branch}${this._liveFlowNode(spec.from, batteryDetail(spec.from), spec.kind)}${connection}${this._liveFlowNode(spec.to, batteryDetail(spec.to), spec.kind)}</div>`;
+    }
+    return `${branch}${this._liveFlowNode(nodeKey, batteryDetail(nodeKey), spec.kind)}${connection}</div>`;
   }
 
   _liveEnergyFlow(entities) {
@@ -1605,38 +1628,38 @@ class BatterySmartFlowDashboard extends HTMLElement {
       };
 
       add(source.pv, allowFallback ? ["pv power", "pv leistung", "solar power", "solarleistung"] : null, {
-        title: "pv_source", kind: "pv", from: "node_pv", to: "node_bus", nonNegative: true,
+        title: "pv_source", kind: "pv", from: "node_pv", to: "node_bus", side: "left", nonNegative: true,
       });
       add(source.native_pv, null, {
-        title: "native_pv_source", kind: "native-pv", from: "node_native_pv", to: "node_bus", nonNegative: true,
+        title: "native_pv_source", kind: "native-pv", from: "node_native_pv", to: "node_bus", side: "left", nonNegative: true,
       });
       add(source.battery_power, allowFallback ? ["battery power", "batterieleistung", "native hardware power w"] : null, {
-        title: "battery_source", kind: "battery", signed: true,
+        title: "battery_source", kind: "battery", side: "right", signed: true,
         from: "node_battery", to: "node_bus",
       });
       if (source.grid_power) {
         add(source.grid_power, null, {
-          title: "grid_net", kind: "grid", signed: true,
+          title: "grid_net", kind: "grid", side: "left", signed: true,
           from: "node_grid", to: "node_bus",
         });
       } else if (source.grid_import || source.grid_export) {
         add(source.grid_import, !source.grid_import && allowFallback ? ["grid import", "netzbezug", "bezug"] : null, {
-          title: "grid_import", kind: "grid-import", from: "node_grid", to: "node_bus", nonNegative: true,
+          title: "grid_import", kind: "grid-import", side: "left", from: "node_grid", to: "node_bus", nonNegative: true,
         });
         add(source.grid_export, !source.grid_export && allowFallback ? ["grid export", "netzeinspeisung", "einspeisung"] : null, {
-          title: "grid_export", kind: "grid-export", from: "node_bus", to: "node_grid", nonNegative: true,
+          title: "grid_export", kind: "grid-export", side: "left", from: "node_bus", to: "node_grid", nonNegative: true,
         });
       } else {
         add(null, allowFallback ? ["grid power", "netzleistung", "netzbezug"] : null, {
-          title: "grid_net", kind: "grid", signed: true,
+          title: "grid_net", kind: "grid", side: "left", signed: true,
           from: "node_grid", to: "node_bus",
         });
       }
       add(source.house_load, allowFallback ? ["house_load", "house load", "hauslast", "hausverbrauch"] : null, {
-        title: "house_load_source", kind: "house", from: "node_bus", to: "node_home", nonNegative: true,
+        title: "house_load_source", kind: "house", side: "right", from: "node_bus", to: "node_home", nonNegative: true,
       });
       add(source.offgrid_power, allowFallback ? ["offgrid power", "off grid power", "off grid ausgang"] : null, {
-        title: "offgrid_source", kind: "offgrid", from: "node_system", to: "node_home", nonNegative: true,
+        title: "offgrid_source", kind: "offgrid", side: "full", from: "node_system", to: "node_home", nonNegative: true,
       });
       if (!lanes.length) return "";
       const maxWatts = Math.max(...lanes.map((lane) => {
@@ -1648,7 +1671,18 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const socText = socEntity && !["unknown", "unavailable"].includes(socEntity.state)
         ? this._value(socEntity)
         : "";
-      return `<section class="live-flow-group"><h3>${this._escape(source.name || this._t("system"))}</h3><div class="live-flow-lanes">${lanes.map((lane) => this._liveFlowLane(lane, maxWatts, socText)).join("")}</div></section>`;
+      const leftLanes = lanes.filter((lane) => lane.side === "left");
+      const rightLanes = lanes.filter((lane) => lane.side === "right");
+      const fullLanes = lanes.filter((lane) => lane.side === "full");
+      const rowCount = Math.max(leftLanes.length, rightLanes.length, 1);
+      const branches = [
+        ...leftLanes.map((lane, index) => this._liveFlowBranch(lane, maxWatts, socText, "left", index + 1)),
+        ...rightLanes.map((lane, index) => this._liveFlowBranch(lane, maxWatts, socText, "right", index + 1)),
+      ].join("");
+      const hub = `<div class="live-flow-hub" style="grid-row:1 / ${rowCount + 1}">${this._liveFlowNode("node_bus")}</div>`;
+      const map = `<div class="live-flow-map" style="--flow-rows:${rowCount}">${branches}${hub}</div>`;
+      const separateFlows = fullLanes.map((lane) => this._liveFlowBranch(lane, maxWatts, socText, "full")).join("");
+      return `<section class="live-flow-group"><h3>${this._escape(source.name || this._t("system"))}</h3>${map}${separateFlows ? `<div class="live-flow-separate">${separateFlows}</div>` : ""}</section>`;
     }).filter(Boolean);
     return groups.length
       ? `<div class="live-flow-overview">${groups.join("")}<p class="live-flow-note">${this._escape(this._t("energy_flow_hint"))}</p></div>`
@@ -1791,6 +1825,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .pack-flow{position:absolute;z-index:0;inset:5px;overflow:hidden;border-radius:4px;clip-path:inset(0 calc(100% - var(--soc-level)) 0 0 round 4px);pointer-events:none}.soap-bubble-track{position:absolute;inset:0 auto 0 0;display:flex;width:200%;height:100%;will-change:transform;animation-delay:var(--flow-delay,0s);animation-duration:8s;animation-timing-function:linear;animation-iteration-count:infinite}.pack-card[data-flow="charge"] .soap-bubble-track{animation-name:soap-bubbles-right}.pack-card[data-flow="discharge"] .soap-bubble-track{animation-name:soap-bubbles-left}.soap-bubble-run{position:relative;flex:0 0 50%;height:100%;overflow:hidden}.soap-bubble{position:absolute;bottom:9%;left:var(--bubble-x);width:var(--bubble-size);aspect-ratio:1;border:1px solid rgba(217,251,255,.72);border-radius:50%;background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.38),rgba(151,238,255,.12) 32%,rgba(186,142,255,.14) 67%,rgba(255,255,255,.04));box-shadow:inset -2px -2px 4px rgba(145,204,255,.22),inset 2px 2px 3px rgba(255,255,255,.28),0 0 5px rgba(123,226,255,.32);opacity:.68}.soap-bubble::after{content:"";position:absolute;top:15%;left:23%;width:25%;height:15%;border-radius:50%;background:rgba(255,255,255,.62);filter:blur(.5px)}.soap-bubble[data-bubble="1"]{--bubble-x:7%;--bubble-size:13px;bottom:16%}.soap-bubble[data-bubble="2"]{--bubble-x:21%;--bubble-size:9px;bottom:48%}.soap-bubble[data-bubble="3"]{--bubble-x:38%;--bubble-size:16px;bottom:25%}.soap-bubble[data-bubble="4"]{--bubble-x:55%;--bubble-size:10px;bottom:58%}.soap-bubble[data-bubble="5"]{--bubble-x:72%;--bubble-size:14px;bottom:38%}.soap-bubble[data-bubble="6"]{--bubble-x:89%;--bubble-size:8px;bottom:19%}@keyframes soap-bubbles-right{from{transform:translateX(-50%)}to{transform:translateX(0)}}@keyframes soap-bubbles-left{from{transform:translateX(0)}to{transform:translateX(-50%)}}@media(prefers-reduced-motion:reduce){.soap-bubble-track{animation:none;transform:none;will-change:auto}}
         .live-flow-overview{display:grid;gap:11px}.live-flow-group{min-width:0;padding:13px;border:1px solid #343a40;border-radius:11px;background:#202428}.live-flow-group h3{margin:0 0 9px;color:#c7cbd0;font-size:13px}.live-flow-lanes{display:grid;gap:5px}.live-flow-row{display:grid;grid-template-columns:minmax(100px,.8fr) minmax(100px,1.7fr) minmax(100px,.8fr) minmax(78px,.55fr);gap:12px;align-items:center;padding:8px 5px;border-bottom:1px solid var(--line);border-radius:7px}.live-flow-row:last-child{border-bottom:0}.live-flow-node{min-width:0;display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid #41464b;border-radius:9px;background:#272b2f}.live-flow-node>span{min-width:0}.live-flow-node strong{display:block;overflow-wrap:anywhere;font-size:13px}.live-flow-node small{display:block;margin-top:3px;color:var(--muted);font-size:10px}.live-flow-icon{flex:none;width:27px;height:27px;color:var(--flow-accent,#16c4df);fill:currentColor;filter:drop-shadow(0 0 6px currentColor);opacity:.88}.live-flow-icon g{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7}.live-flow-route{min-width:0;display:grid;gap:5px;color:var(--flow-accent,#16c4df)}.live-flow-route>small:first-child{color:#c3c7ca;font-size:11px;overflow-wrap:anywhere}.live-flow-track{position:relative;display:flex;align-items:center;justify-content:center;height:11px;border-radius:999px;background:#30353a;overflow:hidden}.live-flow-track>i{position:absolute;inset:0 auto 0 0;max-width:100%;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df));box-shadow:0 0 9px color-mix(in srgb,var(--flow-accent,#16c4df) 50%,transparent)}.live-flow-track>span{position:relative;z-index:1;color:#f0f2f3;font-size:15px;line-height:11px;text-shadow:0 1px 4px #111}.live-flow-route.reverse .live-flow-track>i{left:auto;right:0;background:linear-gradient(270deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df))}.live-flow-route.idle .live-flow-track>i,.live-flow-route.unavailable .live-flow-track>i{display:none}.live-flow-route.unavailable .live-flow-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.live-flow-status{color:var(--muted);font-size:10px}.live-flow-value{color:#e7e9eb;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}.live-flow-row[data-flow="pv"],.live-flow-row[data-flow="native-pv"]{--flow-accent:#56cf83}.live-flow-row[data-flow="battery"]{--flow-accent:#f0c34e}.live-flow-row[data-flow="grid"],.live-flow-row[data-flow="grid-import"],.live-flow-row[data-flow="grid-export"]{--flow-accent:#f06b6b}.live-flow-row[data-flow="house"]{--flow-accent:#16c4df}.live-flow-row[data-flow="offgrid"]{--flow-accent:#30c9d4}.live-flow-note{margin:2px 2px 0;color:var(--muted);font-size:11px;line-height:1.45}@media(max-width:620px){.live-flow-row{grid-template-columns:minmax(82px,.9fr) minmax(72px,1.2fr) minmax(82px,.9fr) minmax(64px,.6fr);gap:6px;padding:7px 2px}.live-flow-node{gap:5px;padding:7px 6px}.live-flow-icon{width:21px;height:21px}.live-flow-node strong{font-size:11px}.live-flow-value{font-size:12px}}@media(max-width:390px){.live-flow-row{grid-template-columns:minmax(0,1fr) auto;gap:5px}.live-flow-route{grid-column:1/-1;grid-row:2}.live-flow-row .live-flow-node:nth-of-type(2){grid-column:1;grid-row:3}.live-flow-value{grid-column:2;grid-row:1}.live-flow-node{min-height:42px}.live-flow-node strong{font-size:12px}}
         @media(max-width:390px){.live-flow-row>.live-flow-node:nth-child(3){grid-column:2;grid-row:3}}.live-flow-track>i{background:linear-gradient(90deg,rgba(255,255,255,.18),var(--flow-accent,#16c4df));box-shadow:0 0 9px var(--flow-accent,#16c4df)}.live-flow-route.reverse .live-flow-track>i{background:linear-gradient(270deg,rgba(255,255,255,.18),var(--flow-accent,#16c4df))}
+        .live-flow-map{display:grid;position:relative;isolation:isolate;grid-template-columns:minmax(110px,.78fr) minmax(90px,1.42fr) minmax(120px,.74fr) minmax(90px,1.42fr) minmax(110px,.78fr);grid-template-rows:repeat(var(--flow-rows),minmax(78px,auto));gap:10px 9px;align-items:center}.live-flow-branch{z-index:1;min-width:0;display:grid;align-items:center;gap:10px}.live-flow-branch.side-left{grid-column:1/3;grid-row:var(--flow-row);grid-template-columns:minmax(110px,.78fr) minmax(0,1.42fr)}.live-flow-branch.side-right{grid-column:4/6;grid-row:var(--flow-row);grid-template-columns:minmax(0,1.42fr) minmax(110px,.78fr)}.live-flow-hub{position:relative;z-index:1;grid-column:3;display:grid;align-items:center;justify-items:center;min-width:0}.live-flow-hub::before{content:"";position:absolute;z-index:-1;top:0;bottom:0;left:calc(50% - 2px);width:4px;border-radius:4px;background:#454b50}.live-flow-hub .live-flow-node{box-sizing:border-box;width:100%;justify-content:center;background:#202428;border-color:#596168}.live-flow-node{box-sizing:border-box}.live-flow-connection{min-width:0;display:grid;gap:5px}.live-flow-measure{min-width:0;display:flex;justify-content:space-between;align-items:baseline;gap:6px}.live-flow-measure small{min-width:0;overflow-wrap:anywhere;color:#c3c7ca;font-size:10px}.live-flow-measure strong{flex:none;color:#e7e9eb;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}.live-flow-track{position:relative;display:flex;align-items:center;justify-content:center;box-sizing:border-box;height:var(--flow-width,6px);min-height:4px;border:1px solid #596168;border-radius:999px;background:#454b50;overflow:hidden}.live-flow-track::after{content:"";position:absolute;inset:0;background-image:repeating-linear-gradient(110deg,transparent 0 9px,color-mix(in srgb,var(--flow-accent,#16c4df) 90%,white) 9px 13px,transparent 13px 22px);background-size:34px 100%;background-repeat:repeat-x;opacity:0;animation:live-flow-streaks var(--flow-duration,1.6s) linear infinite;will-change:background-position}.live-flow-track.forward::after,.live-flow-track.reverse::after{opacity:.92}.live-flow-track.reverse::after{animation-direction:reverse}.live-flow-arrow{position:absolute;z-index:1;color:#eef1f2;font-size:13px;line-height:1;text-shadow:0 1px 4px #111}.live-flow-track.idle{border-color:#626970;background:#51575d;box-shadow:none}.live-flow-track.idle .live-flow-arrow{color:#9ba1a6;text-shadow:none}.live-flow-track.unavailable{border-color:#454b50;background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.live-flow-track.unavailable .live-flow-arrow{color:#858c91;text-shadow:none}.live-flow-status{color:var(--muted);font-size:10px}.live-flow-branch[data-flow="pv"],.live-flow-branch[data-flow="native-pv"]{--flow-accent:#56cf83}.live-flow-branch[data-flow="battery"]{--flow-accent:#f0c34e}.live-flow-branch[data-flow="grid"],.live-flow-branch[data-flow="grid-import"],.live-flow-branch[data-flow="grid-export"]{--flow-accent:#f06b6b}.live-flow-branch[data-flow="house"]{--flow-accent:#16c4df}.live-flow-branch[data-flow="offgrid"]{--flow-accent:#30c9d4}.live-flow-separate{margin-top:10px}.live-flow-branch.side-full{grid-template-columns:minmax(110px,.78fr) minmax(90px,1.42fr) minmax(110px,.78fr)}@keyframes live-flow-streaks{to{background-position:34px 0}}@media(max-width:760px){.live-flow-map{grid-template-columns:minmax(0,1fr);grid-template-rows:auto;gap:8px}.live-flow-hub{grid-column:1;grid-row:1!important}.live-flow-hub::before{display:none}.live-flow-branch.side-left,.live-flow-branch.side-right{grid-column:1;grid-row:auto;grid-template-columns:minmax(105px,.8fr) minmax(0,1.2fr)}.live-flow-branch.side-right{grid-template-columns:minmax(0,1.2fr) minmax(105px,.8fr)}.live-flow-branch.side-full{grid-template-columns:minmax(95px,.8fr) minmax(0,1.2fr) minmax(95px,.8fr)}}@media(prefers-reduced-motion:reduce){.live-flow-track::after{animation:none;will-change:auto;background-position:0 0}}
+        .live-flow-track::after{animation:none;will-change:auto}.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:live-flow-streaks var(--flow-duration,1.6s) linear infinite;will-change:background-position}.live-flow-track.reverse::after{animation-direction:reverse}@media(prefers-reduced-motion:reduce){.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:none;will-change:auto;background-position:0 0}}
       </style>
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
