@@ -2,33 +2,59 @@
 from __future__ import annotations
 
 import ast
+import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-import unittest
-import voluptuous as vol
 
+import voluptuous as vol
 from support import bootstrap
+
 bootstrap()
 
-from custom_components.battery_smartflow_ai import const
-from custom_components.battery_smartflow_ai.core.models import MeasuredValue, ValueValidity
-from custom_components.battery_smartflow_ai.native_capacity import native_capacity, pack_capacity_kwh
-from custom_components.battery_smartflow_ai.native_device_overview import _difference, _pack_status
-from custom_components.battery_smartflow_ai.native_source_fusion import NativeSourceFusion
-from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import preferred_local_transport, resolve_zendure_device
-from custom_components.battery_smartflow_ai.hardware.shelly_pro_3em import validate_shelly_host
-from custom_components.battery_smartflow_ai.native_config_ui import native_device_label, native_device_summary_line
-from custom_components.battery_smartflow_ai.price_currency import price_input_profile, resolve_price_currency
-from custom_components.battery_smartflow_ai.device_profiles import DEVICE_PROFILE_MODELS
-from test_native_source_fusion import make_bootstrap, report
 from test_native_device_overview import observed_pack
+from test_native_source_fusion import make_bootstrap, report
+
+from custom_components.battery_smartflow_ai import const
+from custom_components.battery_smartflow_ai.core.models import (
+    MeasuredValue,
+    ValueValidity,
+)
+from custom_components.battery_smartflow_ai.device_profiles import DEVICE_PROFILE_MODELS
+from custom_components.battery_smartflow_ai.hardware.shelly_pro_3em import (
+    validate_shelly_host,
+)
+from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (
+    preferred_local_transport,
+    resolve_zendure_device,
+)
+from custom_components.battery_smartflow_ai.native_capacity import (
+    native_capacity,
+    pack_capacity_kwh,
+)
+from custom_components.battery_smartflow_ai.native_config_ui import (
+    native_device_label,
+    native_device_summary_line,
+)
+from custom_components.battery_smartflow_ai.native_device_overview import (
+    _difference,
+    _pack_status,
+)
+from custom_components.battery_smartflow_ai.native_source_fusion import (
+    NativeSourceFusion,
+)
+from custom_components.battery_smartflow_ai.price_currency import (
+    price_input_profile,
+    resolve_price_currency,
+)
 
 
 class NativeCapacityTests(unittest.TestCase):
     def test_mixed_packs_and_no_arbitrary_count_limit(self):
         packs = [observed_pack(f"F02N-test-{n}", "main") for n in range(9)]
-        packs.append(observed_pack("C04E-test", "main"))
+        ab2000x = observed_pack("C04E-test", "main")
+        ab2000x.pack_type = MeasuredValue.absent(ValueValidity.MISSING)
+        packs.append(ab2000x)
         result = native_capacity(SimpleNamespace(packs=packs))
         self.assertEqual(result.pack_count, 10)
         self.assertEqual(result.capacity_kwh, 27.84)
@@ -36,6 +62,7 @@ class NativeCapacityTests(unittest.TestCase):
     def test_missing_unknown_and_incomplete_are_not_zero_capacity(self):
         self.assertIsNone(native_capacity(None).pack_count)
         pack = observed_pack("Unknown-serial", "main")
+        pack.pack_type = MeasuredValue.absent(ValueValidity.MISSING)
         self.assertEqual(native_capacity(SimpleNamespace(packs=[pack])).reason, "unknown_pack_profile")
         self.assertIsNone(native_capacity(SimpleNamespace(packs=[pack]), 2).capacity_kwh)
 
@@ -46,7 +73,7 @@ class NativeCapacityTests(unittest.TestCase):
 
     def test_internal_large_pack_is_not_mistaken_for_ab1000(self):
         self.assertEqual(pack_capacity_kwh("B000-test", "70"), 8.0)
-        self.assertIsNone(pack_capacity_kwh(None, "5"))
+        self.assertEqual(pack_capacity_kwh(None, "5"), 2.88)
 
     def test_derived_values_keep_valid_zero_and_unknown_codes(self):
         self.assertEqual(_difference(MeasuredValue.available(3.22), MeasuredValue.available(3.21)).value, 0.01)

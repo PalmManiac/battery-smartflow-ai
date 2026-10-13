@@ -46,7 +46,7 @@ _SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.40"
+DASHBOARD_VERSION = "1.0.41"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -211,6 +211,11 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             "grid_import": data.get(CONF_GRID_IMPORT_ENTITY),
             "grid_export": data.get(CONF_GRID_EXPORT_ENTITY),
             "offgrid_power": data.get(CONF_OFFGRID_POWER_ENTITY),
+            "house_load": entity_registry.async_get_entity_id(
+                "sensor",
+                DOMAIN,
+                f"{DOMAIN}_{entry.entry_id}_house_load",
+            ),
         }
         if data.get("grid_mode") in (
             GRID_MODE_SHELLY_PRO_3EM,
@@ -315,7 +320,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="BSFAI Portal",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=49",
+        module_url=f"{_PANEL_URL}?v=50",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,
