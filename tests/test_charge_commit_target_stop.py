@@ -8,6 +8,7 @@ from pathlib import Path
 from custom_components.battery_smartflow_ai.charge_commit_policy import (
     automatic_peak_reserve_abort_reason,
     completed_charge_stop_decision,
+    strategic_reserve_price_conflict,
 )
 from custom_components.battery_smartflow_ai.decision_engine import DecisionResult
 from custom_components.battery_smartflow_ai.strategy_state import ChargeCommitState
@@ -174,6 +175,64 @@ class AutomaticPeakReserveAbortTests(unittest.TestCase):
 
         self.assertIn("automatic_peak_reserve_abort_reason(", abort_method)
         self.assertIn("automatic_peak_reserve_allowed", abort_method)
+
+    def test_target_completion_precedes_hysteresis_abort(self) -> None:
+        coordinator = (
+            Path(__file__).resolve().parents[1]
+            / "custom_components"
+            / "battery_smartflow_ai"
+            / "coordinator.py"
+        ).read_text(encoding="utf-8")
+        abort_start = coordinator.index(
+            "def _charge_commit_abort_reason("
+        )
+        abort_end = coordinator.index(
+            "def _committed_charge_decision(", abort_start
+        )
+        abort_method = coordinator[abort_start:abort_end]
+
+        target_check = abort_method.index(
+            "if float(soc) >= effective_target_soc - 0.2:"
+        )
+        reserve_check = abort_method.index(
+            "peak_reserve_abort_reason = automatic_peak_reserve_abort_reason("
+        )
+        self.assertLess(target_check, reserve_check)
+
+
+class StrategicReservePriceConflictTests(unittest.TestCase):
+    def test_configured_force_discharge_price_blocks_reserve(self) -> None:
+        self.assertTrue(
+            strategic_reserve_price_conflict(
+                reason="summer_peak_reserve_charge",
+                price_now=0.3545,
+                effective_discharge_threshold=0.369,
+                very_expensive_threshold=0.25,
+                tolerance=0.001,
+            )
+        )
+
+    def test_effective_discharge_price_still_blocks_reserve(self) -> None:
+        self.assertTrue(
+            strategic_reserve_price_conflict(
+                reason="summer_peak_reserve_charge",
+                price_now=0.370,
+                effective_discharge_threshold=0.369,
+                very_expensive_threshold=0.40,
+                tolerance=0.001,
+            )
+        )
+
+    def test_other_charge_sources_are_not_affected(self) -> None:
+        self.assertFalse(
+            strategic_reserve_price_conflict(
+                reason="learned_charge_window_active",
+                price_now=0.50,
+                effective_discharge_threshold=0.3,
+                very_expensive_threshold=0.25,
+                tolerance=0.001,
+            )
+        )
 
 
 if __name__ == "__main__":

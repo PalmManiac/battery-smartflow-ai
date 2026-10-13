@@ -83,6 +83,54 @@ def automatic_peak_reserve_abort_reason(
     return None
 
 
+def strategic_reserve_price_conflict(
+    *,
+    reason: str,
+    price_now: float | None,
+    effective_discharge_threshold: float | None,
+    very_expensive_threshold: float | None,
+    tolerance: float,
+) -> bool:
+    """Return whether discretionary reserve charging conflicts with discharge.
+
+    Reserve charging must yield both at the configured forced-discharge price
+    and inside the effective economic-discharge window.
+    """
+    if str(reason or "") != "summer_peak_reserve_charge":
+        return False
+
+    try:
+        current_price = float(price_now)
+    except (TypeError, ValueError):
+        return False
+
+    try:
+        forced_discharge_threshold = float(very_expensive_threshold)
+    except (TypeError, ValueError):
+        forced_discharge_threshold = None
+
+    if (
+        forced_discharge_threshold is not None
+        and current_price >= forced_discharge_threshold
+    ):
+        return True
+
+    try:
+        discharge_threshold = float(effective_discharge_threshold)
+    except (TypeError, ValueError):
+        return False
+
+    if discharge_threshold <= 0.0:
+        return False
+
+    try:
+        margin = max(0.0, float(tolerance))
+    except (TypeError, ValueError):
+        margin = 0.0
+
+    return current_price >= discharge_threshold + margin
+
+
 def learned_plan_charge_need_satisfied(
     *,
     commit_type: str,
