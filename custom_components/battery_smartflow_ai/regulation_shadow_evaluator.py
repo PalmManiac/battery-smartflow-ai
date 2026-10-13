@@ -9,6 +9,7 @@ promise of real-world improvement.
 from __future__ import annotations
 
 import math
+from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -19,6 +20,7 @@ from .regulation_training import RegulationProfileState
 
 MIN_DIRECTION_SAMPLES = 60
 MIN_RESPONSE_EVENTS = 3
+MIN_EVALUATION_CONFIDENCE = 0.35
 MIN_RELATIVE_IMPROVEMENT = 0.03
 MAX_REPLAY_OVERSHOOT_RATE = 0.10
 _GAIN_FACTORS = (0.8, 0.9, 1.0, 1.1, 1.2)
@@ -32,6 +34,13 @@ class ShadowDirectionResult:
     """Measured telemetry and candidate comparison for one direction."""
 
     sample_count: int
+    direction_sample_count: int
+    unchanged_command_sample_count: int
+    rejected_invalid_grid_count: int
+    rejected_missing_error_count: int
+    rejected_command_skip_count: int
+    valid_sample_ratio: float
+    minimum_confidence: float
     response_event_count: int
     confidence: float
     baseline_score: float | None
@@ -41,10 +50,18 @@ class ShadowDirectionResult:
     selected_gain_factor: float | None
     parameters: dict[str, float | None]
     decision: str
+    insufficient_reasons: tuple[str, ...] = ()
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "sample_count": self.sample_count,
+            "direction_sample_count": self.direction_sample_count,
+            "unchanged_command_sample_count": self.unchanged_command_sample_count,
+            "rejected_invalid_grid_count": self.rejected_invalid_grid_count,
+            "rejected_missing_error_count": self.rejected_missing_error_count,
+            "rejected_command_skip_count": self.rejected_command_skip_count,
+            "valid_sample_ratio": self.valid_sample_ratio,
+            "minimum_confidence": self.minimum_confidence,
             "response_event_count": self.response_event_count,
             "confidence": self.confidence,
             "baseline_score": self.baseline_score,
@@ -54,6 +71,7 @@ class ShadowDirectionResult:
             "selected_gain_factor": self.selected_gain_factor,
             "parameters": dict(self.parameters),
             "decision": self.decision,
+            "insufficient_reasons": list(self.insufficient_reasons),
         }
 
 
@@ -67,17 +85,58 @@ def _number(value: Any) -> float | None:
     return parsed if math.isfinite(parsed) else None
 
 
-def _active_samples(
+def _command_is_usable_observation(sample: Mapping[str, Any]) -> bool:
+    """Keep observations when an active command was unchanged, not blocked.
+
+    Older persisted training samples do not contain ``command_skip_reason``.
+    An active directional command with a non-zero request could only be
+    skipped by the input/output command builder because it was unchanged
+    within tolerance, so infer that specific legacy case conservatively.
+    """
+
+    skipped = sample.get("command_skipped")
+    if skipped is False:
+        return True
+    if skipped is not True:
+        return False
+    if sample.get("command_skip_reason") == "unchanged_within_tolerance":
+        return _sample_direction(sample) is not None
+    if "command_skip_reason" not in sample:
+        return _sample_direction(sample) is not None
+    return False
+
+
+def _direction_sample_quality(
     samples: list[Mapping[str, Any]], direction: str
-) -> list[Mapping[str, Any]]:
-    return [
-        sample
-        for sample in samples
-        if sample.get("direction") == direction
-        and sample.get("grid_valid") is True
-        and sample.get("command_skipped") is False
-        and _number(sample.get("grid_error_w")) is not None
+) -> tuple[list[Mapping[str, Any]], dict[str, int]]:
+    direction_samples = [
+        sample for sample in samples if sample.get("direction") == direction
     ]
+    usable: list[Mapping[str, Any]] = []
+    unchanged_command_count = 0
+    invalid_grid_count = 0
+    missing_error_count = 0
+    skipped_command_count = 0
+    for sample in direction_samples:
+        if sample.get("grid_valid") is not True:
+            invalid_grid_count += 1
+            continue
+        if _number(sample.get("grid_error_w")) is None:
+            missing_error_count += 1
+            continue
+        if not _command_is_usable_observation(sample):
+            skipped_command_count += 1
+            continue
+        usable.append(sample)
+        if sample.get("command_skipped") is True:
+            unchanged_command_count += 1
+    return usable, {
+        "direction_sample_count": len(direction_samples),
+        "unchanged_command_sample_count": unchanged_command_count,
+        "rejected_invalid_grid_count": invalid_grid_count,
+        "rejected_missing_error_count": missing_error_count,
+        "rejected_command_skip_count": skipped_command_count,
+    }
 
 
 def _response_events(samples: list[Mapping[str, Any]]) -> int:
@@ -142,12 +201,9 @@ def _direction_score(
 def _evaluate_direction(
     samples: list[Mapping[str, Any]], direction: str
 ) -> ShadowDirectionResult:
-    usable = _active_samples(samples, direction)
+    usable, quality = _direction_sample_quality(samples, direction)
     events = _response_events(usable)
-    valid_ratio = len(usable) / max(
-        1,
-        sum(1 for item in samples if item.get("direction") == direction),
-    )
+    valid_ratio = len(usable) / max(1, quality["direction_sample_count"])
     confidence = min(1.0, len(usable) / 120.0) * min(1.0, events / 8.0) * valid_ratio
     parameters: dict[str, float | None] = {
         "kp_up": None,
@@ -156,14 +212,27 @@ def _evaluate_direction(
         "max_step_down_w": None,
     }
     baseline = _direction_score(usable, gain_factor=1.0)
-    if (
-        len(usable) < MIN_DIRECTION_SAMPLES
-        or events < MIN_RESPONSE_EVENTS
-        or confidence < 0.35
-        or baseline is None
-    ):
+    insufficient_reasons = []
+    if len(usable) < MIN_DIRECTION_SAMPLES:
+        insufficient_reasons.append("too_few_samples")
+    if events < MIN_RESPONSE_EVENTS:
+        insufficient_reasons.append("too_few_response_events")
+    if confidence < MIN_EVALUATION_CONFIDENCE:
+        insufficient_reasons.append("confidence_below_threshold")
+    if baseline is None:
+        insufficient_reasons.append("missing_baseline")
+    if insufficient_reasons:
         return ShadowDirectionResult(
             sample_count=len(usable),
+            direction_sample_count=quality["direction_sample_count"],
+            unchanged_command_sample_count=quality[
+                "unchanged_command_sample_count"
+            ],
+            rejected_invalid_grid_count=quality["rejected_invalid_grid_count"],
+            rejected_missing_error_count=quality["rejected_missing_error_count"],
+            rejected_command_skip_count=quality["rejected_command_skip_count"],
+            valid_sample_ratio=round(valid_ratio, 3),
+            minimum_confidence=MIN_EVALUATION_CONFIDENCE,
             response_event_count=events,
             confidence=round(confidence, 3),
             baseline_score=round(baseline[0], 2) if baseline else None,
@@ -173,6 +242,7 @@ def _evaluate_direction(
             selected_gain_factor=None,
             parameters=parameters,
             decision="insufficient_data",
+            insufficient_reasons=tuple(insufficient_reasons),
         )
 
     candidates = [
@@ -227,6 +297,15 @@ def _evaluate_direction(
         }
     return ShadowDirectionResult(
         sample_count=len(usable),
+        direction_sample_count=quality["direction_sample_count"],
+        unchanged_command_sample_count=quality[
+            "unchanged_command_sample_count"
+        ],
+        rejected_invalid_grid_count=quality["rejected_invalid_grid_count"],
+        rejected_missing_error_count=quality["rejected_missing_error_count"],
+        rejected_command_skip_count=quality["rejected_command_skip_count"],
+        valid_sample_ratio=round(valid_ratio, 3),
+        minimum_confidence=MIN_EVALUATION_CONFIDENCE,
         response_event_count=events,
         confidence=round(confidence, 3),
         baseline_score=round(baseline[0], 2),
@@ -248,6 +327,31 @@ def _sample_direction(sample: Mapping[str, Any]) -> tuple[str, float] | None:
         return "charge", charge
     if discharge > 0.0 and charge <= 0.0:
         return "discharge", discharge
+    return None
+
+
+def _reversal_ineligibility_reason(sample: Mapping[str, Any]) -> str | None:
+    """Return the first reason a command is unsafe to delay in the shadow."""
+
+    if sample.get("ai_mode") != "automatic":
+        return "not_automatic"
+    if sample.get("manual_action") != "standby":
+        return "manual_action"
+    if sample.get("strategy_intent") not in {"pv_charge", "cover_deficit"}:
+        return "strategy_not_pv_or_load"
+    if sample.get("strategy_force") is not False:
+        return "forced_or_unknown_strategy"
+    priority = _number(sample.get("strategy_priority"))
+    if priority is None or priority > MAX_AUTOMATIC_STRATEGY_PRIORITY:
+        return "priority_missing_or_high"
+    if sample.get("mode_allowed") is not True:
+        return "mode_change_denied"
+    if sample.get("discharge_allowed") is not True:
+        return "discharge_protection"
+    if sample.get("grid_valid") is not True:
+        return "invalid_grid"
+    if not _command_is_usable_observation(sample):
+        return "command_not_observable"
     return None
 
 
@@ -276,19 +380,16 @@ def _reversal_hysteresis_shadow(
     timed.sort(key=lambda item: item[0])
 
     def eligible(sample: Mapping[str, Any]) -> bool:
-        return (
-            sample.get("ai_mode") == "automatic"
-            and sample.get("manual_action") == "standby"
-            and sample.get("strategy_intent") in {"pv_charge", "cover_deficit"}
-            and sample.get("strategy_force") is False
-            and _number(sample.get("strategy_priority")) is not None
-            and _number(sample.get("strategy_priority"))
-            <= MAX_AUTOMATIC_STRATEGY_PRIORITY
-            and sample.get("mode_allowed") is True
-            and sample.get("discharge_allowed") is True
-            and sample.get("grid_valid") is True
-            and sample.get("command_skipped") is False
-        )
+        return _reversal_ineligibility_reason(sample) is None
+
+    direction_samples = [
+        sample for _, sample in timed if _sample_direction(sample) is not None
+    ]
+    exclusion_counts: Counter[str] = Counter()
+    for sample in direction_samples:
+        reason = _reversal_ineligibility_reason(sample)
+        if reason is not None:
+            exclusion_counts[reason] += 1
 
     eligible_samples = 0
     observed_reversals = 0
@@ -296,6 +397,7 @@ def _reversal_hysteresis_shadow(
     override_reversals = 0
     held_reversals = 0
     released_reversals = 0
+    unchanged_command_samples = 0
     held_seconds = 0.0
     held_energy_ws = 0.0
     max_hold_seconds = 0.0
@@ -318,6 +420,8 @@ def _reversal_hysteresis_shadow(
         is_eligible = eligible(sample)
         if is_eligible:
             eligible_samples += 1
+            if sample.get("command_skipped") is True:
+                unchanged_command_samples += 1
         if previous is None:
             if is_eligible:
                 locked_direction = direction
@@ -396,7 +500,10 @@ def _reversal_hysteresis_shadow(
         "method": "automatic_reversal_watt_seconds_shadow_v1",
         "threshold_watt_seconds": REVERSAL_THRESHOLD_WATT_SECONDS,
         "sample_count": len(timed),
+        "direction_sample_count": len(direction_samples),
         "eligible_sample_count": eligible_samples,
+        "unchanged_command_sample_count": unchanged_command_samples,
+        "eligibility_exclusion_counts": dict(sorted(exclusion_counts.items())),
         "observed_reversal_count": observed_reversals,
         "eligible_reversal_count": eligible_reversals,
         "override_reversal_count": override_reversals,

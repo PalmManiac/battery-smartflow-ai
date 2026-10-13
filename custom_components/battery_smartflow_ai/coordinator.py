@@ -2082,6 +2082,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if isinstance(evaluation, dict):
             direction_fields = (
                 "sample_count",
+                "direction_sample_count",
+                "unchanged_command_sample_count",
+                "rejected_invalid_grid_count",
+                "rejected_missing_error_count",
+                "rejected_command_skip_count",
+                "valid_sample_ratio",
+                "minimum_confidence",
                 "response_event_count",
                 "confidence",
                 "baseline_score",
@@ -2091,6 +2098,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "selected_gain_factor",
                 "parameters",
                 "decision",
+                "insufficient_reasons",
             )
             public_evaluation = {
                 key: evaluation[key]

@@ -191,6 +191,7 @@ class TrainingSample:
     grid_valid: bool
     pv_valid: bool
     command_skipped: bool
+    command_skip_reason: str | None = None
     grid_error_w: float | None = None
     target_import_w: float | None = None
     baseline_kp_up: float | None = None
@@ -217,6 +218,7 @@ class TrainingSample:
                 in {
                     "timestamp",
                     "direction",
+                    "command_skip_reason",
                     "ai_mode",
                     "manual_action",
                     "strategy_intent",
@@ -436,6 +438,11 @@ class PassiveTrainingRecorder:
             grid_valid=bool(details.get("grid_sensor_valid")),
             pv_valid=bool(details.get("pv_sensor_valid")),
             command_skipped=bool(details.get("regulation_command_skipped")),
+            command_skip_reason=(
+                str(details["regulation_command_skip_reason"])
+                if details.get("regulation_command_skip_reason")
+                else None
+            ),
             grid_error_w=_finite_number(details.get("regulation_error_w")),
             target_import_w=_finite_number(
                 details.get("regulation_target_import_w")
