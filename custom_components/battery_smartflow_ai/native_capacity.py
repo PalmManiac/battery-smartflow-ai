@@ -28,12 +28,16 @@ class NativePackProfile:
 def resolve_pack_profile(
     serial: str | None,
     pack_type: str | int | None,
-    parent_model: str | None = None,
 ) -> NativePackProfile | None:
-    """Resolve serial evidence first, then field-confirmed pack-type fallback."""
+    """Resolve the confirmed type-5 model before serial and other type evidence."""
 
     normalized_serial = str(serial or "").strip().upper()
     normalized_type = str(pack_type).strip() if pack_type is not None else ""
+    # Type 5 identifies AB3000X. Prefer this confirmed telemetry over the older
+    # generic F-serial mapping (AB3000), which does not distinguish the X variant.
+    if normalized_type == "5":
+        return NativePackProfile("AB3000X", 2.88, "pack_type")
+
     if len(normalized_serial) >= 4:
         prefix = normalized_serial[0]
         if prefix == "A":
@@ -60,18 +64,12 @@ def resolve_pack_profile(
             model, capacity = serial_profiles[prefix]
             return NativePackProfile(model, capacity, "serial")
 
-    normalized_parent = "".join(
-        character for character in (parent_model or "").casefold()
-        if character.isalnum()
-    )
     type_profiles = {
         "70": ("I8000", 8.0),
         "250": ("AB1000", 0.96),
         "300": ("AB2000S / AB2000X", 1.92),
         "500": ("I2400", 2.4),
     }
-    if normalized_type == "5" and normalized_parent == "solarflow2400ac":
-        return NativePackProfile("AB3000X", 2.88, "pack_type_and_parent")
     if normalized_type in type_profiles:
         model, capacity = type_profiles[normalized_type]
         return NativePackProfile(model, capacity, "pack_type")
