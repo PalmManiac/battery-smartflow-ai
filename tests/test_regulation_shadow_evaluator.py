@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 from custom_components.battery_smartflow_ai.regulation_shadow_evaluator import (
     evaluate_training_session,
+    evaluate_training_sessions,
 )
 
 
@@ -53,6 +54,10 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
             samples.append(
                 {
                     "direction": "charge",
+                    "ai_mode": "automatic",
+                    "manual_action": "standby",
+                    "strategy_intent": "pv_charge",
+                    "strategy_force": False,
                     "grid_valid": True,
                     "command_skipped": skipped,
                     "grid_error_w": 500.0,
@@ -160,6 +165,17 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
         self.assertAlmostEqual(result["estimated_withheld_energy_wh"], 0.833)
         self.assertFalse(result["live_parameters_changed"])
 
+    def test_pv_charge_priority_500_is_eligible_for_reversal_shadow(self) -> None:
+        samples = self._reversal_samples()
+        samples[0]["strategy_priority"] = 500
+
+        result = evaluate_training_session({"samples": samples})[
+            "reversal_hysteresis"
+        ]
+
+        self.assertEqual(result["eligible_reversal_count"], 1)
+        self.assertEqual(result["eligibility_exclusion_counts"], {})
+
     def test_manual_reversal_is_counted_as_override_not_delayed(self) -> None:
         result = evaluate_training_session(
             {"samples": self._reversal_samples(override_at_reversal=True)}
@@ -180,6 +196,78 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
         self.assertEqual(result["eligible_sample_count"], 45)
         self.assertEqual(result["unchanged_command_sample_count"], 45)
         self.assertEqual(result["eligible_reversal_count"], 1)
+
+    def test_fixed_ac_charge_does_not_train_pv_charge_profile(self) -> None:
+        samples = self._samples()
+        for sample in samples:
+            sample["strategy_intent"] = "planned_charge"
+
+        result = evaluate_training_session({"samples": samples})
+
+        self.assertEqual(result["charge"]["sample_count"], 0)
+        self.assertEqual(result["charge"]["rejected_context_count"], 60)
+        self.assertEqual(
+            result["charge_context_counts"],
+            {"pv_regulation": 0, "fixed_or_other": 60},
+        )
+
+    def test_pv_charge_in_summer_mode_is_still_automatic_regulation_data(self) -> None:
+        samples = self._samples()
+        for sample in samples:
+            sample["ai_mode"] = "summer"
+
+        result = evaluate_training_session({"samples": samples})["charge"]
+
+        self.assertEqual(result["sample_count"], 60)
+        self.assertEqual(result["rejected_context_count"], 0)
+
+    def test_ac_context_does_not_create_a_pv_response_event(self) -> None:
+        samples = self._samples()
+        for sample in samples:
+            sample["requested_charge_w"] = 500.0
+        samples[-1]["requested_charge_w"] = 600.0
+        ac_sample = dict(samples[0])
+        ac_sample["strategy_intent"] = "planned_charge"
+        mixed_samples = [*samples[:-1], ac_sample, samples[-1]]
+
+        result = evaluate_training_session({"samples": mixed_samples})["charge"]
+
+        self.assertEqual(result["sample_count"], 60)
+        self.assertEqual(result["response_event_count"], 0)
+
+    def test_compatible_sessions_are_pooled_but_other_profiles_are_excluded(self) -> None:
+        profile_signature = "profile-a"
+        key = {"device_id": "device-a", "transport": "zensdk"}
+        first_samples = self._samples()[:30]
+        second_samples = self._samples()[30:]
+        for sample in (*first_samples, *second_samples):
+            sample["profile_signature"] = profile_signature
+        second_samples[-1]["profile_signature"] = "profile-changed-mid-run"
+        first = {
+            "key": key,
+            "started_at": "2026-10-01T00:00:00+00:00",
+            "profile_signature": profile_signature,
+            "samples": first_samples,
+        }
+        same_profile = {
+            "key": key,
+            "started_at": "2026-10-02T00:00:00+00:00",
+            "profile_signature": profile_signature,
+            "samples": second_samples,
+        }
+        different_profile = {
+            "key": key,
+            "profile_signature": "profile-b",
+            "samples": self._samples(),
+        }
+
+        result = evaluate_training_sessions([first, different_profile, same_profile])
+
+        self.assertEqual(result["sessions_aggregated"], 2)
+        self.assertEqual(result["sessions_available"], 3)
+        self.assertEqual(result["sessions_excluded_incompatible"], 1)
+        self.assertEqual(result["charge"]["sample_count"], 59)
+        self.assertEqual(result["charge"]["rejected_profile_mismatch_count"], 1)
 
 
 if __name__ == "__main__":

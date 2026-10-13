@@ -251,12 +251,14 @@ from .regulation_training import (
     RegulationProfileKey,
     TRAINING_CHECKPOINT_INTERVAL,
     TrainingDirection,
+    compact_training_samples,
     recover_interrupted_training_session,
+    regulation_training_profile_signature,
     retain_training_sessions,
-    training_session_candidate_parameters,
     training_candidate_scope_matches,
+    training_session_candidate_parameters,
 )
-from .regulation_shadow_evaluator import evaluate_training_session
+from .regulation_shadow_evaluator import evaluate_training_sessions
 from .debug_exporter import DebugExportError, export_debug_package
 from .debug_sample_builder import (
     build_debug_sample,
@@ -2087,6 +2089,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "rejected_invalid_grid_count",
                 "rejected_missing_error_count",
                 "rejected_command_skip_count",
+                "rejected_context_count",
+                "rejected_profile_mismatch_count",
                 "valid_sample_ratio",
                 "minimum_confidence",
                 "response_event_count",
@@ -2102,7 +2106,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             public_evaluation = {
                 key: evaluation[key]
-                for key in ("status", "method", "interpretation", "score_unit")
+                for key in (
+                    "status",
+                    "method",
+                    "interpretation",
+                    "score_unit",
+                    "sessions_aggregated",
+                    "sessions_available",
+                    "sessions_excluded_incompatible",
+                    "charge_context_counts",
+                )
                 if key in evaluation
             }
             public_evaluation["live_parameters_changed"] = False
@@ -2150,9 +2163,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return
         sessions = stored.get("sessions")
         if isinstance(sessions, list):
-            self._training_sessions = [
-                item for item in sessions[-5:] if isinstance(item, dict)
-            ]
+            self._training_sessions = retain_training_sessions(
+                [item for item in sessions if isinstance(item, dict)]
+            )
             if self._training_sessions:
                 evaluation = self._training_sessions[-1].get("shadow_evaluation")
                 if isinstance(evaluation, dict):
@@ -2196,8 +2209,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self._training_recorder.active or not self._training_sessions:
             return False
         try:
-            return self._training_sessions[-1].get("key") == self._regulation_training_key().as_dict() and bool(
-                self._candidate_parameters_from_session(self._training_sessions[-1])
+            latest = self._training_sessions[-1]
+            return (
+                latest.get("key") == self._regulation_training_key().as_dict()
+                and latest.get("profile_signature")
+                == regulation_training_profile_signature(self._get_active_profile())
+                and bool(self._candidate_parameters_from_session(latest))
             )
         except (KeyError, TypeError, ValueError):
             return False
@@ -2222,6 +2239,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         key = self._regulation_training_key().as_dict()
         if session.get("key") != key:
             raise ValueError("The latest training candidate belongs to a different device or transport")
+        if session.get("profile_signature") != regulation_training_profile_signature(
+            self._get_active_profile()
+        ):
+            raise ValueError(
+                "The active regulation profile changed after this candidate was evaluated"
+            )
         parameters = self._candidate_parameters_from_session(session)
         options = dict(self.entry.options)
         options[CONF_REGULATION_TRAINING_CANDIDATE] = {
@@ -2287,6 +2310,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             now=self._clock.utc_now(),
             duration_minutes=duration_minutes,
             direction_scope=TrainingDirection(direction),
+            profile_signature=regulation_training_profile_signature(
+                self._get_active_profile()
+            ),
         )
         self._training_last_result = "training"
         self._training_checkpoint_last_at = None
@@ -2316,11 +2342,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     async def _save_regulation_training_session(
         self, session: dict[str, Any], *, interrupted: bool = False
     ) -> None:
-        evaluation = evaluate_training_session(session)
-        session["shadow_evaluation"] = evaluation
+        samples = session.get("samples")
+        if isinstance(samples, list):
+            session["samples"] = compact_training_samples(
+                [item for item in samples if isinstance(item, dict)]
+            )
+            session["stored_sample_count"] = len(session["samples"])
         session["interrupted"] = interrupted
         previous_result = self._training_last_result
         previous_evaluation = self._training_last_evaluation
+        previous_sessions = self._training_sessions
+        self._training_sessions = retain_training_sessions(
+            [*previous_sessions, session]
+        )
+        evaluation = evaluate_training_sessions(self._training_sessions)
+        session["shadow_evaluation"] = evaluation
         self._training_last_result = (
             "interrupted" if interrupted else evaluation["status"]
         )
@@ -2338,10 +2374,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if isinstance(metrics, dict):
                     metrics["confidence"] = outcome["confidence"]
                     metrics["overshoot_rate"] = outcome["overshoot_rate"]
-        previous_sessions = self._training_sessions
-        self._training_sessions = retain_training_sessions(
-            [*previous_sessions, session]
-        )
         try:
             await self._save_regulation_training_state(
                 self._training_sessions, active_session=None
@@ -2434,6 +2466,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             **details,
             "battery_charge_w": observed_charge_w,
             "battery_discharge_w": observed_discharge_w,
+            "training_profile_signature": details.get("training_profile_signature"),
         }
         self._training_recorder.record(
             self._training_recorder.sample_from_details(
@@ -8404,6 +8437,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 
                 "adaptive_peak_active": adaptive_peak_active,
                 "device_profile": self.device_profile_key,
+                "training_profile_signature": regulation_training_profile_signature(
+                    profile
+                ),
                 "profile_max_input_w": profile_max_in,
                 "profile_max_output_w": profile_max_out,
                 

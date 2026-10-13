@@ -26,7 +26,10 @@ MAX_REPLAY_OVERSHOOT_RATE = 0.10
 _GAIN_FACTORS = (0.8, 0.9, 1.0, 1.1, 1.2)
 REVERSAL_THRESHOLD_WATT_SECONDS = 3_000.0
 MAX_REVERSAL_SAMPLE_GAP_SECONDS = 30.0
-MAX_AUTOMATIC_STRATEGY_PRIORITY = 400
+MAX_AUTOMATIC_STRATEGY_PRIORITY_BY_INTENT = {
+    "pv_charge": 500,
+    "cover_deficit": 400,
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +42,8 @@ class ShadowDirectionResult:
     rejected_invalid_grid_count: int
     rejected_missing_error_count: int
     rejected_command_skip_count: int
+    rejected_context_count: int
+    rejected_profile_mismatch_count: int
     valid_sample_ratio: float
     minimum_confidence: float
     response_event_count: int
@@ -60,6 +65,8 @@ class ShadowDirectionResult:
             "rejected_invalid_grid_count": self.rejected_invalid_grid_count,
             "rejected_missing_error_count": self.rejected_missing_error_count,
             "rejected_command_skip_count": self.rejected_command_skip_count,
+            "rejected_context_count": self.rejected_context_count,
+            "rejected_profile_mismatch_count": self.rejected_profile_mismatch_count,
             "valid_sample_ratio": self.valid_sample_ratio,
             "minimum_confidence": self.minimum_confidence,
             "response_event_count": self.response_event_count,
@@ -107,7 +114,10 @@ def _command_is_usable_observation(sample: Mapping[str, Any]) -> bool:
 
 
 def _direction_sample_quality(
-    samples: list[Mapping[str, Any]], direction: str
+    samples: list[Mapping[str, Any]],
+    direction: str,
+    *,
+    expected_profile_signature: str | None = None,
 ) -> tuple[list[Mapping[str, Any]], dict[str, int]]:
     direction_samples = [
         sample for sample in samples if sample.get("direction") == direction
@@ -117,17 +127,55 @@ def _direction_sample_quality(
     invalid_grid_count = 0
     missing_error_count = 0
     skipped_command_count = 0
-    for sample in direction_samples:
+    rejected_context_count = 0
+    rejected_profile_mismatch_count = 0
+    observation_segment = 0
+    previous_usable = False
+    for sample in samples:
+        if sample.get("direction") != direction:
+            observation_segment += 1
+            previous_usable = False
+            continue
+        if expected_profile_signature is not None and sample.get(
+            "profile_signature"
+        ) != expected_profile_signature:
+            rejected_profile_mismatch_count += 1
+            observation_segment += 1
+            previous_usable = False
+            continue
+        # Price-window AC charging and other non-PV actions have different
+        # dynamics from the PV proportional loop and break its event sequence.
+        if direction == "charge" and (
+            sample.get("strategy_intent") != "pv_charge"
+            or sample.get("ai_mode") not in {"automatic", "summer"}
+            or sample.get("manual_action") != "standby"
+            or sample.get("strategy_force") is not False
+        ):
+            rejected_context_count += 1
+            observation_segment += 1
+            previous_usable = False
+            continue
         if sample.get("grid_valid") is not True:
             invalid_grid_count += 1
+            observation_segment += 1
+            previous_usable = False
             continue
         if _number(sample.get("grid_error_w")) is None:
             missing_error_count += 1
+            observation_segment += 1
+            previous_usable = False
             continue
         if not _command_is_usable_observation(sample):
             skipped_command_count += 1
+            observation_segment += 1
+            previous_usable = False
             continue
-        usable.append(sample)
+        if not previous_usable:
+            observation_segment += 1
+        usable_sample = dict(sample)
+        usable_sample["_training_observation_segment"] = observation_segment
+        usable.append(usable_sample)
+        previous_usable = True
         if sample.get("command_skipped") is True:
             unchanged_command_count += 1
     return usable, {
@@ -136,13 +184,22 @@ def _direction_sample_quality(
         "rejected_invalid_grid_count": invalid_grid_count,
         "rejected_missing_error_count": missing_error_count,
         "rejected_command_skip_count": skipped_command_count,
+        "rejected_context_count": rejected_context_count,
+        "rejected_profile_mismatch_count": rejected_profile_mismatch_count,
     }
 
 
 def _response_events(samples: list[Mapping[str, Any]]) -> int:
     events = 0
     last_command: float | None = None
+    last_segment: Any = None
     for sample in samples:
+        segment = (
+            sample.get("_training_session_segment"),
+            sample.get("_training_observation_segment"),
+        )
+        if last_command is not None and segment != last_segment:
+            last_command = None
         requested = max(
             _number(sample.get("requested_charge_w")) or 0.0,
             _number(sample.get("requested_discharge_w")) or 0.0,
@@ -150,6 +207,7 @@ def _response_events(samples: list[Mapping[str, Any]]) -> int:
         if last_command is not None and abs(requested - last_command) >= 20.0:
             events += 1
         last_command = requested
+        last_segment = segment
     return events
 
 
@@ -199,9 +257,16 @@ def _direction_score(
 
 
 def _evaluate_direction(
-    samples: list[Mapping[str, Any]], direction: str
+    samples: list[Mapping[str, Any]],
+    direction: str,
+    *,
+    expected_profile_signature: str | None = None,
 ) -> ShadowDirectionResult:
-    usable, quality = _direction_sample_quality(samples, direction)
+    usable, quality = _direction_sample_quality(
+        samples,
+        direction,
+        expected_profile_signature=expected_profile_signature,
+    )
     events = _response_events(usable)
     valid_ratio = len(usable) / max(1, quality["direction_sample_count"])
     confidence = min(1.0, len(usable) / 120.0) * min(1.0, events / 8.0) * valid_ratio
@@ -231,6 +296,10 @@ def _evaluate_direction(
             rejected_invalid_grid_count=quality["rejected_invalid_grid_count"],
             rejected_missing_error_count=quality["rejected_missing_error_count"],
             rejected_command_skip_count=quality["rejected_command_skip_count"],
+            rejected_context_count=quality["rejected_context_count"],
+            rejected_profile_mismatch_count=quality[
+                "rejected_profile_mismatch_count"
+            ],
             valid_sample_ratio=round(valid_ratio, 3),
             minimum_confidence=MIN_EVALUATION_CONFIDENCE,
             response_event_count=events,
@@ -304,6 +373,10 @@ def _evaluate_direction(
         rejected_invalid_grid_count=quality["rejected_invalid_grid_count"],
         rejected_missing_error_count=quality["rejected_missing_error_count"],
         rejected_command_skip_count=quality["rejected_command_skip_count"],
+        rejected_context_count=quality["rejected_context_count"],
+        rejected_profile_mismatch_count=quality[
+            "rejected_profile_mismatch_count"
+        ],
         valid_sample_ratio=round(valid_ratio, 3),
         minimum_confidence=MIN_EVALUATION_CONFIDENCE,
         response_event_count=events,
@@ -330,19 +403,33 @@ def _sample_direction(sample: Mapping[str, Any]) -> tuple[str, float] | None:
     return None
 
 
-def _reversal_ineligibility_reason(sample: Mapping[str, Any]) -> str | None:
+def _reversal_ineligibility_reason(
+    sample: Mapping[str, Any], *, expected_profile_signature: str | None = None
+) -> str | None:
     """Return the first reason a command is unsafe to delay in the shadow."""
 
     if sample.get("ai_mode") != "automatic":
         return "not_automatic"
+    if (
+        expected_profile_signature is not None
+        and sample.get("profile_signature") != expected_profile_signature
+    ):
+        return "profile_changed"
     if sample.get("manual_action") != "standby":
         return "manual_action"
     if sample.get("strategy_intent") not in {"pv_charge", "cover_deficit"}:
         return "strategy_not_pv_or_load"
     if sample.get("strategy_force") is not False:
         return "forced_or_unknown_strategy"
+    allowed_priority = MAX_AUTOMATIC_STRATEGY_PRIORITY_BY_INTENT.get(
+        str(sample.get("strategy_intent"))
+    )
     priority = _number(sample.get("strategy_priority"))
-    if priority is None or priority > MAX_AUTOMATIC_STRATEGY_PRIORITY:
+    if (
+        allowed_priority is None
+        or priority is None
+        or priority > allowed_priority
+    ):
         return "priority_missing_or_high"
     if sample.get("mode_allowed") is not True:
         return "mode_change_denied"
@@ -357,6 +444,8 @@ def _reversal_ineligibility_reason(sample: Mapping[str, Any]) -> str | None:
 
 def _reversal_hysteresis_shadow(
     samples: list[Mapping[str, Any]],
+    *,
+    expected_profile_signature: str | None = None,
 ) -> dict[str, Any]:
     """Estimate a 3 kWs reversal hold on ordinary automatic regulation only.
 
@@ -380,14 +469,23 @@ def _reversal_hysteresis_shadow(
     timed.sort(key=lambda item: item[0])
 
     def eligible(sample: Mapping[str, Any]) -> bool:
-        return _reversal_ineligibility_reason(sample) is None
+        return (
+            _reversal_ineligibility_reason(
+                sample,
+                expected_profile_signature=expected_profile_signature,
+            )
+            is None
+        )
 
     direction_samples = [
         sample for _, sample in timed if _sample_direction(sample) is not None
     ]
     exclusion_counts: Counter[str] = Counter()
     for sample in direction_samples:
-        reason = _reversal_ineligibility_reason(sample)
+        reason = _reversal_ineligibility_reason(
+            sample,
+            expected_profile_signature=expected_profile_signature,
+        )
         if reason is not None:
             exclusion_counts[reason] += 1
 
@@ -408,6 +506,15 @@ def _reversal_hysteresis_shadow(
     pending_seconds = 0.0
 
     for timestamp, sample in timed:
+        segment = sample.get("_training_session_segment")
+        if previous is not None and previous[3].get(
+            "_training_session_segment"
+        ) != segment:
+            previous = None
+            locked_direction = None
+            pending_direction = None
+            pending_ws = 0.0
+            pending_seconds = 0.0
         command = _sample_direction(sample)
         if command is None:
             previous = None
@@ -522,13 +629,64 @@ def _reversal_hysteresis_shadow(
     }
 
 
-def evaluate_training_session(session: Mapping[str, Any]) -> dict[str, Any]:
-    """Replay a finished session and return non-active charge/discharge proposals."""
+def evaluate_training_sessions(sessions: list[Mapping[str, Any]]) -> dict[str, Any]:
+    """Replay compatible training runs as one bounded, passive data pool."""
 
-    raw_samples = session.get("samples")
-    samples = [item for item in raw_samples if isinstance(item, Mapping)] if isinstance(raw_samples, list) else []
-    charge = _evaluate_direction(samples, "charge")
-    discharge = _evaluate_direction(samples, "discharge")
+    sessions = [session for session in sessions if isinstance(session, Mapping)]
+    if not sessions:
+        sessions = [{}]
+    latest = sessions[-1]
+    profile_signature = latest.get("profile_signature")
+    latest_key = latest.get("key")
+    same_device_sessions = (
+        [session for session in sessions if session.get("key") == latest_key]
+        if latest_key is not None
+        else [latest]
+    )
+    compatible_sessions = [
+        session
+        for session in same_device_sessions
+        if profile_signature is not None
+        and session.get("profile_signature") == profile_signature
+    ]
+    # Legacy sessions have no profile fingerprint. They remain evaluable alone,
+    # but are never mixed with another run whose baseline cannot be verified.
+    if not compatible_sessions:
+        compatible_sessions = [latest]
+
+    samples: list[Mapping[str, Any]] = []
+    for index, session in enumerate(compatible_sessions):
+        raw_samples = session.get("samples")
+        if not isinstance(raw_samples, list):
+            continue
+        segment = f"{index}:{session.get('started_at') or 'unknown'}"
+        for item in raw_samples:
+            if not isinstance(item, Mapping):
+                continue
+            sample = dict(item)
+            sample["_training_session_segment"] = segment
+            samples.append(sample)
+
+    charge = _evaluate_direction(
+        samples,
+        "charge",
+        expected_profile_signature=(
+            str(profile_signature) if profile_signature is not None else None
+        ),
+    )
+    discharge = _evaluate_direction(
+        samples,
+        "discharge",
+        expected_profile_signature=(
+            str(profile_signature) if profile_signature is not None else None
+        ),
+    )
+    profile_samples = [
+        item
+        for item in samples
+        if profile_signature is None
+        or item.get("profile_signature") == profile_signature
+    ]
     proposed = charge.decision == "proposed" or discharge.decision == "proposed"
     status = (
         "candidate_proposed"
@@ -545,13 +703,50 @@ def evaluate_training_session(session: Mapping[str, Any]) -> dict[str, Any]:
             else RegulationProfileState.SHADOW.value
         ),
         "method": "bounded_one_step_proportional_counterfactual_v1",
+        "sessions_aggregated": len(compatible_sessions),
+        "sessions_available": len(same_device_sessions),
+        "sessions_excluded_incompatible": max(
+            0, len(same_device_sessions) - len(compatible_sessions)
+        ),
+        "profile_signature": profile_signature,
+        "charge_context_counts": {
+            "pv_regulation": sum(
+                item.get("direction") == "charge"
+                and item.get("strategy_intent") == "pv_charge"
+                and item.get("ai_mode") in {"automatic", "summer"}
+                and item.get("manual_action") == "standby"
+                and item.get("strategy_force") is False
+                for item in profile_samples
+            ),
+            "fixed_or_other": sum(
+                item.get("direction") == "charge"
+                and not (
+                    item.get("strategy_intent") == "pv_charge"
+                    and item.get("ai_mode") in {"automatic", "summer"}
+                    and item.get("manual_action") == "standby"
+                    and item.get("strategy_force") is False
+                )
+                for item in profile_samples
+            ),
+        },
         "score_unit": "mean_absolute_predicted_grid_error_w",
         "interpretation": (
             "Screening estimate from recorded errors, commands, readbacks, and "
             "baseline gains; it does not simulate full device or grid dynamics."
         ),
         "live_parameters_changed": False,
-        "reversal_hysteresis": _reversal_hysteresis_shadow(samples),
+        "reversal_hysteresis": _reversal_hysteresis_shadow(
+            samples,
+            expected_profile_signature=(
+                str(profile_signature) if profile_signature is not None else None
+            ),
+        ),
         "charge": charge.as_dict(),
         "discharge": discharge.as_dict(),
     }
+
+
+def evaluate_training_session(session: Mapping[str, Any]) -> dict[str, Any]:
+    """Backward-compatible single-run evaluator entrypoint."""
+
+    return evaluate_training_sessions([session])
