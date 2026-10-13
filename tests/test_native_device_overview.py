@@ -1,18 +1,25 @@
 """Hierarchical, privacy-safe native device overview tests."""
 
+import unittest
 from datetime import datetime, timezone
 from types import SimpleNamespace
-import unittest
 
 from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
-    BatteryPackIdentity, DeviceControlState, DeviceInventory, HemsStatus, MainDevice,
-    MeasuredValue, NativeDeviceIdentity, ValueValidity, ZendureTransport,
+from custom_components.battery_smartflow_ai.core.models import (
+    BatteryPackIdentity,
+    DeviceControlState,
+    DeviceInventory,
+    HemsStatus,
+    MainDevice,
+    MeasuredValue,
+    NativeDeviceIdentity,
+    ValueValidity,
+    ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.native_device_overview import (  # noqa: E402
+from custom_components.battery_smartflow_ai.native_device_overview import (
     build_native_device_overview,
 )
 
@@ -22,7 +29,7 @@ def measured(value):
 
 
 def observed_pack(pack_id, parent):
-    values = dict(
+    return SimpleNamespace(
         pack_id=pack_id, parent_system_id=parent,
         serial_number=pack_id, firmware=measured("1.2.3"),
         soc_pct=measured(55.0), charge_power_w=measured(100.0),
@@ -34,7 +41,6 @@ def observed_pack(pack_id, parent):
         pack_type=measured(5),
         last_message_at=datetime(2026, 9, 2, tzinfo=timezone.utc),
     )
-    return SimpleNamespace(**values)
 
 
 class NativeDeviceOverviewTests(unittest.TestCase):
@@ -51,6 +57,7 @@ class NativeDeviceOverviewTests(unittest.TestCase):
             native_identities=(identity,),
         )
         pack = observed_pack("C04E-test", main.system_id)
+        pack.pack_type = MeasuredValue.absent(ValueValidity.MISSING)
         pack.soc_pct = MeasuredValue.absent(ValueValidity.STALE)
         state = SimpleNamespace(
             packs=(pack,),
@@ -165,8 +172,10 @@ class NativeDeviceOverviewTests(unittest.TestCase):
             devices=(main,),
             packs=(BatteryPackIdentity("pack-secret", main.system_id),),
         )
+        pack = observed_pack("pack-secret", main.system_id)
+        pack.pack_type = MeasuredValue.absent(ValueValidity.MISSING)
         state = SimpleNamespace(
-            packs=(observed_pack("pack-secret", main.system_id),),
+            packs=(pack,),
             firmware=measured("2.0.0"), soc_pct=measured(55.0),
             charge_power_w=measured(100.0), discharge_power_w=measured(0.0),
             ac_input_power_w=measured(0.0), ac_output_power_w=measured(100.0),
@@ -183,26 +192,26 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         self.assertFalse(hasattr(item.packs[0], "cell_count"))
         self.assertEqual(item.packs[0].parent_public_id, item.public_id)
 
-    def test_numeric_pack_type_is_not_exposed_as_an_unverified_model_name(self):
+    def test_unknown_numeric_pack_type_is_not_exposed_as_a_model_name(self):
         main = MainDevice("main-secret", "Unknown system")
         inventory = DeviceInventory(
             devices=(main,),
-            packs=(BatteryPackIdentity("pack-secret", main.system_id, pack_type="5"),),
+            packs=(BatteryPackIdentity("pack-secret", main.system_id, pack_type="999"),),
         )
+        observed = observed_pack("pack-secret", main.system_id)
+        observed.pack_type = measured(999)
         state = SimpleNamespace(
-            packs=(observed_pack("pack-secret", main.system_id),),
+            packs=(observed,),
             last_message_at=None,
         )
         pack = build_native_device_overview(
             inventory, {main.system_id: state}
         )[0].packs[0]
         self.assertIsNone(pack.pack_model)
-        self.assertEqual(pack.measurements["pack_type"].value, 5)
+        self.assertEqual(pack.measurements["pack_type"].value, 999)
 
-    def test_sf2400ac_pack_type_five_is_resolved_as_ab3000x(self):
-        main = MainDevice(
-            "main-secret", "System", model="SolarFlow 2400 AC"
-        )
+    def test_pack_type_five_is_resolved_as_ab3000x(self):
+        main = MainDevice("main-secret", "Unknown system")
         inventory = DeviceInventory(
             devices=(main,),
             packs=(BatteryPackIdentity("pack-secret", main.system_id, pack_type="5"),),
@@ -216,6 +225,42 @@ class NativeDeviceOverviewTests(unittest.TestCase):
         )[0].packs[0]
         self.assertEqual(pack.pack_model, "AB3000X")
         self.assertEqual(pack.measurements["pack_type"].value, 5)
+
+    def test_sf2400ac_telemetry_pack_type_five_overrides_generic_serial_model(self):
+        main = MainDevice(
+            "main-secret", "System", model="SolarFlow 2400 AC"
+        )
+        inventory = DeviceInventory(
+            devices=(main,),
+            packs=(BatteryPackIdentity(
+                "F123-pack", main.system_id, serial_number="F123-pack"
+            ),),
+        )
+        observed = observed_pack("F123-pack", main.system_id)
+        state = SimpleNamespace(packs=(observed,), last_message_at=None)
+
+        pack = build_native_device_overview(
+            inventory, {main.system_id: state}
+        )[0].packs[0]
+
+        self.assertEqual(pack.pack_model, "AB3000X")
+
+    def test_current_pack_type_five_overrides_stale_inventory_type(self):
+        main = MainDevice("main-secret", "System")
+        inventory = DeviceInventory(
+            devices=(main,),
+            packs=(BatteryPackIdentity(
+                "F123-pack", main.system_id, pack_type="999", serial_number="F123-pack"
+            ),),
+        )
+        observed = observed_pack("F123-pack", main.system_id)
+        state = SimpleNamespace(packs=(observed,), last_message_at=None)
+
+        pack = build_native_device_overview(
+            inventory, {main.system_id: state}
+        )[0].packs[0]
+
+        self.assertEqual(pack.pack_model, "AB3000X")
 
     def test_confirmed_pack_types_are_resolved_without_false_precision(self):
         expected_models = {
@@ -232,8 +277,10 @@ class NativeDeviceOverviewTests(unittest.TestCase):
                         "pack-secret", main.system_id, pack_type=pack_type
                     ),),
                 )
+                observed = observed_pack("pack-secret", main.system_id)
+                observed.pack_type = measured(pack_type)
                 state = SimpleNamespace(
-                    packs=(observed_pack("pack-secret", main.system_id),),
+                    packs=(observed,),
                     last_message_at=None,
                 )
                 pack = build_native_device_overview(

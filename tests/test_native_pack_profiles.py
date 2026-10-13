@@ -6,7 +6,7 @@ from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.native_capacity import (  # noqa: E402
+from custom_components.battery_smartflow_ai.native_capacity import (
     pack_capacity_kwh,
     resolve_pack_profile,
 )
@@ -37,6 +37,7 @@ class NativePackProfileTests(unittest.TestCase):
 
     def test_pack_type_fallback_handles_missing_or_short_serial(self):
         cases = {
+            "5": ("AB3000X", 2.88),
             "70": ("I8000", 8.0),
             "250": ("AB1000", 0.96),
             "300": ("AB2000S / AB2000X", 1.92),
@@ -47,15 +48,10 @@ class NativePackProfileTests(unittest.TestCase):
                 profile = resolve_pack_profile("", pack_type)
                 self.assertEqual((profile.model, profile.capacity_kwh), expected)
 
-        sf2400ac = resolve_pack_profile("", "5", "SolarFlow 2400 AC")
-        self.assertEqual(
-            (sf2400ac.model, sf2400ac.capacity_kwh), ("AB3000X", 2.88)
-        )
-
     def test_unknown_or_ambiguous_evidence_does_not_guess(self):
         self.assertIsNone(resolve_pack_profile(None, None))
         self.assertIsNone(resolve_pack_profile("short", "999"))
-        self.assertIsNone(pack_capacity_kwh(None, "5"))
+        self.assertEqual(pack_capacity_kwh(None, "5"), 2.88)
 
 
 if __name__ == "__main__":

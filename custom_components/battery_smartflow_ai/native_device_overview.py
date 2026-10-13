@@ -2,23 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-import hashlib
 from types import MappingProxyType
-from typing import Mapping
-from .native_capacity import (
-    native_capacity,
-    native_inventory_capacity,
-    pack_capacity_kwh,
-    resolve_pack_profile,
-)
-from .native_statistics import derived_statistics
-from .hardware.zendure.device_matrix import (
-    VerificationLevel,
-    ZENDURE_DEVICE_MATRIX,
-    resolve_zendure_device,
-)
 
 from .core.models import (
     DeviceControlState,
@@ -29,7 +17,18 @@ from .core.models import (
     ValueValidity,
     ZendureTransport,
 )
-
+from .hardware.zendure.device_matrix import (
+    ZENDURE_DEVICE_MATRIX,
+    VerificationLevel,
+    resolve_zendure_device,
+)
+from .native_capacity import (
+    native_capacity,
+    native_inventory_capacity,
+    pack_capacity_kwh,
+    resolve_pack_profile,
+)
+from .native_statistics import derived_statistics
 
 # Legacy firmware publishes its state in sparse groups. Keep already reported
 # display values visible while the device is still sending other valid
@@ -169,14 +168,18 @@ def build_native_device_overview(
             observed = state_packs.get(pack_id)
             if observed is None:
                 continue
+            observed_pack_type = (
+                observed.pack_type.value
+                if observed.pack_type.valid
+                else None
+            )
             packs.append(
                 PackOverview(
                     public_id=_public_id("PACK", pack_id),
                     parent_public_id=public_id,
                     serial_number=pack_identity.serial_number,
                     pack_model=_pack_model(
-                        pack_identity.pack_type,
-                        device.model,
+                        observed_pack_type or pack_identity.pack_type,
                         pack_identity.serial_number or observed.serial_number,
                     ),
                     firmware=observed.firmware,
@@ -433,16 +436,15 @@ def _boolean_status(value, *, retain_stale: bool = False):
 
 def _pack_model(
     value: str | None,
-    parent_model: str | None,
     serial_number: str | None = None,
 ) -> str | None:
     """Resolve only verified pack models; never present a numeric code as one."""
 
     if value is None:
-        profile = resolve_pack_profile(serial_number, None, parent_model)
+        profile = resolve_pack_profile(serial_number, None)
         return profile.model if profile is not None else None
     normalized = str(value).strip()
-    profile = resolve_pack_profile(serial_number, normalized, parent_model)
+    profile = resolve_pack_profile(serial_number, normalized)
     if profile is not None:
         return profile.model
     return normalized if normalized and not normalized.isdecimal() else None

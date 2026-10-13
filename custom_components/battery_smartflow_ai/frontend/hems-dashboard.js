@@ -7,6 +7,7 @@ const METRIC_ICONS = Object.freeze({
   "grid-power": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="m12 2-8 20m8-20 8 20M7 15h10M8.5 11h7M10 7h4M6 18h12M12 2v4"/></g>',
   "grid-import": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="m12 2-8 20m8-20 8 20M7 15h10M8.5 11h7M10 7h4M6 18h12"/><path d="M3 4v5m-2-2 2 2 2-2"/></g>',
   "grid-export": '<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"><path d="m12 2-8 20m8-20 8 20M7 15h10M8.5 11h7M10 7h4M6 18h12"/><path d="M21 9V4m-2 2 2-2 2 2"/></g>',
+  home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1V10zm2 1v8h2v-6h8v6h2v-8l-5-3.9L5 11z"/>',
   offgrid: '<path d="M7 2v7h2V2H7zm8 0v7h2V2h-2zM5 10v2a7 7 0 0 0 6 6.93V22h2v-3.07A7 7 0 0 0 19 12v-2H5z"/>',
 });
 
@@ -93,7 +94,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._callTraining(
           apply ? "apply_regulation_training_candidate" : "reset_regulation_training_candidate",
           candidateAction,
-          { entry_id: candidateAction.dataset.entryId, confirm: true },
+          { entry_id: candidateAction.dataset.entryId, confirm: true }
         );
         return;
       }
@@ -266,10 +267,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
       battery: ["AKKU", "BATTERY"], pv_power: ["PV-LEISTUNG", "PV POWER"], battery_power: ["AKKULEISTUNG", "BATTERY POWER"], grid_power: ["NETZLEISTUNG", "GRID POWER"], current_price: ["AKTUELLER PREIS", "CURRENT PRICE"], waiting_entity: ["Warte auf passenden Sensor", "Waiting for matching entity"], no_data: ["Noch keine Daten", "No data yet"],
       flows_today: ["Energieflüsse heute", "Today's energy flows"], ledger: ["Gemessenes BSFAI-Energiebuch", "Measured BSFAI energy ledger"], solar_forecast: ["Solarprognose", "Solar forecast"], forecast_compare: ["Brutto-Prognose und nutzbarer Rest", "Gross forecast versus usable remainder"],
       near_term: ["Nächste Stunden · nutzbar", "Next few hours · usable"], forecast_today: ["Heute · Brutto und nutzbar", "Today · gross and usable"], forecast_tomorrow: ["Morgen · Brutto und nutzbar", "Tomorrow · gross and usable"],
-      power_now: ["Momentanleistung", "Instantaneous power"], power_note: ["Live-Messwerte · Watt (W)", "Live readings · watts (W)"], daily_energy_note: ["Aufsummierte Energiemengen heute · Kilowattstunden (kWh)", "Accumulated energy today · kilowatt-hours (kWh)"], grid_net: ["Netzleistung (Bezug + / Einspeisung −)", "Grid power (import + / export −)"], grid_import: ["Netzbezug", "Grid import"], grid_export: ["Netzeinspeisung", "Grid export"], pv_source: ["PV-Leistung", "PV power"], native_pv_source: ["Native PV-Leistung", "Native PV power"], offgrid_source: ["Off-Grid-Ausgang", "Off-grid output"], house_load_source: ["Hauslast", "House load"], battery_source: ["Akku-Leistung", "Battery power"],
+      power_now: ["Momentanleistung", "Instantaneous power"], power_note: ["Live-Messwerte · Watt (W)", "Live readings · watts (W)"], daily_energy_note: ["Aufsummierte Energiemengen heute · Kilowattstunden (kWh)", "Accumulated energy today · kilowatt-hours (kWh)"], energy_flow_hint: ["Richtung nach Live-Messwerten · Netzbezug + / Einspeisung − · Akkuentladung + / Ladung −", "Direction from live readings · grid import + / export − · battery discharge + / charge −"], flow_idle: ["Kein aktiver Fluss", "No active flow"], flow_forward: ["Fluss nach rechts", "Flow to the right"], flow_reverse: ["Fluss nach links", "Flow to the left"], flow_unavailable: ["Messwert nicht verfügbar", "Reading unavailable"], grid_net: ["Netzleistung (Bezug + / Einspeisung −)", "Grid power (import + / export −)"], grid_import: ["Netzbezug", "Grid import"], grid_export: ["Netzeinspeisung", "Grid export"], pv_source: ["PV-Leistung", "PV power"], native_pv_source: ["Native PV-Leistung", "Native PV power"], offgrid_source: ["Off-Grid-Ausgang", "Off-grid output"], house_load_source: ["Hauslast", "House load"], battery_source: ["Akku-Leistung", "Battery power"],
       source_unavailable: ["Quelle nicht verfügbar", "Source unavailable"], no_power_readings: ["Keine konfigurierten oder nativen Leistungswerte gefunden.", "No configured or native power readings found."], per_system: ["Je System", "Per system"], shared_metrics: ["Gemeinsamer Wert", "Shared value"],
       pv_battery: ["PV → Akku", "PV → battery"], grid_battery: ["Netz → Akku", "Grid → battery"], battery_home: ["Akku → Haus", "Battery → home"], battery_grid: ["Akku → Netz", "Battery → grid"], native_pv_home: ["Native PV → Haus", "Native PV → home"], grid_export: ["Netzeinspeisung", "Grid export"],
-      node_pv: ["PV", "PV"], node_native_pv: ["Native PV", "Native PV"], node_grid: ["Netz", "Grid"], node_battery: ["Akku", "Battery"], node_home: ["Haus", "Home"], node_site: ["Anlage", "Site"], source: ["Quelle", "Source"], destination: ["Ziel", "Destination"], relative_flow_scale: ["Balken relativ zum größten dargestellten Tagesfluss", "Bars are relative to the largest daily flow shown"],
+      node_pv: ["PV", "PV"], node_native_pv: ["Native PV", "Native PV"], node_grid: ["Netz", "Grid"], node_battery: ["Akku", "Battery"], node_home: ["Haus", "Home"], node_bus: ["Hausnetz", "Home circuit"], node_site: ["Anlage", "Site"], node_system: ["System", "System"], source: ["Quelle", "Source"], destination: ["Ziel", "Destination"], relative_flow_scale: ["Balken relativ zum größten dargestellten Tagesfluss", "Bars are relative to the largest daily flow shown"],
       usable_3h: ["Nutzbar · nächste 3 Stunden", "Usable · next 3 hours"], usable_6h: ["Nutzbar · nächste 6 Stunden", "Usable · next 6 hours"], usable_today: ["Nutzbar · Rest des Tages", "Usable · rest of today"], gross_today: ["Brutto · Rest des Tages", "Gross · rest of today"], usable_tomorrow: ["Nutzbar · morgen", "Usable · tomorrow"], gross_tomorrow: ["Brutto · morgen", "Gross · tomorrow"],
       gross_amount: ["Brutto", "Gross"], usable_amount: ["Nutzbar", "Usable"], forecast_not_configured: ["Keine Prognosequelle konfiguriert", "No forecast source configured"], forecast_unavailable: ["Prognosedaten derzeit nicht verfügbar", "Forecast data is currently unavailable"],
       forecast_explain: ["Die nutzbare Prognose berücksichtigt die Planungsannahmen von BSFAI. Die Bruttowerte zeigen die importierte Prognose vor dieser Reduktion.", "Usable forecast reflects BSFAI's planning assumptions. Gross values show the imported forecast before that reduction."], economics_today: ["Wirtschaftlichkeit heute", "Today's economics"], daily_costs: ["Tageswerte und Kosten", "Daily value and costs"], battery_benefit: ["Akku-Nutzen", "Battery benefit"], avoided_import: ["Vermiedene Netzbezugskosten", "Avoided grid import"], grid_charge_cost: ["Netzladekosten", "Grid charging cost"], pv_opportunity_cost: ["PV-Opportunitätskosten", "PV opportunity cost"], export_revenue: ["Einspeiseerlös", "Export revenue"], self_consumption_value: ["Wert nativer PV-Eigenverbrauch", "Native PV self-consumption value"], average_values: ["Durchschnittliche Ist-Werte", "Average realized values"], ledger_based: ["Basierend auf dem BSFAI-Energie- und Kostenbuch", "Based on BSFAI's energy and cost ledger"], grid_charge_price: ["Netzladepreis", "Grid charging price"], pv_opportunity_value: ["PV-Opportunitätswert", "PV opportunity value"], blended_charge_price: ["Gewichteter Akku-Ladepreis", "Blended battery charge price"], export_price: ["Einspeisepreis", "Export price"], discharge_value: ["Wert der Akkuentladung", "Battery discharge value"], native_pv_return: ["Ertrag native PV direkt ins Haus", "Native PV to home return"], efficiency: ["Wirtschaftlicher Wirkungsgrad", "Economic efficiency"],
@@ -1532,7 +1533,131 @@ class BatterySmartFlowDashboard extends HTMLElement {
       .join("");
   }
 
+  _powerWatts(entity) {
+    if (!entity || ["unknown", "unavailable"].includes(entity.state)) return null;
+    const value = Number(entity.state);
+    if (!Number.isFinite(value)) return null;
+    const unit = String(entity.attributes.unit_of_measurement || "W").trim();
+    const factors = { W: 1, kW: 1000, MW: 1000000, mW: 0.001 };
+    return Object.prototype.hasOwnProperty.call(factors, unit)
+      ? value * factors[unit]
+      : null;
+  }
+
+  _liveFlowNode(labelKey, detail = "", nodeType = "") {
+    const iconTypes = {
+      node_pv: "pv",
+      node_native_pv: "native-pv",
+      node_battery: "battery-power",
+      node_grid: "grid-power",
+      node_home: "home",
+      node_bus: "home",
+      node_system: "offgrid",
+    };
+    const icon = METRIC_ICONS[iconTypes[labelKey]];
+    const svg = icon
+      ? `<svg class="live-flow-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icon}</svg>`
+      : "";
+    return `<div class="live-flow-node" data-node="${this._escape(labelKey)}"${nodeType ? ` data-node-type="${this._escape(nodeType)}"` : ""}>${svg}<span><strong>${this._escape(this._t(labelKey))}</strong>${detail ? `<small>${this._escape(detail)}</small>` : ""}</span></div>`;
+  }
+
+  _liveFlowLane(spec, maxWatts, socText) {
+    let watts = this._powerWatts(spec.entity);
+    if (spec.nonNegative && watts !== null && watts < -1) watts = null;
+    let flow = watts === null ? "unavailable" : "idle";
+    if (watts !== null && Math.abs(watts) >= 1) {
+      flow = spec.signed && watts < 0 ? "reverse" : "forward";
+    }
+    const amount = watts === null ? "— W" : `${Math.abs(watts).toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 1 })} W`;
+    const width = watts === null || maxWatts <= 0
+      ? 0
+      : Math.min(100, Math.abs(watts) / maxWatts * 100);
+    const arrow = flow === "forward" ? "→" : flow === "reverse" ? "←" : flow === "idle" ? "·" : "—";
+    const status = flow === "idle" ? this._t("flow_idle") : flow === "unavailable" ? this._t("flow_unavailable") : "";
+    const batteryDetail = (key) => key === "node_battery" && socText ? `${this._t("battery")}: ${socText}` : "";
+    const history = spec.entity && spec.entity.entity_id && this._hass?.states?.[spec.entity.entity_id]
+      ? ` data-history-entity="${this._escape(spec.entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${this._t(spec.title)} · ${amount} · ${this._t("show_history")}`)}"`
+      : "";
+    const value = watts === null ? this._t("flow_unavailable") : amount;
+    const accessibleDirection = flow === "forward" ? this._t("flow_forward") : flow === "reverse" ? this._t("flow_reverse") : status;
+    return `<div class="live-flow-row ${history ? "history-card" : ""}" data-flow="${this._escape(spec.kind)}"${history}>${this._liveFlowNode(spec.from, batteryDetail(spec.from), spec.kind)}<div class="live-flow-route ${flow}" role="img" aria-label="${this._escape(`${this._t(spec.title)} · ${accessibleDirection}`)}"><small>${this._escape(this._t(spec.title))}</small><div class="live-flow-track"><span>${arrow}</span><i style="width:${width}%"></i></div>${status ? `<small class="live-flow-status">${this._escape(status)}</small>` : ""}</div>${this._liveFlowNode(spec.to, batteryDetail(spec.to), spec.kind)}<strong class="live-flow-value">${this._escape(value)}</strong></div>`;
+  }
+
+  _liveEnergyFlow(entities) {
+    const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
+    const allowFallback = sources.length === 1;
+    const groups = sources.map((source) => {
+      const lanes = [];
+      const seen = new Set();
+      const resolve = (entityId, terms) => {
+        if (entityId) {
+          return this._hass?.states?.[entityId]
+            || entities.find((entity) => entity.entity_id === entityId)
+            || { entity_id: entityId, state: "unavailable", attributes: {} };
+        }
+        return terms ? this._find(entities, terms) : null;
+      };
+      const add = (entityId, terms, spec) => {
+        const entity = resolve(entityId, terms);
+        if (!entity || (entity.entity_id && seen.has(entity.entity_id))) return;
+        if (entity.entity_id) seen.add(entity.entity_id);
+        lanes.push({ ...spec, entity });
+      };
+
+      add(source.pv, allowFallback ? ["pv power", "pv leistung", "solar power", "solarleistung"] : null, {
+        title: "pv_source", kind: "pv", from: "node_pv", to: "node_bus", nonNegative: true,
+      });
+      add(source.native_pv, null, {
+        title: "native_pv_source", kind: "native-pv", from: "node_native_pv", to: "node_bus", nonNegative: true,
+      });
+      add(source.battery_power, allowFallback ? ["battery power", "batterieleistung", "native hardware power w"] : null, {
+        title: "battery_source", kind: "battery", signed: true,
+        from: "node_battery", to: "node_bus",
+      });
+      if (source.grid_power) {
+        add(source.grid_power, null, {
+          title: "grid_net", kind: "grid", signed: true,
+          from: "node_grid", to: "node_bus",
+        });
+      } else if (source.grid_import || source.grid_export) {
+        add(source.grid_import, !source.grid_import && allowFallback ? ["grid import", "netzbezug", "bezug"] : null, {
+          title: "grid_import", kind: "grid-import", from: "node_grid", to: "node_bus", nonNegative: true,
+        });
+        add(source.grid_export, !source.grid_export && allowFallback ? ["grid export", "netzeinspeisung", "einspeisung"] : null, {
+          title: "grid_export", kind: "grid-export", from: "node_bus", to: "node_grid", nonNegative: true,
+        });
+      } else {
+        add(null, allowFallback ? ["grid power", "netzleistung", "netzbezug"] : null, {
+          title: "grid_net", kind: "grid", signed: true,
+          from: "node_grid", to: "node_bus",
+        });
+      }
+      add(source.house_load, allowFallback ? ["house_load", "house load", "hauslast", "hausverbrauch"] : null, {
+        title: "house_load_source", kind: "house", from: "node_bus", to: "node_home", nonNegative: true,
+      });
+      add(source.offgrid_power, allowFallback ? ["offgrid power", "off grid power", "off grid ausgang"] : null, {
+        title: "offgrid_source", kind: "offgrid", from: "node_system", to: "node_home", nonNegative: true,
+      });
+      if (!lanes.length) return "";
+      const maxWatts = Math.max(...lanes.map((lane) => {
+        const value = this._powerWatts(lane.entity);
+        return value === null || (lane.nonNegative && value < -1) ? 0 : Math.abs(value);
+      }));
+      const socEntity = (source.soc && this._hass?.states?.[source.soc])
+        || (allowFallback ? this._findBatterySoc(entities, null) : null);
+      const socText = socEntity && !["unknown", "unavailable"].includes(socEntity.state)
+        ? this._value(socEntity)
+        : "";
+      return `<section class="live-flow-group"><h3>${this._escape(source.name || this._t("system"))}</h3><div class="live-flow-lanes">${lanes.map((lane) => this._liveFlowLane(lane, maxWatts, socText)).join("")}</div></section>`;
+    }).filter(Boolean);
+    return groups.length
+      ? `<div class="live-flow-overview">${groups.join("")}<p class="live-flow-note">${this._escape(this._t("energy_flow_hint"))}</p></div>`
+      : "";
+  }
+
   _overviewMetrics(entities) {
+    const liveFlow = this._liveEnergyFlow(entities);
+    if (liveFlow) return liveFlow;
     const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
     const groups = sources.map((source) => {
       const cards = [];
@@ -1664,6 +1789,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .history-card{transition:none}.history-card:hover{box-shadow:0 0 0 1px #16c4df35}
         .pack-card.has-soc::after{display:none}
         .pack-flow{position:absolute;z-index:0;inset:5px;overflow:hidden;border-radius:4px;clip-path:inset(0 calc(100% - var(--soc-level)) 0 0 round 4px);pointer-events:none}.soap-bubble-track{position:absolute;inset:0 auto 0 0;display:flex;width:200%;height:100%;will-change:transform;animation-delay:var(--flow-delay,0s);animation-duration:8s;animation-timing-function:linear;animation-iteration-count:infinite}.pack-card[data-flow="charge"] .soap-bubble-track{animation-name:soap-bubbles-right}.pack-card[data-flow="discharge"] .soap-bubble-track{animation-name:soap-bubbles-left}.soap-bubble-run{position:relative;flex:0 0 50%;height:100%;overflow:hidden}.soap-bubble{position:absolute;bottom:9%;left:var(--bubble-x);width:var(--bubble-size);aspect-ratio:1;border:1px solid rgba(217,251,255,.72);border-radius:50%;background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.38),rgba(151,238,255,.12) 32%,rgba(186,142,255,.14) 67%,rgba(255,255,255,.04));box-shadow:inset -2px -2px 4px rgba(145,204,255,.22),inset 2px 2px 3px rgba(255,255,255,.28),0 0 5px rgba(123,226,255,.32);opacity:.68}.soap-bubble::after{content:"";position:absolute;top:15%;left:23%;width:25%;height:15%;border-radius:50%;background:rgba(255,255,255,.62);filter:blur(.5px)}.soap-bubble[data-bubble="1"]{--bubble-x:7%;--bubble-size:13px;bottom:16%}.soap-bubble[data-bubble="2"]{--bubble-x:21%;--bubble-size:9px;bottom:48%}.soap-bubble[data-bubble="3"]{--bubble-x:38%;--bubble-size:16px;bottom:25%}.soap-bubble[data-bubble="4"]{--bubble-x:55%;--bubble-size:10px;bottom:58%}.soap-bubble[data-bubble="5"]{--bubble-x:72%;--bubble-size:14px;bottom:38%}.soap-bubble[data-bubble="6"]{--bubble-x:89%;--bubble-size:8px;bottom:19%}@keyframes soap-bubbles-right{from{transform:translateX(-50%)}to{transform:translateX(0)}}@keyframes soap-bubbles-left{from{transform:translateX(0)}to{transform:translateX(-50%)}}@media(prefers-reduced-motion:reduce){.soap-bubble-track{animation:none;transform:none;will-change:auto}}
+        .live-flow-overview{display:grid;gap:11px}.live-flow-group{min-width:0;padding:13px;border:1px solid #343a40;border-radius:11px;background:#202428}.live-flow-group h3{margin:0 0 9px;color:#c7cbd0;font-size:13px}.live-flow-lanes{display:grid;gap:5px}.live-flow-row{display:grid;grid-template-columns:minmax(100px,.8fr) minmax(100px,1.7fr) minmax(100px,.8fr) minmax(78px,.55fr);gap:12px;align-items:center;padding:8px 5px;border-bottom:1px solid var(--line);border-radius:7px}.live-flow-row:last-child{border-bottom:0}.live-flow-node{min-width:0;display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid #41464b;border-radius:9px;background:#272b2f}.live-flow-node>span{min-width:0}.live-flow-node strong{display:block;overflow-wrap:anywhere;font-size:13px}.live-flow-node small{display:block;margin-top:3px;color:var(--muted);font-size:10px}.live-flow-icon{flex:none;width:27px;height:27px;color:var(--flow-accent,#16c4df);fill:currentColor;filter:drop-shadow(0 0 6px currentColor);opacity:.88}.live-flow-icon g{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7}.live-flow-route{min-width:0;display:grid;gap:5px;color:var(--flow-accent,#16c4df)}.live-flow-route>small:first-child{color:#c3c7ca;font-size:11px;overflow-wrap:anywhere}.live-flow-track{position:relative;display:flex;align-items:center;justify-content:center;height:11px;border-radius:999px;background:#30353a;overflow:hidden}.live-flow-track>i{position:absolute;inset:0 auto 0 0;max-width:100%;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df));box-shadow:0 0 9px color-mix(in srgb,var(--flow-accent,#16c4df) 50%,transparent)}.live-flow-track>span{position:relative;z-index:1;color:#f0f2f3;font-size:15px;line-height:11px;text-shadow:0 1px 4px #111}.live-flow-route.reverse .live-flow-track>i{left:auto;right:0;background:linear-gradient(270deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df))}.live-flow-route.idle .live-flow-track>i,.live-flow-route.unavailable .live-flow-track>i{display:none}.live-flow-route.unavailable .live-flow-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.live-flow-status{color:var(--muted);font-size:10px}.live-flow-value{color:#e7e9eb;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}.live-flow-row[data-flow="pv"],.live-flow-row[data-flow="native-pv"]{--flow-accent:#56cf83}.live-flow-row[data-flow="battery"]{--flow-accent:#f0c34e}.live-flow-row[data-flow="grid"],.live-flow-row[data-flow="grid-import"],.live-flow-row[data-flow="grid-export"]{--flow-accent:#f06b6b}.live-flow-row[data-flow="house"]{--flow-accent:#16c4df}.live-flow-row[data-flow="offgrid"]{--flow-accent:#30c9d4}.live-flow-note{margin:2px 2px 0;color:var(--muted);font-size:11px;line-height:1.45}@media(max-width:620px){.live-flow-row{grid-template-columns:minmax(82px,.9fr) minmax(72px,1.2fr) minmax(82px,.9fr) minmax(64px,.6fr);gap:6px;padding:7px 2px}.live-flow-node{gap:5px;padding:7px 6px}.live-flow-icon{width:21px;height:21px}.live-flow-node strong{font-size:11px}.live-flow-value{font-size:12px}}@media(max-width:390px){.live-flow-row{grid-template-columns:minmax(0,1fr) auto;gap:5px}.live-flow-route{grid-column:1/-1;grid-row:2}.live-flow-row .live-flow-node:nth-of-type(2){grid-column:1;grid-row:3}.live-flow-value{grid-column:2;grid-row:1}.live-flow-node{min-height:42px}.live-flow-node strong{font-size:12px}}
+        @media(max-width:390px){.live-flow-row>.live-flow-node:nth-child(3){grid-column:2;grid-row:3}}.live-flow-track>i{background:linear-gradient(90deg,rgba(255,255,255,.18),var(--flow-accent,#16c4df));box-shadow:0 0 9px var(--flow-accent,#16c4df)}.live-flow-route.reverse .live-flow-track>i{background:linear-gradient(270deg,rgba(255,255,255,.18),var(--flow-accent,#16c4df))}
       </style>
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
