@@ -201,7 +201,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.39"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.40"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=49"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
@@ -345,7 +345,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.39"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.40"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=49"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
@@ -403,6 +403,9 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"regulation_training_evaluation": public_evaluation', coordinator)
         self.assertIn('"shadow_evaluation": evaluation', sensor)
         self.assertIn('resultState?.attributes?.shadow_evaluation', frontend)
+        self.assertIn('training_sessions_aggregated', frontend)
+        self.assertIn('training_charge_context', frontend)
+        self.assertIn('evaluate_training_sessions(self._training_sessions)', coordinator)
         self.assertIn('result.relative_improvement', frontend)
         self.assertIn('result.baseline_score', frontend)
         self.assertIn('result.candidate_score', frontend)
@@ -464,7 +467,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"training_reversal_eligible_samples"', frontend)
         self.assertIn('"training_reason_low_confidence"', frontend)
         self.assertIn('"training_confidence_summary"', frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.39"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.40"', dashboard)
         self.assertIn('module_url=f"{_PANEL_URL}?v=49"', dashboard)
 
 

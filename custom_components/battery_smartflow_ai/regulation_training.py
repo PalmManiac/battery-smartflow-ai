@@ -6,6 +6,8 @@ controller parameters.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 from collections import deque
 from collections.abc import Mapping
@@ -37,9 +39,33 @@ ALLOWED_TRAINING_MINUTES = frozenset({10, 30, 60, 120, 1440})
 # The recent observed capture rate was about 326 samples per 30 minutes.
 # 20,000 samples leave headroom for a complete 24-hour run at that rate.
 MAX_TRAINING_SAMPLES = 20_000
-MAX_STORED_TRAINING_SESSIONS = 5
+MAX_STORED_TRAINING_SESSIONS = 30
 MAX_STORED_TRAINING_SAMPLES = 22_000
 TRAINING_CHECKPOINT_INTERVAL = timedelta(minutes=15)
+
+def _profile_signature(values: Mapping[str, Any]) -> str:
+    def normalize(value: Any) -> Any:
+        if isinstance(value, bool) or value is None or isinstance(value, str):
+            return value
+        if isinstance(value, Mapping):
+            return {
+                str(key): normalize(item)
+                for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
+            }
+        if isinstance(value, (list, tuple)):
+            return [normalize(item) for item in value]
+        numeric = _finite_number(value)
+        return round(numeric, 6) if numeric is not None else str(value)
+
+    normalized = normalize(values)
+    payload = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def regulation_training_profile_signature(profile: Mapping[str, Any]) -> str:
+    """Return a stable identity for the full effective controller profile."""
+
+    return _profile_signature(profile)
 
 
 def candidate_gain_parameters(evaluation: Mapping[str, Any]) -> dict[str, float]:
@@ -106,16 +132,24 @@ def training_candidate_scope_matches(
 def retain_training_sessions(
     sessions: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Keep recent sessions within count and aggregate sample budgets."""
+    """Keep a useful multi-run history within bounded storage budgets."""
 
     retained = sessions[-MAX_STORED_TRAINING_SESSIONS:]
 
     def sample_count(session: Mapping[str, Any]) -> int:
+        stored = session.get("stored_sample_count")
+        if stored is not None:
+            try:
+                return max(0, int(stored))
+            except (TypeError, ValueError):
+                pass
+        samples = session.get("samples")
+        if isinstance(samples, list):
+            return len(samples)
         try:
             return max(0, int(session.get("sample_count", 0)))
         except (TypeError, ValueError):
-            samples = session.get("samples")
-            return len(samples) if isinstance(samples, list) else 0
+            return 0
 
     while (
         len(retained) > 1
@@ -124,6 +158,27 @@ def retain_training_sessions(
     ):
         retained = retained[1:]
     return retained
+
+
+def compact_training_samples(samples: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop idle repetition while preserving command and idle boundaries.
+
+    Directional observations are needed for the cross-run response and reversal
+    estimates. Repeated idle observations add no information; one idle marker
+    after a directional command is sufficient to break a reversal sequence.
+    """
+
+    compacted: list[dict[str, Any]] = []
+    previous_was_directional = False
+    for sample in samples:
+        direction = sample.get("direction")
+        if direction in {"charge", "discharge"}:
+            compacted.append(sample)
+            previous_was_directional = True
+        elif direction == "idle" and previous_was_directional:
+            compacted.append(sample)
+            previous_was_directional = False
+    return compacted
 
 
 def recover_interrupted_training_session(
@@ -207,6 +262,7 @@ class TrainingSample:
     mode_allowed: bool | None = None
     discharge_allowed: bool | None = None
     mode_arbiter_reason: str | None = None
+    profile_signature: str | None = None
 
     def __post_init__(self) -> None:
         _aware(self.timestamp)
@@ -227,6 +283,7 @@ class TrainingSample:
                     "mode_allowed",
                     "discharge_allowed",
                     "mode_arbiter_reason",
+                    "profile_signature",
                 }
                 or isinstance(value, bool)
                 or value is None
@@ -251,6 +308,7 @@ class TrainingSession:
     direction_scope: TrainingDirection
     samples: tuple[TrainingSample, ...]
     dropped_sample_count: int = 0
+    profile_signature: str | None = None
 
     def profile(self) -> RegulationProfile:
         """Create a conservative shadow profile from observed coverage only."""
@@ -284,6 +342,7 @@ class TrainingSession:
             "direction_scope": self.direction_scope.value,
             "sample_count": len(self.samples),
             "dropped_sample_count": self.dropped_sample_count,
+            "profile_signature": self.profile_signature,
             "profile": self.profile().as_dict(),
             "samples": [sample.as_dict() for sample in self.samples],
         }
@@ -302,6 +361,7 @@ class PassiveTrainingRecorder:
         self._ends_at: datetime | None = None
         self._direction_scope = TrainingDirection.BOTH
         self._dropped_sample_count = 0
+        self._profile_signature: str | None = None
 
     @property
     def active(self) -> bool:
@@ -316,6 +376,7 @@ class PassiveTrainingRecorder:
             "direction_scope": self._direction_scope.value,
             "sample_count": len(self._samples),
             "dropped_sample_count": self._dropped_sample_count,
+            "profile_signature": self._profile_signature,
         }
 
     def start(
@@ -325,6 +386,7 @@ class PassiveTrainingRecorder:
         now: datetime,
         duration_minutes: int,
         direction_scope: TrainingDirection,
+        profile_signature: str | None = None,
     ) -> None:
         _aware(now)
         if self.active:
@@ -335,6 +397,7 @@ class PassiveTrainingRecorder:
         self._started_at = now
         self._ends_at = now + timedelta(minutes=duration_minutes)
         self._direction_scope = TrainingDirection(direction_scope)
+        self._profile_signature = profile_signature
         self._samples.clear()
         self._dropped_sample_count = 0
 
@@ -365,12 +428,14 @@ class PassiveTrainingRecorder:
             direction_scope=self._direction_scope,
             samples=tuple(self._samples),
             dropped_sample_count=self._dropped_sample_count,
+            profile_signature=self._profile_signature,
         )
         self._key = None
         self._started_at = None
         self._ends_at = None
         self._samples.clear()
         self._dropped_sample_count = 0
+        self._profile_signature = None
         return session
 
     def snapshot(self, *, now: datetime) -> TrainingSession | None:
@@ -390,6 +455,7 @@ class PassiveTrainingRecorder:
             direction_scope=self._direction_scope,
             samples=tuple(self._samples),
             dropped_sample_count=self._dropped_sample_count,
+            profile_signature=self._profile_signature,
         )
 
     def tick(self, *, now: datetime) -> TrainingSession | None:
@@ -495,6 +561,11 @@ class PassiveTrainingRecorder:
             mode_arbiter_reason=(
                 str(details["regulation_mode_arbiter_reason"])
                 if details.get("regulation_mode_arbiter_reason")
+                else None
+            ),
+            profile_signature=(
+                str(details["training_profile_signature"])
+                if details.get("training_profile_signature")
                 else None
             ),
         )

@@ -14,7 +14,9 @@ from custom_components.battery_smartflow_ai.regulation_training import (
     RegulationProfileState,
     TrainingDirection,
     TrainingSample,
+    compact_training_samples,
     recover_interrupted_training_session,
+    regulation_training_profile_signature,
     retain_training_sessions,
 )
 
@@ -151,6 +153,7 @@ class RegulationTrainingModelTests(unittest.TestCase):
             now=started,
             duration_minutes=10,
             direction_scope=TrainingDirection.BOTH,
+            profile_signature="profile-a",
         )
         sample = recorder.sample_from_details(
             timestamp=started,
@@ -174,7 +177,7 @@ class RegulationTrainingModelTests(unittest.TestCase):
                 "manual_action": "standby",
                 "regulation_strategy_intent": "pv_charge",
                 "regulation_strategy_force": False,
-                "regulation_strategy_priority": 400,
+                "regulation_strategy_priority": 500,
                 "regulation_mode_allowed": True,
                 "regulation_discharge_allowed": True,
                 "regulation_mode_arbiter_reason": "stable_export",
@@ -183,6 +186,7 @@ class RegulationTrainingModelTests(unittest.TestCase):
                 "effective_charge_max_step_up": 550,
                 "effective_charge_max_step_down": 300,
                 "effective_charge_deadband_w": 50,
+                "training_profile_signature": "profile-a",
                 "password": "must-not-be-recorded",
             },
         )
@@ -201,7 +205,9 @@ class RegulationTrainingModelTests(unittest.TestCase):
             "unchanged_within_tolerance",
         )
         self.assertEqual(serialized["samples"][0]["strategy_intent"], "pv_charge")
-        self.assertEqual(serialized["samples"][0]["strategy_priority"], 400)
+        self.assertEqual(serialized["samples"][0]["strategy_priority"], 500)
+        self.assertEqual(serialized["profile_signature"], "profile-a")
+        self.assertEqual(serialized["samples"][0]["profile_signature"], "profile-a")
         self.assertFalse(serialized["samples"][0]["strategy_force"])
         self.assertTrue(serialized["samples"][0]["mode_allowed"])
         self.assertEqual(
@@ -312,6 +318,56 @@ class RegulationTrainingModelTests(unittest.TestCase):
         retained = retain_training_sessions(sessions)
 
         self.assertEqual([item["label"] for item in retained], ["new"])
+
+    def test_training_storage_retains_multiple_small_sessions(self) -> None:
+        sessions = [
+            {"sample_count": 400, "stored_sample_count": 10, "label": str(index)}
+            for index in range(12)
+        ]
+
+        retained = retain_training_sessions(sessions)
+
+        self.assertEqual(len(retained), 12)
+
+    def test_compaction_keeps_directional_samples_and_single_idle_boundaries(self) -> None:
+        samples = [
+            {"direction": "charge", "timestamp": "1"},
+            {"direction": "idle", "timestamp": "2"},
+            {"direction": "idle", "timestamp": "3"},
+            {"direction": "discharge", "timestamp": "4"},
+            {"direction": "idle", "timestamp": "5"},
+            {"direction": "idle", "timestamp": "6"},
+        ]
+
+        retained = compact_training_samples(samples)
+
+        self.assertEqual(
+            [item["timestamp"] for item in retained], ["1", "2", "4", "5"]
+        )
+
+    def test_profile_signature_is_stable_and_changes_with_active_gain(self) -> None:
+        profile = {
+            "TARGET_IMPORT_W": 10,
+            "CHARGE_KP_UP": 0.65,
+            "MODE_SWITCH_COOLDOWN_S": 3,
+        }
+
+        signature = regulation_training_profile_signature(profile)
+
+        self.assertEqual(
+            signature,
+            regulation_training_profile_signature(
+                {
+                    "TARGET_IMPORT_W": 10.0,
+                    "CHARGE_KP_UP": 0.6500001,
+                    "MODE_SWITCH_COOLDOWN_S": 3.0,
+                }
+            ),
+        )
+        self.assertNotEqual(
+            signature,
+            regulation_training_profile_signature({**profile, "CHARGE_KP_UP": 0.7}),
+        )
 
 
 if __name__ == "__main__":
