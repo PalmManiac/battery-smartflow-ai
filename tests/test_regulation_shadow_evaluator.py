@@ -12,7 +12,10 @@ from custom_components.battery_smartflow_ai.regulation_shadow_evaluator import (
 class RegulationShadowEvaluatorTests(unittest.TestCase):
     @staticmethod
     def _reversal_samples(
-        *, override_at_reversal: bool = False, unchanged_commands: bool = False
+        *,
+        override_at_reversal: bool = False,
+        unchanged_commands: bool = False,
+        ai_mode: str = "automatic",
     ) -> list[dict]:
         started = datetime(2026, 10, 9, 12, 0, tzinfo=timezone.utc)
         samples = []
@@ -21,11 +24,19 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
             sample = {
                 "timestamp": (started + timedelta(seconds=index)).isoformat(),
                 "direction": direction,
-                "ai_mode": "automatic",
+                "ai_mode": ai_mode,
                 "manual_action": "standby",
-                "strategy_intent": "cover_deficit" if direction == "discharge" else "pv_charge",
+                "strategy_intent": (
+                    "cover_deficit" if direction == "discharge" else "pv_charge"
+                ),
                 "strategy_force": False,
-                "strategy_priority": 400,
+                "strategy_priority": (
+                    450
+                    if ai_mode == "summer" and direction == "discharge"
+                    else 500
+                    if direction == "charge"
+                    else 400
+                ),
                 "mode_allowed": True,
                 "discharge_allowed": True,
                 "grid_valid": True,
@@ -175,6 +186,59 @@ class RegulationShadowEvaluatorTests(unittest.TestCase):
 
         self.assertEqual(result["eligible_reversal_count"], 1)
         self.assertEqual(result["eligibility_exclusion_counts"], {})
+
+    def test_autarky_mode_and_its_normal_load_priority_are_eligible(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._reversal_samples(ai_mode="summer")}
+        )["reversal_hysteresis"]
+
+        self.assertEqual(result["eligible_sample_count"], 45)
+        self.assertEqual(result["eligible_reversal_count"], 1)
+        self.assertGreater(result["held_reversal_count"], 0)
+        self.assertEqual(result["eligibility_exclusion_counts"], {})
+
+    def test_manual_mode_remains_outside_reversal_shadow(self) -> None:
+        result = evaluate_training_session(
+            {"samples": self._reversal_samples(ai_mode="manual")}
+        )["reversal_hysteresis"]
+
+        self.assertEqual(result["eligible_sample_count"], 0)
+        self.assertEqual(result["eligible_reversal_count"], 0)
+        self.assertEqual(result["override_reversal_count"], 1)
+        self.assertEqual(
+            result["eligibility_exclusion_counts"]["unsupported_mode"], 45
+        )
+
+    def test_automatic_mode_keeps_its_lower_load_coverage_priority_limit(self) -> None:
+        samples = self._reversal_samples()
+        for sample in samples:
+            if sample["strategy_intent"] == "cover_deficit":
+                sample["strategy_priority"] = 450
+
+        result = evaluate_training_session({"samples": samples})[
+            "reversal_hysteresis"
+        ]
+
+        self.assertEqual(result["eligible_reversal_count"], 0)
+        self.assertEqual(result["override_reversal_count"], 1)
+        self.assertEqual(
+            result["eligibility_exclusion_counts"]["priority_missing_or_high"],
+            40,
+        )
+
+    def test_autarky_reversal_blocked_by_protection_is_not_eligible(self) -> None:
+        samples = self._reversal_samples(ai_mode="summer")
+        samples[5]["discharge_allowed"] = False
+
+        result = evaluate_training_session({"samples": samples})[
+            "reversal_hysteresis"
+        ]
+
+        self.assertEqual(result["eligible_reversal_count"], 0)
+        self.assertEqual(result["override_reversal_count"], 1)
+        self.assertEqual(
+            result["eligibility_exclusion_counts"]["discharge_protection"], 1
+        )
 
     def test_manual_reversal_is_counted_as_override_not_delayed(self) -> None:
         result = evaluate_training_session(

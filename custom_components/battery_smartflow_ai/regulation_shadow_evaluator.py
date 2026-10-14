@@ -26,9 +26,11 @@ MAX_REPLAY_OVERSHOOT_RATE = 0.10
 _GAIN_FACTORS = (0.8, 0.9, 1.0, 1.1, 1.2)
 REVERSAL_THRESHOLD_WATT_SECONDS = 3_000.0
 MAX_REVERSAL_SAMPLE_GAP_SECONDS = 30.0
-MAX_AUTOMATIC_STRATEGY_PRIORITY_BY_INTENT = {
-    "pv_charge": 500,
-    "cover_deficit": 400,
+MAX_REVERSAL_STRATEGY_PRIORITY_BY_MODE = {
+    "automatic": {"pv_charge": 500, "cover_deficit": 400},
+    # Explicit Autarky operation may use a slightly higher load-coverage
+    # priority while remaining an ordinary, non-forced PV/load strategy.
+    "summer": {"pv_charge": 500, "cover_deficit": 450},
 }
 
 
@@ -408,8 +410,9 @@ def _reversal_ineligibility_reason(
 ) -> str | None:
     """Return the first reason a command is unsafe to delay in the shadow."""
 
-    if sample.get("ai_mode") != "automatic":
-        return "not_automatic"
+    ai_mode = sample.get("ai_mode")
+    if ai_mode not in MAX_REVERSAL_STRATEGY_PRIORITY_BY_MODE:
+        return "unsupported_mode"
     if (
         expected_profile_signature is not None
         and sample.get("profile_signature") != expected_profile_signature
@@ -421,7 +424,7 @@ def _reversal_ineligibility_reason(
         return "strategy_not_pv_or_load"
     if sample.get("strategy_force") is not False:
         return "forced_or_unknown_strategy"
-    allowed_priority = MAX_AUTOMATIC_STRATEGY_PRIORITY_BY_INTENT.get(
+    allowed_priority = MAX_REVERSAL_STRATEGY_PRIORITY_BY_MODE[ai_mode].get(
         str(sample.get("strategy_intent"))
     )
     priority = _number(sample.get("strategy_priority"))
@@ -447,7 +450,8 @@ def _reversal_hysteresis_shadow(
     *,
     expected_profile_signature: str | None = None,
 ) -> dict[str, Any]:
-    """Estimate a 3 kWs reversal hold on ordinary automatic regulation only.
+    """Estimate a 3 kWs reversal hold on ordinary Automatic or Autarky
+    PV/load regulation.
 
     This deliberately reports withheld command energy and hold time, not a
     claimed grid-error improvement: the passive sample stream cannot reproduce
@@ -621,7 +625,8 @@ def _reversal_hysteresis_shadow(
         "maximum_hold_seconds": round(max_hold_seconds, 2),
         "live_parameters_changed": False,
         "interpretation": (
-            "Shadow-only estimate for ordinary automatic PV/load regulation. "
+            "Shadow-only estimate for ordinary Automatic or Autarky "
+            "PV/load regulation. "
             "Manual actions, forced or higher-priority strategies, denied mode "
             "changes, and discharge-protection states are excluded. Withheld "
             "energy and hold time are not a prediction of grid-error improvement."

@@ -161,11 +161,12 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('class="live-flow-track ${direction}"', frontend)
         self.assertIn('.live-flow-track.idle{border-color:#626970;background:#51575d;box-shadow:none}', frontend)
         self.assertIn('.live-flow-track.forward::after,.live-flow-track.reverse::after{opacity:.92}', frontend)
-        self.assertIn('.live-flow-track::after{animation:none;will-change:auto}', frontend)
-        self.assertIn('.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:live-flow-streaks', frontend)
+        self.assertIn('.live-flow-track::after{left:-34px;right:auto;width:calc(100% + 34px);animation:none;will-change:auto}', frontend)
+        self.assertIn('.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:live-flow-streaks-transform var(--flow-duration,1.6s) linear infinite;will-change:transform}', frontend)
         self.assertIn('repeating-linear-gradient(110deg', frontend)
+        self.assertIn('@keyframes live-flow-streaks-transform{to{transform:translateX(34px)}}', frontend)
         self.assertIn('animation-direction:reverse', frontend)
-        self.assertIn('@media(prefers-reduced-motion:reduce){.live-flow-track::after{animation:none', frontend)
+        self.assertIn('@media(prefers-reduced-motion:reduce){.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:none;will-change:auto;transform:none}}', frontend)
         self.assertIn('this._liveFlowNode(nodeKey, batteryDetail(nodeKey), spec.kind)', frontend)
 
     def test_irrelevant_pv_cards_hide_but_reappear_for_configured_or_live_data(self) -> None:
@@ -236,8 +237,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('type: "recorder/statistics_during_period"', frontend)
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.42"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=51"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.43"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=52"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -380,8 +381,8 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"CHF"', frontend)
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.42"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=51"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.43"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=52"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -500,10 +501,12 @@ class DashboardContractTests(unittest.TestCase):
             self.assertIn(field, coordinator)
         self.assertIn("eligibility_exclusion_counts", frontend)
         self.assertIn('"training_reversal_eligible_samples"', frontend)
+        self.assertIn('"training_reversal_reason_unsupported_mode"', frontend)
+        self.assertIn('"Not enough eligible PV/load data yet."', frontend)
         self.assertIn('"training_reason_low_confidence"', frontend)
         self.assertIn('"training_confidence_summary"', frontend)
-        self.assertIn('DASHBOARD_VERSION = "1.0.42"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=51"', dashboard)
+        self.assertIn('DASHBOARD_VERSION = "1.0.43"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v=52"', dashboard)
 
 
 if __name__ == "__main__":
