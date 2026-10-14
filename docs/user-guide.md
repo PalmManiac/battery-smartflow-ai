@@ -14,7 +14,7 @@
 
 * [V5 quick start: connect Zendure directly](#v5-quick-start-connect-zendure-directly)
 * [V5.1.0: the BSFAI Portal](#v510-the-bsfai-portal)
-* [Regulation training (V5.2.0 beta)](#regulation-training-v520-beta)
+* [Regulation training](#regulation-training)
 * [Chapter 1 – What does Battery SmartFlow AI do?](#chapter-1--what-does-battery-smartflow-ai-do)
 * [Chapter 2 – Mandatory Requirements](#chapter-2--mandatory-requirements)
 * [Chapter 3 – Installation](#chapter-3--installation)
@@ -166,7 +166,7 @@ reference and are not writable from this portal.
 
 ![BSFAI Portal 5.1.0: operating mode, settings, and hardware SoC limits](images/v510_portal_controls.png)
 
-### Regulation training (V5.2.0 beta)
+### Regulation training
 
 Passive regulation training observes normal charging and discharging and uses
 those observations to estimate a possible controller-profile candidate. It

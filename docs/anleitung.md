@@ -14,7 +14,7 @@
 
 * [V5-Schnellstart: Zendure direkt verbinden](#v5-schnellstart-zendure-direkt-verbinden)
 * [V5.1.0: Das BSFAI-Portal](#v510-das-bsfai-portal)
-* [Regelungstraining (V5.2.0 Beta)](#regelungstraining-v520-beta)
+* [Regelungstraining](#regelungstraining)
 * [Kapitel 1 – Was macht Battery SmartFlow AI?](#kapitel-1--was-macht-battery-smartflow-ai)
 * [Kapitel 2 – Zwingende Voraussetzungen](#kapitel-2--zwingende-voraussetzungen)
 * [Kapitel 3 – Installation](#kapitel-3--installation)
@@ -174,7 +174,7 @@ Information.
 
 ![BSFAI-Portal V5.1.0: Betriebsart, Einstellungen und Hardware-SoC-Grenzen](images/v510_portal_controls.png)
 
-### Regelungstraining (V5.2.0 Beta)
+### Regelungstraining
 
 Das passive Regelungstraining beobachtet die normalen Lade- und Entladevorgänge
 und schätzt daraus einen möglichen Regelungsvorschlag. Es ändert während der
