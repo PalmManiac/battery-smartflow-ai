@@ -14,6 +14,7 @@
 
 * [V5-Schnellstart: Zendure direkt verbinden](#v5-schnellstart-zendure-direkt-verbinden)
 * [V5.1.0: Das BSFAI-Portal](#v510-das-bsfai-portal)
+* [Regelungstraining](#regelungstraining)
 * [Kapitel 1 – Was macht Battery SmartFlow AI?](#kapitel-1--was-macht-battery-smartflow-ai)
 * [Kapitel 2 – Zwingende Voraussetzungen](#kapitel-2--zwingende-voraussetzungen)
 * [Kapitel 3 – Installation](#kapitel-3--installation)
@@ -172,6 +173,121 @@ die Anzeige nennt weiterhin die verfügbaren Hardware-SoC-Grenzen zur
 Information.
 
 ![BSFAI-Portal V5.1.0: Betriebsart, Einstellungen und Hardware-SoC-Grenzen](images/v510_portal_controls.png)
+
+### Regelungstraining
+
+Das passive Regelungstraining beobachtet die normalen Lade- und Entladevorgänge
+und schätzt daraus einen möglichen Regelungsvorschlag. Es ändert während der
+Aufzeichnung **keine aktiven Regelungswerte** und sendet keine experimentellen
+Befehle. Du findest es im BSFAI-Portal unter **Einstellungen & Training**.
+
+![Regelungstraining mit Status, Lade- und Entladevergleich sowie Schattenauswertung](images/regulation_training_overview.png)
+
+#### Trainingsdauer und Richtung wählen
+
+Wähle eine Dauer von **10, 30, 60 oder 120 Minuten** oder **24 Stunden** und
+die Richtung **Laden und Entladen**, **Nur Laden** oder **Nur Entladen**. Die
+Aufzeichnung endet nach der gewählten Zeit automatisch; du kannst sie auch
+vorher beenden.
+
+![Auswahl der Trainingsdauer im Regelungstraining](images/regulation_training_duration.png)
+
+![Auswahl der Trainingsrichtung im Regelungstraining](images/regulation_training_direction.png)
+
+Für einen vollständigen Überblick ist **24 Stunden mit beiden Richtungen** ein
+guter Startpunkt. Das Training kann aber keine Betriebsphase erzwingen: Ohne
+tatsächliche Ladung oder Entladung entstehen für diese Richtung keine
+auswertbaren Beobachtungen. Besonders wichtig: Ein Ladeprofil für
+PV-Überschuss wird nur anhand normaler, automatisch geregelter PV-Ladung
+bewertet. Feste AC- oder Preisfenster-Ladung wird separat gezählt und nicht als
+PV-Ladeverhalten gewertet. Für die Entladung braucht es tatsächliche
+Entladebeobachtungen; eine einzelne Richtung kann deshalb auswertbar sein,
+während für die andere noch Daten fehlen.
+
+Lass während des Laufs Gerät, Kommunikationsweg und Regelungsprofil möglichst
+unverändert. Vermeide außerdem einen Home-Assistant-Neustart oder ein Neuladen
+der Integration: Ein dadurch unterbrochener Lauf kann zwar teilweise zur
+Auswertung erhalten bleiben, sein Vorschlag lässt sich aber nicht übernehmen.
+Der Vergleich bezieht sich auf das **aktive Regelungsprofil** der passenden
+BSFAI-Instanz. Beobachtungen aus mehreren Läufen werden nur zusammengeführt,
+wenn Gerät, Kommunikationsweg, Firmware und Profil dazu passen.
+
+#### Status und Ergebniswerte lesen
+
+Die Anzeige **Trainingsdaten** zählt alle erfassten Beobachtungen des Laufs.
+Sie ist nicht gleichbedeutend mit der Zahl der für jede Richtung verwendbaren
+Datensätze. Ungültige oder fehlende Netzmessungen, nicht passende
+Betriebskontexte, übersprungene Befehle und Änderungen am Profil können
+Beobachtungen aus der jeweiligen Auswertung ausschließen. Achte daher auf die
+separaten Daten- und Qualitätsangaben bei **Ladeverhalten** und
+**Entladeverhalten**. „Noch nicht genügend auswertbare Daten“ bedeutet nicht
+automatisch, dass der ganze Lauf fehlgeschlagen ist.
+
+Die Balken vergleichen das aktive Profil mit einem Trainingsvorschlag. Die
+Werte in **W** sind eine vereinfachte Schätzung der mittleren verbleibenden
+Netzabweichung in einer Ein-Schritt-Simulation; sie sind weder der aktuelle
+Netzleistungswert noch eine gemessene Energieeinsparung. Ein kürzerer Balken
+bedeutet in dieser Schätzung eine geringere Abweichung. **Verbesserung** zeigt
+die geschätzte relative Änderung gegenüber dem aktiven Profil: positiv heißt
+geringere, negativ höhere Abweichung. Das ist keine Garantie für einen
+entsprechenden Effekt im echten Betrieb. Im Beispiel-Screenshot zeigt die
+Anzeige bei 18,1 W gegenüber 16,9 W eine geschätzte Verbesserung von 6,3 %;
+die Prozentzahl wird aus den ungerundeten internen Werten berechnet.
+
+* **Reaktionsereignisse** zählen erkennbare Änderungen der angeforderten
+  Lade- oder Entladeleistung. Sie helfen einzuschätzen, ob der Lauf tatsächlich
+  Regelreaktionen beobachtet hat.
+* **Konfidenz** fasst Datenmenge, gültige Daten und Reaktionsereignisse
+  zusammen. 100 % bedeutet, dass die internen Abdeckungswerte erreicht sind;
+  es ist **keine 100-prozentige Erfolgswahrscheinlichkeit**.
+* **Überschwingen** ist der Anteil der Beobachtungen, bei denen die vereinfachte
+  Simulation eine Überkorrektur erwartet. Beurteile ihn gemeinsam mit dem
+  Verbesserungsscore und nicht isoliert.
+* **Vorgeschlagener Faktor** skaliert die proportionalen Regelverstärkungen des
+  jeweiligen Richtungsprofils. Zum Beispiel bedeutet **1,2×** etwa 20 % mehr
+  Regelverstärkung – nicht 20 % mehr maximale Lade- oder Entladeleistung.
+
+Der Ergebnisstatus **Trainingskandidat aktiv** kann auch einen bereits früher
+übernommenen Vorschlag anzeigen; er bedeutet nicht zwingend, dass der gerade
+laufende Trainingsdurchgang schon fertig ist. Ein Durchgang kann außerdem für
+eine Richtung einen Vorschlag liefern und für die andere noch nicht.
+
+#### Umkehrsperre: getrennte Schattenauswertung
+
+Die **Umkehrsperre – Schattenauswertung** ist von der Profiloptimierung
+getrennt. Sie simuliert, wie eine kurze Sperre bei normalen automatischen
+Richtungswechseln wirken könnte. Manuelle, erzwungene oder höher priorisierte
+Entscheidungen sowie durch Schutzfunktionen gesperrte Zustände werden nicht
+verzögert. Die Anzeige ändert die aktive Regelung **nicht**.
+
+„Noch nicht genügend geeignete automatische Daten“ heißt, dass bisher zu wenige
+passende Beobachtungen für diese Simulation vorliegen; es sagt nichts über die
+Qualität des Lade- oder Entladekandidaten aus. Auch ein 24-Stunden-Lauf muss
+nicht automatisch geeignete Richtungswechsel enthalten. Wenn Werte angezeigt
+werden, lies sie so:
+
+* **Schwelle (Ws):** aufsummierte Leistung über Zeit, die der simulierte
+  Richtungswechsel erreichen muss; sie ist kein Watt-Limit.
+* **Simulierte Umkehrungen:** zurückgehaltene geeignete Wechsel im Verhältnis
+  zu allen geeigneten Wechseln.
+* **Nicht geeignete Umkehrungen:** beobachtete Wechsel, die wegen Modus,
+  Priorität, Schutz oder fehlendem gültigem Kontext nicht in die Simulation
+  eingehen.
+* **Geschätzte Haltezeit** und **zurückgehaltene Energie:** aufsummierte Werte
+  des simulierten Zurückhaltens, keine Messung einer realen Verbesserung oder
+  garantierten Einsparung.
+
+#### Vorschlag prüfen und übernehmen
+
+Ein Vorschlag wird **nicht automatisch aktiviert**. Übernimm ihn nur, wenn der
+Vergleich für die betreffende Richtung plausibel ist und genügend passende
+Daten vorliegen. Nach **Vorschlag übernehmen** kannst du den Kandidaten im
+Dashboard beobachten. Prüfe dabei Netzbezug und Einspeisung sowie das
+Lade-/Entladeverhalten unter realen Bedingungen. Bei unerwünschtem Verhalten
+stellt **Auf Geräteprofil zurücksetzen** das Geräteprofil wieder her. Ein
+fehlender oder abgelehnter Vorschlag ist kein Fehler: Er bedeutet, dass die
+Auswertung aktuell keinen ausreichend belastbaren oder besseren Kandidaten
+empfiehlt.
 
 Die Darstellung und verfügbare Werte richten sich nach den eingerichteten
 Entitäten und Prognosequellen. Nicht konfigurierte oder nicht verfügbare
