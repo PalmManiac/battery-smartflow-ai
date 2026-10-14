@@ -14,6 +14,7 @@
 
 * [V5 quick start: connect Zendure directly](#v5-quick-start-connect-zendure-directly)
 * [V5.1.0: the BSFAI Portal](#v510-the-bsfai-portal)
+* [Regulation training (V5.2.0 beta)](#regulation-training-v520-beta)
 * [Chapter 1 – What does Battery SmartFlow AI do?](#chapter-1--what-does-battery-smartflow-ai-do)
 * [Chapter 2 – Mandatory Requirements](#chapter-2--mandatory-requirements)
 * [Chapter 3 – Installation](#chapter-3--installation)
@@ -164,6 +165,115 @@ Changes are saved through Home Assistant. Hardware SoC limits are shown for
 reference and are not writable from this portal.
 
 ![BSFAI Portal 5.1.0: operating mode, settings, and hardware SoC limits](images/v510_portal_controls.png)
+
+### Regulation training (V5.2.0 beta)
+
+Passive regulation training observes normal charging and discharging and uses
+those observations to estimate a possible controller-profile candidate. It
+does **not change active regulation settings** or send experimental commands
+while recording. Find it in the BSFAI Portal under **Settings & Training**.
+
+![Regulation training status, charge and discharge comparison, and shadow evaluation; the screenshot labels are in German](images/regulation_training_overview.png)
+
+#### Choosing a duration and direction
+
+Choose **10, 30, 60, or 120 minutes**, or **24 hours**, and select **Charge and
+discharge**, **Charging only**, or **Discharging only**. Recording ends
+automatically after the selected duration, or you can stop it earlier.
+
+![Regulation training duration selector; the screenshot labels are in German](images/regulation_training_duration.png)
+
+![Regulation training direction selector; the screenshot labels are in German](images/regulation_training_direction.png)
+
+For a broad first look, **24 hours with both directions** is a good starting
+point. Training cannot force an operating phase, though: if no actual charge or
+discharge occurs, there may be no usable observations for that direction. In
+particular, a PV-surplus charging profile is evaluated only from normal,
+automatically regulated PV charging. Fixed AC or price-window charging is
+counted separately and is not treated as PV charging. The discharge evaluation
+needs actual discharge observations, so one direction may be evaluable while
+the other still needs data.
+
+Keep the device, communication path, and regulation profile unchanged during a
+run where possible. Also avoid restarting Home Assistant or reloading the
+integration: a run interrupted that way may retain partial observations for
+analysis, but its candidate cannot be applied. Results are compared with the
+**active regulation profile** for the matching BSFAI entry. Observations from
+multiple runs are combined only when the device, communication path, and
+firmware, and profile are compatible.
+
+#### Understanding the status and result values
+
+The **Training data** counter reports all observations captured during the
+run. It is not the same as the number of usable samples for each direction.
+Invalid or missing grid readings, unsuitable operating contexts, skipped
+commands, and profile changes can exclude observations from a particular
+evaluation. Check the separate data and quality details under **Charging** and
+**Discharging**. “Not enough usable data” for one direction does not
+automatically mean the whole run failed.
+
+The bars compare the active profile with a training candidate. Their values in
+**W** are a simplified estimate of mean remaining grid deviation in a one-step
+simulation; they are not the current grid-power reading or measured energy
+savings. A shorter bar means a smaller deviation in this estimate.
+**Improvement** shows the estimated relative change versus the active profile:
+a positive value means lower deviation, and a negative value means higher
+deviation. This is not a guarantee of the same effect in real operation.
+In the example screenshot, the display shows 6.3% estimated improvement for
+18.1 W versus 16.9 W; the percentage is calculated from unrounded internal
+values.
+
+* **Response events** count recognizable changes in requested charge or
+  discharge power. They help show whether the run observed actual controller
+  reactions.
+* **Confidence** combines sample quantity, valid data, and response events.
+  100% means the internal coverage values have been reached; it is **not a
+  100% probability of success**.
+* **Overshoot** is the share of observations for which the simplified
+  simulation predicts an over-correction. Consider it together with the
+  improvement score rather than in isolation.
+* **Proposed factor** scales the proportional controller gains for that
+  direction. For example, **1.2×** means about 20% more controller gain—not
+  20% more maximum charge or discharge power.
+
+The result status **Training candidate active** can refer to a candidate
+applied earlier; it does not necessarily mean the run currently in progress is
+already complete. A run may also produce a candidate for one direction while
+the other direction still lacks enough data.
+
+#### Reversal hold: separate shadow evaluation
+
+The **Reversal hold – shadow evaluation** is separate from profile tuning. It
+simulates how a short hold on ordinary automatic direction changes might
+behave. Manual, forced, or higher-priority decisions, as well as states blocked
+by protection, are not delayed. This display does **not** change active
+regulation.
+
+“Not enough suitable automatic data” means that too few matching observations
+are available for this simulation; it says nothing about the quality of the
+charge or discharge candidate. Even a 24-hour run may contain no suitable
+direction changes. When values are shown, read them as follows:
+
+* **Threshold (Ws):** accumulated power over time that a simulated reversal
+  must reach; it is not a watt limit.
+* **Simulated reversals:** eligible reversals held, compared with all eligible
+  reversals.
+* **Ineligible reversals:** observed reversals left out of the simulation due
+  to mode, priority, protection, or missing valid context.
+* **Estimated hold time** and **energy deferred during hold:** accumulated
+  simulation values, not measured real-world improvement or guaranteed
+  savings.
+
+#### Reviewing and applying a candidate
+
+A candidate is **not activated automatically**. Apply it only when the
+comparison looks plausible for the relevant direction and enough suitable data
+is available. After selecting **Apply candidate**, monitor it in the dashboard.
+Check grid import and export and the battery's charging and discharging
+behavior under real conditions. Use **Restore device profile** to revert if the
+behavior is undesirable. A missing or rejected candidate is not an error: it
+means the evaluation currently recommends no sufficiently reliable or better
+candidate.
 
 The displayed readings depend on the entities and forecast providers you have
 configured. Missing or unavailable sources are identified in the portal.
