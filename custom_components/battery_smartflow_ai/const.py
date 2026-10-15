@@ -588,6 +588,7 @@ DECISION_REASON_ENUMS = [
     "learned_charge_window_wait",
     "learned_charge_window_active",
     "charge_commit_active",
+    "charge_commit_waiting_price",
     "learned_charge_window_latest_start_reached",
     "learned_charge_window_no_charge_needed",
     "valley_opportunity_charge",
