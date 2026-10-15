@@ -34,6 +34,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._view = "overview";
     this._renderQueued = false;
+    this._renderStyleReady = false;
     this._openDetailId = null;
     this._chartEntityId = null;
     this._chartOriginView = "overview";
@@ -151,6 +152,45 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._scheduleRender();
         return;
       }
+      const applySelect = nodeFor("[data-apply-select]");
+      if (applySelect) {
+        const entityId = applySelect.dataset.applySelect;
+        const select = this.shadowRoot.querySelector(`[data-control-select="${CSS.escape(entityId)}"]`);
+        if (select) this._applyControl("select_option", entityId, { option: select.value });
+        return;
+      }
+      const applyNumber = nodeFor("[data-apply-number]");
+      if (applyNumber) {
+        const entityId = applyNumber.dataset.applyNumber;
+        const input = this.shadowRoot.querySelector(`[data-control-number="${CSS.escape(entityId)}"]`);
+        const value = Number(input ? input.value : NaN);
+        if (input && input.reportValidity() && Number.isFinite(value)) {
+          this._applyControl("set_value", entityId, { value });
+        }
+        return;
+      }
+      const detailsButton = nodeFor("[data-details-toggle]");
+      if (detailsButton) {
+        const details = this.shadowRoot.getElementById(detailsButton.dataset.detailsToggle);
+        const card = detailsButton.closest(".system-card, .pack-card");
+        if (!details || !card) return;
+        const open = card.classList.toggle("details-open");
+        this._openDetailId = open ? detailsButton.dataset.detailsToggle : null;
+        if (open) {
+          this.shadowRoot.querySelectorAll(".details-open").forEach((otherCard) => {
+            if (otherCard === card) return;
+            otherCard.classList.remove("details-open");
+            const otherButton = otherCard.querySelector("[data-details-toggle]");
+            if (otherButton) {
+              otherButton.setAttribute("aria-expanded", "false");
+              otherButton.textContent = this._t("details");
+            }
+          });
+        }
+        detailsButton.setAttribute("aria-expanded", String(open));
+        detailsButton.textContent = this._t(open ? "hide_details" : "details");
+        return;
+      }
       if (nodeFor("[data-home]")) {
         event.preventDefault();
         if (this._hass && typeof this._hass.navigate === "function") {
@@ -195,6 +235,69 @@ class BatterySmartFlowDashboard extends HTMLElement {
       this._renderQueued = false;
       this._render();
     });
+  }
+
+  _sameRenderNode(current, next) {
+    if (!current || current.nodeType !== next.nodeType) return false;
+    if (current.nodeType !== Node.ELEMENT_NODE) return true;
+    if (current.localName !== next.localName) return false;
+    const currentKey = current.getAttribute("data-render-key");
+    const nextKey = next.getAttribute("data-render-key");
+    return !currentKey && !nextKey ? true : currentKey === nextKey;
+  }
+
+  _patchRenderNode(current, next) {
+    if (current.nodeType === Node.TEXT_NODE) {
+      if (current.data !== next.data) current.data = next.data;
+      return;
+    }
+    if (current.nodeType !== Node.ELEMENT_NODE) return;
+    for (const attribute of [...current.attributes]) {
+      if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
+    }
+    for (const attribute of [...next.attributes]) {
+      if (current.getAttribute(attribute.name) !== attribute.value) {
+        current.setAttribute(attribute.name, attribute.value);
+      }
+    }
+    if (current instanceof HTMLInputElement && current.type === "checkbox") {
+      current.checked = next.checked;
+    } else if (current instanceof HTMLInputElement && document.activeElement !== current) {
+      current.value = next.value;
+    }
+    this._patchRenderChildren(current, next);
+    if (current instanceof HTMLSelectElement && document.activeElement !== current) {
+      current.value = next.value;
+    }
+  }
+
+  _patchRenderChildren(currentParent, nextParent) {
+    const nextChildren = [...nextParent.childNodes];
+    for (let index = 0; index < nextChildren.length; index += 1) {
+      const nextChild = nextChildren[index];
+      let currentChild = currentParent.childNodes[index] || null;
+      if (!this._sameRenderNode(currentChild, nextChild)) {
+        const nextKey = nextChild.nodeType === Node.ELEMENT_NODE
+          ? nextChild.getAttribute("data-render-key")
+          : null;
+        const matchingChild = nextKey
+          ? [...currentParent.childNodes].slice(index + 1).find((child) =>
+            this._sameRenderNode(child, nextChild))
+          : null;
+        if (matchingChild) {
+          currentParent.insertBefore(matchingChild, currentChild);
+          currentChild = matchingChild;
+        } else {
+          const replacement = nextChild.cloneNode(true);
+          currentParent.insertBefore(replacement, currentChild);
+          currentChild = replacement;
+        }
+      }
+      this._patchRenderNode(currentChild, nextChild);
+    }
+    while (currentParent.childNodes.length > nextChildren.length) {
+      currentParent.lastChild.remove();
+    }
   }
 
   _entities() {
@@ -267,7 +370,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       battery: ["AKKU", "BATTERY"], pv_power: ["PV-LEISTUNG", "PV POWER"], battery_power: ["AKKULEISTUNG", "BATTERY POWER"], grid_power: ["NETZLEISTUNG", "GRID POWER"], current_price: ["AKTUELLER PREIS", "CURRENT PRICE"], waiting_entity: ["Warte auf passenden Sensor", "Waiting for matching entity"], no_data: ["Noch keine Daten", "No data yet"],
       flows_today: ["Energieflüsse heute", "Today's energy flows"], ledger: ["Gemessenes BSFAI-Energiebuch", "Measured BSFAI energy ledger"], solar_forecast: ["Solarprognose", "Solar forecast"], forecast_compare: ["Brutto-Prognose und nutzbarer Rest", "Gross forecast versus usable remainder"],
       near_term: ["Nächste Stunden · nutzbar", "Next few hours · usable"], forecast_today: ["Heute · Brutto und nutzbar", "Today · gross and usable"], forecast_tomorrow: ["Morgen · Brutto und nutzbar", "Tomorrow · gross and usable"],
-      power_now: ["Momentanleistung", "Instantaneous power"], power_note: ["Live-Messwerte · Watt (W)", "Live readings · watts (W)"], daily_energy_note: ["Aufsummierte Energiemengen heute · Kilowattstunden (kWh)", "Accumulated energy today · kilowatt-hours (kWh)"], energy_flow_hint: ["Richtung nach Live-Messwerten · Netzbezug + / Einspeisung − · Akkuentladung + / Ladung −", "Direction from live readings · grid import + / export − · battery discharge + / charge −"], flow_idle: ["Kein aktiver Fluss", "No active flow"], flow_forward: ["Fluss nach rechts", "Flow to the right"], flow_reverse: ["Fluss nach links", "Flow to the left"], flow_unavailable: ["Messwert nicht verfügbar", "Reading unavailable"], grid_net: ["Netzleistung (Bezug + / Einspeisung −)", "Grid power (import + / export −)"], grid_import: ["Netzbezug", "Grid import"], grid_export: ["Netzeinspeisung", "Grid export"], pv_source: ["PV-Leistung", "PV power"], native_pv_source: ["Native PV-Leistung", "Native PV power"], offgrid_source: ["Off-Grid-Ausgang", "Off-grid output"], house_load_source: ["Hauslast", "House load"], battery_source: ["Akku-Leistung", "Battery power"],
+      power_now: ["Momentanleistung", "Instantaneous power"], power_note: ["Live-Messwerte · Watt (W)", "Live readings · watts (W)"], daily_energy_note: ["Aufsummierte Energiemengen heute · Kilowattstunden (kWh)", "Accumulated energy today · kilowatt-hours (kWh)"], energy_flow_hint: ["Live-Messwerte zum/vom gemeinsamen Hausnetz · Netzbezug + / Einspeisung − · Akkuentladung + / Ladung −. Keine rechnerische Aufteilung zwischen Geräten.", "Live meter flows to/from the shared home bus · grid import + / export − · battery discharge + / charge −. No inferred device-to-device allocation."], flow_idle: ["Kein aktiver Fluss", "No active flow"], flow_forward: ["Fluss nach rechts", "Flow to the right"], flow_reverse: ["Fluss nach links", "Flow to the left"], flow_unavailable: ["Messwert nicht verfügbar", "Reading unavailable"], grid_net: ["Netzleistung (Bezug + / Einspeisung −)", "Grid power (import + / export −)"], grid_import: ["Netzbezug", "Grid import"], grid_export: ["Netzeinspeisung", "Grid export"], pv_source: ["PV-Leistung", "PV power"], native_pv_source: ["Native PV-Leistung", "Native PV power"], offgrid_source: ["Off-Grid-Ausgang", "Off-grid output"], house_load_source: ["Hauslast", "House load"], battery_source: ["Akku-Leistung", "Battery power"],
       source_unavailable: ["Quelle nicht verfügbar", "Source unavailable"], no_power_readings: ["Keine konfigurierten oder nativen Leistungswerte gefunden.", "No configured or native power readings found."], per_system: ["Je System", "Per system"], shared_metrics: ["Gemeinsamer Wert", "Shared value"],
       pv_battery: ["PV → Akku", "PV → battery"], grid_battery: ["Netz → Akku", "Grid → battery"], battery_home: ["Akku → Haus", "Battery → home"], battery_grid: ["Akku → Netz", "Battery → grid"], native_pv_home: ["Native PV → Haus", "Native PV → home"], grid_export: ["Netzeinspeisung", "Grid export"],
       node_pv: ["PV", "PV"], node_native_pv: ["Native PV", "Native PV"], node_grid: ["Netz", "Grid"], node_battery: ["Akku", "Battery"], node_home: ["Haus", "Home"], node_bus: ["Hausnetz", "Home circuit"], node_site: ["Anlage", "Site"], node_system: ["System", "System"], source: ["Quelle", "Source"], destination: ["Ziel", "Destination"], relative_flow_scale: ["Balken relativ zum größten dargestellten Tagesfluss", "Bars are relative to the largest daily flow shown"],
@@ -1544,7 +1647,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       : null;
   }
 
-  _liveFlowNode(labelKey, detail = "", nodeType = "") {
+  _liveFlowNode(labelKey, detail = "", nodeType = "", placement = "") {
     const iconTypes = {
       node_pv: "pv",
       node_native_pv: "native-pv",
@@ -1558,7 +1661,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const svg = icon
       ? `<svg class="live-flow-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icon}</svg>`
       : "";
-    return `<div class="live-flow-node" data-node="${this._escape(labelKey)}"${nodeType ? ` data-node-type="${this._escape(nodeType)}"` : ""}>${svg}<span><strong>${this._escape(this._t(labelKey))}</strong>${detail ? `<small>${this._escape(detail)}</small>` : ""}</span></div>`;
+    return `<div class="live-flow-node ${this._escape(placement)}" data-render-key="node:${this._escape(labelKey)}" data-node="${this._escape(labelKey)}"${nodeType ? ` data-node-type="${this._escape(nodeType)}"` : ""}>${svg}<span><strong>${this._escape(this._t(labelKey))}</strong>${detail ? `<small>${this._escape(detail)}</small>` : ""}</span></div>`;
   }
 
   _liveFlowBranch(spec, maxWatts, socText, side, row = 1) {
@@ -1594,7 +1697,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const strength = watts === null || maxWatts <= 0 ? 0 : Math.min(1, Math.abs(watts) / maxWatts);
     const trackStyle = flow === "idle" || flow === "unavailable"
       ? ""
-      : ` style="--flow-duration:${(2.1 - strength * 1.35).toFixed(2)}s;--flow-width:${(3 + strength * 3).toFixed(1)}px"`;
+      : ` style="--flow-width:${(3 + strength * 3).toFixed(1)}px"`;
     const connection = `<div class="live-flow-connection" role="img" aria-label="${this._escape(`${this._t(spec.title)} · ${accessibleDirection}`)}"><div class="live-flow-measure"><small>${this._escape(this._t(spec.title))}</small><strong>${this._escape(value)}</strong></div><div class="live-flow-track ${direction}"${trackStyle}><span class="live-flow-arrow">${arrow}</span></div>${status ? `<small class="live-flow-status">${this._escape(status)}</small>` : ""}</div>`;
     const branch = `<div class="live-flow-branch side-${side} ${history ? "history-card" : ""}" data-flow="${this._escape(spec.kind)}"${side !== "full" ? ` style="--flow-row:${row}"` : ""}${history}>`;
     if (side === "right") {
@@ -1633,28 +1736,62 @@ class BatterySmartFlowDashboard extends HTMLElement {
       add(source.native_pv, null, {
         title: "native_pv_source", kind: "native-pv", from: "node_native_pv", to: "node_bus", side: "left", nonNegative: true,
       });
-      add(source.battery_power, allowFallback ? ["battery power", "batterieleistung", "native hardware power w"] : null, {
-        title: "battery_source", kind: "battery", side: "right", signed: true,
-        from: "node_battery", to: "node_bus",
-      });
-      if (source.grid_power) {
-        add(source.grid_power, null, {
-          title: "grid_net", kind: "grid", side: "left", signed: true,
-          from: "node_grid", to: "node_bus",
-        });
-      } else if (source.grid_import || source.grid_export) {
-        add(source.grid_import, !source.grid_import && allowFallback ? ["grid import", "netzbezug", "bezug"] : null, {
-          title: "grid_import", kind: "grid-import", side: "left", from: "node_grid", to: "node_bus", nonNegative: true,
-        });
-        add(source.grid_export, !source.grid_export && allowFallback ? ["grid export", "netzeinspeisung", "einspeisung"] : null, {
-          title: "grid_export", kind: "grid-export", side: "left", from: "node_bus", to: "node_grid", nonNegative: true,
-        });
-      } else {
-        add(null, allowFallback ? ["grid power", "netzleistung", "netzbezug"] : null, {
-          title: "grid_net", kind: "grid", side: "left", signed: true,
-          from: "node_grid", to: "node_bus",
-        });
+      const batterySpec = {
+        title: "battery_source", kind: "battery", from: "node_battery", to: "node_bus",
+        signed: true, side: "right",
+      };
+      const configuredBattery = resolve(
+        source.battery_power,
+        allowFallback ? ["battery power", "batterieleistung", "native hardware power w"] : null,
+      );
+      let batteryLane = configuredBattery && this._powerWatts(configuredBattery) !== null
+        ? { ...batterySpec, entity: configuredBattery }
+        : null;
+      if (!batteryLane && Array.isArray(source.native_battery_power) && source.native_battery_power.length) {
+        let totalWatts = 0;
+        let complete = true;
+        for (const pair of source.native_battery_power) {
+          const chargeEntity = resolve(pair.charge_entity, null);
+          const dischargeEntity = resolve(pair.discharge_entity, null);
+          const chargeWatts = this._powerWatts(chargeEntity);
+          const dischargeWatts = this._powerWatts(dischargeEntity);
+          if (chargeWatts !== null && dischargeWatts !== null) {
+            totalWatts += dischargeWatts - chargeWatts;
+          } else if (chargeWatts !== null && chargeWatts > 1 && (dischargeWatts === null || dischargeWatts <= 1)) {
+            // A live positive reading identifies the active direction; Zendure reports charge and discharge separately.
+            totalWatts -= chargeWatts;
+          } else if (dischargeWatts !== null && dischargeWatts > 1 && (chargeWatts === null || chargeWatts <= 1)) {
+            totalWatts += dischargeWatts;
+          } else {
+            complete = false;
+            break;
+          }
+        }
+        if (complete) batteryLane = { ...batterySpec, entity: null, watts: totalWatts, native: true };
       }
+      if (!batteryLane && configuredBattery) {
+        batteryLane = { ...batterySpec, entity: configuredBattery };
+      }
+      if (batteryLane) lanes.push(batteryLane);
+
+      let gridLane = null;
+      if (source.grid_power) {
+        const entity = resolve(source.grid_power, null);
+        if (entity) gridLane = { title: "grid_net", kind: "grid", entity, signed: true };
+      } else if (source.grid_import || source.grid_export) {
+        const importEntity = resolve(source.grid_import, !source.grid_import && allowFallback ? ["grid import", "netzbezug", "bezug"] : null);
+        const exportEntity = resolve(source.grid_export, !source.grid_export && allowFallback ? ["grid export", "netzeinspeisung", "einspeisung"] : null);
+        if (importEntity || exportEntity) {
+          const importWatts = importEntity ? this._powerWatts(importEntity) : 0;
+          const exportWatts = exportEntity ? this._powerWatts(exportEntity) : 0;
+          const watts = importWatts === null || exportWatts === null ? null : importWatts - exportWatts;
+          gridLane = { title: "grid_net", kind: "grid", entity: null, watts, signed: true, importEntity, exportEntity };
+        }
+      } else {
+        const entity = resolve(null, allowFallback ? ["grid power", "netzleistung", "netzbezug"] : null);
+        if (entity) gridLane = { title: "grid_net", kind: "grid", entity, signed: true };
+      }
+      if (gridLane) lanes.push(gridLane);
       add(source.house_load, allowFallback ? ["house_load", "house load", "hauslast", "hausverbrauch"] : null, {
         title: "house_load_source", kind: "house", side: "right", from: "node_bus", to: "node_home", nonNegative: true,
       });
@@ -1662,8 +1799,12 @@ class BatterySmartFlowDashboard extends HTMLElement {
         title: "offgrid_source", kind: "offgrid", side: "full", from: "node_system", to: "node_home", nonNegative: true,
       });
       if (!lanes.length) return "";
+      const wattsFor = (lane) => {
+        const value = lane.watts !== undefined ? lane.watts : this._powerWatts(lane.entity);
+        return lane.nonNegative && value !== null && value < -1 ? null : value;
+      };
       const maxWatts = Math.max(...lanes.map((lane) => {
-        const value = this._powerWatts(lane.entity);
+        const value = wattsFor(lane);
         return value === null || (lane.nonNegative && value < -1) ? 0 : Math.abs(value);
       }));
       const socEntity = (source.soc && this._hass?.states?.[source.soc])
@@ -1671,18 +1812,60 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const socText = socEntity && !["unknown", "unavailable"].includes(socEntity.state)
         ? this._value(socEntity)
         : "";
-      const leftLanes = lanes.filter((lane) => lane.side === "left");
-      const rightLanes = lanes.filter((lane) => lane.side === "right");
-      const fullLanes = lanes.filter((lane) => lane.side === "full");
-      const rowCount = Math.max(leftLanes.length, rightLanes.length, 1);
-      const branches = [
-        ...leftLanes.map((lane, index) => this._liveFlowBranch(lane, maxWatts, socText, "left", index + 1)),
-        ...rightLanes.map((lane, index) => this._liveFlowBranch(lane, maxWatts, socText, "right", index + 1)),
+      const pvLane = lanes.find((lane) => lane.kind === "pv") || lanes.find((lane) => lane.kind === "native-pv");
+      const nativePvLane = lanes.find((lane) => lane.kind === "native-pv");
+      const batteryWatts = batteryLane ? wattsFor(batteryLane) : null;
+      const gridWatts = gridLane ? wattsFor(gridLane) : null;
+      const houseLane = lanes.find((lane) => lane.kind === "house");
+      const houseWatts = houseLane ? wattsFor(houseLane) : null;
+      const pvWatts = pvLane ? wattsFor(pvLane) : null;
+      const amount = (watts) => watts === null
+        ? this._t("flow_unavailable")
+        : `${Math.abs(watts).toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 1 })} W`;
+      const direction = (watts, kind) => {
+        if (watts === null) return this._t("flow_unavailable");
+        if (Math.abs(watts) < 1) return this._t("flow_idle");
+        if (kind === "grid") return this._t(watts > 0 ? "grid_import" : "grid_export");
+        if (kind === "battery") return this._t(watts > 0 ? "discharge" : "charge");
+        return "";
+      };
+      const nodeDetail = (watts, kind, extra = "") => {
+        const detail = watts === null ? this._t("flow_unavailable") : `${amount(watts)}${direction(watts, kind) ? ` · ${direction(watts, kind)}` : ""}`;
+        return [extra, detail].filter(Boolean).join(" · ");
+      };
+      const flowClass = (watts, nonNegative = false) => watts === null || (nonNegative && watts < -1)
+        ? "unavailable"
+        : Math.abs(watts) < 1
+          ? "idle"
+          : watts < 0 ? "reverse" : "forward";
+      const wire = (key, path, watts, nonNegative = false) => {
+        const state = flowClass(watts, nonNegative);
+        return `<path class="flow-wire-base" d="${path}"/><path class="flow-wire ${state}" data-wire="${key}" d="${path}"/>`;
+      };
+      const pvDetail = [
+        pvLane ? nodeDetail(pvWatts, "pv") : this._t("flow_unavailable"),
+        nativePvLane && nativePvLane !== pvLane ? `${this._t("native_pv_source")}: ${amount(wattsFor(nativePvLane))}` : "",
+      ].filter(Boolean).join(" · ");
+      const batteryDetail = nodeDetail(
+        batteryWatts,
+        "battery",
+        socText ? `${this._t("battery")}: ${socText}` : "",
+      );
+      const gridDetail = nodeDetail(gridWatts, "grid");
+      const houseDetail = houseLane ? nodeDetail(houseWatts, "house") : this._t("flow_unavailable");
+      const wires = [
+        wire("pv", "M 135 76 C 204 80 224 135 263 160", pvWatts, true),
+        wire("grid", "M 300 105 L 300 137", gridWatts),
+        wire("battery", "M 465 76 C 396 80 376 135 337 160", batteryWatts),
+        wire("house", "M 300 199 L 300 239", houseWatts, true),
       ].join("");
-      const hub = `<div class="live-flow-hub" style="grid-row:1 / ${rowCount + 1}">${this._liveFlowNode("node_bus")}</div>`;
-      const map = `<div class="live-flow-map" style="--flow-rows:${rowCount}">${branches}${hub}</div>`;
-      const separateFlows = fullLanes.map((lane) => this._liveFlowBranch(lane, maxWatts, socText, "full")).join("");
-      return `<section class="live-flow-group"><h3>${this._escape(source.name || this._t("system"))}</h3>${map}${separateFlows ? `<div class="live-flow-separate">${separateFlows}</div>` : ""}</section>`;
+      const map = `<div class="live-flow-map" data-render-key="flow-map"><svg class="flow-wires" viewBox="0 0 600 300" preserveAspectRatio="none" aria-hidden="true">${wires}</svg>${this._liveFlowNode("node_pv", pvDetail, "pv", "flow-node-pv")}${this._liveFlowNode("node_grid", gridDetail, "grid", "flow-node-grid")}${this._liveFlowNode("node_battery", batteryDetail, "battery", "flow-node-battery")}${this._liveFlowNode("node_bus", "", "bus", "flow-node-bus")}${this._liveFlowNode("node_home", houseDetail, "house", "flow-node-house")}</div>`;
+      const offgridLane = lanes.find((lane) => lane.kind === "offgrid");
+      const offgrid = offgridLane
+        ? `<div class="live-flow-offgrid">${this._liveFlowBranch(offgridLane, maxWatts, socText, "full")}</div>`
+        : "";
+      const groupKey = this._escape(source.entry_id || source.name || "system");
+      return `<section class="live-flow-group" data-render-key="flow-group:${groupKey}"><h3>${this._escape(source.name || this._t("system"))}</h3>${map}${offgrid}</section>`;
     }).filter(Boolean);
     return groups.length
       ? `<div class="live-flow-overview">${groups.join("")}<p class="live-flow-note">${this._escape(this._t("energy_flow_hint"))}</p></div>`
@@ -1792,7 +1975,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
           }).join("")}</div>` : `<div class="empty">${this._escape(this._t("native_empty"))}</div>`}
         </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${systemSignals.length} ${this._escape(this._t("additional_signals"))}</small></div><div class="inventory signal-grid">${systemSignals.map((entity) => { const watchdog = entity.entity_id.includes("native_zendure_watchdog"); const watchdogState = watchdog ? String(entity.state || "unknown") : ""; const displayedValue = watchdog ? this._t(`watchdog_${watchdogState}`) : this._value(entity); return `<div class="entity signal-entity history-card${watchdog ? ` watchdog-signal watchdog-${this._escape(watchdogState)}` : ""}" data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${this._signalLabel(entity)} · ${displayedValue} · ${this._t("show_history")}`)}"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(displayedValue)}">${watchdog ? `<i class="watchdog-light" aria-hidden="true"></i>` : ""}${this._escape(displayedValue)}</strong></div>`; }).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
 
-    this.shadowRoot.innerHTML = `
+    const markup = `
       <style>
         :host{display:block;min-height:100%;background:#101214;color:#e7e9eb;font-family:Inter,"Segoe UI",sans-serif;--line:#34383d;--muted:#a4a9af;--cyan:#16c4df;--green:#56cf83;--amber:#f0c34e}
         *{box-sizing:border-box}.shell{max-width:1500px;margin:auto;padding:28px clamp(18px,3vw,42px) 56px}
@@ -1832,6 +2015,24 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .live-flow-track.reverse::after{animation-direction:reverse}
         @keyframes live-flow-streaks-transform{to{transform:translateX(34px)}}
         @media(prefers-reduced-motion:reduce){.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:none;will-change:auto;transform:none}}
+        .live-flow-map{position:relative;display:block;isolation:isolate;width:100%;min-height:270px;aspect-ratio:2/1;max-height:390px;overflow:hidden;border:1px solid #343a40;border-radius:12px;background:radial-gradient(ellipse at 50% 56%,#1d3440 0,#202428 68%)}
+        .flow-wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+        .flow-wire-base,.flow-wire{fill:none;stroke-linecap:round;vector-effect:non-scaling-stroke}
+        .flow-wire-base{stroke:#3a4248;stroke-width:8}
+        .flow-wire{stroke:#555e64;stroke-width:3.2;stroke-dasharray:2 15;stroke-dashoffset:0;opacity:.5}
+        .flow-wire[data-wire="pv"]{--wire-accent:#56cf83}.flow-wire[data-wire="grid"]{--wire-accent:#f06b6b}.flow-wire[data-wire="battery"]{--wire-accent:#f0c34e}.flow-wire[data-wire="house"]{--wire-accent:#16c4df}
+        .flow-wire.forward,.flow-wire.reverse{stroke:var(--wire-accent);opacity:.98;animation:energy-wire-flow 1.25s linear infinite}
+        .flow-wire.reverse{animation-direction:reverse}
+        .flow-wire.idle,.flow-wire.unavailable{animation:none;stroke:#596168;opacity:.58}
+        @keyframes energy-wire-flow{to{stroke-dashoffset:-34}}
+        .live-flow-map>.live-flow-node{position:absolute;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;width:clamp(78px,18%,128px);height:auto;min-height:78px;aspect-ratio:1;padding:9px;border:1px solid color-mix(in srgb,var(--flow-accent,#16c4df) 68%,#41464b);border-radius:50%;background:radial-gradient(circle at 38% 28%,color-mix(in srgb,var(--flow-accent,#16c4df) 16%,#272b2f),#202428 72%);box-shadow:0 0 17px color-mix(in srgb,var(--flow-accent,#16c4df) 24%,transparent);text-align:center;transform:translate(-50%,-50%)}
+        .live-flow-map>.live-flow-node>span{width:100%;min-width:0}.live-flow-map>.live-flow-node strong{font-size:clamp(11px,1.1vw,14px);line-height:1.15}.live-flow-map>.live-flow-node small{max-width:100%;color:#d0d6d9;font-size:clamp(9px,.85vw,11px);line-height:1.25;overflow-wrap:anywhere}
+        .live-flow-map .live-flow-icon{width:clamp(20px,3vw,31px);height:clamp(20px,3vw,31px);margin-bottom:1px}
+        .flow-node-pv{left:16%;top:18%;--flow-accent:#56cf83}.flow-node-grid{left:50%;top:18%;--flow-accent:#f06b6b}.flow-node-battery{left:84%;top:18%;--flow-accent:#f0c34e}.flow-node-bus{left:50%;top:56%;--flow-accent:#16c4df}.flow-node-house{left:50%;top:88%;--flow-accent:#16c4df}
+        .live-flow-map>.flow-node-bus{width:clamp(68px,14%,100px);min-height:68px;background:#1c2930;border-color:#4e6873;box-shadow:0 0 15px #16c4df20}.live-flow-map>.flow-node-bus .live-flow-icon{width:clamp(18px,2.5vw,25px);height:clamp(18px,2.5vw,25px)}.live-flow-map>.flow-node-house{width:clamp(82px,16%,112px);min-height:82px}
+        .live-flow-offgrid{margin-top:9px}.live-flow-note{margin:9px 2px 0}
+        @media(max-width:620px){.live-flow-map{min-height:310px;aspect-ratio:1.25/1}.live-flow-map>.live-flow-node{width:clamp(76px,22%,96px);min-height:76px;padding:7px}.live-flow-map>.flow-node-bus{width:clamp(65px,18%,78px);min-height:65px}.live-flow-map>.flow-node-house{width:clamp(78px,21%,90px);min-height:78px}.live-flow-map>.live-flow-node strong{font-size:11px}.live-flow-map>.live-flow-node small{font-size:9px}}
+        @media(prefers-reduced-motion:reduce){.flow-wire.forward,.flow-wire.reverse{animation:none;stroke-dasharray:3 10;stroke-dashoffset:0}}
       </style>
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
@@ -1840,6 +2041,22 @@ class BatterySmartFlowDashboard extends HTMLElement {
         ${activeContent}
         <p class="footer">${this._escape(this._t("footer"))}</p>
       </main>`;
+    const template = document.createElement("template");
+    if (this._renderStyleReady) {
+      const styleEnd = markup.indexOf("</style>");
+      template.innerHTML = markup.slice(styleEnd + "</style>".length);
+      const currentShell = this.shadowRoot.querySelector(".shell");
+      const nextShell = template.content.querySelector(".shell");
+      if (currentShell && nextShell) this._patchRenderNode(currentShell, nextShell);
+      else {
+        template.innerHTML = markup;
+        this._patchRenderChildren(this.shadowRoot, template.content);
+      }
+    } else {
+      template.innerHTML = markup;
+      this._patchRenderChildren(this.shadowRoot, template.content);
+      this._renderStyleReady = true;
+    }
     if (this._openDetailId) {
       const openButton = [...this.shadowRoot.querySelectorAll("[data-details-toggle]")]
         .find((button) => button.dataset.detailsToggle === this._openDetailId);
@@ -1852,44 +2069,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._openDetailId = null;
       }
     }
-    this.shadowRoot.querySelectorAll("[data-apply-select]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const entityId = button.dataset.applySelect;
-        const select = this.shadowRoot.querySelector(`[data-control-select="${CSS.escape(entityId)}"]`);
-        const option = select ? select.value : undefined;
-        if (option !== undefined) this._applyControl("select_option", entityId, { option });
-      });
-    });
-    this.shadowRoot.querySelectorAll("[data-apply-number]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const entityId = button.dataset.applyNumber;
-        const input = this.shadowRoot.querySelector(`[data-control-number="${CSS.escape(entityId)}"]`);
-        const value = Number(input ? input.value : NaN);
-        if (input && input.reportValidity() && Number.isFinite(value)) this._applyControl("set_value", entityId, { value });
-      });
-    });
-    this.shadowRoot.querySelectorAll("[data-details-toggle]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const details = this.shadowRoot.getElementById(button.dataset.detailsToggle);
-        const card = button.closest(".system-card, .pack-card");
-        if (!details || !card) return;
-        const open = card.classList.toggle("details-open");
-        this._openDetailId = open ? button.dataset.detailsToggle : null;
-        if (open) {
-          this.shadowRoot.querySelectorAll(".details-open").forEach((otherCard) => {
-            if (otherCard === card) return;
-            otherCard.classList.remove("details-open");
-            const otherButton = otherCard.querySelector("[data-details-toggle]");
-            if (otherButton) {
-              otherButton.setAttribute("aria-expanded", "false");
-              otherButton.textContent = this._t("details");
-            }
-          });
-        }
-        button.setAttribute("aria-expanded", String(open));
-        button.textContent = this._t(open ? "hide_details" : "details");
-      });
-    });
   }
 
   _escape(value) {

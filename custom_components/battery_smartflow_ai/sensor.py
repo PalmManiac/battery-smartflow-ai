@@ -2011,6 +2011,13 @@ async def async_setup_entry(
     entity_registry = er.async_get(hass)
     optional_registry_initialized = False
 
+    async def refresh_dashboard_native_sources() -> None:
+        """Refresh entity IDs after native Zendure sensors are first discovered."""
+
+        from .dashboard import async_update_dashboard_panel
+
+        await async_update_dashboard_panel(hass)
+
     def add_discovered_native_entities() -> None:
         nonlocal optional_registry_initialized
         discovered = []
@@ -2098,6 +2105,14 @@ async def async_setup_entry(
                         ))
         if discovered:
             add_entities(discovered)
+            if any(
+                entity._kind == "main"
+                and entity.entity_description.key in {"charge_power_w", "discharge_power_w"}
+                for entity in discovered
+            ):
+                # Native hardware is discovered after the initial dashboard setup;
+                # rebuild its source map once so live charge/discharge sensors are linked.
+                hass.async_create_task(refresh_dashboard_native_sources())
         optional_registry_initialized = True
 
     add_discovered_native_entities()

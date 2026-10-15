@@ -169,6 +169,39 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('@media(prefers-reduced-motion:reduce){.live-flow-track.forward::after,.live-flow-track.reverse::after{animation:none;will-change:auto;transform:none}}', frontend)
         self.assertIn('this._liveFlowNode(nodeKey, batteryDetail(nodeKey), spec.kind)', frontend)
 
+    def test_live_flow_uses_native_zendure_charge_and_discharge_when_needed(self) -> None:
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('native_main_prefix = f"{unique_prefix}native_main_"', dashboard)
+        self.assertIn('("_charge_power_w", "charge_entity")', dashboard)
+        self.assertIn('("_discharge_power_w", "discharge_entity")', dashboard)
+        self.assertIn('sources["native_battery_power"] = list(native_battery_power.values())', dashboard)
+        self.assertIn("refresh_dashboard_native_sources", sensor)
+        self.assertIn("hass.async_create_task(refresh_dashboard_native_sources())", sensor)
+        self.assertIn("source.native_battery_power", frontend)
+        self.assertIn("totalWatts += dischargeWatts - chargeWatts", frontend)
+        self.assertIn('wire("battery",', frontend)
+        self.assertIn('this._t(watts > 0 ? "discharge" : "charge")', frontend)
+
+    def test_live_dashboard_patches_existing_dom_and_uses_energy_flow_schematic(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+        render = frontend.split("  _render() {", 1)[1].split("\n  _escape(value)", 1)[0]
+
+        self.assertNotIn("this.shadowRoot.innerHTML =", render)
+        self.assertIn("this._patchRenderNode(currentShell, nextShell)", render)
+        self.assertIn("this._renderStyleReady = true", render)
+        self.assertIn('data-render-key="flow-map"', frontend)
+        self.assertIn('class="flow-wires"', frontend)
+        self.assertIn("@keyframes energy-wire-flow", frontend)
+        self.assertIn(".flow-wire.idle,.flow-wire.unavailable", frontend)
+        self.assertIn("preserveAspectRatio=\"none\"", frontend)
+
     def test_irrelevant_pv_cards_hide_but_reappear_for_configured_or_live_data(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"

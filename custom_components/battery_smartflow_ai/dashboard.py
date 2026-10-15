@@ -102,6 +102,16 @@ _DASHBOARD_SENSOR_KEYS = (
 async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
     """Register the panel whenever at least one config entry opts in."""
 
+    update_lock = hass.data.setdefault(
+        f"{DOMAIN}_dashboard_update_lock", asyncio.Lock()
+    )
+    async with update_lock:
+        await _async_update_dashboard_panel_locked(hass)
+
+
+async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
+    """Build and register the panel while holding the update lock."""
+
     loaded_entry_ids = hass.data.get(DOMAIN, {})
     entries = [
         hass.config_entries.async_get_entry(entry_id)
@@ -198,6 +208,7 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
                     forecast_sources.append(str(label))
 
         sources = {
+            "entry_id": entry.entry_id,
             "name": entry.title,
             "soc": data.get(CONF_SOC_ENTITY),
             "price_now": data.get(CONF_PRICE_NOW_ENTITY),
@@ -227,13 +238,13 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
                 DOMAIN,
                 f"{DOMAIN}_{entry.entry_id}_grid_power",
             )
-        if any(value for key, value in sources.items() if key != "name"):
-            power_sources.append(sources)
         configured_price = data.get(CONF_PRICE_NOW_ENTITY)
         if configured_price and configured_price not in sensor_entities["price_now"]:
             sensor_entities["price_now"].append(configured_price)
 
         unique_prefix = f"{DOMAIN}_{entry.entry_id}_"
+        native_main_prefix = f"{unique_prefix}native_main_"
+        native_battery_power: dict[str, dict[str, str]] = {}
         for registry_entry in entity_registry.entities.values():
             if (
                 registry_entry.config_entry_id != entry.entry_id
@@ -245,6 +256,21 @@ async def async_update_dashboard_panel(hass: HomeAssistant) -> None:
             key = registry_entry.unique_id.removeprefix(unique_prefix)
             if key in sensor_entities and registry_entry.entity_id not in sensor_entities[key]:
                 sensor_entities[key].append(registry_entry.entity_id)
+            if registry_entry.unique_id.startswith(native_main_prefix):
+                for suffix, field in (
+                    ("_charge_power_w", "charge_entity"),
+                    ("_discharge_power_w", "discharge_entity"),
+                ):
+                    if registry_entry.unique_id.endswith(suffix):
+                        public_id = registry_entry.unique_id[
+                            len(native_main_prefix) : -len(suffix)
+                        ]
+                        native_battery_power.setdefault(public_id, {})[field] = (
+                            registry_entry.entity_id
+                        )
+        sources["native_battery_power"] = list(native_battery_power.values())
+        if any(value for key, value in sources.items() if key not in {"name", "entry_id"}):
+            power_sources.append(sources)
 
     # Multiple config entries can reach dashboard setup concurrently. Protect
     # the check-and-register sequence so each instance cannot register the
