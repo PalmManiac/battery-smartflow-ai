@@ -210,6 +210,34 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
                     sensors[key]["state"],
                 )
 
+    def test_waiting_charge_commit_reason_is_a_translated_decision_enum_state(
+        self,
+    ) -> None:
+        constants = ast.parse((COMPONENT / "const.py").read_text(encoding="utf-8"))
+        decision_reasons = next(
+            ast.literal_eval(node.value)
+            for node in constants.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "DECISION_REASON_ENUMS"
+                for target in node.targets
+            )
+        )
+        self.assertIn("charge_commit_waiting_price", decision_reasons)
+
+        for filename in ("strings.json", "de.json", "en.json", "fr.json", "nl.json"):
+            path = (
+                COMPONENT / filename
+                if filename == "strings.json"
+                else COMPONENT / "translations" / filename
+            )
+            sensors = json.loads(path.read_text(encoding="utf-8"))["entity"]["sensor"]
+            self.assertIn(
+                "charge_commit_waiting_price",
+                sensors["decision_reason"]["state"],
+            )
+
     def test_serial_is_device_metadata_but_not_part_of_entity_identity(self) -> None:
         sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
         entity = sensor[sensor.index("class NativeZendureHardwareSensor"):]

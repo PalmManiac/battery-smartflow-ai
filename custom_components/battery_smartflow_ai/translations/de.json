@@ -928,6 +928,7 @@
           "learned_charge_window_wait": "Lernbasierte Ladeplanung wartet auf optimales Ladefenster",
           "learned_charge_window_active": "Lernbasiertes Ladefenster aktiv",
           "charge_commit_active": "AC-Ladebindung aktiv",
+          "charge_commit_waiting_price": "AC-Ladebindung wartet auf Preisfenster",
           "learned_charge_window_latest_start_reached": "Lernplanung: spätester Startzeitpunkt erreicht",
           "learned_charge_window_no_charge_needed": "Lernplanung: keine Nachladung erforderlich",
           "valley_opportunity_charge": "Preis-Tal genutzt, da real kaum PV verfügbar ist",
