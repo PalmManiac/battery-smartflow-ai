@@ -14,6 +14,7 @@
 
 * [V5-Schnellstart: Zendure direkt verbinden](#v5-schnellstart-zendure-direkt-verbinden)
 * [V5.1.0: Das BSFAI-Portal](#v510-das-bsfai-portal)
+* [Community-Erweiterung: SmartFlow Preisampel](#community-erweiterung-smartflow-preisampel)
 * [Regelungstraining](#regelungstraining)
 * [Kapitel 1 – Was macht Battery SmartFlow AI?](#kapitel-1--was-macht-battery-smartflow-ai)
 * [Kapitel 2 – Zwingende Voraussetzungen](#kapitel-2--zwingende-voraussetzungen)
@@ -292,6 +293,34 @@ empfiehlt.
 Die Darstellung und verfügbare Werte richten sich nach den eingerichteten
 Entitäten und Prognosequellen. Nicht konfigurierte oder nicht verfügbare
 Messwerte werden im Portal entsprechend gekennzeichnet.
+
+### Community-Erweiterung: SmartFlow Preisampel
+
+Die [SmartFlow Preisampel](https://github.com/spikesch/smartflow-preisampel)
+ist ein unabhängiges Community-Projekt. Es ergänzt eine Dashboard-Karte, die
+BSFAI-Preisstufen, Schwellen und bisherige Aktionen visualisiert, sowie einen
+Simulator für Preisregler. Die Karte ist kein weiterer Regler: Anzeige und
+Simulation treffen keine eigenen Lade- oder Entladeentscheidungen.
+
+Danke an spikesch für dieses erste externe Community-Projekt rund um BSFAI.
+
+Der Simulator ändert zunächst nur seine Vorschau. Erst wenn du **In BSFAI
+übernehmen** auswählst und die Rückfrage bestätigst, schreibt die Erweiterung
+die geänderten Werte in die Einstellungen der ausgewählten BSFAI-Instanz.
+Prüfe die vorgeschlagenen Werte daher sorgfältig; notiere dir bei Bedarf die
+bisherigen Einstellungen, damit du sie wiederherstellen kannst.
+
+Die Erweiterung ist nicht Teil von Battery SmartFlow AI und wird nicht von
+dessen Maintainer unterstützt. Sie greift teilweise auf interne, nicht
+dokumentierte BSFAI-Schnittstellen zu; zukünftige Änderungen können daher die
+Kompatibilität beeinflussen. Für die HACS-Installation wird das Repository als
+benutzerdefiniertes Repository vom Typ **Integration** hinzugefügt; danach
+werden die Integration eingerichtet und die Karte im Dashboard ergänzt. Das
+Projekt nennt außerdem **apexcharts-card** als Voraussetzung. Prüfe die
+aktuellen Voraussetzungen und folge der vollständigen Installations- und
+Kartenanleitung im
+[Repository des Autors](https://github.com/spikesch/smartflow-preisampel).
+Melde Probleme mit der Erweiterung dort und nicht als Fehler von BSFAI.
 
 ## Upgrade von V4.7.4 auf V5
 
