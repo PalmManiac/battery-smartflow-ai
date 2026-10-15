@@ -158,6 +158,10 @@ class DashboardContractTests(unittest.TestCase):
         )
 
         self.assertIn('class="live-flow-map"', frontend)
+        self.assertIn(
+            '.flow-node-house{left:50%;top:calc(100% - 74px);--flow-accent:#16c4df}',
+            frontend,
+        )
         self.assertIn('class="live-flow-track ${direction}"', frontend)
         self.assertIn('.live-flow-track.idle{border-color:#626970;background:#51575d;box-shadow:none}', frontend)
         self.assertIn('.live-flow-track.forward::after,.live-flow-track.reverse::after{opacity:.92}', frontend)
