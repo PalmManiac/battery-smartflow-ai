@@ -14,6 +14,7 @@
 
 * [V5 quick start: connect Zendure directly](#v5-quick-start-connect-zendure-directly)
 * [V5.1.0: the BSFAI Portal](#v510-the-bsfai-portal)
+* [Community extension: SmartFlow Preisampel](#community-extension-smartflow-preisampel)
 * [Regulation training](#regulation-training)
 * [Chapter 1 – What does Battery SmartFlow AI do?](#chapter-1--what-does-battery-smartflow-ai-do)
 * [Chapter 2 – Mandatory Requirements](#chapter-2--mandatory-requirements)
@@ -277,6 +278,32 @@ candidate.
 
 The displayed readings depend on the entities and forecast providers you have
 configured. Missing or unavailable sources are identified in the portal.
+
+### Community extension: SmartFlow Preisampel
+
+[SmartFlow Preisampel](https://github.com/spikesch/smartflow-preisampel) is an
+independent community project. It adds a dashboard card that visualizes BSFAI
+price levels, thresholds and recent actions, as well as a simulator for price
+settings. The card is not another controller: its display and simulation do
+not make charging or discharging decisions.
+
+Thanks to spikesch for creating this first external community project around
+BSFAI.
+
+The simulator initially changes only its preview. If you select **Apply to
+BSFAI** and confirm the prompt, the extension writes the changed values to the
+settings of the selected BSFAI instance. Review the values carefully; if you
+may want to revert them, note your existing settings first.
+
+This extension is not part of Battery SmartFlow AI and is not maintained or
+supported by its maintainers. It accesses some internal, undocumented BSFAI
+interfaces, so future changes may affect compatibility. For HACS installation,
+add the repository as a custom repository of type **Integration**, install it,
+then set up the integration and add its card to a dashboard. The project also
+lists **apexcharts-card** as a requirement. Check the current requirements and
+follow the full installation and card instructions in the author's
+[repository](https://github.com/spikesch/smartflow-preisampel). Report
+problems with the extension there, not as BSFAI bugs.
 
 ## Upgrade from V4.7.4 to V5
 

@@ -65,6 +65,25 @@ not a second hardware controller.
 See the [English portal guide](docs/user-guide.md#v510-the-bsfai-portal) or the
 [German portal guide](docs/anleitung.md#v510-das-bsfai-portal).
 
+## Community project: SmartFlow Preisampel
+
+An independent community project adds a dashboard card for visualizing BSFAI
+price levels, thresholds and recent actions, plus a simulator for exploring
+price-setting changes. The display and simulation do not make control
+decisions. Applying simulator values to BSFAI writes the selected settings
+only after explicit confirmation.
+
+Thanks to spikesch for creating this first external community project around
+BSFAI.
+
+This project is not part of or supported by the BSFAI maintainers. It uses
+some internal BSFAI interfaces, so compatibility can change; installation,
+requirements and support are documented by its author in the
+[SmartFlow Preisampel repository](https://github.com/spikesch/smartflow-preisampel).
+See the [English guide](docs/user-guide.md#community-extension-smartflow-preisampel)
+or [German guide](docs/anleitung.md#community-erweiterung-smartflow-preisampel)
+for context and precautions.
+
 ---
 
 # 🌍 Language
@@ -655,6 +674,24 @@ Home-Assistant-Entitäten und -Dienste und ist kein zweiter Hardware-Regler.
 
 Mehr dazu in der [deutschen Portal-Anleitung](docs/anleitung.md#v510-das-bsfai-portal)
 oder im [englischen User Guide](docs/user-guide.md#v510-the-bsfai-portal).
+
+## Community-Erweiterung: SmartFlow Preisampel
+
+Ein unabhängiges Community-Projekt ergänzt eine Dashboard-Karte zur Anzeige
+von BSFAI-Preisstufen, Schwellen und bisherigen Aktionen sowie einen Simulator
+für Preisregler. Anzeige und Simulation treffen keine Regelungsentscheidungen.
+Wenn du simulierte Werte in BSFAI übernimmst, werden die ausgewählten
+Einstellungen erst nach ausdrücklicher Bestätigung geschrieben.
+
+Danke an spikesch für dieses erste externe Community-Projekt rund um BSFAI.
+
+Die Erweiterung gehört nicht zum BSFAI-Projekt und wird nicht von dessen
+Maintainer unterstützt. Sie nutzt teilweise interne BSFAI-Schnittstellen;
+Kompatibilität und Voraussetzungen können sich daher ändern. Installation,
+aktuelle Anforderungen und Support findest du im Repository des Autors:
+[SmartFlow Preisampel](https://github.com/spikesch/smartflow-preisampel).
+Weitere Hinweise stehen in der [deutschen Anleitung](docs/anleitung.md#community-erweiterung-smartflow-preisampel)
+und im [englischen User Guide](docs/user-guide.md#community-extension-smartflow-preisampel).
 
 ---
 
