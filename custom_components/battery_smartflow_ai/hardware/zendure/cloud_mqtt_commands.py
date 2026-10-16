@@ -239,7 +239,12 @@ def plan_cloud_command(
         # Zendure directional control is one complete command. A bare limit
         # write can update the stored setpoint without starting Smart Mode.
         requested.extend((
-            ("smartMode", 1 if active_limit > 0 else 0),
+            (
+                "smartMode",
+                matrix.smart_mode_for_setpoint(
+                    active_limit, command.metadata
+                ),
+            ),
             ("acMode", _MODE_VALUES[command.ac_mode]),
             ("outputLimit", output_limit),
             ("inputLimit", input_limit),

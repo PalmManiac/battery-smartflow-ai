@@ -112,6 +112,25 @@ class ZendureDeviceMatrixTests(unittest.TestCase):
                 self.assertIsNotNone(entry)
                 self.assertIs(entry.profile, DEVICE_PROFILE_MODELS[profile_key])
 
+    def test_standby_smart_mode_is_model_specific(self):
+        self.assertEqual(
+            ZENDURE_DEVICE_MATRIX["SF2400AC"].smart_mode_standby_value, 0
+        )
+        for profile_key in (
+            "SF2400Pro",
+            "SF2400AC+",
+            "SF1600AC",
+            "SF800",
+            "SF800Plus",
+            "SF800Pro",
+            "SF800Pro2",
+        ):
+            with self.subTest(profile=profile_key):
+                self.assertEqual(
+                    ZENDURE_DEVICE_MATRIX[profile_key].smart_mode_standby_value,
+                    1,
+                )
+
     def test_verified_legacy_models_prefer_local_mqtt_automatically(self):
         for profile_key, model in (
             ("Hyper 2000", "Hyper 2000"),

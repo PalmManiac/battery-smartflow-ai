@@ -99,7 +99,9 @@ def map_zensdk_command(
         output_w = _whole_watts(command.output_limit_w)
         active_w = input_w if command.ac_mode == "input" else output_w
         requested.update({
-            "smartMode": _smart_mode(active_w, command.metadata),
+            "smartMode": matrix.smart_mode_for_setpoint(
+                active_w, command.metadata
+            ),
             "acMode": 1 if command.ac_mode == "input" else 2,
             "outputLimit": 0 if command.ac_mode == "input" else output_w,
             "inputLimit": input_w if command.ac_mode == "input" else 0,
@@ -107,7 +109,9 @@ def map_zensdk_command(
     elif command.should_write_output:
         output_w = _whole_watts(command.output_limit_w)
         requested.update({
-            "smartMode": _smart_mode(output_w, command.metadata),
+            "smartMode": matrix.smart_mode_for_setpoint(
+                output_w, command.metadata
+            ),
             "outputLimit": output_w,
         })
     if command.should_write_min_soc:
@@ -288,19 +292,3 @@ def _soc_tenths(value: float | None) -> int:
     if number < 0 or number > 100:
         raise ValueError("invalid_soc_value")
     return int(round(number * 10))
-
-
-def _smart_mode(active_w: int, metadata: Mapping[str, object]) -> int:
-    """Keep the off-grid socket alive when its load is active or unknown."""
-
-    if active_w > 0:
-        return 1
-    raw_offgrid = metadata.get("native_offgrid_power_w")
-    if raw_offgrid is None:
-        return 1
-    if isinstance(raw_offgrid, bool):
-        raise ValueError("invalid_offgrid_power")
-    try:
-        return 1 if float(raw_offgrid) > 0 else 0
-    except (TypeError, ValueError) as error:
-        raise ValueError("invalid_offgrid_power") from error

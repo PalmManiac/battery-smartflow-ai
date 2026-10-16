@@ -46,7 +46,7 @@ class Response:
         return self.data
 
 
-async def make_bootstrap():
+async def make_bootstrap(model="SolarFlow 2400 AC", product_id="BC8B7F"):
     token = b64encode(b"https://api.example.com.app-key").decode()
 
     async def post(*_args, **_kwargs):
@@ -57,8 +57,8 @@ async def make_bootstrap():
                 "deviceList": [{
                     "deviceKey": "device-real-1",
                     "snNumber": "serial-real-1",
-                    "productKey": "BC8B7F",
-                    "productModel": "SolarFlow 2400 AC",
+                    "productKey": product_id,
+                    "productModel": model,
                     "online": True,
                     "ip": "192.168.1.44",
                 }],
@@ -206,6 +206,19 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
                     "outputLimit": 0,
                     "inputLimit": 0,
                 })
+
+    async def test_zero_command_uses_model_standby_smart_mode(self):
+        data = await make_bootstrap(
+            model="SolarFlow 2400 Pro", product_id="UNKNOWN_PRODUCT"
+        )
+        command = output_command(0)
+        command.metadata["native_offgrid_power_w"] = 0
+
+        mapped = map_zensdk_command(
+            authorized(command), data, first_request_id=7
+        )
+
+        self.assertEqual(mapped.properties["smartMode"], 1)
 
     async def test_soc_property_remains_rejected_without_network(self):
         data = await make_bootstrap()
