@@ -99,13 +99,23 @@ async def async_write_zensdk_properties(
     direction_names = frozenset(
         {"smartMode", "acMode", "inputLimit", "outputLimit"}
     )
+    active_output_adjustment_names = frozenset({"smartMode", "outputLimit"})
     if any(isinstance(value, bool) or not isinstance(value, int) for value in properties.values()):
         return ZenSdkWriteResult(False, None, "invalid_property_value")
-    if property_names not in (frozenset({"outputLimit"}), direction_names, frozenset({"gridOffMode"})):
+    if property_names not in (
+        frozenset({"outputLimit"}),
+        active_output_adjustment_names,
+        direction_names,
+        frozenset({"gridOffMode"}),
+    ):
         return ZenSdkWriteResult(False, None, "property_not_allowed")
     if property_names == frozenset({"gridOffMode"}) and next(iter(properties.values())) not in {0, 1, 2}:
         return ZenSdkWriteResult(False, None, "invalid_property_value")
     if property_names == direction_names and not _valid_direction_group(properties):
+        return ZenSdkWriteResult(False, None, "invalid_direction_group")
+    if property_names == active_output_adjustment_names and (
+        properties["smartMode"] != 1 or properties["outputLimit"] <= 0
+    ):
         return ZenSdkWriteResult(False, None, "invalid_direction_group")
     device = next(
         (item for item in bootstrap.devices

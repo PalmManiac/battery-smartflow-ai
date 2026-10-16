@@ -244,6 +244,43 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
             {"sn": "serial-real-1", "properties": {"outputLimit": 301}, "id": 7},
         )
 
+    async def test_active_discharge_adjustment_allows_only_temporary_mode(self):
+        data = await make_bootstrap()
+        calls = []
+
+        async def post(url, **kwargs):
+            calls.append((url, kwargs))
+            return Response({"success": True}, 200)
+
+        result = await async_write_zensdk_properties(
+            data,
+            "cloud_mqtt:device-real-1",
+            {"smartMode": 1, "outputLimit": 301},
+            8,
+            post,
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(calls[0][1]["json"]["properties"], {
+            "smartMode": 1,
+            "outputLimit": 301,
+        })
+        for invalid in (
+            {"smartMode": 0, "outputLimit": 301},
+            {"smartMode": 1, "outputLimit": 0},
+        ):
+            with self.subTest(invalid=invalid):
+                rejected = await async_write_zensdk_properties(
+                    data,
+                    "cloud_mqtt:device-real-1",
+                    invalid,
+                    9,
+                    post,
+                )
+                self.assertFalse(rejected.accepted)
+                self.assertEqual(rejected.result, "invalid_direction_group")
+        self.assertEqual(len(calls), 1)
+
     async def test_write_falls_back_after_pre_send_connector_error(self):
         data = await make_bootstrap(
             product_model="SolarFlow 800 Pro", product_key="R3mn8U"

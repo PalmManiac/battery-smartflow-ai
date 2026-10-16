@@ -81,10 +81,11 @@ def map_zensdk_command(
     command = authorized.command
     requested: dict[str, int] = {}
     # Direction changes, charging updates and an explicit stop must reach the
-    # device as one complete state.  A running discharge, on the other hand,
-    # can safely adjust only ``outputLimit``.  Repeating ``smartMode`` and
-    # ``acMode`` for every output correction makes some devices reprocess the
-    # direction and can cause unnecessary relay activity.
+    # device as one complete state.  During a running discharge, keep avoiding
+    # repeated ``acMode`` writes (which can reprocess the direction), but always
+    # reassert ``smartMode=1`` alongside a positive output correction. Without
+    # it, a correction after a previous stop can remain in persistent-storage
+    # mode even though the device is active again.
     complete_directional_write = (
         command.should_write_mode
         or command.should_write_input
@@ -104,7 +105,11 @@ def map_zensdk_command(
             "inputLimit": input_w if command.ac_mode == "input" else 0,
         })
     elif command.should_write_output:
-        requested["outputLimit"] = _whole_watts(command.output_limit_w)
+        output_w = _whole_watts(command.output_limit_w)
+        requested.update({
+            "smartMode": _smart_mode(output_w, command.metadata),
+            "outputLimit": output_w,
+        })
     if command.should_write_min_soc:
         requested["minSoc"] = _soc_tenths(command.min_soc_pct)
     if command.should_write_max_soc:

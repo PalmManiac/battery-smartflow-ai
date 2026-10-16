@@ -238,6 +238,10 @@ class ZendureCommandMatrixTests(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
                     self.assertEqual(len(post_calls), 1)
                     self.assertEqual(
+                        post_calls[0][1]["json"]["properties"],
+                        {"smartMode": 1, "outputLimit": 123},
+                    )
+                    self.assertEqual(
                         adapter.observe_properties(
                             device_id=DEVICE_ID,
                             properties={"outputLimit": 123},
@@ -245,8 +249,13 @@ class ZendureCommandMatrixTests(unittest.IsolatedAsyncioTestCase):
                         ),
                         1,
                     )
+                    output_verification = next(
+                        verification.get(command_id)
+                        for command_id in result.verification_ids
+                        if verification.get(command_id).target_key == "outputLimit"
+                    )
                     self.assertEqual(
-                        verification.get(result.verification_ids[0]).status,
+                        output_verification.status,
                         CommandVerificationStatus.READBACK_CONFIRMED,
                     )
                 else:
