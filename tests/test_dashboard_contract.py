@@ -66,6 +66,18 @@ class DashboardContractTests(unittest.TestCase):
             registration.index("hass.data[_STATIC_PATH_KEY] = True"),
         )
 
+    def test_dashboard_module_cache_key_tracks_frontend_contents(self) -> None:
+        dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
+
+        self.assertIn("import hashlib", dashboard)
+        self.assertIn("panel_module_version = hashlib.sha256(", dashboard)
+        self.assertIn('(frontend_dir / "hems-dashboard.js").read_bytes()', dashboard)
+        self.assertIn(
+            'module_url=f"{_PANEL_URL}?v={panel_module_version}"',
+            dashboard,
+        )
+        self.assertNotIn('module_url=f"{_PANEL_URL}?v=52"', dashboard)
+
     def test_forecast_sensors_are_resolved_by_registered_unique_ids(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
@@ -275,7 +287,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('period: this._chartRange === "month" ? "day" : "hour"', frontend)
         self.assertIn("this._chartDataIsStatistic", frontend)
         self.assertIn('DASHBOARD_VERSION = "1.0.43"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=52"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v={panel_module_version}"', dashboard)
         self.assertIn("_parseHistoryResponse(history, entityId)", frontend)
         self.assertIn("history[entityId]", frontend)
         self.assertIn("row.s ?? row.state", frontend)
@@ -419,7 +431,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"JPY"', frontend)
         self.assertIn("const precision = this._displayPrecision(unit) ?? 1;", frontend)
         self.assertIn('DASHBOARD_VERSION = "1.0.43"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=52"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v={panel_module_version}"', dashboard)
 
     def test_training_controls_and_reconfiguration_are_exposed_in_dashboard(self) -> None:
         dashboard = (COMPONENT / "dashboard.py").read_text(encoding="utf-8")
@@ -543,7 +555,7 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"training_reason_low_confidence"', frontend)
         self.assertIn('"training_confidence_summary"', frontend)
         self.assertIn('DASHBOARD_VERSION = "1.0.43"', dashboard)
-        self.assertIn('module_url=f"{_PANEL_URL}?v=52"', dashboard)
+        self.assertIn('module_url=f"{_PANEL_URL}?v={panel_module_version}"', dashboard)
 
 
 if __name__ == "__main__":

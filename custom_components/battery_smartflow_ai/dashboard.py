@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 
 from homeassistant.components import frontend, panel_custom
@@ -275,10 +276,14 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
     # Multiple config entries can reach dashboard setup concurrently. Protect
     # the check-and-register sequence so each instance cannot register the
     # same GET route before the other one marks it as registered.
+    frontend_dir = Path(__file__).parent / "frontend"
+    panel_module_version = hashlib.sha256(
+        (frontend_dir / "hems-dashboard.js").read_bytes()
+    ).hexdigest()[:12]
+
     registration_lock = hass.data.setdefault(_STATIC_PATH_LOCK_KEY, asyncio.Lock())
     async with registration_lock:
         if not hass.data.get(_STATIC_PATH_KEY):
-            frontend_dir = Path(__file__).parent / "frontend"
             await hass.http.async_register_static_paths(
                 [
                     StaticPathConfig(
@@ -346,7 +351,7 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
         webcomponent_name=_PANEL_NAME,
         sidebar_title="BSFAI Portal",
         sidebar_icon="mdi:solar-power-variant",
-        module_url=f"{_PANEL_URL}?v=52",
+        module_url=f"{_PANEL_URL}?v={panel_module_version}",
         config={
             "title": "Battery SmartFlow AI",
             "integration_version": INTEGRATION_VERSION,
