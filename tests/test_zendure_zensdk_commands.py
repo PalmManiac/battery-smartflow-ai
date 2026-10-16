@@ -114,7 +114,7 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
         self.assertEqual(calls[0][1]["json"]["properties"], {"gridOffMode": 1})
         self.assertIsNotNone(manager.active_for(DEVICE, "gridOffMode"))
-    async def test_running_output_adjustment_writes_only_output_limit(self):
+    async def test_running_output_adjustment_reasserts_temporary_smart_mode(self):
         data = await make_bootstrap()
         calls = []
         manager = NativeCommandVerificationManager()
@@ -129,15 +129,18 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         result = await adapter.execute(authorized(output_command()))
 
         self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
-        self.assertEqual(result.writes_sent, 1)
+        self.assertEqual(result.writes_sent, 2)
         self.assertEqual(result.requests_sent, 1)
         self.assertEqual(len(calls), 1)
         self.assertEqual(calls[0][0], "http://192.168.1.44/properties/write")
         self.assertEqual(calls[0][1]["json"], {
             "sn": "serial-real-1",
-            "properties": {"outputLimit": 301},
+            "properties": {"smartMode": 1, "outputLimit": 301},
             "id": 1,
         })
+        mode = manager.active_for(DEVICE, "smartMode")
+        self.assertIsNotNone(mode)
+        self.assertEqual(mode.status, CommandVerificationStatus.TRANSPORT_OK)
         tracked = manager.active_for(DEVICE, "outputLimit")
         self.assertIsNotNone(tracked)
         self.assertEqual(tracked.status, CommandVerificationStatus.TRANSPORT_OK)
@@ -266,12 +269,12 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.http_status, 503)
         self.assertEqual(result.requests_sent, 1)
         self.assertEqual(len(calls), 1)
-        self.assertEqual(len(result.verification_ids), 1)
+        self.assertEqual(len(result.verification_ids), 2)
         diagnostics = adapter.diagnostics()
         self.assertEqual(diagnostics["result"], "http_error")
         self.assertEqual(diagnostics["http_status"], 503)
         self.assertEqual(diagnostics["address_source"], "device_list_ip")
-        self.assertEqual(diagnostics["properties"], ["outputLimit"])
+        self.assertEqual(diagnostics["properties"], ["outputLimit", "smartMode"])
         self.assertNotIn("url", diagnostics)
         for command_id in result.verification_ids:
             tracked = manager.get(command_id)
