@@ -92,9 +92,32 @@ class CloudCommandMappingTests(unittest.TestCase):
         command = DeviceCommand(
             "output", output_limit_w=0, should_write_mode=True,
             should_write_input=False, should_write_output=True,
+            metadata={"native_offgrid_power_w": 0},
         )
         *_, writes = map_cloud_command(envelope(command), self.data, first_message_id=1, timestamp=1)
         self.assertEqual([(item.property_name, item.value) for item in writes], [("smartMode", 0), ("acMode", 2), ("outputLimit", 0), ("inputLimit", 0)])
+
+    def test_zero_command_uses_model_standby_smart_mode(self):
+        for model, offgrid_power, expected in (
+            ("SolarFlow 2400 AC", 0, 0),
+            ("SolarFlow 2400 AC", None, 1),
+            ("SolarFlow 2400 AC", 12, 1),
+            ("SolarFlow 2400 Pro", 0, 1),
+            ("SolarFlow 2400 AC+", 0, 1),
+            ("SolarFlow 800", 0, 1),
+        ):
+            with self.subTest(model=model, offgrid_power=offgrid_power):
+                data = asyncio.run(bootstrap(model))
+                command = DeviceCommand(
+                    "output", output_limit_w=0, should_write_mode=True,
+                    should_write_input=False, should_write_output=True,
+                    metadata={"native_offgrid_power_w": offgrid_power},
+                )
+                *_, writes = map_cloud_command(
+                    envelope(command), data, first_message_id=1, timestamp=1
+                )
+                self.assertEqual(writes[0].property_name, "smartMode")
+                self.assertEqual(writes[0].value, expected)
 
     def test_active_output_is_complete_directional_command(self):
         command = DeviceCommand(

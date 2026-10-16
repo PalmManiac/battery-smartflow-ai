@@ -66,10 +66,13 @@ class ZendureDeviceMatrixEntry:
     calibration: CalibrationCapability
     cloud_command_protocol: CloudCommandProtocol = CloudCommandProtocol.PROPERTIES
     native_control_approved: bool = False
+    smart_mode_standby_value: int = 1
 
     def __post_init__(self) -> None:
         if self.profile_key not in DEVICE_PROFILE_MODELS:
             raise ValueError("Native matrix references an unknown device profile")
+        if self.smart_mode_standby_value not in (0, 1):
+            raise ValueError("Smart Mode standby value must be 0 or 1")
         object.__setattr__(self, "transports", MappingProxyType(dict(self.transports)))
         object.__setattr__(
             self,
@@ -112,6 +115,27 @@ class ZendureDeviceMatrixEntry:
         return self.writable_main_properties_by_transport.get(transport, {}).get(
             property_name, VerificationLevel.UNSUPPORTED
         )
+
+    def smart_mode_for_setpoint(
+        self, active_w: int, metadata: Mapping[str, object]
+    ) -> int:
+        """Select temporary or model-specific standby Smart Mode safely."""
+
+        if active_w > 0:
+            return 1
+        offgrid_power = metadata.get("native_offgrid_power_w")
+        if offgrid_power is None:
+            return 1
+        if isinstance(offgrid_power, bool):
+            raise ValueError("invalid_offgrid_power")
+        try:
+            return (
+                1
+                if float(offgrid_power) > 0
+                else self.smart_mode_standby_value
+            )
+        except (TypeError, ValueError) as error:
+            raise ValueError("invalid_offgrid_power") from error
 
 
 _COMMON_MAIN_READS = frozenset(
@@ -249,6 +273,7 @@ def _entry(
     zensdk_verified: bool = False,
     local_mqtt_verified: bool = False,
     local_mqtt_input_verified: bool = True,
+    smart_mode_standby_value: int = 1,
 ) -> ZendureDeviceMatrixEntry:
     transports = dict(_transport_matrix())
     writes = dict(_REFERENCE_WRITES)
@@ -335,6 +360,7 @@ def _entry(
         ),
         cloud_command_protocol=cloud_command_protocol,
         native_control_approved=True,
+        smart_mode_standby_value=smart_mode_standby_value,
     )
 
 
@@ -349,6 +375,9 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 "SF2400AC",
                 product_ids=("BC8B7F",),
                 zensdk_verified=True,
+                # Field reports describe residual output on this model unless
+                # the persistent-storage stop mode is used.
+                smart_mode_standby_value=0,
             ),
             _entry(
                 "SF2400Pro",
