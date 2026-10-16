@@ -347,7 +347,13 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn("background:radial-gradient(circle at 30% 25%", frontend)
         self.assertIn("@keyframes soap-bubbles-right{from{transform:translateX(-50%)}to{transform:translateX(0)}}", frontend)
         self.assertIn("@keyframes soap-bubbles-left{from{transform:translateX(0)}to{transform:translateX(-50%)}}", frontend)
-        self.assertIn("performance.now() + systemIndex * 883 + packNumber * 557", frontend)
+        self.assertIn(
+            "const flowSeed = `${system.id || system.name || system.model || systemIndex}:${packNumber}`;",
+            frontend,
+        )
+        self.assertIn("(phase * 31 + character.charCodeAt(0)) % 8000", frontend)
+        self.assertIn("`--flow-delay:-${(flowPhase / 1000).toFixed(3)}s`", frontend)
+        self.assertNotIn("performance.now() + systemIndex * 883 + packNumber * 557", frontend)
         self.assertIn("@keyframes soap-bubbles-right", frontend)
         self.assertIn("@keyframes soap-bubbles-left", frontend)
         self.assertIn('_topologyTransport(system.transport)', frontend)
