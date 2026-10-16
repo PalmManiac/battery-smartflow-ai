@@ -1957,8 +1957,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
               const socLevel = soc == null ? "0" : String(soc);
               const socBand = soc == null ? "unknown" : soc < 20 ? "low" : soc < 50 ? "medium" : "high";
               const socLabel = this._escape(`${this._t("battery_pack")} ${packNumber} · ${socLevel} % SoC`);
+              const flowSeed = `${system.id || system.name || system.model || systemIndex}:${packNumber}`;
+              const flowPhase = [...flowSeed].reduce(
+                (phase, character) => (phase * 31 + character.charCodeAt(0)) % 8000,
+                0,
+              );
+              // Keep the phase stable across renders so state refreshes do not restart the animation.
               const flowDelay = flowDirection && soc != null
-                ? `--flow-delay:-${((performance.now() + systemIndex * 883 + packNumber * 557) % 8000 / 1000).toFixed(3)}s`
+                ? `--flow-delay:-${(flowPhase / 1000).toFixed(3)}s`
                 : "";
               const bubbles = `<span class="soap-bubble" data-bubble="1"></span><span class="soap-bubble" data-bubble="2"></span><span class="soap-bubble" data-bubble="3"></span><span class="soap-bubble" data-bubble="4"></span><span class="soap-bubble" data-bubble="5"></span><span class="soap-bubble" data-bubble="6"></span>`;
               const flowOverlay = flowDirection && soc != null
