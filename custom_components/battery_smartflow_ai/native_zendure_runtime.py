@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable, Mapping
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
@@ -31,6 +32,7 @@ from .hardware.zendure.cloud import ZendureCloudClient
 from .hardware.zendure.cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
 from .hardware.zendure.cloud_mqtt_commands import CloudCommandStatus
 from .hardware.zendure.device_matrix import (
+    SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY,
     VerificationLevel,
     preferred_local_transport,
     resolve_zendure_device,
@@ -98,6 +100,15 @@ ZENSDK_OFFLINE_AFTER_FAILURES = 3
 ZENSDK_MAX_DATA_AGE = 30.0
 ZENSDK_MAX_RETRY_INTERVAL = 60.0
 ZENSDK_DEBUG_ATTEMPT_LIMIT = 120
+SMART_MODE_STANDBY_DELAY_SECONDS = 60.0
+SMART_MODE_STANDBY_POLL_INTERVAL_SECONDS = 5.0
+SMART_MODE_STANDBY_CONFIRMATION_TIMEOUT_SECONDS = 30.0
+SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY = (
+    "native_smart_mode_standby_force_write"
+)
+SMART_MODE_STANDBY_GENERATION_METADATA_KEY = (
+    "native_smart_mode_standby_generation"
+)
 NATIVE_MESSAGE_COUNT_SENSOR_UPDATE_INTERVAL = 300.0
 LEGACY_GROUPED_CONTROL_MAX_DATA_AGE = 180.0
 _LEGACY_GROUPED_CONTROL_MODELS = frozenset(
@@ -177,6 +188,8 @@ class NativeZendureRuntime:
         self._first_write_result: NativeWriteVerification | None = None
         self._write_lock = asyncio.Lock()
         self._write_sequence = 0
+        self._smart_mode_standby_task: asyncio.Task[None] | None = None
+        self._smart_mode_standby_generation = 0
         self._command_verification = NativeCommandVerificationManager()
         self._transport_metrics = NativeTransportMetrics()
         self._zensdk_command_adapter: ZendureZenSdkCommandAdapter | None = None
@@ -428,6 +441,7 @@ class NativeZendureRuntime:
         self._task = asyncio.create_task(self._async_run())
 
     async def async_stop(self) -> None:
+        self._cancel_smart_mode_standby()
         self._transport_router.update_readiness(
             ready=False,
             reason="runtime_stopped",
@@ -994,11 +1008,30 @@ class NativeZendureRuntime:
     ) -> CommandExecutionResult:
         """Route one neutral PowerController command through the native stack."""
 
+        standby_confirmation = (
+            command.metadata.get(SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY) is True
+        )
+        standby_generation = command.metadata.get(
+            SMART_MODE_STANDBY_GENERATION_METADATA_KEY
+        )
+        if not standby_confirmation and _requests_active_direction(command):
+            # A new target cancels a pending persistent-standby write before it
+            # can wait behind the serialized transport lock.
+            self._cancel_smart_mode_standby()
+
         if not self._control_enabled:
             return self._remember_command_result(_command_result(
                 CommandExecutionStatus.SKIPPED, "native_control_disabled"
             ))
+        standby_request_generation = self._smart_mode_standby_generation
         async with self._write_lock:
+            if standby_confirmation and (
+                standby_generation != self._smart_mode_standby_generation
+            ):
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED,
+                    "native_smart_mode_standby_superseded",
+                ))
             if (
                 self._status != STATUS_OBSERVING
                 or self._selected_device is None
@@ -1069,6 +1102,17 @@ class NativeZendureRuntime:
                 native_identities=(control_identity,),
             )
             final_command = _skip_matching_writes(command, state)
+            if standby_confirmation:
+                final_command = replace(
+                    final_command,
+                    metadata={
+                        **final_command.metadata,
+                        SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY: True,
+                        SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY: True,
+                        SMART_MODE_STANDBY_GENERATION_METADATA_KEY:
+                            standby_generation,
+                    },
+                )
             offgrid_power = getattr(state, "offgrid_power_w", None)
             final_command = replace(
                 final_command,
@@ -1088,6 +1132,7 @@ class NativeZendureRuntime:
             request = NativeCommandRequest(
                 self._selected_device, control_transport, final_command
             )
+            stop_requested_at = datetime.now(timezone.utc)
             context = NativeCommandContext(
                 inventory=DeviceInventory(devices=(active_device,)),
                 states={self._selected_device: state},
@@ -1143,6 +1188,22 @@ class NativeZendureRuntime:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.FAILED, transport.reason
                 ))
+            if (
+                not standby_confirmation
+                and self._should_delay_smart_mode_standby(
+                    source_device,
+                    control_transport,
+                    final_command,
+                )
+                and standby_request_generation
+                == self._smart_mode_standby_generation
+            ):
+                self._schedule_smart_mode_standby(
+                    device_id=self._selected_device,
+                    transport=control_transport,
+                    command=final_command,
+                    stop_requested_at=stop_requested_at,
+                )
             return self._remember_command_result(CommandExecutionResult(
                 status=CommandExecutionStatus.APPLIED,
                 reason=transport.reason,
@@ -1150,6 +1211,148 @@ class NativeZendureRuntime:
                 input_written=final_command.should_write_input,
                 output_written=final_command.should_write_output,
             ))
+
+    def _should_delay_smart_mode_standby(
+        self,
+        device: MainDevice,
+        transport: ZendureTransport,
+        command: DeviceCommand,
+    ) -> bool:
+        """Limit the delayed persistent-mode policy to verified model paths."""
+
+        identity = _identity_for_transport(device, transport)
+        matrix = resolve_zendure_device(identity) if identity is not None else None
+        return bool(
+            matrix is not None
+            and matrix.smart_mode_standby_value == 0
+            and matrix.property_write_level(transport, "smartMode")
+            is VerificationLevel.VERIFIED
+            and float(command.input_limit_w) == 0
+            and float(command.output_limit_w) == 0
+            and any((
+                command.should_write_mode,
+                command.should_write_input,
+                command.should_write_output,
+            ))
+        )
+
+    def _cancel_smart_mode_standby(self) -> None:
+        """Invalidate and cancel a pending persistent-standby write."""
+
+        self._smart_mode_standby_generation += 1
+        task, self._smart_mode_standby_task = self._smart_mode_standby_task, None
+        if task is not None and task is not asyncio.current_task():
+            task.cancel()
+
+    def _schedule_smart_mode_standby(
+        self,
+        *,
+        device_id: str,
+        transport: ZendureTransport,
+        command: DeviceCommand,
+        stop_requested_at: datetime,
+    ) -> None:
+        """Start tracking one explicit zero-power stop for sustained standby."""
+
+        self._cancel_smart_mode_standby()
+        generation = self._smart_mode_standby_generation
+        self._smart_mode_standby_task = asyncio.create_task(
+            self._async_apply_smart_mode_standby_after_idle(
+                generation=generation,
+                device_id=device_id,
+                transport=transport,
+                command=command,
+                stop_requested_at=stop_requested_at,
+            )
+        )
+
+    async def _async_apply_smart_mode_standby_after_idle(
+        self,
+        *,
+        generation: int,
+        device_id: str,
+        transport: ZendureTransport,
+        command: DeviceCommand,
+        stop_requested_at: datetime,
+    ) -> None:
+        """Use persistent standby only after confirmed zero setpoints stay stable."""
+
+        task = asyncio.current_task()
+        loop = asyncio.get_running_loop()
+        confirmation_deadline = (
+            loop.time() + SMART_MODE_STANDBY_CONFIRMATION_TIMEOUT_SECONDS
+        )
+        idle_since: float | None = None
+        try:
+            while True:
+                await asyncio.sleep(SMART_MODE_STANDBY_POLL_INTERVAL_SECONDS)
+                if generation != self._smart_mode_standby_generation:
+                    return
+                if (
+                    self._status != STATUS_OBSERVING
+                    or not self._control_enabled
+                    or self._selected_device != device_id
+                ):
+                    return
+                device = self._inventory.devices.get(device_id)
+                state = self._states.get(device_id)
+                if (
+                    device is None
+                    or state is None
+                    or not _fresh_native_state(state, device=device)
+                ):
+                    return
+                identity = _identity_for_transport(device, transport)
+                matrix = (
+                    resolve_zendure_device(identity)
+                    if identity is not None
+                    else None
+                )
+                if matrix is None or matrix.smart_mode_standby_value != 0:
+                    return
+                if self._effective_control_transport(device).transport is not transport:
+                    return
+
+                setpoint_confirmation = _confirmed_zero_setpoints(
+                    state,
+                    now=datetime.now(timezone.utc),
+                    requested_at=stop_requested_at,
+                )
+                if setpoint_confirmation is None:
+                    if loop.time() >= confirmation_deadline:
+                        return
+                    continue
+                if not setpoint_confirmation:
+                    return
+                if idle_since is None:
+                    idle_since = loop.time()
+                if loop.time() - idle_since < SMART_MODE_STANDBY_DELAY_SECONDS:
+                    continue
+
+                confirmed_command = replace(
+                    command,
+                    should_write_mode=True,
+                    should_write_input=False,
+                    should_write_output=False,
+                    metadata={
+                        **command.metadata,
+                        SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY: True,
+                        SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY: True,
+                        SMART_MODE_STANDBY_GENERATION_METADATA_KEY: generation,
+                    },
+                )
+                await self.async_execute_device_command(confirmed_command)
+                return
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:  # noqa: BLE001 - isolate delayed standby write
+            _LOGGER.warning(
+                "Delayed Zendure standby Smart Mode write failed: %s",
+                _safe_reason(error),
+            )
+        finally:
+            if self._smart_mode_standby_task is task:
+                self._smart_mode_standby_task = None
 
     def selected_offgrid_mode(self) -> str | None:
         """Return the selected system's current, documented native off-grid mode."""
@@ -2267,6 +2470,64 @@ def _positive_measurement(value: Any) -> bool:
         return False
 
 
+def _requests_active_direction(command: DeviceCommand) -> bool:
+    """Return whether a new command contains a positive directional target."""
+
+    try:
+        return (
+            float(command.input_limit_w) > 0
+            or float(command.output_limit_w) > 0
+        )
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _identity_for_transport(
+    device: MainDevice,
+    transport: ZendureTransport,
+) -> NativeDeviceIdentity | None:
+    """Resolve a device identity for a transport currently used for control."""
+
+    identity = next(
+        (item for item in device.native_identities if item.transport is transport),
+        None,
+    )
+    if identity is not None or not device.native_identities:
+        return identity
+    # The runtime inventory keeps the observation identity canonical (usually
+    # Cloud MQTT) even when a verified ZenSDK path is selected for writes.
+    return replace(device.native_identities[0], transport=transport)
+
+
+def _confirmed_zero_setpoints(
+    state: Any,
+    *,
+    now: datetime,
+    requested_at: datetime,
+) -> bool | None:
+    """Confirm both limits are zero, ignoring only pre-stop active readback."""
+
+    for measured in (
+        state.setpoints.input_limit_w,
+        state.setpoints.output_limit_w,
+    ):
+        if not _fresh_at(measured, now=now) or measured.observed_at is None:
+            return None
+        if isinstance(measured.value, bool):
+            return False
+        try:
+            value = float(measured.value)
+        except (TypeError, ValueError, OverflowError):
+            return False
+        if not math.isfinite(value):
+            return False
+        if value != 0:
+            if measured.observed_at < requested_at:
+                return None
+            return False
+    return True
+
+
 def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
     mode = state.mode
     mode_matches = mode.valid and (
@@ -2341,6 +2602,8 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
     should_write_mode = force_atomic_idle or (
         command.should_write_mode and not mode_matches
     )
+    if command.metadata.get(SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY) is True:
+        should_write_mode = True
     return replace(
         command,
         metadata=dict(command.metadata),

@@ -26,6 +26,9 @@ from custom_components.battery_smartflow_ai.native_device_command_gate import ( 
 from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
     ZendureCloudClient,
 )
+from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (  # noqa: E402
+    SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY,
+)
 from custom_components.battery_smartflow_ai.hardware.zendure.zensdk_commands import (  # noqa: E402
     ZenSdkCommandStatus,
     ZendureZenSdkCommandAdapter,
@@ -193,7 +196,7 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_zero_command_respects_offgrid_load_and_unknown_state(self):
         data = await make_bootstrap()
-        for offgrid, expected in ((0, 0), (12, 1), (None, 1)):
+        for offgrid, expected in ((0, 1), (12, 1), (None, 1)):
             with self.subTest(offgrid=offgrid):
                 command = output_command(0)
                 command.metadata["native_offgrid_power_w"] = offgrid
@@ -206,6 +209,20 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
                     "outputLimit": 0,
                     "inputLimit": 0,
                 })
+
+    async def test_confirmed_stable_stop_uses_persistent_standby_smart_mode(self):
+        data = await make_bootstrap()
+        command = output_command(0)
+        command.metadata.update({
+            "native_offgrid_power_w": 20,
+            SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY: True,
+        })
+
+        mapped = map_zensdk_command(
+            authorized(command), data, first_request_id=7
+        )
+
+        self.assertEqual(mapped.properties["smartMode"], 0)
 
     async def test_zero_command_uses_model_standby_smart_mode(self):
         data = await make_bootstrap(
