@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import sys
 import unittest
 from datetime import datetime, timedelta, timezone
 from types import ModuleType, SimpleNamespace
+from unittest.mock import patch
 
 from support import bootstrap
 
@@ -36,6 +38,7 @@ from custom_components.battery_smartflow_ai.native_command_verification import (
 )
 from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
     STATUS_OBSERVING,
+    SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY,
     NativeZendureRuntime,
     _fresh_native_state,
     _maintenance_pack_conflict,
@@ -674,6 +677,147 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             stop_target._zensdk_command_adapter.commands[-1].command.output_limit_w,
             0,
         )
+
+    async def test_smart_mode_zero_is_delayed_until_fresh_stable_idle(self):
+        target = runtime(current_state=state(output_w=100))
+        with (
+            patch(
+                "custom_components.battery_smartflow_ai.native_zendure_runtime."
+                "SMART_MODE_STANDBY_DELAY_SECONDS",
+                0.02,
+            ),
+            patch(
+                "custom_components.battery_smartflow_ai.native_zendure_runtime."
+                "SMART_MODE_STANDBY_POLL_INTERVAL_SECONDS",
+                0.001,
+            ),
+        ):
+            stopped = await target.async_execute_device_command(DeviceCommand(
+                "output", input_limit_w=0, output_limit_w=0,
+                should_write_mode=True, should_write_input=False,
+                should_write_output=True,
+            ))
+            self.assertEqual(stopped.status, CommandExecutionStatus.APPLIED)
+            initial = target._zensdk_command_adapter.commands[-1].command
+            self.assertNotIn(
+                SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY,
+                initial.metadata,
+            )
+
+            observed_at = datetime.now(timezone.utc)
+            confirmed = state(input_w=0, output_w=0)
+            confirmed.setpoints = ReportedDeviceSetpoints(
+                MeasuredValue.available(0, observed_at=observed_at),
+                MeasuredValue.available(0, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(10, observed_at=observed_at),
+                MeasuredValue.available(100, observed_at=observed_at),
+            )
+            confirmed.offgrid_power_w = MeasuredValue.available(
+                20, observed_at=observed_at
+            )
+            target._states[DEVICE] = confirmed
+
+            await asyncio.sleep(0.06)
+
+        writes = target._zensdk_command_adapter.commands
+        self.assertEqual(len(writes), 2)
+        delayed = writes[-1].command
+        self.assertTrue(delayed.metadata[SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY])
+        self.assertTrue(delayed.should_write_mode)
+
+    async def test_active_command_cancels_pending_smart_mode_standby(self):
+        target = runtime(current_state=state(output_w=100))
+        with (
+            patch(
+                "custom_components.battery_smartflow_ai.native_zendure_runtime."
+                "SMART_MODE_STANDBY_DELAY_SECONDS",
+                0.03,
+            ),
+            patch(
+                "custom_components.battery_smartflow_ai.native_zendure_runtime."
+                "SMART_MODE_STANDBY_POLL_INTERVAL_SECONDS",
+                0.001,
+            ),
+        ):
+            await target.async_execute_device_command(DeviceCommand(
+                "output", input_limit_w=0, output_limit_w=0,
+                should_write_mode=True, should_write_input=False,
+                should_write_output=True,
+            ))
+            observed_at = datetime.now(timezone.utc)
+            confirmed = state(input_w=0, output_w=0)
+            confirmed.setpoints = ReportedDeviceSetpoints(
+                MeasuredValue.available(0, observed_at=observed_at),
+                MeasuredValue.available(0, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(10, observed_at=observed_at),
+                MeasuredValue.available(100, observed_at=observed_at),
+            )
+            confirmed.offgrid_power_w = MeasuredValue.available(
+                0, observed_at=observed_at
+            )
+            target._states[DEVICE] = confirmed
+            await asyncio.sleep(0.005)
+
+            active = await target.async_execute_device_command(DeviceCommand(
+                "output", input_limit_w=0, output_limit_w=250,
+                should_write_mode=False, should_write_input=False,
+                should_write_output=True,
+            ))
+            self.assertEqual(active.status, CommandExecutionStatus.APPLIED)
+            await asyncio.sleep(0.05)
+
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 2)
+
+    async def test_active_setpoint_readback_cancels_pending_smart_mode_standby(self):
+        target = runtime(current_state=state(output_w=100))
+        with (
+            patch(
+                "custom_components.battery_smartflow_ai.native_zendure_runtime."
+                "SMART_MODE_STANDBY_DELAY_SECONDS",
+                0.03,
+            ),
+            patch(
+                "custom_components.battery_smartflow_ai.native_zendure_runtime."
+                "SMART_MODE_STANDBY_POLL_INTERVAL_SECONDS",
+                0.001,
+            ),
+        ):
+            await target.async_execute_device_command(DeviceCommand(
+                "output", input_limit_w=0, output_limit_w=0,
+                should_write_mode=True, should_write_input=False,
+                should_write_output=True,
+            ))
+            observed_at = datetime.now(timezone.utc)
+            confirmed = state(input_w=0, output_w=0)
+            confirmed.setpoints = ReportedDeviceSetpoints(
+                MeasuredValue.available(0, observed_at=observed_at),
+                MeasuredValue.available(0, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(10, observed_at=observed_at),
+                MeasuredValue.available(100, observed_at=observed_at),
+            )
+            target._states[DEVICE] = confirmed
+            await asyncio.sleep(0.01)
+
+            observed_at = datetime.now(timezone.utc)
+            changed = state(input_w=0, output_w=100)
+            changed.setpoints = ReportedDeviceSetpoints(
+                MeasuredValue.available(0, observed_at=observed_at),
+                MeasuredValue.available(100, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(2400, observed_at=observed_at),
+                MeasuredValue.available(10, observed_at=observed_at),
+                MeasuredValue.available(100, observed_at=observed_at),
+            )
+            target._states[DEVICE] = changed
+            await asyncio.sleep(0.04)
+
+        self.assertEqual(len(target._zensdk_command_adapter.commands), 1)
 
     async def test_idle_after_charge_forces_atomic_zero_even_with_stale_mode(self):
         target = runtime(current_state=state(charge_w=200))

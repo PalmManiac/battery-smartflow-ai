@@ -29,6 +29,11 @@ class CloudCommandProtocol(StrEnum):
     DEVICE_AUTOMATION_VALUE = "device_automation_value"
 
 
+SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY = (
+    "native_smart_mode_standby_confirmed"
+)
+
+
 @dataclass(frozen=True, slots=True)
 class TransportCapability:
     transport: ZendureTransport
@@ -119,10 +124,21 @@ class ZendureDeviceMatrixEntry:
     def smart_mode_for_setpoint(
         self, active_w: int, metadata: Mapping[str, object]
     ) -> int:
-        """Select temporary or model-specific standby Smart Mode safely."""
+        """Select temporary or model-specific standby Smart Mode safely.
+
+        A model that needs persistent Smart Mode for standby may use it only
+        after the runtime confirms sustained zero setpoints. A transient
+        stop at a charge/discharge reversal must remain in temporary mode.
+        """
 
         if active_w > 0:
             return 1
+        if self.smart_mode_standby_value == 0:
+            return (
+                0
+                if metadata.get(SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY) is True
+                else 1
+            )
         offgrid_power = metadata.get("native_offgrid_power_w")
         if offgrid_power is None:
             return 1
