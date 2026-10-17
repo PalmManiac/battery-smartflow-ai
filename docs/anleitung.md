@@ -120,6 +120,13 @@ Dort lassen sich App-Token, Hauptgerät und Kommunikationsweg nach einem
 Kontowechsel, Gerätewechsel oder zur Fehlersuche neu prüfen. Ein gespeicherter
 Token erscheint dabei nur verdeckt, kann aber ersetzt werden.
 
+Unter **Zendure-SmartMode** lässt sich außerdem das Standby-Verhalten für
+Geräte und Kommunikationswege mit direkter SmartMode-Steuerung festlegen. Die
+Option ist standardmäßig aktiviert und hält `smartMode=1` auch im Leerlauf.
+Wird sie ausgeschaltet, greift wieder das bisherige, modellabhängige
+Standby-Verhalten. Die Einstellung ist auch im BSFAI-Portal unter
+**Einstellungen & Training** erreichbar.
+
 Wenn Messwerte fehlen, bleibt BSFAI aus Sicherheitsgründen im Leerlauf. Prüfe
 zuerst App-Token, Geräteauswahl, Kommunikationsweg und den tatsächlichen
 Datenempfang. Für Support können das *Zendure-Initial-Sync-JSON* und eine

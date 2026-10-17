@@ -3,14 +3,15 @@ from __future__ import annotations
 import logging
 
 from .const import (
+    CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1,
     CONF_NATIVE_ZENDURE_APP_TOKEN,
-    CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
     CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
+    CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     DOMAIN,
     PLATFORMS,
 )
@@ -237,6 +238,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             migration_bound_device=migration_bound_device,
             control_enabled=bool(
                 entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
+            ),
+            always_smart_mode_1=bool(
+                entry.options.get(CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1, True)
             ),
             control_transport=entry.options.get(
                 CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT

@@ -114,6 +114,12 @@ review or replace the app token, main device and communication path after an
 account change, device change or while troubleshooting. A stored token is only
 shown as a masked placeholder.
 
+Use **Zendure Smart Mode** to choose the standby behavior for devices and
+communication paths that support direct Smart Mode control. It is enabled by
+default and keeps `smartMode=1` while idle. When disabled, the existing
+model-specific standby policy is used instead. The same setting is available
+in the BSFAI Portal under **Settings & Training**.
+
 If readings are missing, BSFAI stays safely idle. First check the app token,
 selected device, communication path and actual data reception. The *Zendure
 initial-sync JSON* and a time-limited BSFAI debug recording can help with

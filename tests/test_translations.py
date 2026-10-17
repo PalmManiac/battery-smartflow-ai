@@ -203,6 +203,7 @@ class TranslationCoverageTests(unittest.TestCase):
             "native_zendure",
             "native_zendure_device",
             "dashboard",
+            "smart_mode",
         }
         files = [
             COMPONENT / "strings.json",
@@ -218,6 +219,7 @@ class TranslationCoverageTests(unittest.TestCase):
                     {
                         "general",
                         "dashboard",
+                        "smart_mode",
                         "expert",
                         "native_zendure",
                         "training",
@@ -239,6 +241,14 @@ class TranslationCoverageTests(unittest.TestCase):
                 self.assertEqual(
                     set(steps["general"]["data_description"]),
                     {"installed_pv_wp"},
+                )
+                self.assertEqual(
+                    set(steps["smart_mode"]["data"]),
+                    {"native_zendure_always_smart_mode_1"},
+                )
+                self.assertEqual(
+                    set(steps["smart_mode"]["data_description"]),
+                    {"native_zendure_always_smart_mode_1"},
                 )
 
     def test_removed_tuning_steps_are_not_reachable(self) -> None:

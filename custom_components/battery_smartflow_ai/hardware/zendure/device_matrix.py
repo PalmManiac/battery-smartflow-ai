@@ -29,6 +29,7 @@ class CloudCommandProtocol(StrEnum):
     DEVICE_AUTOMATION_VALUE = "device_automation_value"
 
 
+SMART_MODE_ALWAYS_ONE_METADATA_KEY = "native_smart_mode_always_one"
 SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY = (
     "native_smart_mode_standby_confirmed"
 )
@@ -126,12 +127,16 @@ class ZendureDeviceMatrixEntry:
     ) -> int:
         """Select temporary or model-specific standby Smart Mode safely.
 
-        A model that needs persistent Smart Mode for standby may use it only
-        after the runtime confirms sustained zero setpoints. A transient
-        stop at a charge/discharge reversal must remain in temporary mode.
+        Models use persistent Smart Mode 1 by default. An explicit user
+        preference may retain that mode at idle or opt into the model-specific
+        standby value after the runtime confirms sustained zero setpoints.
+        A transient stop at a charge/discharge reversal remains in mode 1.
         """
 
-        if active_w > 0:
+        if (
+            active_w > 0
+            or metadata.get(SMART_MODE_ALWAYS_ONE_METADATA_KEY) is True
+        ):
             return 1
         if self.smart_mode_standby_value == 0:
             return (

@@ -270,6 +270,7 @@
           "general": "Général",
           "dashboard": "Tableau de bord HEMS",
           "expert": "Mode expert",
+          "smart_mode": "Mode Smart Zendure",
           "native_zendure": "Test Zendure natif",
           "training": "Entraînement de régulation",
           "debug": "Mode débogage"
@@ -281,6 +282,12 @@
         "title": "Tableau de bord HEMS",
         "description": "Active ou désactive le tableau de bord HEMS personnalisé de Battery SmartFlow AI dans la barre latérale.",
         "data": {"hems_dashboard_enabled": "Afficher le tableau de bord HEMS dans la barre latérale"}
+      },
+      "smart_mode": {
+        "title": "Mode Smart Zendure",
+        "description": "Pour les modèles Zendure compatibles avec le contrôle direct de Smart Mode, choisissez le comportement au repos. Activé, smartMode=1 reste défini en veille ; désactivé, la politique de veille actuelle du modèle est utilisée.",
+        "data": {"native_zendure_always_smart_mode_1": "Conserver Smart Mode 1 en veille"},
+        "data_description": {"native_zendure_always_smart_mode_1": "Activé par défaut. Cette option s’applique lorsque le modèle et le transport sélectionnés prennent en charge l’écriture directe de Smart Mode. Si désactivé, les modèles utilisent leur comportement de veille actuel, y compris Smart Mode 0 lorsque la matrice de l’appareil le prévoit."}
       },
       "general": {
         "title": "Paramètres de Battery SmartFlow AI – Général",
@@ -1221,6 +1228,7 @@
           "sensor_invalid": "Sensor invalid",
           "soc_invalid": "Veille sûre : SoC de la batterie invalide",
           "grid_sensor_invalid": "Veille sûre : données du capteur réseau indisponibles",
+          "grid_sensor_invalid_grace_hold": "Décharge temporairement suspendue pendant une interruption du capteur réseau",
           "soc_limits_invalid": "Veille sûre : limites SoC configurées invalides",
           "power_limits_invalid": "Veille sûre : limites de puissance configurées invalides",
           "cell_voltage_sensor_invalid": "Décharge bloquée : capteur de tension cellule indisponible",
@@ -1316,6 +1324,7 @@
           "sensor_invalid": "Sensor invalid",
           "soc_invalid": "Veille sûre : SoC de la batterie invalide",
           "grid_sensor_invalid": "Veille sûre : données du capteur réseau indisponibles",
+          "grid_sensor_invalid_grace_hold": "Décharge temporairement suspendue pendant une interruption du capteur réseau",
           "soc_limits_invalid": "Veille sûre : limites SoC configurées invalides",
           "power_limits_invalid": "Veille sûre : limites de puissance configurées invalides",
           "cell_voltage_sensor_invalid": "Décharge bloquée : capteur de tension cellule indisponible",
@@ -1375,6 +1384,7 @@
           "sensor_invalid": "Sensor invalid",
           "soc_invalid": "Veille sûre : SoC de la batterie invalide",
           "grid_sensor_invalid": "Veille sûre : données du capteur réseau indisponibles",
+          "grid_sensor_invalid_grace_hold": "Décharge temporairement suspendue pendant une interruption du capteur réseau",
           "soc_limits_invalid": "Veille sûre : limites SoC configurées invalides",
           "power_limits_invalid": "Veille sûre : limites de puissance configurées invalides",
           "cell_voltage_sensor_invalid": "Décharge bloquée : capteur de tension cellule indisponible",

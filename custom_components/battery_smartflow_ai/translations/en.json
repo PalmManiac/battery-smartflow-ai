@@ -289,6 +289,7 @@
           "general": "General",
           "expert": "Expert mode",
           "dashboard": "HEMS dashboard",
+          "smart_mode": "Zendure Smart Mode",
           "native_zendure": "Native Zendure",
           "training": "Regulation training",
           "debug": "Debug mode"
@@ -300,6 +301,12 @@
         "data": {
           "hems_dashboard_enabled": "Show the HEMS dashboard in the sidebar"
         }
+      },
+      "smart_mode": {
+        "title": "Zendure Smart Mode",
+        "description": "For Zendure models with supported direct Smart Mode control, choose the idle behavior. Enabled keeps smartMode=1 during standby; disabled uses the existing model-specific standby policy.",
+        "data": {"native_zendure_always_smart_mode_1": "Keep Smart Mode 1 during standby"},
+        "data_description": {"native_zendure_always_smart_mode_1": "Enabled by default. This applies when the selected model and communication path support direct Smart Mode writes. When disabled, models use their existing standby behavior, including Smart Mode 0 where the device matrix specifies it."}
       },
       "native_zendure": {
         "title": "Native Zendure connection",
@@ -1681,6 +1688,7 @@
           "sensor_invalid": "Invalid sensor data",
           "soc_invalid": "Safe idle: battery SoC is invalid",
           "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "grid_sensor_invalid_grace_hold": "Discharge temporarily held during a grid sensor gap",
           "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
           "power_limits_invalid": "Safe idle: configured power limits are invalid",
           "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
@@ -1776,6 +1784,7 @@
           "sensor_invalid": "Invalid sensor data",
           "soc_invalid": "Safe idle: battery SoC is invalid",
           "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "grid_sensor_invalid_grace_hold": "Discharge temporarily held during a grid sensor gap",
           "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
           "power_limits_invalid": "Safe idle: configured power limits are invalid",
           "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",
@@ -1835,6 +1844,7 @@
           "sensor_invalid": "Invalid sensor data",
           "soc_invalid": "Safe idle: battery SoC is invalid",
           "grid_sensor_invalid": "Safe idle: grid sensor data is unavailable",
+          "grid_sensor_invalid_grace_hold": "Discharge temporarily held during a grid sensor gap",
           "soc_limits_invalid": "Safe idle: configured SoC limits are invalid",
           "power_limits_invalid": "Safe idle: configured power limits are invalid",
           "cell_voltage_sensor_invalid": "Discharging blocked: cell-voltage sensor is unavailable",

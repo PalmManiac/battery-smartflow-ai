@@ -124,7 +124,7 @@ class SelectorStub:
         return lambda *args, **kwargs: (lambda value: value) if not name.endswith("Config") else kwargs
 
 
-def load_flow_classes():
+def load_flow_namespace():
     source = Path(__file__).parents[1] / "custom_components/battery_smartflow_ai/config_flow.py"
     tree = ast.parse(source.read_text(encoding="utf-8"))
     nodes = [node for node in tree.body if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.Assign))]
@@ -144,10 +144,28 @@ def load_flow_classes():
     from custom_components.battery_smartflow_ai.core.models import ZendureTransport
     namespace["ZendureTransport"] = ZendureTransport
     exec(compile(ast.Module(body=nodes, type_ignores=[]), str(source), "exec"), namespace)
-    return namespace["ZendureSmartFlowConfigFlow"]
+    return namespace
+
+
+def load_flow_classes():
+    return load_flow_namespace()["ZendureSmartFlowConfigFlow"]
 
 
 class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_smart_mode_option_defaults_on_and_can_be_disabled(self):
+        options_flow = load_flow_namespace()["ZendureSmartFlowOptionsFlow"]()
+        options_flow.config_entry = SimpleNamespace(options={"unrelated": "keep"})
+
+        form = await options_flow.async_step_smart_mode()
+        key = next(iter(form["data_schema"].schema))
+        self.assertEqual(key.schema, const.CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1)
+        self.assertTrue(key.default)
+
+        saved = await options_flow.async_step_smart_mode({key.schema: False})
+        self.assertEqual(saved["type"], "create_entry")
+        self.assertFalse(saved["data"][const.CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1])
+        self.assertEqual(saved["data"]["unrelated"], "keep")
+
     async def test_native_selection_to_entry_needs_no_zha_hardware_entities(self):
         flow = load_flow_classes()()
         flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
