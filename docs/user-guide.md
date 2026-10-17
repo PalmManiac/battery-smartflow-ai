@@ -895,6 +895,7 @@ Users of the French EDF Tempo tariff can expose its hourly prices through a
 template sensor's `rates` attribute. This example requires the EDF Tempo
 integration. Replace the entity IDs with the IDs used by your installation:
 
+{% raw %}
 ```yaml
 template:
   - sensor:
@@ -951,6 +952,7 @@ template:
             {% endfor %}
             {{ ns.prices }}
 ```
+{% endraw %}
 
 Then select the new sensor as the dynamic price source in BSFAI. Unknown tariff
 colors or prices are intentionally omitted; they are never created as
