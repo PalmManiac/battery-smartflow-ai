@@ -919,6 +919,7 @@ einen Template-Sensor als `rates`-Attribut bereitstellen. Das Beispiel setzt die
 EDF-Tempo-Integration voraus. Ersetze die Entity-IDs bei Bedarf durch die IDs
 deiner Sensoren:
 
+{% raw %}
 ```yaml
 template:
   - sensor:
@@ -975,6 +976,7 @@ template:
             {% endfor %}
             {{ ns.prices }}
 ```
+{% endraw %}
 
 Wähle den erzeugten Sensor anschließend als dynamische Preisquelle in BSFAI.
 Unbekannte Farben oder Tarife werden bewusst ausgelassen und niemals als
