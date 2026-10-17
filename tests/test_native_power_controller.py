@@ -38,6 +38,7 @@ from custom_components.battery_smartflow_ai.native_command_verification import (
 )
 from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
     STATUS_OBSERVING,
+    SMART_MODE_ALWAYS_ONE_METADATA_KEY,
     SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY,
     NativeZendureRuntime,
     _fresh_native_state,
@@ -164,13 +165,14 @@ class FakeLocalTransport:
 
 def runtime(
     *, enabled=True, current_state=None, migration_bound_device=None,
-    control_transport=None,
+    control_transport=None, always_smart_mode_1=True,
 ):
     result = NativeZendureRuntime(
         SimpleNamespace(), app_token="configured", selected_device=DEVICE,
         notify=lambda: None, control_enabled=enabled,
         migration_bound_device=migration_bound_device,
         control_transport=control_transport,
+        always_smart_mode_1=always_smart_mode_1,
     )
     identity = NativeDeviceIdentity(
         ZendureTransport.CLOUD_MQTT, device_id="main-1",
@@ -679,7 +681,9 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_smart_mode_zero_is_delayed_until_fresh_stable_idle(self):
-        target = runtime(current_state=state(output_w=100))
+        target = runtime(
+            current_state=state(output_w=100), always_smart_mode_1=False
+        )
         with (
             patch(
                 "custom_components.battery_smartflow_ai.native_zendure_runtime."
@@ -724,11 +728,28 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         writes = target._zensdk_command_adapter.commands
         self.assertEqual(len(writes), 2)
         delayed = writes[-1].command
+        self.assertFalse(delayed.metadata[SMART_MODE_ALWAYS_ONE_METADATA_KEY])
         self.assertTrue(delayed.metadata[SMART_MODE_STANDBY_FORCE_WRITE_METADATA_KEY])
         self.assertTrue(delayed.should_write_mode)
 
-    async def test_active_command_cancels_pending_smart_mode_standby(self):
+    async def test_default_policy_keeps_smart_mode_one_without_standby_task(self):
         target = runtime(current_state=state(output_w=100))
+
+        result = await target.async_execute_device_command(DeviceCommand(
+            "output", input_limit_w=0, output_limit_w=0,
+            should_write_mode=True, should_write_input=False,
+            should_write_output=True,
+        ))
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        command = target._zensdk_command_adapter.commands[-1].command
+        self.assertTrue(command.metadata[SMART_MODE_ALWAYS_ONE_METADATA_KEY])
+        self.assertIsNone(target._smart_mode_standby_task)
+
+    async def test_active_command_cancels_pending_smart_mode_standby(self):
+        target = runtime(
+            current_state=state(output_w=100), always_smart_mode_1=False
+        )
         with (
             patch(
                 "custom_components.battery_smartflow_ai.native_zendure_runtime."
@@ -773,7 +794,9 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(target._zensdk_command_adapter.commands), 2)
 
     async def test_active_setpoint_readback_cancels_pending_smart_mode_standby(self):
-        target = runtime(current_state=state(output_w=100))
+        target = runtime(
+            current_state=state(output_w=100), always_smart_mode_1=False
+        )
         with (
             patch(
                 "custom_components.battery_smartflow_ai.native_zendure_runtime."

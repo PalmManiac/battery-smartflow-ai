@@ -8,6 +8,15 @@ COMPONENT = ROOT / "custom_components" / "battery_smartflow_ai"
 
 
 class DashboardContractTests(unittest.TestCase):
+    def test_portal_exposes_smart_mode_setting(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('data-dashboard-setting="smart_mode"', frontend)
+        self.assertIn('step.step_id === "smart_mode"', frontend)
+        self.assertIn('native_zendure_always_smart_mode_1', frontend)
+
     def test_topology_reads_inventory_without_false_health_warning(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"

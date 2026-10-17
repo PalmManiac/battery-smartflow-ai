@@ -270,6 +270,7 @@
           "general": "Algemeen",
           "dashboard": "HEMS-dashboard",
           "expert": "Expertmodus",
+          "smart_mode": "Zendure Smart Mode",
           "native_zendure": "Native Zendure-test",
           "training": "Regelingstraining",
           "debug": "Debugmodus"
@@ -281,6 +282,12 @@
         "title": "HEMS-dashboard",
         "description": "Schakel het aangepaste HEMS-dashboard van Battery SmartFlow AI in of uit in de zijbalk.",
         "data": {"hems_dashboard_enabled": "Toon het HEMS-dashboard in de zijbalk"}
+      },
+      "smart_mode": {
+        "title": "Zendure Smart Mode",
+        "description": "Kies voor Zendure-modellen met ondersteunde directe Smart Mode-besturing het gedrag in rust. Ingeschakeld blijft smartMode=1 actief in stand-by; uitgeschakeld gebruikt het bestaande modelafhankelijke stand-bygedrag.",
+        "data": {"native_zendure_always_smart_mode_1": "Smart Mode 1 behouden in stand-by"},
+        "data_description": {"native_zendure_always_smart_mode_1": "Standaard ingeschakeld. Deze optie geldt wanneer het geselecteerde model en de verbinding directe Smart Mode-schrijfacties ondersteunen. Indien uitgeschakeld gebruiken modellen hun bestaande stand-bygedrag, waaronder Smart Mode 0 wanneer dit in de apparaatmatrix is vastgelegd."}
       },
       "general": {
         "title": "Battery SmartFlow AI instellen – Algemeen",
@@ -1221,6 +1228,7 @@
           "sensor_invalid": "Sensor invalid",
           "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
           "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "grid_sensor_invalid_grace_hold": "Ontlading tijdelijk gepauzeerd tijdens een onderbreking van de netsensor",
           "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
           "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
           "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
@@ -1316,6 +1324,7 @@
           "sensor_invalid": "Sensor invalid",
           "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
           "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "grid_sensor_invalid_grace_hold": "Ontlading tijdelijk gepauzeerd tijdens een onderbreking van de netsensor",
           "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
           "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
           "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",
@@ -1375,6 +1384,7 @@
           "sensor_invalid": "Sensor invalid",
           "soc_invalid": "Veilige ruststand: batterij-SoC is ongeldig",
           "grid_sensor_invalid": "Veilige ruststand: netsensorgegevens ontbreken",
+          "grid_sensor_invalid_grace_hold": "Ontlading tijdelijk gepauzeerd tijdens een onderbreking van de netsensor",
           "soc_limits_invalid": "Veilige ruststand: ingestelde SoC-grenzen zijn ongeldig",
           "power_limits_invalid": "Veilige ruststand: ingestelde vermogensgrenzen zijn ongeldig",
           "cell_voltage_sensor_invalid": "Ontladen geblokkeerd: celspanningssensor niet beschikbaar",

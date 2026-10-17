@@ -29,6 +29,7 @@ from .const import (
     CONF_INPUT_LIMIT_ENTITY,
     CONF_INSTALLED_PV_WP,
     CONF_NATIVE_PV_ENTITY,
+    CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1,
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
     CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
@@ -1103,10 +1104,39 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "general",
                 "expert",
                 "dashboard",
+                "smart_mode",
                 "native_zendure",
                 "training",
                 "debug",
             ],
+        )
+
+    async def async_step_smart_mode(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Choose whether Zendure devices should stay in Smart Mode 1 at idle."""
+
+        if user_input is not None:
+            options = dict(self.config_entry.options)
+            options[CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1] = bool(
+                user_input.get(CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1, True)
+            )
+            return self.async_create_entry(title="", data=options)
+
+        return self.async_show_form(
+            step_id="smart_mode",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1,
+                        default=bool(
+                            self.config_entry.options.get(
+                                CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1, True
+                            )
+                        ),
+                    ): selector.BooleanSelector(),
+                }
+            ),
         )
 
     async def async_step_dashboard(self, user_input: dict[str, Any] | None = None):

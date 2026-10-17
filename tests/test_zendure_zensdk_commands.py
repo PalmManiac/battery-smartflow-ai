@@ -27,6 +27,7 @@ from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # n
     ZendureCloudClient,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (  # noqa: E402
+    SMART_MODE_ALWAYS_ONE_METADATA_KEY,
     SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.zensdk_commands import (  # noqa: E402
@@ -223,6 +224,21 @@ class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(mapped.properties["smartMode"], 0)
+
+    async def test_explicit_always_smart_mode_one_overrides_model_standby(self):
+        data = await make_bootstrap()
+        command = output_command(0)
+        command.metadata.update({
+            "native_offgrid_power_w": 0,
+            SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY: True,
+            SMART_MODE_ALWAYS_ONE_METADATA_KEY: True,
+        })
+
+        mapped = map_zensdk_command(
+            authorized(command), data, first_request_id=7
+        )
+
+        self.assertEqual(mapped.properties["smartMode"], 1)
 
     async def test_zero_command_uses_model_standby_smart_mode(self):
         data = await make_bootstrap(

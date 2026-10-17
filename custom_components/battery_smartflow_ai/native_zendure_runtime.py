@@ -32,6 +32,7 @@ from .hardware.zendure.cloud import ZendureCloudClient
 from .hardware.zendure.cloud_mqtt import ConnectionState, ZendureCloudMqttTransport
 from .hardware.zendure.cloud_mqtt_commands import CloudCommandStatus
 from .hardware.zendure.device_matrix import (
+    SMART_MODE_ALWAYS_ONE_METADATA_KEY,
     SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY,
     VerificationLevel,
     preferred_local_transport,
@@ -137,6 +138,7 @@ class NativeZendureRuntime:
         notify: Callable[[], None],
         migration_bound_device: str | None = None,
         control_enabled: bool = False,
+        always_smart_mode_1: bool = True,
         control_transport: str | None = None,
         local_mqtt_server: str | None = None,
         local_mqtt_port: int = 1883,
@@ -148,6 +150,7 @@ class NativeZendureRuntime:
         self._selected_device = selected_device
         self._migration_bound_device = migration_bound_device
         self._control_enabled = bool(control_enabled)
+        self._always_smart_mode_1 = bool(always_smart_mode_1)
         self._configured_transport = _parse_transport(control_transport)
         self._notify = notify
         self._task: asyncio.Task[None] | None = None
@@ -1102,6 +1105,14 @@ class NativeZendureRuntime:
                 native_identities=(control_identity,),
             )
             final_command = _skip_matching_writes(command, state)
+            final_command = replace(
+                final_command,
+                metadata={
+                    **final_command.metadata,
+                    SMART_MODE_ALWAYS_ONE_METADATA_KEY:
+                        self._always_smart_mode_1,
+                },
+            )
             if standby_confirmation:
                 final_command = replace(
                     final_command,
@@ -1223,7 +1234,8 @@ class NativeZendureRuntime:
         identity = _identity_for_transport(device, transport)
         matrix = resolve_zendure_device(identity) if identity is not None else None
         return bool(
-            matrix is not None
+            not self._always_smart_mode_1
+            and matrix is not None
             and matrix.smart_mode_standby_value == 0
             and matrix.property_write_level(transport, "smartMode")
             is VerificationLevel.VERIFIED
