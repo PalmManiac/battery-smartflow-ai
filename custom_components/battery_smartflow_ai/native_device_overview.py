@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from types import MappingProxyType
+from typing import Any
 
 from .core.models import (
     DeviceControlState,
@@ -36,6 +37,76 @@ from .native_statistics import derived_statistics
 # presentation-only: the native runtime continues to require each safety value
 # itself to be fresh before it can affect control.
 LEGACY_DISPLAY_RETENTION_SECONDS = 300.0
+NATIVE_HARDWARE_DISPLAY_GRACE_SECONDS = 5.0
+
+
+@dataclass(frozen=True, slots=True)
+class NativeDisplayValueState:
+    """A sensor-facing value that may briefly retain its last good reading."""
+
+    available: bool
+    value: Any | None
+    stale: bool = False
+
+
+class NativeDisplayValueGrace:
+    """Hold a last good value briefly after a transient native transport gap."""
+
+    def __init__(
+        self,
+        grace_seconds: float = NATIVE_HARDWARE_DISPLAY_GRACE_SECONDS,
+    ) -> None:
+        self.grace_seconds = max(0.0, float(grace_seconds))
+        self._value: Any | None = None
+        self._has_value = False
+        self._unavailable_since: float | None = None
+
+    def update(
+        self,
+        value: Any | None,
+        *,
+        valid: bool,
+        transient_failure: bool,
+        now_monotonic: float,
+    ) -> NativeDisplayValueState:
+        """Return a fresh value or briefly retain the previous display value."""
+
+        if valid and value is not None:
+            self._value = value
+            self._has_value = True
+            self._unavailable_since = None
+            return NativeDisplayValueState(True, value)
+
+        if not transient_failure:
+            self.reset()
+            return NativeDisplayValueState(False, None)
+
+        if not self._has_value:
+            return NativeDisplayValueState(False, None)
+
+        if self._unavailable_since is None:
+            self._unavailable_since = now_monotonic
+        elapsed = now_monotonic - self._unavailable_since
+        if 0.0 <= elapsed < self.grace_seconds:
+            return NativeDisplayValueState(True, self._value, stale=True)
+        return NativeDisplayValueState(False, None)
+
+    def remaining_seconds(self, *, now_monotonic: float) -> float | None:
+        """Return how long the current display grace window has left."""
+
+        if not self._has_value or self._unavailable_since is None:
+            return None
+        elapsed = now_monotonic - self._unavailable_since
+        if elapsed < 0.0:
+            return 0.0
+        return max(0.0, self.grace_seconds - elapsed)
+
+    def reset(self) -> None:
+        """Forget the cached value and any active grace window."""
+
+        self._value = None
+        self._has_value = False
+        self._unavailable_since = None
 
 
 def legacy_display_retains_stale_value(

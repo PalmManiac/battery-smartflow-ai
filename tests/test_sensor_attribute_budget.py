@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 import unittest
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SENSOR = ROOT / "custom_components" / "battery_smartflow_ai" / "sensor.py"
@@ -85,9 +84,15 @@ class SensorAttributeBudgetTests(unittest.TestCase):
         self.assertIn("self._attr_extra_state_attributes = None", source)
         self.assertNotIn("profile_overrides\"] =", source)
         tree = ast.parse(source)
+        smartflow_sensor = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "ZendureSmartFlowSensor"
+        )
         update_method = next(
             ast.get_source_segment(source, node)
-            for node in ast.walk(tree)
+            for node in smartflow_sensor.body
             if isinstance(node, ast.FunctionDef)
             and node.name == "_handle_coordinator_update"
         )

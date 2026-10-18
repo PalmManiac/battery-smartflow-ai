@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, replace
 
 from homeassistant.components.sensor import (
@@ -10,9 +11,9 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EntityCategory
 from homeassistant.const import (
     PERCENTAGE,
+    EntityCategory,
     UnitOfElectricCurrent,
     UnitOfElectricPotential,
     UnitOfEnergy,
@@ -20,67 +21,74 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    AI_STATUS_ENUMS,
+    AUTOMATIC_WEIGHTING_ENUMS,
+    BOOLEAN_STATE_ENUMS,
+    CELL_VOLTAGE_SOC_PLAUSIBILITY_ENUMS,
+    CELL_VOLTAGE_STATUS_ENUMS,
+    CHARGE_COMMIT_ABORT_REASON_ENUMS,
+    CHARGE_COMMIT_TYPE_ENUMS,
+    CHARGE_STRATEGY_ENUMS,
+    DECISION_REASON_ENUMS,
     DOMAIN,
+    FORECAST_STATUS_ENUMS,
     GRID_MODE_SHELLY_PRO_3EM_OPTIONS,
     INTEGRATION_MANUFACTURER,
     INTEGRATION_MODEL,
     INTEGRATION_VERSION,
-    virtual_device_model,
-    STATUS_ENUMS,
-    AI_STATUS_ENUMS,
-    RECO_ENUMS,
     NEXT_ACTION_STATE_ENUMS,
-    CELL_VOLTAGE_STATUS_ENUMS,
-    CELL_VOLTAGE_SOC_PLAUSIBILITY_ENUMS,
-    FORECAST_STATUS_ENUMS,
     PV_OUTLOOK_ENUMS,
-    CHARGE_STRATEGY_ENUMS,
+    RECO_ENUMS,
+    SOURCE_AC_MODE_ENUMS,
+    SOURCE_ACTION_ENUMS,
+    STATUS_ENUMS,
+    STRATEGIC_REASON_ENUMS,
+    STRATEGY_REASON_ENUMS,
     STRATEGY_STATE_ENUMS,
     VISIBLE_STATE_ENUMS,
-    BOOLEAN_STATE_ENUMS,
-    SOURCE_ACTION_ENUMS,
-    SOURCE_AC_MODE_ENUMS,
-    STRATEGY_REASON_ENUMS,
-    STRATEGIC_REASON_ENUMS,
-    DECISION_REASON_ENUMS,
-    CHARGE_COMMIT_TYPE_ENUMS,
-    CHARGE_COMMIT_ABORT_REASON_ENUMS,
-    AUTOMATIC_WEIGHTING_ENUMS,
+    virtual_device_model,
 )
-from .device_profiles import DEVICE_PROFILES
-from .native_device_overview import legacy_display_retains_stale_value
-from .native_entity_availability import (
-    OPTIONAL_NATIVE_MAIN_SENSOR_KEYS,
-    optional_native_main_sensor_available,
-    optional_native_sensor_registry_action,
-)
-from .remaining_output_time import RemainingOutputTime
 from .core.full_charge_maintenance import (
     MaintenanceBlockReason,
     MaintenanceState,
     MaintenanceWindow,
 )
+from .core.models import ValueValidity
+from .device_profiles import DEVICE_PROFILES
 from .diagnostic_values import (
     safe_diagnostic_sensor_value,
     smart_mode_state,
     zendure_documented_status_state,
 )
 from .hardware.zendure.normalizer import RAW_MAIN_DIAGNOSTICS
+from .native_config_ui import native_device_name
+from .native_device_overview import (
+    NATIVE_HARDWARE_DISPLAY_GRACE_SECONDS,
+    NativeDisplayValueGrace,
+    NativeDisplayValueState,
+    legacy_display_retains_stale_value,
+)
+from .native_entity_availability import (
+    OPTIONAL_NATIVE_MAIN_SENSOR_KEYS,
+    optional_native_main_sensor_available,
+    optional_native_sensor_registry_action,
+)
 from .native_registry_identity import (
     native_hardware_unique_id,
     native_main_device_identifier,
     native_pack_device_identifier,
 )
-from .native_config_ui import native_device_name
 from .price_currency import price_input_profile
+from .remaining_output_time import RemainingOutputTime
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -2143,6 +2151,12 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         self._public_id = public_id
         self._parent_public_id = parent_public_id
         self._remaining_output_time = RemainingOutputTime()
+        self._display_value_grace = NativeDisplayValueGrace(
+            NATIVE_HARDWARE_DISPLAY_GRACE_SECONDS
+        )
+        self._display_grace_enabled = False
+        self._display_value_is_stale = False
+        self._display_grace_cancel = None
         self._attr_unique_id = native_hardware_unique_id(
             entry.entry_id,
             kind,
@@ -2201,28 +2215,130 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 ),
             )
 
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self._cancel_display_grace_timer)
+
+    def _handle_coordinator_update(self) -> None:
+        super()._handle_coordinator_update()
+        if self._display_value_is_stale:
+            self._schedule_display_grace_expiry()
+        else:
+            self._cancel_display_grace_timer()
+
+    def _schedule_display_grace_expiry(self) -> None:
+        remaining = self._display_value_grace.remaining_seconds(
+            now_monotonic=time.monotonic()
+        )
+        if remaining is None:
+            return
+        self._cancel_display_grace_timer()
+        self._display_grace_cancel = async_call_later(
+            self.hass,
+            remaining,
+            self._handle_display_grace_expired,
+        )
+
+    def _handle_display_grace_expired(self, _now) -> None:
+        self._display_grace_cancel = None
+        self.async_write_ha_state()
+
+    def _cancel_display_grace_timer(self) -> None:
+        if self._display_grace_cancel is not None:
+            self._display_grace_cancel()
+            self._display_grace_cancel = None
+
     def _parent_system(self):
         for system in self.coordinator.native_zendure.hardware_overview():
             if system.public_id == self._parent_public_id:
                 return system
         return None
 
-    def _measurement_available_for_display(self, measured) -> bool:
+    def _measurement_display_state(
+        self,
+        measured,
+        *,
+        allow_grace: bool = True,
+        missing_item: bool = False,
+    ) -> NativeDisplayValueState:
         parent = self._parent_system() if self._kind == "pack" else self._item()
-        return bool(
-            measured is not None
-            and (
-                measured.valid
-                or legacy_display_retains_stale_value(parent, measured)
-            )
+        selected_zensdk = bool(
+            parent is not None
+            and getattr(parent.selected_transport, "value", None) == "zensdk"
         )
 
+        if not allow_grace:
+            self._display_value_is_stale = False
+            self._display_value_grace.reset()
+            self._display_grace_enabled = False
+            if measured is not None and measured.valid:
+                return NativeDisplayValueState(True, measured.value)
+            if legacy_display_retains_stale_value(parent, measured):
+                return NativeDisplayValueState(True, measured.value)
+            return NativeDisplayValueState(False, None)
+
+        if selected_zensdk:
+            self._display_grace_enabled = True
+            if measured is not None and measured.valid:
+                state = self._display_value_grace.update(
+                    measured.value,
+                    valid=True,
+                    transient_failure=False,
+                    now_monotonic=time.monotonic(),
+                )
+            elif legacy_display_retains_stale_value(parent, measured):
+                self._display_value_grace.reset()
+                state = NativeDisplayValueState(True, measured.value)
+            else:
+                transient_failure = missing_item or (
+                    measured is not None
+                    and measured.validity in {
+                        ValueValidity.OFFLINE,
+                        ValueValidity.STALE,
+                    }
+                )
+                state = self._display_value_grace.update(
+                    None,
+                    valid=False,
+                    transient_failure=transient_failure,
+                    now_monotonic=time.monotonic(),
+                )
+            self._display_value_is_stale = state.stale
+            return state
+
+        if missing_item and self._display_grace_enabled:
+            state = self._display_value_grace.update(
+                None,
+                valid=False,
+                transient_failure=True,
+                now_monotonic=time.monotonic(),
+            )
+            self._display_value_is_stale = state.stale
+            return state
+
+        self._display_value_grace.reset()
+        self._display_grace_enabled = False
+        self._display_value_is_stale = False
+        if measured is not None and measured.valid:
+            return NativeDisplayValueState(True, measured.value)
+        if legacy_display_retains_stale_value(parent, measured):
+            return NativeDisplayValueState(True, measured.value)
+        return NativeDisplayValueState(False, None)
+
+    def _measurement_available_for_display(
+        self,
+        measured,
+        *,
+        allow_grace: bool = True,
+    ) -> bool:
+        return self._measurement_display_state(
+            measured,
+            allow_grace=allow_grace,
+        ).available
+
     def _measurement_value_for_display(self, measured):
-        return (
-            measured.value
-            if self._measurement_available_for_display(measured)
-            else None
-        )
+        state = self._measurement_display_state(measured)
+        return state.value if state.available else None
 
     def _item(self):
         for system in self.coordinator.native_zendure.hardware_overview():
@@ -2237,38 +2353,38 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         item = self._item()
-        if self._kind != "main" or item is None:
-            return None
-        attributes = {
-            "v4_migration_binding": (
+        attributes = {}
+        if self._kind == "main" and item is not None:
+            attributes["v4_migration_binding"] = (
                 "confirmed" if item.migration_bound else "not_bound"
             )
-        }
-        if self.entity_description.key == "switching_count":
-            estimate = item.measurements.get("switching_count_is_estimate")
-            attributes["estimated"] = bool(
-                estimate is not None and estimate.valid and estimate.value
-            )
-        if self.entity_description.key == "smartMode":
-            measured = item.measurements.get("smartMode")
-            raw_value = _measured_value(measured)
-            state = smart_mode_state(raw_value)
-            attributes.update(
-                {
-                    "raw_value": raw_value,
-                    "writes_to_flash": (
-                        True if state == "persistent_storage"
-                        else False if state == "temporary_control"
-                        else None
-                    ),
-                    "restored_after_device_restart": (
-                        True if state == "temporary_control"
-                        else False if state == "persistent_storage"
-                        else None
-                    ),
-                }
-            )
-        return attributes
+            if self.entity_description.key == "switching_count":
+                estimate = item.measurements.get("switching_count_is_estimate")
+                attributes["estimated"] = bool(
+                    estimate is not None and estimate.valid and estimate.value
+                )
+            if self.entity_description.key == "smartMode":
+                measured = item.measurements.get("smartMode")
+                raw_value = _measured_value(measured)
+                state = smart_mode_state(raw_value)
+                attributes.update(
+                    {
+                        "raw_value": raw_value,
+                        "writes_to_flash": (
+                            True if state == "persistent_storage"
+                            else False if state == "temporary_control"
+                            else None
+                        ),
+                        "restored_after_device_restart": (
+                            True if state == "temporary_control"
+                            else False if state == "persistent_storage"
+                            else None
+                        ),
+                    }
+                )
+        if self._display_value_is_stale:
+            attributes["display_stale"] = True
+        return attributes or None
 
     def _remaining_output_minutes(self, item, measured) -> int | None:
         """Return the device's remaining discharge minutes, only while discharging.
@@ -2282,7 +2398,10 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         return self._remaining_output_time.remaining_minutes(
             _measured_value(measured),
             _measured_value(discharge),
-            estimate_available=self._measurement_available_for_display(measured),
+            estimate_available=self._measurement_available_for_display(
+                measured,
+                allow_grace=False,
+            ),
             discharge_available=(
                 discharge is not None and discharge.valid
             ),
@@ -2301,6 +2420,11 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
     def available(self) -> bool:
         item = self._item()
         if item is None:
+            if self.entity_description.source in {"measurement", "firmware"}:
+                return self._measurement_display_state(
+                    None,
+                    missing_item=True,
+                ).available
             return False
         description = self.entity_description
         if description.source == "measurement":
@@ -2328,14 +2452,22 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
     def native_value(self):
         item = self._item()
         if item is None:
+            if self.entity_description.source in {"measurement", "firmware"}:
+                state = self._measurement_display_state(
+                    None,
+                    missing_item=True,
+                )
+                return state.value if state.available else None
             return None
         source = self.entity_description.source
         if source == "measurement":
             measured = item.measurements.get(self.entity_description.measurement_key)
             if self.entity_description.measurement_key == "smartMode":
-                return smart_mode_state(_measured_value(measured))
+                return smart_mode_state(
+                    self._measurement_value_for_display(measured)
+                )
             if self.entity_description.measurement_key == "wifiState":
-                raw_value = _measured_value(measured)
+                raw_value = self._measurement_value_for_display(measured)
                 if raw_value == 1:
                     return "connected"
                 if raw_value == 0:
@@ -2349,7 +2481,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             ):
                 return zendure_documented_status_state(
                     self.entity_description.measurement_key,
-                    _measured_value(measured),
+                    self._measurement_value_for_display(measured),
                 )
             if (
                 self.entity_description.measurement_key == "localAPIEnable"
