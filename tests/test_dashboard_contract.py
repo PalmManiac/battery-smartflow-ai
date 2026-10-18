@@ -480,6 +480,15 @@ class DashboardContractTests(unittest.TestCase):
         self.assertIn('"debug_active_entity": entity_registry.async_get_entity_id(', dashboard)
         self.assertIn('this._hass.callService("battery_smartflow_ai", service, data)', frontend)
 
+    def test_portal_options_form_prefills_home_assistant_suggested_values(self) -> None:
+        frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('const value = this._optionFieldValue(field);', frontend)
+        self.assertIn('description.suggested_value', frontend)
+        self.assertIn('return field?.value ?? suggestedValue ?? field?.default ?? "";', frontend)
+
     def test_training_dashboard_labels_are_localized_and_redundant_branding_is_removed(self) -> None:
         frontend = (COMPONENT / "frontend" / "hems-dashboard.js").read_text(
             encoding="utf-8"

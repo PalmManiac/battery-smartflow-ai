@@ -956,6 +956,15 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return name.replaceAll("_", " ");
   }
 
+  _optionFieldValue(field) {
+    const description = field?.description;
+    const suggestedValue = field?.suggested_value
+      ?? (description && typeof description === "object"
+        ? description.suggested_value
+        : undefined);
+    return field?.value ?? suggestedValue ?? field?.default ?? "";
+  }
+
   _renderOptionsFlow(step) {
     if (!step || step.type === "abort" || step.type === "create_entry") {
       const finished = step?.type === "create_entry";
@@ -978,7 +987,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const config = selector[fieldType] || {};
         const name = this._escape(field.name);
         const label = this._escape(this._optionsFieldLabel(field.name));
-        const value = field.default ?? field.value ?? "";
+        const value = this._optionFieldValue(field);
         if (fieldType === "boolean") return `<label class="option-field"><span>${label}${field.name === "native_zendure_always_smart_mode_1" ? `<small>${this._escape(this._t("smart_mode_help"))}</small>` : ""}</span><input type="checkbox" data-option-field="${name}" ${value ? "checked" : ""}></label>`;
         if (fieldType === "select") {
           const options = (config.options || []).map((option) => {
