@@ -155,6 +155,21 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn("LEGACY_DISPLAY_RETENTION_SECONDS = 300.0", overview)
         self.assertIn("maximum_age_seconds: float = 30.0", runtime)
 
+    def test_native_hardware_short_gap_grace_is_presentation_only(self) -> None:
+        sensor = (COMPONENT / "sensor.py").read_text(encoding="utf-8")
+        overview = (COMPONENT / "native_device_overview.py").read_text(
+            encoding="utf-8"
+        )
+        entity = sensor[sensor.index("class NativeZendureHardwareSensor"):]
+
+        self.assertIn("NATIVE_HARDWARE_DISPLAY_GRACE_SECONDS = 5.0", overview)
+        self.assertIn("NativeDisplayValueGrace(", entity)
+        self.assertIn("ValueValidity.OFFLINE", entity)
+        self.assertIn("ValueValidity.STALE", entity)
+        self.assertIn('attributes[\"display_stale\"] = True', entity)
+        self.assertIn("async_call_later(", entity)
+        self.assertIn("allow_grace=False", entity)
+
     def test_safe_idle_capacity_reason_is_a_translated_enum_state(self) -> None:
         constants = ast.parse((COMPONENT / "const.py").read_text(encoding="utf-8"))
         enum_names = {"DECISION_REASON_ENUMS"}

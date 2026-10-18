@@ -20,6 +20,7 @@ from custom_components.battery_smartflow_ai.core.models import (
     ZendureTransport,
 )
 from custom_components.battery_smartflow_ai.native_device_overview import (
+    NativeDisplayValueGrace,
     build_native_device_overview,
 )
 
@@ -44,6 +45,79 @@ def observed_pack(pack_id, parent):
 
 
 class NativeDeviceOverviewTests(unittest.TestCase):
+    def test_native_display_grace_holds_only_brief_transient_gaps(self):
+        grace = NativeDisplayValueGrace(grace_seconds=5.0)
+
+        fresh = grace.update(
+            420,
+            valid=True,
+            transient_failure=False,
+            now_monotonic=10.0,
+        )
+        self.assertEqual((fresh.available, fresh.value, fresh.stale), (True, 420, False))
+
+        during_gap = grace.update(
+            None,
+            valid=False,
+            transient_failure=True,
+            now_monotonic=11.0,
+        )
+        self.assertEqual(
+            (during_gap.available, during_gap.value, during_gap.stale),
+            (True, 420, True),
+        )
+        self.assertEqual(grace.remaining_seconds(now_monotonic=13.0), 3.0)
+
+        after_grace = grace.update(
+            None,
+            valid=False,
+            transient_failure=True,
+            now_monotonic=16.0,
+        )
+        self.assertEqual(
+            (after_grace.available, after_grace.value, after_grace.stale),
+            (False, None, False),
+        )
+
+    def test_native_display_grace_resets_after_recovery_or_permanent_failure(self):
+        grace = NativeDisplayValueGrace(grace_seconds=5.0)
+        grace.update(
+            420,
+            valid=True,
+            transient_failure=False,
+            now_monotonic=10.0,
+        )
+        grace.update(
+            None,
+            valid=False,
+            transient_failure=True,
+            now_monotonic=11.0,
+        )
+
+        recovered = grace.update(
+            430,
+            valid=True,
+            transient_failure=False,
+            now_monotonic=12.0,
+        )
+        self.assertEqual((recovered.available, recovered.value, recovered.stale), (True, 430, False))
+
+        invalid = grace.update(
+            None,
+            valid=False,
+            transient_failure=False,
+            now_monotonic=13.0,
+        )
+        self.assertEqual((invalid.available, invalid.value, invalid.stale), (False, None, False))
+
+        no_cached_value = grace.update(
+            None,
+            valid=False,
+            transient_failure=True,
+            now_monotonic=14.0,
+        )
+        self.assertFalse(no_cached_value.available)
+
     def test_sparse_legacy_keeps_confirmed_inventory_for_display_only(self):
         identity = NativeDeviceIdentity(
             ZendureTransport.CLOUD_MQTT,
