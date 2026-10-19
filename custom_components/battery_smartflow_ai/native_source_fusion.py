@@ -90,6 +90,7 @@ class NativeSourceFusion:
         self._debug_properties: dict[
             tuple[ZendureTransport, str], dict[str, Any]
         ] = {}
+        self._pack_membership: dict[str, frozenset[str]] = {}
 
     def apply(
         self, message: CloudMqttMessage, *, now: datetime | None = None
@@ -101,6 +102,7 @@ class NativeSourceFusion:
         result = self._normalizers[transport].apply(message, now=now)
         if result is None or message.device_candidate_id is None:
             return None
+        self._record_complete_pack_membership(message)
         self._record_retained(transport, message)
         return self.snapshot(
             message.device_candidate_id,
@@ -246,7 +248,12 @@ class NativeSourceFusion:
                 for item in fields(ReportedDeviceSetpoints)
             }
         )
-        packs = self._fuse_packs(system_id, states, select)
+        packs = self._fuse_packs(
+            system_id,
+            states,
+            select,
+            self._pack_membership.get(system_id),
+        )
         preferred = trace["soc_pct"].transport
         if preferred is None:
             preferred = max(
@@ -301,7 +308,34 @@ class NativeSourceFusion:
             ),
         )
 
-    def _fuse_packs(self, system_id, states, select):
+    def _record_complete_pack_membership(
+        self, message: CloudMqttMessage
+    ) -> None:
+        """Use a complete report to retire pack identities no longer present.
+
+        Cloud ``state`` packets are partial updates, so only a full
+        ``properties/report`` carrying an identifiable pack list can replace
+        the current membership. Applying the authoritative set at fusion level
+        also retires an old ID cached by another native transport.
+        """
+
+        if not message.topic.rstrip("/").endswith("/properties/report"):
+            return
+        system_id = message.device_candidate_id
+        payload = message.parsed_payload
+        if system_id is None or not isinstance(payload, dict):
+            return
+        raw_packs = payload.get("packData")
+        if not isinstance(raw_packs, list):
+            return
+        pack_ids = tuple(
+            _pack_id(pack) if isinstance(pack, dict) else None
+            for pack in raw_packs
+        )
+        if all(pack_id is not None for pack_id in pack_ids):
+            self._pack_membership[system_id] = frozenset(pack_ids)
+
+    def _fuse_packs(self, system_id, states, select, membership=None):
         by_source = {
             source: {pack.pack_id: pack for pack in state.packs}
             for source, state in states.items()
@@ -309,6 +343,8 @@ class NativeSourceFusion:
         pack_ids = sorted(
             {pack_id for packs in by_source.values() for pack_id in packs}
         )
+        if membership is not None:
+            pack_ids = [pack_id for pack_id in pack_ids if pack_id in membership]
         result = []
         measurement_names = tuple(
             item.name
