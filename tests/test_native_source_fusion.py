@@ -213,6 +213,30 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(pack.charge_power_w.value, 0.0)
         self.assertTrue(pack.charge_power_w.valid)
 
+    def test_complete_pack_report_retires_old_identity_across_transports(self):
+        for transport in ("cloud_mqtt", "zensdk"):
+            self.fusion.apply(
+                report(
+                    self.now,
+                    {},
+                    transport=transport,
+                    packs=[{"sn": "old-pack", "packType": 5, "socLevel": 70}],
+                )
+            )
+
+        replacement = self.fusion.apply(
+            report(
+                self.now + timedelta(minutes=5),
+                {},
+                transport="cloud_mqtt",
+                packs=[{"sn": "new-pack", "packType": 5, "socLevel": 65}],
+            )
+        )
+
+        self.assertEqual(
+            [pack.pack_id for pack in replacement.state.packs], ["new-pack"]
+        )
+
     def test_diagnostics_contain_selection_not_values(self):
         self.fusion.apply(report(self.now, {"electricLevel": 50}, transport="zensdk"))
         diagnostics = self.fusion.source_diagnostics("cloud_mqtt:device-1")

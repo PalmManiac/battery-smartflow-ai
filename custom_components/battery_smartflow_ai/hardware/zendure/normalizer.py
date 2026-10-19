@@ -414,7 +414,14 @@ class ZendureCloudNormalizer:
                     state_properties,
                     observed_at,
                 )
-            self._apply_packs(system_id, payload.get("packData"), observed_at)
+            self._apply_packs(
+                system_id,
+                payload.get("packData"),
+                observed_at,
+                complete_snapshot=message.topic.rstrip("/").endswith(
+                    "/properties/report"
+                ),
+            )
         if (
             message.topic.endswith("/properties/energy")
             and not message.retained
@@ -643,9 +650,20 @@ class ZendureCloudNormalizer:
         system_id: str,
         raw_packs: Any,
         observed_at: datetime,
+        *,
+        complete_snapshot: bool = False,
     ) -> None:
         if not isinstance(raw_packs, list):
             return
+        pack_ids = tuple(
+            _pack_id(raw_pack) if isinstance(raw_pack, Mapping) else None
+            for raw_pack in raw_packs
+        )
+        if complete_snapshot and all(pack_id is not None for pack_id in pack_ids):
+            current_pack_ids = set(pack_ids)
+            for pack_id in tuple(self._pack_values[system_id]):
+                if pack_id not in current_pack_ids:
+                    del self._pack_values[system_id][pack_id]
         for raw_pack in raw_packs:
             if not isinstance(raw_pack, Mapping):
                 continue

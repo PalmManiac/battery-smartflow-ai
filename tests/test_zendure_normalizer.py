@@ -245,6 +245,28 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             result.unknown_pack_properties, ("futurePackProperty",)
         )
 
+    async def test_complete_report_retires_packs_missing_from_inventory(self):
+        normalizer = ZendureCloudNormalizer(self.bootstrap)
+        initial = normalizer.apply(report(self.at, self.full_payload()))
+        self.assertEqual(
+            {pack.pack_id for pack in initial.state.packs},
+            {"pack-a", "pack-b"},
+        )
+
+        replacement_time = self.at + timedelta(minutes=5)
+        replacement = normalizer.apply(
+            report(
+                replacement_time,
+                {"properties": {"electricLevel": 60}, "packData": [
+                    {"sn": "pack-new", "packType": 5, "socLevel": 62},
+                ]},
+            )
+        )
+
+        self.assertEqual(
+            [pack.pack_id for pack in replacement.state.packs], ["pack-new"]
+        )
+
     async def test_command_echo_cannot_become_reported_device_state(self):
         normalizer = ZendureCloudNormalizer(self.bootstrap)
         result = normalizer.apply(
