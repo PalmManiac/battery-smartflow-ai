@@ -552,6 +552,7 @@ class ZendureCloudNormalizer:
             hems_active=hems_active,
             fault_code=device_value("fault_code"),
             protection_active=_device_protection_state(
+                model=self._models[system_id],
                 fault_code=device_value("fault_code"),
                 is_error=self._value(
                     values,
@@ -794,15 +795,32 @@ def _fault_block(*values):
     )
 
 
-def _device_protection_state(*, fault_code, is_error):
+def _device_protection_state(*, model, fault_code, is_error):
     """Use the explicit error flag before interpreting model-specific fault levels.
 
     ZenSDK devices can report a non-zero ``faultLevel`` during normal operation
     (the SF2400AC has been observed with ``faultLevel=2`` and ``is_error=0``).
     When the explicit flag is available it is therefore authoritative. The raw
     fault level remains a conservative fallback for devices that do not expose
-    ``is_error`` at all.
+    ``is_error`` at all. The legacy Hyper 2000 can keep a Cloud ``is_error=1``
+    snapshot after its current grouped ``faultLevel`` has returned to zero, so
+    a fresh, explicit zero fault level clears that advisory snapshot for control.
     """
+    model_key = "".join(
+        character for character in str(model).casefold() if character.isalnum()
+    )
+    is_legacy_hyper = model_key in {"hyper2000", "zendurehyper2000"}
+    if (
+        is_legacy_hyper
+        and fault_code.valid
+        and float(fault_code.value) == 0
+        and is_error.valid
+        and float(is_error.value) != 0
+    ):
+        return MeasuredValue.available(
+            False,
+            observed_at=fault_code.observed_at,
+        )
     if is_error.valid:
         return MeasuredValue.available(
             float(is_error.value) != 0,

@@ -336,6 +336,47 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.state.protection_active.valid)
         self.assertTrue(result.state.protection_active.value)
 
+    async def test_hyper_clear_fault_level_overrides_sticky_cloud_error_event(self):
+        normalizer = ZendureCloudNormalizer(
+            await make_bootstrap(primary_model="Hyper 2000")
+        )
+        normalizer.apply(
+            report(self.at, {"properties": {"faultLevel": 0}})
+        )
+
+        result = normalizer.apply(
+            report(
+                self.at + timedelta(seconds=1),
+                {"offData": 1, "eventId": 3, "data": []},
+                topic="event/error",
+            )
+        )
+
+        self.assertTrue(result.state.fault_code.valid)
+        self.assertEqual(result.state.fault_code.value, 0)
+        self.assertTrue(result.state.protection_active.valid)
+        self.assertFalse(result.state.protection_active.value)
+        self.assertEqual(result.state.protection_active.observed_at, self.at)
+
+    async def test_hyper_error_event_still_blocks_with_active_fault_level(self):
+        normalizer = ZendureCloudNormalizer(
+            await make_bootstrap(primary_model="Hyper 2000")
+        )
+        normalizer.apply(
+            report(self.at, {"properties": {"faultLevel": 2}})
+        )
+
+        result = normalizer.apply(
+            report(
+                self.at + timedelta(seconds=1),
+                {"offData": 1, "eventId": 3, "data": []},
+                topic="event/error",
+            )
+        )
+
+        self.assertTrue(result.state.protection_active.valid)
+        self.assertTrue(result.state.protection_active.value)
+
     async def test_cloud_device_report_does_not_refresh_error_snapshot(self):
         normalizer = ZendureCloudNormalizer(
             self.bootstrap, stale_after_seconds=30
