@@ -158,7 +158,7 @@
       },
       "native_device": {
         "title": "Select the Zendure system",
-        "description": "Zendure reported these devices:\n\n{device_summary}\n\nSelect exactly one system and its communication path. Cloud is the recommended starting path for Legacy devices. Native control is activated only by the separate switch below. When enabled, BSFAI stops writing through the configured Z-HA entities.",
+        "description": "Zendure reported these devices:\n\n{device_summary}\n\nConfigure each supported main system in turn and choose its communication path. Unsupported systems remain read-only. This release keeps the existing single-device control path; it does not enable multi-device power regulation. Native control is activated only by the separate switch below.",
         "data": {
           "native_zendure_selected_device": "Zendure system",
           "native_zendure_control_transport": "Communication path",
@@ -169,7 +169,7 @@
           "native_zendure_local_mqtt_password": "Local MQTT password"
         },
         "data_description": {
-          "native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently. Select a supported communication path for that system.",
+          "native_zendure_selected_device": "Configure each supported main system in turn. Packs cannot be controlled independently; multi-device power regulation is not enabled in this release.",
           "native_zendure_control_transport": "Cloud is the recommended starting path for Legacy devices and works immediately after account discovery. Use Local MQTT only after the device itself sends current data to the local broker. ZenSDK remains recommended for supported newer systems.",
           "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the selected supported communication path. Disable this switch to retain the established Z-HA control path.",
           "native_zendure_local_mqtt_server": "Shown only when the account contains a verified legacy family. The device is provisioned automatically on the first switch to Local MQTT unless this is explicitly skipped.",
@@ -322,7 +322,7 @@
       },
       "native_zendure_device": {
         "title": "Select the Zendure system",
-        "description": "Zendure reported these devices:\n\n{device_summary}\n\nSelect exactly one system and its communication path. Cloud is the recommended starting path for Legacy devices.",
+        "description": "Zendure reported these devices:\n\n{device_summary}\n\nConfigure each supported main system in turn and choose its communication path. Unsupported systems remain read-only. This release keeps the existing single-device control path; it does not enable multi-device power regulation.",
         "data": {
           "native_zendure_selected_device": "Zendure system",
           "native_zendure_control_transport": "Communication path",
@@ -336,7 +336,7 @@
           "native_zendure_legacy_provision": "Configure the selected Legacy device now"
         },
         "data_description": {
-          "native_zendure_selected_device": "Exactly one main system is selected; packs cannot be controlled independently. Select a supported communication path for that system.",
+          "native_zendure_selected_device": "Configure each supported main system in turn. Packs cannot be controlled independently; multi-device power regulation is not enabled in this release.",
           "native_zendure_control_transport": "Cloud is the recommended starting path for Legacy devices and works immediately after account discovery. Use Local MQTT only after the device itself sends current data to the local broker. ZenSDK remains recommended for supported newer systems.",
           "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the selected supported communication path.",
           "native_zendure_local_mqtt_server": "Address sent to the Legacy device over Bluetooth and used by BSFAI.",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import fields
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Mapping
 
 from .core.models import (
     MeasuredValue,
@@ -62,6 +62,7 @@ class NativeSourceFusion:
         bootstrap: ZendureCloudBootstrap,
         *,
         preferred_transport: ZendureTransport | None = None,
+        preferred_transports: Mapping[str, ZendureTransport] | None = None,
     ) -> None:
         self._normalizers = {
             transport: ZendureCloudNormalizer(bootstrap) for transport in _TRANSPORTS
@@ -79,6 +80,25 @@ class NativeSourceFusion:
             else _TRANSPORTS
         )
         self._arbiter = NativeReadSourceArbiter(default_priority=priority)
+        self._device_arbiters = {}
+        for item in bootstrap.devices:
+            system_id = item.candidate.candidate_id
+            device_preference = (preferred_transports or {}).get(system_id)
+            if device_preference is None:
+                device_preference = preferred_transport
+            device_priority = (
+                (device_preference,)
+                + tuple(
+                    source
+                    for source in _TRANSPORTS
+                    if source is not device_preference
+                )
+                if device_preference is not None
+                else _TRANSPORTS
+            )
+            self._device_arbiters[system_id] = NativeReadSourceArbiter(
+                default_priority=device_priority
+            )
         self._selection: dict[str, dict[str, SelectedMeasurement[Any]]] = {}
         self._selection_changed_at: dict[str, dict[str, datetime]] = {}
         self._retained_main: dict[
@@ -177,7 +197,8 @@ class NativeSourceFusion:
             retained: dict[ZendureTransport, bool] | None = None,
         ):
             target = name.rsplit(".", 1)[-1]
-            selected = self._arbiter.select(
+            arbiter = self._device_arbiters.get(system_id, self._arbiter)
+            selected = arbiter.select(
                 name,
                 tuple(
                     SourceMeasurement(

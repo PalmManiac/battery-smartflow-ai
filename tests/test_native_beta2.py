@@ -6,6 +6,7 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Mapping
 
 import voluptuous as vol
 from support import bootstrap
@@ -39,6 +40,13 @@ from custom_components.battery_smartflow_ai.native_config_ui import (
 from custom_components.battery_smartflow_ai.native_device_overview import (
     _difference,
     _pack_status,
+)
+from custom_components.battery_smartflow_ai.native_device_setup import (
+    SETUP_COMPLETE,
+    SETUP_REQUIRED,
+    reconcile_device_setups,
+    save_device_setup,
+    setup_is_complete,
 )
 from custom_components.battery_smartflow_ai.native_source_fusion import (
     NativeSourceFusion,
@@ -131,6 +139,7 @@ def load_flow_namespace():
     namespace = dict(vars(const))
     namespace.update(
         vol=vol, selector=SelectorStub(),
+        Mapping=Mapping,
         config_entries=SimpleNamespace(ConfigFlow=FlowBase, OptionsFlow=FlowBase),
         resolve_zendure_device=resolve_zendure_device,
         preferred_local_transport=preferred_local_transport,
@@ -140,6 +149,10 @@ def load_flow_namespace():
         native_device_label=native_device_label,
         native_device_summary_line=native_device_summary_line,
         validate_shelly_host=validate_shelly_host,
+        SETUP_COMPLETE=SETUP_COMPLETE,
+        reconcile_device_setups=reconcile_device_setups,
+        save_device_setup=save_device_setup,
+        setup_is_complete=setup_is_complete,
     )
     from custom_components.battery_smartflow_ai.core.models import ZendureTransport
     namespace["ZendureTransport"] = ZendureTransport
@@ -152,6 +165,80 @@ def load_flow_classes():
 
 
 class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_new_setup_configures_each_supported_system_separately(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        flow._native_bootstrap = await make_bootstrap(("device-1", "device-2"))
+        flow._native_options = {
+            const.CONF_NATIVE_ZENDURE_APP_TOKEN: "private-test-token"
+        }
+
+        first = await flow.async_step_native_device({
+            const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: "cloud_mqtt:device-1",
+            const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "cloud_mqtt",
+            const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: False,
+        })
+        self.assertEqual(first["type"], "form")
+        self.assertEqual(first["step_id"], "native_device")
+        self.assertEqual(
+            flow._native_setup_map["devices"]["cloud_mqtt:device-1"]["transport"],
+            "cloud_mqtt",
+        )
+
+        second = await flow.async_step_native_device({
+            const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: "cloud_mqtt:device-2",
+            const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "zensdk",
+        })
+        self.assertEqual(second["type"], "form")
+        self.assertEqual(second["step_id"], "native_external")
+        self.assertEqual(
+            flow._native_options[const.CONF_NATIVE_ZENDURE_DEVICE_SETUPS][
+                "devices"
+            ]["cloud_mqtt:device-2"]["transport"],
+            "zensdk",
+        )
+        self.assertEqual(
+            flow._native_options[const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE],
+            "cloud_mqtt:device-1",
+        )
+        self.assertFalse(
+            flow._native_options[const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED]
+        )
+
+    async def test_options_setup_can_finish_while_an_unseen_device_is_offline(self):
+        flow = load_flow_namespace()["ZendureSmartFlowOptionsFlow"]()
+        flow.config_entry = SimpleNamespace(
+            data={},
+            options={
+                const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: "cloud_mqtt:device-1",
+                const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "cloud_mqtt",
+            },
+        )
+        flow._native_bootstrap = await make_bootstrap()
+        flow._native_token = "private-test-token"
+        flow._native_setup_map = reconcile_device_setups(
+            flow._native_bootstrap.devices
+        )
+        flow._native_setup_map["devices"]["cloud_mqtt:device-1"].update(
+            setup_status=SETUP_COMPLETE,
+            transport="cloud_mqtt",
+        )
+        flow._native_setup_map["devices"]["cloud_mqtt:offline"] = {
+            "setup_status": SETUP_REQUIRED,
+            "online": False,
+        }
+
+        result = await flow.async_step_native_zendure_device({
+            const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: "cloud_mqtt:device-1",
+            const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "cloud_mqtt",
+        })
+
+        self.assertEqual(result["type"], "create_entry")
+        self.assertIn(
+            "cloud_mqtt:offline",
+            result["data"][const.CONF_NATIVE_ZENDURE_DEVICE_SETUPS]["devices"],
+        )
+
     async def test_smart_mode_option_defaults_on_and_can_be_disabled(self):
         options_flow = load_flow_namespace()["ZendureSmartFlowOptionsFlow"]()
         options_flow.config_entry = SimpleNamespace(options={"unrelated": "keep"})
@@ -194,6 +281,9 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(const.CONF_PV_ENTITY, entry["data"])
         self.assertNotIn(const.CONF_NATIVE_ZENDURE_APP_TOKEN, entry["data"])
         self.assertEqual(entry["options"][const.CONF_NATIVE_ZENDURE_APP_TOKEN], "private-test-token")
+        self.assertTrue(
+            entry["options"][const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED]
+        )
 
     async def test_invalid_device_cannot_create_entry(self):
         flow = load_flow_classes()()

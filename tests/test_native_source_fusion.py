@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from base64 import b64encode
-from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 import json
 import unittest
@@ -12,10 +11,19 @@ from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.core.models import ValueValidity, ZendureTransport  # noqa: E402
-from custom_components.battery_smartflow_ai.native_source_fusion import NativeSourceFusion  # noqa: E402
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud import ZendureCloudClient  # noqa: E402
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import CloudMqttMessage  # noqa: E402
+from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
+    ValueValidity,
+    ZendureTransport,
+)
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
+    ZendureCloudClient,
+)
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (  # noqa: E402
+    CloudMqttMessage,
+)
+from custom_components.battery_smartflow_ai.native_source_fusion import (  # noqa: E402
+    NativeSourceFusion,
+)
 
 
 class Response:
@@ -26,7 +34,7 @@ class Response:
         return self.value
 
 
-async def make_bootstrap():
+async def make_bootstrap(device_ids=("device-1",)):
     token = b64encode(b"https://api.example.com.app-secret").decode()
 
     async def post(*_args, **_kwargs):
@@ -34,10 +42,15 @@ async def make_bootstrap():
             "code": 200,
             "success": True,
             "data": {
-                "deviceList": [{
-                    "deviceKey": "device-1", "productKey": "product-1",
-                    "productModel": "SolarFlow2400AC", "online": True,
-                }],
+                "deviceList": [
+                    {
+                        "deviceKey": device_id,
+                        "productKey": "product-1",
+                        "productModel": "SolarFlow2400AC",
+                        "online": True,
+                    }
+                    for device_id in device_ids
+                ],
                 "mqtt": {
                     "clientId": "secret", "url": "mqtt://broker:1883",
                     "username": "secret", "password": "secret",
@@ -53,6 +66,7 @@ def report(
     properties,
     *,
     transport="cloud_mqtt",
+    device_id="device-1",
     packs=None,
     retained=False,
 ):
@@ -61,11 +75,11 @@ def report(
         payload["packData"] = packs
     return CloudMqttMessage(
         received_at=at,
-        topic="/product-1/device-1/properties/report",
+        topic=f"/product-1/{device_id}/properties/report",
         payload=json.dumps(payload).encode(),
         parsed_payload=payload,
         payload_format="json",
-        device_candidate_id="cloud_mqtt:device-1",
+        device_candidate_id=f"cloud_mqtt:{device_id}",
         pack_id=None,
         known_topic=True,
         session_number=1,
@@ -103,6 +117,41 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
         state = self.fusion.apply(cloud).state
         self.assertEqual(state.soc_pct.value, 51.0)
         self.assertEqual(state.observed_transport, ZendureTransport.ZENSDK)
+
+    async def test_configured_transport_preference_is_per_device(self):
+        fusion = NativeSourceFusion(
+            await make_bootstrap(("device-1", "device-2")),
+            preferred_transport=ZendureTransport.ZENSDK,
+            preferred_transports={
+                "cloud_mqtt:device-1": ZendureTransport.CLOUD_MQTT,
+            },
+        )
+
+        fusion.apply(report(self.now, {"electricLevel": 50}, transport="zensdk"))
+        state = fusion.apply(
+            report(self.now, {"electricLevel": 51}, transport="cloud_mqtt")
+        ).state
+        fusion.apply(
+            report(
+                self.now,
+                {"electricLevel": 50},
+                transport="cloud_mqtt",
+                device_id="device-2",
+            )
+        )
+        other_state = fusion.apply(
+            report(
+                self.now,
+                {"electricLevel": 51},
+                transport="zensdk",
+                device_id="device-2",
+            )
+        ).state
+
+        self.assertEqual(state.soc_pct.value, 51.0)
+        self.assertEqual(state.observed_transport, ZendureTransport.CLOUD_MQTT)
+        self.assertEqual(other_state.soc_pct.value, 51.0)
+        self.assertEqual(other_state.observed_transport, ZendureTransport.ZENSDK)
 
     def test_debug_snapshot_keeps_raw_main_and_pack_properties_per_transport(self):
         self.fusion.apply(

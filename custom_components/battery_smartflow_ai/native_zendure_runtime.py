@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from functools import partial
@@ -76,6 +76,7 @@ from .native_device_command_gate import (
     NativeDeviceCommandGate,
 )
 from .native_device_overview import (
+    _public_id,
     build_native_device_overview,
     with_control_state,
 )
@@ -137,6 +138,7 @@ class NativeZendureRuntime:
         selected_device: str | None,
         notify: Callable[[], None],
         migration_bound_device: str | None = None,
+        device_setups: Mapping[str, Any] | None = None,
         control_enabled: bool = False,
         always_smart_mode_1: bool = True,
         control_transport: str | None = None,
@@ -149,6 +151,12 @@ class NativeZendureRuntime:
         self._app_token = app_token
         self._selected_device = selected_device
         self._migration_bound_device = migration_bound_device
+        raw_setups = (
+            device_setups.get("devices", {})
+            if isinstance(device_setups, Mapping)
+            else {}
+        )
+        self._device_setups = dict(raw_setups) if isinstance(raw_setups, Mapping) else {}
         self._control_enabled = bool(control_enabled)
         self._always_smart_mode_1 = bool(always_smart_mode_1)
         self._configured_transport = _parse_transport(control_transport)
@@ -508,6 +516,18 @@ class NativeZendureRuntime:
                     "model": item.model,
                     "profile": item.profile_key,
                     "selected": system_id == self._selected_device,
+                    "setup_status": self._setup_status(
+                        system_id,
+                        item.control_state is not DeviceControlState.UNSUPPORTED,
+                    ),
+                    "configured_transport": (
+                        self._device_setups.get(system_id, {}).get("transport")
+                        if isinstance(self._device_setups.get(system_id), Mapping)
+                        else None
+                    ),
+                    "available_transports": self._available_device_transports(
+                        system_id
+                    ),
                     "migration_binding": (
                         "confirmed" if item.migration_bound else "not_bound"
                     ),
@@ -542,6 +562,32 @@ class NativeZendureRuntime:
                     ],
                 }
             )
+        known_systems = set(self._inventory.devices)
+        for system_id, record in sorted(self._device_setups.items()):
+            if system_id in known_systems or not isinstance(record, Mapping):
+                continue
+            systems.append(
+                {
+                    "id": _public_id("DEVICE", system_id),
+                    "name": record.get("model") or "Zendure system",
+                    "model": record.get("model"),
+                    "profile": None,
+                    "selected": system_id == self._selected_device,
+                    "setup_status": str(
+                        record.get("setup_status", "setup_required")
+                    ),
+                    "configured_transport": record.get("transport"),
+                    "available_transports": self._available_device_transports(
+                        system_id
+                    ),
+                    "migration_binding": "not_bound",
+                    "online": False,
+                    "status": "offline",
+                    "transport": record.get("transport") or "unknown",
+                    "observed_transport": None,
+                    "packs": [],
+                }
+            )
         return {
             "read_only": False,
             "native_control": "enabled" if self._control_enabled else "disabled",
@@ -574,6 +620,9 @@ class NativeZendureRuntime:
             "model",
             "profile",
             "selected",
+            "setup_status",
+            "configured_transport",
+            "available_transports",
             "migration_binding",
             "online",
             "status",
@@ -594,6 +643,39 @@ class NativeZendureRuntime:
                 if isinstance(system, dict)
             ]
         }
+
+    def _setup_status(self, system_id: str, supported: bool) -> str:
+        """Return persisted setup status without implying control activation."""
+
+        record = self._device_setups.get(system_id)
+        if not supported:
+            return "unsupported_read_only"
+        if not isinstance(record, Mapping):
+            # Preserve visibility for pre-V6 entries while options are migrated.
+            return "configured" if system_id == self._selected_device else "setup_required"
+        return str(record.get("setup_status", "setup_required"))
+
+    def _available_device_transports(self, system_id: str) -> list[str]:
+        """Return model-family paths offered for this system's setup."""
+
+        record = self._device_setups.get(system_id)
+        raw = record.get("available_transports") if isinstance(record, Mapping) else None
+        if isinstance(raw, (list, tuple, set, frozenset)):
+            return sorted(
+                value
+                for value in raw
+                if isinstance(value, str)
+                and value in {transport.value for transport in ZendureTransport}
+            )
+        device = self._inventory.devices.get(system_id)
+        if device is None or device.control_state is DeviceControlState.UNSUPPORTED:
+            return []
+        available = {ZendureTransport.CLOUD_MQTT.value}
+        for identity in device.native_identities:
+            local = preferred_local_transport(identity)
+            if local is not None:
+                available.add(local.value)
+        return sorted(available)
 
     def hardware_overview(self):
         """Return the privacy-safe native hierarchy used by HA entities."""
@@ -1463,10 +1545,17 @@ class NativeZendureRuntime:
                     system_id=candidate_id,
                 )
             selected_transport = self._startup_transport()
-            use_cloud_mqtt = selected_transport is not ZendureTransport.ZENSDK
+            device_transports = self._device_transport_preferences(
+                tuple(item.candidate.candidate_id for item in bootstrap.devices)
+            )
+            use_cloud_mqtt = any(
+                transport is not ZendureTransport.ZENSDK
+                for transport in device_transports.values()
+            ) or selected_transport is not ZendureTransport.ZENSDK
             self._normalizer = NativeSourceFusion(
                 bootstrap,
-                preferred_transport=self._configured_transport,
+                preferred_transport=selected_transport,
+                preferred_transports=device_transports,
             )
             self._zensdk_command_adapter = ZendureZenSdkCommandAdapter(
                 bootstrap,
@@ -1490,7 +1579,7 @@ class NativeZendureRuntime:
                 else None
             )
             if (
-                selected_transport is ZendureTransport.LOCAL_MQTT
+                ZendureTransport.LOCAL_MQTT in device_transports.values()
                 and self._local_mqtt_credentials is not None
             ):
                 candidate = ZendureLocalMqttTransport(
@@ -1514,11 +1603,8 @@ class NativeZendureRuntime:
                     initial_messages=zensdk.messages,
                     zensdk_attempts=zensdk.attempts,
                     completion_transport=(
-                        self._configured_transport.value
-                        if self._configured_transport in {
-                            ZendureTransport.CLOUD_MQTT,
-                            ZendureTransport.ZENSDK,
-                        }
+                        ZendureTransport.CLOUD_MQTT.value
+                        if use_cloud_mqtt
                         else None
                     ),
                 )
@@ -1586,7 +1672,7 @@ class NativeZendureRuntime:
         ):
             return False
         return not (
-            self._configured_transport is ZendureTransport.ZENSDK
+            self._startup_transport() is ZendureTransport.ZENSDK
             and self._selected_device is not None
             and self._selected_device in self._zensdk_last_success
         )
@@ -1994,7 +2080,7 @@ class NativeZendureRuntime:
         """Summarize selected-device reachability without relying on sensor age alone."""
 
         candidate_id = self._selected_device
-        configured_transport = self._configured_transport or self._startup_transport()
+        configured_transport = self._startup_transport()
         probe_supported = (
             candidate_id is not None
             and (
@@ -2223,33 +2309,65 @@ class NativeZendureRuntime:
     def _selected_control_transport(self, device: MainDevice):
         """Use the explicit choice; preserve pre-RC10 local installations."""
 
-        if self._configured_transport is None:
+        configured_transport = self._device_configured_transport(device.system_id)
+        if configured_transport is None:
             return automatic_control_transport(device)
         supported = {ZendureTransport.CLOUD_MQTT}
         for identity in device.native_identities:
             local = preferred_local_transport(identity)
             if local is not None:
                 supported.add(local)
-        if self._configured_transport not in supported:
+        if configured_transport not in supported:
             from .native_transport_router import AutomaticTransportDecision
 
             return AutomaticTransportDecision(None, "configured_transport_unsupported")
         from .native_transport_router import AutomaticTransportDecision
 
         return AutomaticTransportDecision(
-            self._configured_transport,
+            configured_transport,
             "configured_transport",
         )
+
+    def _device_transport_preferences(
+        self, device_ids: Sequence[str]
+    ) -> dict[str, ZendureTransport]:
+        """Return validated read-source preferences independently per device."""
+
+        preferences: dict[str, ZendureTransport] = {}
+        for device_id in device_ids:
+            device = self._inventory.devices.get(device_id)
+            if device is None:
+                continue
+            transport = self._selected_control_transport(device).transport
+            if transport is not None:
+                preferences[device_id] = transport
+        return preferences
 
     def _startup_transport(self) -> ZendureTransport | None:
         """Resolve the selected path before opening any MQTT session."""
 
-        if self._configured_transport is not None:
-            return self._configured_transport
         device = self._inventory.devices.get(self._selected_device or "")
         if device is None:
-            return None
+            # Keep construction-time diagnostics and older entries usable
+            # before the first discovery cycle restores inventory identities.
+            return self._device_configured_transport(self._selected_device or "")
         return self._selected_control_transport(device).transport
+
+    def _device_configured_transport(
+        self, device_id: str
+    ) -> ZendureTransport | None:
+        """Read the durable per-device choice, with a legacy single-device fallback."""
+
+        record = self._device_setups.get(device_id)
+        if isinstance(record, Mapping):
+            configured = _parse_transport(record.get("transport"))
+            if configured is not None:
+                return configured
+        # Older installations stored only one global transport. It remains
+        # applicable to that selected device during migration, never to others.
+        if device_id == self._selected_device:
+            return self._configured_transport
+        return None
 
     def _control_sensor_state(self) -> str:
         configured = self._selected_local_transport()
