@@ -46,6 +46,7 @@ INTEGRATION_VERSION = "5.2.6"
 # to entity states, logs or diagnostics.
 CONF_NATIVE_ZENDURE_APP_TOKEN = "native_zendure_app_token"
 CONF_NATIVE_ZENDURE_SELECTED_DEVICE = "native_zendure_selected_device"
+CONF_NATIVE_ZENDURE_DEVICE_SETUPS = "native_zendure_device_setups"
 CONF_NATIVE_ZENDURE_CONTROL_ENABLED = "native_zendure_control_enabled"
 CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1 = "native_zendure_always_smart_mode_1"
 CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER = "native_zendure_local_mqtt_server"

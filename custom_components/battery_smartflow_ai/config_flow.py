@@ -33,6 +33,7 @@ from .const import (
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
     CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
+    CONF_NATIVE_ZENDURE_DEVICE_SETUPS,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
@@ -95,6 +96,12 @@ from .native_config_ui import (
     native_device_label,
     native_device_summary_line,
     resolve_app_token_input,
+)
+from .native_device_setup import (
+    SETUP_COMPLETE,
+    reconcile_device_setups,
+    save_device_setup,
+    setup_is_complete,
 )
 from .price_currency import price_input_profile, resolve_price_currency
 from .hardware.zendure.cloud import ZendureCloudClient, ZendureCloudError
@@ -283,8 +290,13 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                     return Response()
 
-                self._native_bootstrap = await ZendureCloudClient(post_json).async_discover(token)
+                self._native_bootstrap = await ZendureCloudClient(
+                    post_json
+                ).async_discover(token)
                 self._native_options = {CONF_NATIVE_ZENDURE_APP_TOKEN: token}
+                self._native_setup_map = reconcile_device_setups(
+                    self._native_bootstrap.devices
+                )
                 return await self.async_step_native_device()
             except ZendureCloudError as error:
                 errors["base"] = error.reason
@@ -301,12 +313,31 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_native_device(self, user_input=None):
         devices = self._native_bootstrap.devices
+        if getattr(self, "_native_setup_map", None) is None:
+            self._native_setup_map = reconcile_device_setups(devices)
+        pending = next(
+            (
+                item.candidate.candidate_id
+                for item in devices
+                if item.candidate.supported
+                and self._native_setup_map["devices"].get(
+                    item.candidate.candidate_id, {}
+                ).get("setup_status") != SETUP_COMPLETE
+            ),
+            None,
+        )
         errors = {}
         if user_input is not None:
-            selected = next((item for item in devices if item.candidate.candidate_id ==
-                             user_input.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)), None)
+            selected = next(
+                (
+                    item for item in devices
+                    if item.candidate.candidate_id
+                    == user_input.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+                ),
+                None,
+            )
             profile = resolve_zendure_device(selected.candidate.identity) if selected else None
-            if selected is None:
+            if selected is None or selected.candidate.candidate_id != pending:
                 errors["base"] = "device_not_found"
             elif profile is None:
                 errors["base"] = "unsupported_device"
@@ -385,17 +416,89 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 )
                             },
                         )
-                    self._native_options.update(user_input)
-                    self._user_input = {
-                        "connection_type": "native",
-                        CONF_DEVICE_PROFILE: profile.profile_key,
-                    }
-                    return await self.async_step_native_external()
+                    self._native_setup_map = save_device_setup(
+                        self._native_setup_map,
+                        selected.candidate.candidate_id,
+                        chosen_transport.value,
+                    )
+                    self._native_options.setdefault(
+                        CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
+                        selected.candidate.candidate_id,
+                    )
+                    self._native_options.setdefault(
+                        CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
+                        chosen_transport.value,
+                    )
+                    self._native_options.setdefault(
+                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                        bool(
+                            user_input.get(
+                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                            )
+                        ),
+                    )
+                    for key in (
+                        CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
+                        CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
+                        CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
+                        CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
+                        CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID,
+                        CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
+                    ):
+                        if key in user_input:
+                            self._native_options[key] = user_input[key]
+                    if setup_is_complete(self._native_setup_map):
+                        self._native_options[
+                            CONF_NATIVE_ZENDURE_DEVICE_SETUPS
+                        ] = self._native_setup_map
+                        self._native_options.setdefault(
+                            CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                        )
+                        self._native_options.update({
+                            key: value for key, value in user_input.items()
+                            if key in {
+                                CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
+                                CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
+                                CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
+                                CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
+                                CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID,
+                                CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
+                            }
+                        })
+                        self._user_input = {
+                            "connection_type": "native",
+                            CONF_DEVICE_PROFILE: profile.profile_key,
+                        }
+                        return await self.async_step_native_external()
+                    next_id = next(
+                        item.candidate.candidate_id for item in devices
+                        if item.candidate.supported
+                        and self._native_setup_map["devices"].get(
+                            item.candidate.candidate_id, {}
+                        ).get("setup_status") != SETUP_COMPLETE
+                    )
+                    return self.async_show_form(
+                        step_id="native_device",
+                        data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
+                            devices, target_device_id=next_id
+                        ),
+                        description_placeholders={
+                            "device_summary": (
+                                ZendureSmartFlowOptionsFlow._native_device_summary(
+                                    devices
+                                )
+                            )
+                        },
+                    )
         return self.async_show_form(
             step_id="native_device", errors=errors,
-            data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(devices),
+            data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
+                devices, target_device_id=pending
+            ),
             description_placeholders={
-                "device_summary": ZendureSmartFlowOptionsFlow._native_device_summary(devices),
+                "device_summary": (
+                    ZendureSmartFlowOptionsFlow._native_device_summary(devices)
+                ),
             },
         )
 
@@ -1000,6 +1103,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         self._working_options: dict[str, Any] = {}
         self._native_bootstrap = None
         self._native_token: str | None = None
+        self._native_setup_map: dict[str, Any] | None = None
 
     def _get_battery_packs(self) -> int:
         try:
@@ -1118,6 +1222,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             options = dict(self.config_entry.options)
+            options.update(self._working_options)
             options[CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1] = bool(
                 user_input.get(CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1, True)
             )
@@ -1195,6 +1300,16 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     post_json
                 ).async_discover(token)
                 self._native_token = token
+                self._native_setup_map = reconcile_device_setups(
+                    self._native_bootstrap.devices,
+                    self.config_entry.options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+                    legacy_selected_device=self.config_entry.options.get(
+                        CONF_NATIVE_ZENDURE_SELECTED_DEVICE
+                    ),
+                    legacy_transport=self.config_entry.options.get(
+                        CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT
+                    ),
+                )
                 return await self.async_step_native_zendure_device()
             except ZendureCloudError as error:
                 errors["base"] = error.reason
@@ -1235,10 +1350,32 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             return await self.async_step_native_zendure()
 
         devices = self._native_bootstrap.devices
+        if self._native_setup_map is None:
+            self._native_setup_map = reconcile_device_setups(
+                devices,
+                self.config_entry.options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+                legacy_selected_device=self.config_entry.options.get(
+                    CONF_NATIVE_ZENDURE_SELECTED_DEVICE
+                ),
+                legacy_transport=self.config_entry.options.get(
+                    CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT
+                ),
+            )
+        pending = next(
+            (
+                item.candidate.candidate_id
+                for item in devices
+                if item.candidate.supported
+                and self._native_setup_map["devices"].get(
+                    item.candidate.candidate_id, {}
+                ).get("setup_status") != SETUP_COMPLETE
+            ),
+            None,
+        )
         if user_input is not None:
             selected = str(user_input[CONF_NATIVE_ZENDURE_SELECTED_DEVICE])
             valid = {item.candidate.candidate_id for item in devices}
-            if selected not in valid:
+            if selected not in valid or (pending is not None and selected != pending):
                 return self.async_show_form(
                     step_id="native_zendure_device",
                     data_schema=self._native_device_schema(
@@ -1254,13 +1391,23 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     },
                 )
             options = dict(self.config_entry.options)
+            options.update(self._working_options)
             options[CONF_NATIVE_ZENDURE_APP_TOKEN] = self._native_token
-            options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
-            options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
             selected_device = next(
                 item for item in devices
                 if item.candidate.candidate_id == selected
             )
+            if not selected_device.candidate.supported:
+                return self.async_show_form(
+                    step_id="native_zendure_device",
+                    data_schema=self._native_device_schema(
+                        devices, True, options, target_device_id=pending
+                    ),
+                    errors={"base": "unsupported_device"},
+                    description_placeholders={
+                        "device_summary": self._native_device_summary(devices)
+                    },
+                )
             chosen_transport = _requested_native_transport(
                 user_input, selected_device.candidate.identity
             )
@@ -1275,7 +1422,19 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         "device_summary": self._native_device_summary(devices)
                     },
                 )
-            options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = chosen_transport.value
+            # Keep the existing single-device controller as the V5-compatible
+            # fallback. New accounts use the first configured device; setup of
+            # further devices never silently changes the active controller.
+            is_active_device = (
+                options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE) == selected
+            )
+            if not options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
+                options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
+                options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
+                options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = (
+                    chosen_transport.value
+                )
+                is_active_device = True
             if chosen_transport is ZendureTransport.LOCAL_MQTT:
                 server = str(
                     user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, "")
@@ -1288,7 +1447,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             bool(user_input.get(
                                 CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
                             )),
-                            self.config_entry.options,
+                            options,
+                            target_device_id=selected,
                         ),
                         errors={"base": "local_mqtt_required"},
                         description_placeholders={
@@ -1306,9 +1466,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 options[CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD] = (
                     resolve_app_token_input(
                         user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD),
-                        self.config_entry.options.get(
-                            CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD
-                        ),
+                        options.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD),
                     )
                 )
                 wifi_ssid = str(
@@ -1316,9 +1474,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 ).strip()
                 wifi_password = resolve_app_token_input(
                     user_input.get(CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD),
-                    self.config_entry.options.get(
-                        CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD
-                    ),
+                    options.get(CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD),
                 )
                 if wifi_ssid:
                     options[CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID] = wifi_ssid
@@ -1375,6 +1531,14 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                                 "device_summary": self._native_device_summary(devices)
                             },
                         )
+            self._native_setup_map = save_device_setup(
+                self._native_setup_map, selected, chosen_transport.value
+            )
+            options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
+            if is_active_device:
+                options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
+                options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = chosen_transport.value
+            self._working_options = options
             migration = self.config_entry.data.get("v5_migration")
             if isinstance(migration, Mapping):
                 from .v5_migration import confirm_native_binding
@@ -1388,6 +1552,28 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     self.config_entry,
                     data=data,
                 )
+            next_pending = next(
+                (
+                    item.candidate.candidate_id
+                    for item in devices
+                    if item.candidate.supported
+                    and self._native_setup_map["devices"].get(
+                        item.candidate.candidate_id, {}
+                    ).get("setup_status") != SETUP_COMPLETE
+                ),
+                None,
+            )
+            if next_pending is not None:
+                return self.async_show_form(
+                    step_id="native_zendure_device",
+                    data_schema=self._native_device_schema(
+                        devices, True, options, target_device_id=next_pending
+                    ),
+                    description_placeholders={
+                        "device_summary": self._native_device_summary(devices)
+                    },
+                )
+            options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
             return self.async_create_entry(title="", data=options)
 
         return self.async_show_form(
@@ -1398,6 +1584,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
                 )),
                 self.config_entry.options,
+                target_device_id=pending,
             ),
             description_placeholders={
                 "device_summary": self._native_device_summary(devices)
@@ -1409,9 +1596,26 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         devices,
         native_control_enabled: bool = False,
         stored_options: dict[str, Any] | None = None,
+        target_device_id: str | None = None,
     ) -> vol.Schema:
         options = stored_options or {}
-        stored_transport = options.get(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT)
+        setup_map = options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS, {})
+        setup_records = (
+            setup_map.get("devices", {})
+            if isinstance(setup_map, Mapping)
+            else {}
+        )
+        device_record = (
+            setup_records.get(target_device_id, {})
+            if isinstance(setup_records, Mapping) and target_device_id
+            else {}
+        )
+        stored_transport = device_record.get("transport") or (
+            options.get(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT)
+            if target_device_id is None
+            or target_device_id == options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+            else None
+        )
         if stored_transport not in {item.value for item in ZendureTransport}:
             selected_id = options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
             selected_item = next(
@@ -1437,10 +1641,15 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 if inherited is not None
                 else ZendureTransport.CLOUD_MQTT.value
             )
+        transport_devices = [
+            item for item in devices
+            if target_device_id is None
+            or item.candidate.candidate_id == target_device_id
+        ]
         available_transports = sorted(
             {
                 transport.value
-                for item in devices
+                for item in transport_devices
                 for transport in _native_transport_options(item.candidate.identity)
             },
             key=lambda value: (
@@ -1462,6 +1671,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                                     ),
                                 }
                                 for item in devices
+                                if item.candidate.supported
+                                if target_device_id is None
+                                or item.candidate.candidate_id == target_device_id
                             ],
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )

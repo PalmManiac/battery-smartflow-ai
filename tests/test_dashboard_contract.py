@@ -365,7 +365,10 @@ class DashboardContractTests(unittest.TestCase):
         self.assertNotIn("performance.now() + systemIndex * 883 + packNumber * 557", frontend)
         self.assertIn("@keyframes soap-bubbles-right", frontend)
         self.assertIn("@keyframes soap-bubbles-left", frontend)
-        self.assertIn('_topologyTransport(system.transport)', frontend)
+        self.assertIn(
+            '_topologyTransport(system.configured_transport || system.transport)',
+            frontend,
+        )
         self.assertIn('this._t("transport_cloud_mqtt")', frontend)
         self.assertIn('this._t("transport_local")', frontend)
         self.assertIn('this._t("transport_zensdk")', frontend)

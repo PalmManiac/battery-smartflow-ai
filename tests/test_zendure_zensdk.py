@@ -160,6 +160,37 @@ async def make_bootstrap(
 
 
 class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_offline_configured_device_stays_in_topology_without_raw_id(self):
+        runtime = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device="cloud_mqtt:private-device-id",
+            notify=lambda: None,
+            device_setups={
+                "version": 1,
+                "devices": {
+                    "cloud_mqtt:private-device-id": {
+                        "model": "SolarFlow 2400 AC",
+                        "setup_status": "configured",
+                        "transport": "zensdk",
+                        "available_transports": ["cloud_mqtt", "zensdk"],
+                        "online": False,
+                    }
+                },
+            },
+        )
+
+        system = runtime.topology_attributes()["systems"][0]
+
+        self.assertEqual(system["model"], "SolarFlow 2400 AC")
+        self.assertEqual(system["setup_status"], "configured")
+        self.assertEqual(system["transport"], "zensdk")
+        self.assertEqual(
+            system["available_transports"], ["cloud_mqtt", "zensdk"]
+        )
+        self.assertFalse(system["online"])
+        self.assertNotIn("private-device-id", system["id"])
+
     async def test_message_count_sensor_is_rate_limited_for_recorder(self):
         runtime = NativeZendureRuntime(
             SimpleNamespace(), app_token="configured", selected_device=None,
@@ -224,6 +255,39 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
             notify=lambda: None, control_transport="cloud_mqtt",
         )
         self.assertEqual(cloud._startup_transport(), ZendureTransport.CLOUD_MQTT)
+
+    async def test_persisted_device_transport_overrides_legacy_global_choice(self):
+        data = await make_bootstrap()
+        candidate_id = data.devices[0].candidate.candidate_id
+        runtime = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device=candidate_id,
+            notify=lambda: None,
+            control_transport="zensdk",
+            device_setups={
+                "version": 1,
+                "devices": {
+                    candidate_id: {
+                        "setup_status": "configured",
+                        "transport": "cloud_mqtt",
+                        "available_transports": ["cloud_mqtt", "zensdk"],
+                    }
+                },
+            },
+        )
+        data.register_candidates(runtime._inventory)
+        runtime._inventory.add_observed_system(
+            candidate_id, system_id=candidate_id
+        )
+
+        self.assertEqual(runtime._startup_transport(), ZendureTransport.CLOUD_MQTT)
+        self.assertEqual(
+            runtime._selected_control_transport(
+                runtime._inventory.devices[candidate_id]
+            ).transport,
+            ZendureTransport.CLOUD_MQTT,
+        )
 
     async def test_first_write_posts_one_allowlisted_property_to_exact_device(self):
         data = await make_bootstrap()
