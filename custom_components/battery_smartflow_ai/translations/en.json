@@ -33,7 +33,10 @@
       "legacy_port_required": "Zendure Legacy devices require the local broker on port 1883.",
       "legacy_ble_device_not_found": "The selected Legacy device is not currently reachable over Bluetooth.",
       "legacy_device_id_missing": "Zendure did not provide the Legacy device identity.",
-      "legacy_provision_failed": "The Legacy device could not be configured. Check Bluetooth, Wi-Fi and broker settings."
+      "legacy_provision_failed": "The Legacy device could not be configured. Check Bluetooth, Wi-Fi and broker settings.",
+      "invalid_zensdk_ip": "Enter a private IPv4 address for the Zendure device.",
+      "zensdk_ip_unsupported": "This Zendure model does not support direct ZenSDK readings.",
+      "zensdk_ip_clear_conflict": "Enter an address or select automatic discovery, not both."
     },
     "step": {
       "reconfigure": {
@@ -166,7 +169,8 @@
           "native_zendure_local_mqtt_server": "Local MQTT server",
           "native_zendure_local_mqtt_port": "Local MQTT port",
           "native_zendure_local_mqtt_username": "Local MQTT username",
-          "native_zendure_local_mqtt_password": "Local MQTT password"
+          "native_zendure_local_mqtt_password": "Local MQTT password",
+          "native_zendure_zensdk_ip": "Fixed ZenSDK IP address (optional)"
         },
         "data_description": {
           "native_zendure_selected_device": "Configure each supported main system in turn. Packs cannot be controlled independently; multi-device power regulation is not enabled in this release.",
@@ -175,7 +179,8 @@
           "native_zendure_local_mqtt_server": "Shown only when the account contains a verified legacy family. The device is provisioned automatically on the first switch to Local MQTT unless this is explicitly skipped.",
           "native_zendure_local_mqtt_port": "Usually 1883 for a local unencrypted broker.",
           "native_zendure_local_mqtt_username": "Broker account used by BSFAI; it is kept private.",
-          "native_zendure_local_mqtt_password": "Keep the dot mask unchanged to reuse the stored password. It is never exposed by sensors or diagnostics."
+          "native_zendure_local_mqtt_password": "Keep the dot mask unchanged to reuse the stored password. It is never exposed by sensors or diagnostics.",
+          "native_zendure_zensdk_ip": "Optional private IPv4 address for this Zendure system. Reserve it in your router. When set, ZenSDK requests use only this address and bypass mDNS for this device."
         }
       },
       "native_external": {
@@ -281,6 +286,11 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_zensdk_ip": "Enter a private IPv4 address for the Zendure device.",
+      "zensdk_ip_unsupported": "This Zendure model does not support direct ZenSDK readings.",
+      "zensdk_ip_clear_conflict": "Enter an address or select automatic discovery, not both."
+    },
     "step": {
       "init": {
         "title": "Battery SmartFlow AI settings",
@@ -333,7 +343,9 @@
           "native_zendure_local_mqtt_password": "Local MQTT password",
           "native_zendure_legacy_wifi_ssid": "Legacy device Wi-Fi SSID",
           "native_zendure_legacy_wifi_password": "Legacy device Wi-Fi password",
-          "native_zendure_legacy_provision": "Configure the selected Legacy device now"
+          "native_zendure_legacy_provision": "Configure the selected Legacy device now",
+          "native_zendure_zensdk_ip": "Fixed ZenSDK IP address (optional)",
+          "native_zendure_zensdk_ip_clear": "Clear the fixed address and use automatic discovery"
         },
         "data_description": {
           "native_zendure_selected_device": "Configure each supported main system in turn. Packs cannot be controlled independently; multi-device power regulation is not enabled in this release.",
@@ -345,7 +357,9 @@
           "native_zendure_local_mqtt_password": "Keep the dot mask unchanged to reuse the stored password.",
           "native_zendure_legacy_wifi_ssid": "Required only when configuring a Legacy device over Bluetooth.",
           "native_zendure_legacy_wifi_password": "Required only for Bluetooth provisioning; the stored value remains masked.",
-          "native_zendure_legacy_provision": "Sends the broker address and Wi-Fi settings over Bluetooth. The device will restart."
+          "native_zendure_legacy_provision": "Sends the broker address and Wi-Fi settings over Bluetooth. The device will restart.",
+          "native_zendure_zensdk_ip": "Optional private IPv4 address for this Zendure system. Reserve it in your router. When set, ZenSDK requests use only this address and bypass mDNS for this device.",
+          "native_zendure_zensdk_ip_clear": "Clears the fixed address for the selected system and returns it to automatic IP and hostname discovery."
         }
       },
       "general": {

@@ -60,6 +60,7 @@ from .hardware.zendure.zensdk import (
     ZenSdkReadResult,
     async_read_zensdk_reports,
     async_write_zensdk_property,
+    normalize_zensdk_ipv4,
 )
 from .hardware.zendure.zensdk_commands import (
     ZendureZenSdkCommandAdapter,
@@ -157,6 +158,21 @@ class NativeZendureRuntime:
             else {}
         )
         self._device_setups = dict(raw_setups) if isinstance(raw_setups, Mapping) else {}
+        self._zensdk_address_overrides: dict[str, str] = {}
+        for device_id, record in self._device_setups.items():
+            if not isinstance(device_id, str) or not isinstance(record, Mapping):
+                continue
+            configured_ip = record.get("zensdk_ip")
+            if configured_ip is None:
+                continue
+            try:
+                self._zensdk_address_overrides[device_id] = (
+                    normalize_zensdk_ipv4(configured_ip)
+                )
+            except (TypeError, ValueError):
+                # Ignore invalid persisted options rather than making a LAN
+                # request to an unvalidated destination.
+                continue
         self._control_enabled = bool(control_enabled)
         self._always_smart_mode_1 = bool(always_smart_mode_1)
         self._configured_transport = _parse_transport(control_transport)
@@ -1070,12 +1086,17 @@ class NativeZendureRuntime:
                 outcome = await async_write_zensdk_property(
                     self._bootstrap, self._selected_device, prop, int(value),
                     self._write_sequence, self._post_zensdk_write,
+                    address_override=self._zensdk_address_overrides.get(
+                        self._selected_device
+                    ),
                 )
                 return TransportWriteResult(outcome.accepted, outcome.http_status)
 
             async def read():
                 result = await async_read_zensdk_reports(
-                    self._bootstrap, self._get_json
+                    self._bootstrap,
+                    self._get_json,
+                    address_overrides=self._zensdk_address_overrides,
                 )
                 self._record_zensdk_cycle(result)
                 self._apply_messages(result.messages)
@@ -1572,10 +1593,12 @@ class NativeZendureRuntime:
                 bootstrap,
                 self._post_zensdk_write,
                 self._command_verification,
+                address_overrides=self._zensdk_address_overrides,
             )
             zensdk = await async_read_zensdk_reports(
                 bootstrap,
                 self._get_json,
+                address_overrides=self._zensdk_address_overrides,
             )
             self._record_zensdk_cycle(zensdk)
             self._transport = (
@@ -1761,6 +1784,7 @@ class NativeZendureRuntime:
             self._bootstrap,
             self._get_json,
             candidate_ids=frozenset(due),
+            address_overrides=self._zensdk_address_overrides,
         )
         # Start the retry delay after the request finishes. Measuring it from
         # the poll's start can consume the whole backoff while trying the

@@ -3,20 +3,20 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import ipaddress
 import json
 import re
 import time
-from typing import Any, Awaitable, Callable, Mapping, Protocol
+from collections.abc import Awaitable, Callable, Mapping
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from ...core.models import ZendureTransport
 from .cloud import ZendureCloudBootstrap
 from .cloud_mqtt import CloudMqttMessage
 from .device_matrix import VerificationLevel, resolve_zendure_device
-
 
 ZENSDK_REPORT_PATH = "/properties/report"
 ZENSDK_WRITE_PATH = "/properties/write"
@@ -69,6 +69,7 @@ async def async_write_zensdk_property(
     post_json: GetJson,
     *,
     timeout: float = DEFAULT_ZENSDK_TIMEOUT,
+    address_override: str | None = None,
 ) -> ZenSdkWriteResult:
     """Write one allow-listed property to one exact local main device."""
 
@@ -81,6 +82,7 @@ async def async_write_zensdk_property(
         request_id,
         post_json,
         timeout=timeout,
+        address_override=address_override,
     )
 
 
@@ -92,6 +94,7 @@ async def async_write_zensdk_properties(
     post_json: GetJson,
     *,
     timeout: float = DEFAULT_ZENSDK_TIMEOUT,
+    address_override: str | None = None,
 ) -> ZenSdkWriteResult:
     """Write one command group; never retry a request with ambiguous delivery."""
 
@@ -144,7 +147,12 @@ async def async_write_zensdk_properties(
         (item for item in bootstrap.raw_device_list
          if str(item.get("deviceKey")) == str(identity.device_id)), {}
     )
-    addresses = _candidate_addresses(raw, identity.product_model, identity.serial_number)
+    addresses = _candidate_addresses(
+        raw,
+        identity.product_model,
+        identity.serial_number,
+        address_override=address_override,
+    )
     if not addresses:
         return ZenSdkWriteResult(False, None, "no_local_address")
     started = time.monotonic()
@@ -219,6 +227,7 @@ async def async_read_zensdk_reports(
     timeout: float = DEFAULT_ZENSDK_TIMEOUT,
     clock: Callable[[], datetime] | None = None,
     candidate_ids: frozenset[str] | None = None,
+    address_overrides: Mapping[str, str] | None = None,
 ) -> ZenSdkReadResult:
     """Read one local report per supported device without exposing a write API."""
 
@@ -246,7 +255,14 @@ async def async_read_zensdk_reports(
             continue
         raw = raw_by_device.get(identity.device_id, {})
         addresses = _candidate_addresses(
-            raw, identity.product_model, identity.serial_number
+            raw,
+            identity.product_model,
+            identity.serial_number,
+            address_override=(
+                address_overrides.get(candidate_id)
+                if address_overrides is not None
+                else None
+            ),
         )
         tasks.append(
             _read_device(
@@ -342,8 +358,19 @@ async def _read_device(
 
 
 def _candidate_addresses(
-    raw: Mapping[str, Any], model: str | None, serial: str | None
+    raw: Mapping[str, Any],
+    model: str | None,
+    serial: str | None,
+    *,
+    address_override: str | None = None,
 ) -> tuple[tuple[str, str], ...]:
+    if address_override is not None:
+        try:
+            return (("configured_ip", normalize_zensdk_ipv4(address_override)),)
+        except (TypeError, ValueError):
+            # A stale or corrupted explicit override must fail closed. Do not
+            # silently return to DNS when the user intentionally pinned an IP.
+            return ()
     result: list[tuple[str, str]] = []
     raw_ip = raw.get("ip")
     if isinstance(raw_ip, str) and _safe_lan_ip(raw_ip.strip()):
@@ -352,6 +379,22 @@ def _candidate_addresses(
     if hostname and all(host != hostname for _source, host in result):
         result.append(("derived_local_hostname", hostname))
     return tuple(result)
+
+
+def normalize_zensdk_ipv4(value: str) -> str:
+    """Validate a private IPv4 LAN endpoint for direct ZenSDK requests."""
+
+    if not isinstance(value, str):
+        raise TypeError("invalid_zensdk_ip")
+    try:
+        address = ipaddress.ip_address(value.strip())
+    except ValueError as error:
+        raise ValueError("invalid_zensdk_ip") from error
+    if not isinstance(address, ipaddress.IPv4Address) or not (
+        address.is_private or address.is_link_local
+    ) or address.is_loopback or address.is_multicast or address.is_unspecified or address.is_reserved:
+        raise ValueError("invalid_zensdk_ip")
+    return str(address)
 
 
 def _safe_lan_ip(value: str) -> bool:

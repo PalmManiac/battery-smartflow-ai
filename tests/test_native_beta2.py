@@ -26,8 +26,12 @@ from custom_components.battery_smartflow_ai.hardware.shelly_pro_3em import (
     validate_shelly_host,
 )
 from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (
+    VerificationLevel,
     preferred_local_transport,
     resolve_zendure_device,
+)
+from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (
+    normalize_zensdk_ipv4,
 )
 from custom_components.battery_smartflow_ai.native_capacity import (
     native_capacity,
@@ -142,6 +146,8 @@ def load_flow_namespace():
         Mapping=Mapping,
         config_entries=SimpleNamespace(ConfigFlow=FlowBase, OptionsFlow=FlowBase),
         resolve_zendure_device=resolve_zendure_device,
+        VerificationLevel=VerificationLevel,
+        normalize_zensdk_ipv4=normalize_zensdk_ipv4,
         preferred_local_transport=preferred_local_transport,
         DEVICE_PROFILE_MODELS=DEVICE_PROFILE_MODELS,
         resolve_price_currency=resolve_price_currency,
@@ -165,6 +171,39 @@ def load_flow_classes():
 
 
 class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_zensdk_ip_is_validated_and_persisted_per_device(self):
+        namespace = load_flow_namespace()
+        devices = await make_bootstrap(("device-1", "device-2"))
+        first, second = devices.devices
+        first_id = first.candidate.candidate_id
+        second_id = second.candidate.candidate_id
+        validate_ip = namespace["_validate_native_zensdk_ip"]
+        update_ip = namespace["_update_native_zensdk_ip"]
+
+        error, address, clear = validate_ip(
+            {const.CONF_NATIVE_ZENDURE_ZENSDK_IP: "192.168.1.44"},
+            first.candidate.identity,
+        )
+        self.assertIsNone(error)
+        self.assertEqual(address, "192.168.1.44")
+        self.assertFalse(clear)
+        error, address, _clear = validate_ip(
+            {const.CONF_NATIVE_ZENDURE_ZENSDK_IP: "8.8.8.8"},
+            first.candidate.identity,
+        )
+        self.assertEqual(error, "invalid_zensdk_ip")
+        self.assertIsNone(address)
+
+        setup_map = reconcile_device_setups(devices.devices)
+        setup_map["devices"][first_id]["transport"] = "zensdk"
+        setup_map["devices"][second_id]["transport"] = "cloud_mqtt"
+        saved = update_ip(setup_map, first_id, "192.168.1.44")
+        self.assertEqual(saved["devices"][first_id]["zensdk_ip"], "192.168.1.44")
+        self.assertNotIn("zensdk_ip", saved["devices"][second_id])
+
+        cleared = update_ip(saved, first_id, None, clear=True)
+        self.assertNotIn("zensdk_ip", cleared["devices"][first_id])
+
     async def test_new_setup_configures_each_supported_system_separately(self):
         flow = load_flow_classes()()
         flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))

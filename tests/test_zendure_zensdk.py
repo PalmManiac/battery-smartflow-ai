@@ -21,25 +21,26 @@ aiohttp_module.async_get_clientsession = lambda _hass: None
 sys.modules.setdefault("homeassistant.helpers", helpers_module)
 sys.modules.setdefault("homeassistant.helpers.aiohttp_client", aiohttp_module)
 
-from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
+from custom_components.battery_smartflow_ai.core.models import (
     DeviceControlState,
     ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (
     ZendureCloudNormalizer,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (
     ZenSdkReadAttempt,
     ZenSdkReadResult,
     _candidate_addresses,
     async_read_zensdk_reports,
     async_write_zensdk_properties,
     async_write_zensdk_property,
+    normalize_zensdk_ipv4,
 )
-from custom_components.battery_smartflow_ai.native_zendure_runtime import (  # noqa: E402
+from custom_components.battery_smartflow_ai.native_zendure_runtime import (
     NativeZendureRuntime,
     _zensdk_read_write_path_comparison,
 )
@@ -160,6 +161,27 @@ async def make_bootstrap(
 
 
 class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_runtime_loads_only_valid_per_device_zensdk_addresses(self):
+        runtime = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device="cloud_mqtt:device-real-1",
+            notify=lambda: None,
+            device_setups={
+                "version": 1,
+                "devices": {
+                    "cloud_mqtt:device-real-1": {"zensdk_ip": "192.168.1.99"},
+                    "cloud_mqtt:device-real-2": {"zensdk_ip": "8.8.8.8"},
+                },
+            },
+        )
+
+        self.assertEqual(
+            runtime._zensdk_address_overrides,
+            {"cloud_mqtt:device-real-1": "192.168.1.99"},
+        )
+        self.assertNotIn("192.168.1.99", repr(runtime.diagnostic_data()))
+
     async def test_offline_configured_device_stays_in_topology_without_raw_id(self):
         runtime = NativeZendureRuntime(
             SimpleNamespace(),
@@ -307,6 +329,136 @@ class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
             calls[0][1]["json"],
             {"sn": "serial-real-1", "properties": {"outputLimit": 301}, "id": 7},
         )
+
+    async def test_configured_ip_is_the_only_read_address_for_that_device(self):
+        data = await make_bootstrap()
+        requested = []
+
+        async def get(url, **_kwargs):
+            requested.append(url)
+            return Response({"sn": "serial-real-1", "properties": {}})
+
+        result = await async_read_zensdk_reports(
+            data,
+            get,
+            address_overrides={"cloud_mqtt:device-real-1": "192.168.1.99"},
+        )
+
+        self.assertEqual(
+            requested, ["http://192.168.1.99/properties/report"]
+        )
+        self.assertEqual(result.attempts[0].address_source, "configured_ip")
+        self.assertNotIn("192.168.1.99", repr(result.attempts))
+
+    async def test_configured_ip_override_is_scoped_to_one_device(self):
+        data = await make_bootstrap()
+        first = data.devices[0]
+        second = replace(
+            first,
+            candidate=replace(
+                first.candidate,
+                identity=replace(
+                    first.candidate.identity,
+                    device_id="device-real-2",
+                    serial_number="serial-real-2",
+                ),
+            ),
+        )
+        data = replace(
+            data,
+            devices=(first, second),
+            raw_device_list=(
+                *data.raw_device_list,
+                {
+                    **data.raw_device_list[0],
+                    "deviceKey": "device-real-2",
+                    "snNumber": "serial-real-2",
+                    "ip": "192.168.1.45",
+                },
+            ),
+        )
+        requested = []
+
+        async def get(url, **_kwargs):
+            requested.append(url)
+            serial = "serial-real-2" if "192.168.1.45" in url else "serial-real-1"
+            return Response({"sn": serial, "properties": {}})
+
+        result = await async_read_zensdk_reports(
+            data,
+            get,
+            address_overrides={"cloud_mqtt:device-real-1": "192.168.1.99"},
+        )
+
+        self.assertCountEqual(
+            requested,
+            [
+                "http://192.168.1.99/properties/report",
+                "http://192.168.1.45/properties/report",
+            ],
+        )
+        self.assertCountEqual(
+            [message.device_candidate_id for message in result.messages],
+            ["cloud_mqtt:device-real-1", "cloud_mqtt:device-real-2"],
+        )
+        self.assertEqual(
+            {
+                attempt.device_candidate_id: attempt.address_source
+                for attempt in result.attempts
+            },
+            {
+                "cloud_mqtt:device-real-1": "configured_ip",
+                "cloud_mqtt:device-real-2": "device_list_ip",
+            },
+        )
+
+    async def test_invalid_configured_ip_fails_closed_without_dns_fallback(self):
+        data = await make_bootstrap()
+        requested = []
+
+        async def get(url, **_kwargs):
+            requested.append(url)
+            return Response({"sn": "serial-real-1", "properties": {}})
+
+        result = await async_read_zensdk_reports(
+            data,
+            get,
+            address_overrides={"cloud_mqtt:device-real-1": "8.8.8.8"},
+        )
+
+        self.assertEqual(requested, [])
+        self.assertEqual(result.attempts[0].result, "no_local_address")
+
+    async def test_configured_ip_is_used_for_writes_without_address_fallback(self):
+        data = await make_bootstrap()
+        calls = []
+
+        async def post(url, **kwargs):
+            calls.append((url, kwargs))
+            return Response({"success": True}, 200)
+
+        result = await async_write_zensdk_property(
+            data,
+            "cloud_mqtt:device-real-1",
+            "outputLimit",
+            301,
+            7,
+            post,
+            address_override="192.168.1.99",
+        )
+
+        self.assertTrue(result.accepted)
+        self.assertEqual(
+            calls[0][0], "http://192.168.1.99/properties/write"
+        )
+        self.assertEqual(result.address_source, "configured_ip")
+        self.assertNotIn("192.168.1.99", repr(result))
+
+    def test_configured_ip_validator_accepts_only_private_ipv4(self):
+        self.assertEqual(normalize_zensdk_ipv4(" 192.168.1.44 "), "192.168.1.44")
+        for invalid in ("8.8.8.8", "127.0.0.1", "192.168.1.5/path", "fe80::1"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                normalize_zensdk_ipv4(invalid)
 
     async def test_active_discharge_adjustment_allows_only_temporary_mode(self):
         data = await make_bootstrap()

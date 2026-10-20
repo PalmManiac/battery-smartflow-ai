@@ -14,6 +14,9 @@
       "invalid_shelly_host": "Vul alleen een hostnaam of IP-adres in, zonder schema, poort of pad.",
       "grid_split_missing": "Bij gebruik van twee sensoren moeten zowel netafname als netteruglevering zijn geselecteerd.",
       "unsupported_device": "Unsupported device model.",
+      "invalid_zensdk_ip": "Voer een privé IPv4-adres van het Zendure-apparaat in.",
+      "zensdk_ip_unsupported": "Dit Zendure-model ondersteunt geen directe ZenSDK-metingen.",
+      "zensdk_ip_clear_conflict": "Voer een adres in of kies automatische detectie, niet allebei.",
       "invalid_token": "De indeling van het app-token is ongeldig.", "invalid_or_expired_token": "Het app-token is ongeldig of verlopen.", "cannot_connect": "Kan geen verbinding maken met Zendure Cloud.", "timeout": "Zendure Cloud antwoordde niet op tijd.", "invalid_response": "Zendure Cloud gaf een onverwacht antwoord.", "no_devices": "Er zijn geen Zendure-apparaten gevonden.", "no_mqtt_credentials": "Zendure gaf geen Cloud MQTT-toegang.", "duplicate_device_id": "Zendure gaf dubbele apparaatidentiteiten.", "incomplete_device": "Zendure gaf een onvolledig apparaat terug.", "device_not_found": "Het geselecteerde apparaat is niet meer beschikbaar.", "local_mqtt_required": "Voor dit Legacy-apparaat zijn de lokale MQTT-brokerinstellingen vereist.", "legacy_wifi_required": "Voer de wifi-SSID en het wachtwoord in voordat u het Legacy-apparaat configureert.", "legacy_port_required": "Zendure Legacy-apparaten vereisen lokale brokerpoort 1883.", "legacy_ble_device_not_found": "Het geselecteerde Legacy-apparaat is momenteel niet bereikbaar via Bluetooth.", "legacy_device_id_missing": "Zendure leverde geen identiteit voor het Legacy-apparaat.", "legacy_provision_failed": "Het Legacy-apparaat kon niet worden geconfigureerd. Controleer Bluetooth, wifi en brokerinstellingen."
     },
     "step": {
@@ -147,7 +150,8 @@
           "native_zendure_local_mqtt_server": "Lokale MQTT-server",
           "native_zendure_local_mqtt_port": "Lokale MQTT-poort",
           "native_zendure_local_mqtt_username": "Lokale MQTT-gebruikersnaam",
-          "native_zendure_local_mqtt_password": "Lokaal MQTT-wachtwoord"
+          "native_zendure_local_mqtt_password": "Lokaal MQTT-wachtwoord",
+          "native_zendure_zensdk_ip": "Vast ZenSDK-IP-adres (optioneel)"
         },
         "data_description": {
           "native_zendure_selected_device": "Er wordt precies één hoofdsysteem geselecteerd; packs kunnen niet afzonderlijk worden bestuurd. BSFAI bepaalt ZenSDK of Local MQTT aan de hand van de geverifieerde modelfamilie.",
@@ -156,7 +160,8 @@
           "native_zendure_local_mqtt_server": "Alleen getoond voor een geverifieerde Legacy-familie. Het apparaat moet al naar deze broker publiceren.",
           "native_zendure_local_mqtt_port": "Meestal 1883 voor een lokale onversleutelde broker.",
           "native_zendure_local_mqtt_username": "Privébrokeraccount voor BSFAI.",
-          "native_zendure_local_mqtt_password": "Laat het puntenmasker staan om het opgeslagen wachtwoord opnieuw te gebruiken."
+          "native_zendure_local_mqtt_password": "Laat het puntenmasker staan om het opgeslagen wachtwoord opnieuw te gebruiken.",
+          "native_zendure_zensdk_ip": "Optioneel privé IPv4-adres voor dit Zendure-systeem. Reserveer het in uw router. Als dit is ingesteld, gebruikt ZenSDK alleen dit adres en wordt mDNS voor dit apparaat omzeild."
         }
       },
       "native_external": {
@@ -262,6 +267,11 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_zensdk_ip": "Voer een privé IPv4-adres van het Zendure-apparaat in.",
+      "zensdk_ip_unsupported": "Dit Zendure-model ondersteunt geen directe ZenSDK-metingen.",
+      "zensdk_ip_clear_conflict": "Voer een adres in of kies automatische detectie, niet allebei."
+    },
     "step": {
       "init": {
         "title": "Battery SmartFlow AI instellen",
@@ -277,7 +287,7 @@
         }
       },
       "native_zendure": {"title": "Native Zendure-verbinding", "description": "Voer het Home Assistant-app-token uit de Zendure-app in. Een vast puntenmasker geeft aan dat een token is opgeslagen; het is niet het token of de lengte ervan. Alleen een apparaat selecteren activeert de besturing niet; daarvoor is de aparte schakelaar in de volgende stap vereist.", "data": {"native_zendure_app_token": "Zendure app-token", "disable_native_zendure_test": "Native Zendure-test uitschakelen en verwijderen"}, "data_description": {"native_zendure_app_token": "Laat het puntenmasker ongewijzigd om het opgeslagen token opnieuw te gebruiken, of vervang het door een volledig nieuw Home Assistant-app-token.", "disable_native_zendure_test": "Stopt de verbinding en verwijdert het token. Z-HA blijft ongewijzigd."}},
-      "native_zendure_device": {"title": "Zendure-systeem selecteren", "description": "Zendure meldde deze apparaten:\n\n{device_summary}\n\nSelecteer precies één systeem. BSFAI kiest automatisch het lokale transport en kan Legacy-apparaten via Bluetooth configureren.", "data": {"native_zendure_selected_device": "Zendure-systeem", "native_zendure_control_transport": "Communicatieverbinding", "native_zendure_control_enabled": "Native Zendure-besturing inschakelen", "native_zendure_local_mqtt_server": "Lokale MQTT-server", "native_zendure_local_mqtt_port": "Lokale MQTT-poort", "native_zendure_local_mqtt_username": "Lokale MQTT-gebruikersnaam", "native_zendure_local_mqtt_password": "Lokaal MQTT-wachtwoord", "native_zendure_legacy_wifi_ssid": "Wifi-SSID van Legacy-apparaat", "native_zendure_legacy_wifi_password": "Wifi-wachtwoord van Legacy-apparaat", "native_zendure_legacy_provision": "Geselecteerd Legacy-apparaat nu configureren"}, "data_description": {"native_zendure_selected_device": "Er wordt precies één hoofdsysteem geselecteerd; packs kunnen niet afzonderlijk worden bestuurd. BSFAI bepaalt ZenSDK of Local MQTT aan de hand van de geverifieerde modelfamilie.", "native_zendure_control_transport": "Cloud werkt na accountdetectie. De aanbevolen lokale verbinding wordt pas gebruikt nadat actuele gegevens zijn ontvangen.", "native_zendure_control_enabled": "Stuurt BSFAI-opdrachten via het lokale transport van het model.", "native_zendure_local_mqtt_server": "Adres dat via Bluetooth naar het Legacy-apparaat wordt gestuurd en door BSFAI wordt gebruikt.", "native_zendure_local_mqtt_port": "Legacy-apparaten gebruiken standaardpoort 1883.", "native_zendure_local_mqtt_username": "Brokeraccount dat alleen door BSFAI wordt gebruikt.", "native_zendure_local_mqtt_password": "Laat het puntenmasker staan om het opgeslagen wachtwoord opnieuw te gebruiken.", "native_zendure_legacy_wifi_ssid": "Alleen nodig voor Bluetooth-configuratie.", "native_zendure_legacy_wifi_password": "Alleen nodig voor Bluetooth-configuratie.", "native_zendure_legacy_provision": "Verstuurt het brokeradres en de wifi-instellingen via Bluetooth. Het apparaat start opnieuw."}},
+      "native_zendure_device": {"title": "Zendure-systeem selecteren", "description": "Zendure meldde deze apparaten:\n\n{device_summary}\n\nSelecteer precies één systeem. BSFAI kiest automatisch het lokale transport en kan Legacy-apparaten via Bluetooth configureren.", "data": {"native_zendure_selected_device": "Zendure-systeem", "native_zendure_control_transport": "Communicatieverbinding", "native_zendure_control_enabled": "Native Zendure-besturing inschakelen", "native_zendure_local_mqtt_server": "Lokale MQTT-server", "native_zendure_local_mqtt_port": "Lokale MQTT-poort", "native_zendure_local_mqtt_username": "Lokale MQTT-gebruikersnaam", "native_zendure_local_mqtt_password": "Lokaal MQTT-wachtwoord", "native_zendure_legacy_wifi_ssid": "Wifi-SSID van Legacy-apparaat", "native_zendure_legacy_wifi_password": "Wifi-wachtwoord van Legacy-apparaat", "native_zendure_legacy_provision": "Geselecteerd Legacy-apparaat nu configureren", "native_zendure_zensdk_ip": "Vast ZenSDK-IP-adres (optioneel)", "native_zendure_zensdk_ip_clear": "Vast adres wissen en automatische detectie gebruiken"}, "data_description": {"native_zendure_selected_device": "Er wordt precies één hoofdsysteem geselecteerd; packs kunnen niet afzonderlijk worden bestuurd. BSFAI bepaalt ZenSDK of Local MQTT aan de hand van de geverifieerde modelfamilie.", "native_zendure_control_transport": "Cloud werkt na accountdetectie. De aanbevolen lokale verbinding wordt pas gebruikt nadat actuele gegevens zijn ontvangen.", "native_zendure_control_enabled": "Stuurt BSFAI-opdrachten via het lokale transport van het model.", "native_zendure_local_mqtt_server": "Adres dat via Bluetooth naar het Legacy-apparaat wordt gestuurd en door BSFAI wordt gebruikt.", "native_zendure_local_mqtt_port": "Legacy-apparaten gebruiken standaardpoort 1883.", "native_zendure_local_mqtt_username": "Brokeraccount dat alleen door BSFAI wordt gebruikt.", "native_zendure_local_mqtt_password": "Laat het puntenmasker staan om het opgeslagen wachtwoord opnieuw te gebruiken.", "native_zendure_legacy_wifi_ssid": "Alleen nodig voor Bluetooth-configuratie.", "native_zendure_legacy_wifi_password": "Alleen nodig voor Bluetooth-configuratie.", "native_zendure_legacy_provision": "Verstuurt het brokeradres en de wifi-instellingen via Bluetooth. Het apparaat start opnieuw.", "native_zendure_zensdk_ip": "Optioneel privé IPv4-adres voor dit Zendure-systeem. Reserveer het in uw router. Als dit is ingesteld, gebruikt ZenSDK alleen dit adres en wordt mDNS voor dit apparaat omzeild.", "native_zendure_zensdk_ip_clear": "Wist het vaste adres voor dit systeem en schakelt automatische IP- en hostnamedetectie weer in."}},
       "dashboard": {
         "title": "HEMS-dashboard",
         "description": "Schakel het aangepaste HEMS-dashboard van Battery SmartFlow AI in of uit in de zijbalk.",
