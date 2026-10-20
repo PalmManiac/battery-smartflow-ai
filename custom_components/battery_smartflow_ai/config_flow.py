@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_HEMS_DASHBOARD_ENABLED,
     CONF_AC_MODE_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
@@ -22,10 +22,7 @@ from .const import (
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_MODE,
     CONF_GRID_POWER_ENTITY,
-    CONF_SHELLY_PRO_3EM_HOST,
-    CONF_SHELLY_PRO_3EM_PASSWORD,
-    CONF_SHELLY_3EM_HOST,
-    CONF_SHELLY_3EM_PASSWORD,
+    CONF_HEMS_DASHBOARD_ENABLED,
     CONF_INPUT_LIMIT_ENTITY,
     CONF_INSTALLED_PV_WP,
     CONF_NATIVE_PV_ENTITY,
@@ -34,14 +31,16 @@ from .const import (
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
     CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
     CONF_NATIVE_ZENDURE_DEVICE_SETUPS,
+    CONF_NATIVE_ZENDURE_LEGACY_PROVISION,
+    CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
+    CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
     CONF_NATIVE_ZENDURE_LOCAL_MQTT_USERNAME,
-    CONF_NATIVE_ZENDURE_LEGACY_PROVISION,
-    CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
-    CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID,
     CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
+    CONF_NATIVE_ZENDURE_ZENSDK_IP,
+    CONF_NATIVE_ZENDURE_ZENSDK_IP_CLEAR,
     CONF_OFFGRID_MODE_ENTITY,
     CONF_OFFGRID_POWER_ENTITY,
     CONF_OUTPUT_LIMIT_ENTITY,
@@ -49,9 +48,13 @@ from .const import (
     CONF_PRICE_EXPORT_ENTITY,
     CONF_PRICE_NOW_ENTITY,
     CONF_PV_ENTITY,
+    CONF_PV_FORECAST_CONFIG_ENTRIES,
     CONF_PV_FORECAST_TODAY_ENTITY,
     CONF_PV_FORECAST_TOMORROW_ENTITY,
-    CONF_PV_FORECAST_CONFIG_ENTRIES,
+    CONF_SHELLY_3EM_HOST,
+    CONF_SHELLY_3EM_PASSWORD,
+    CONF_SHELLY_PRO_3EM_HOST,
+    CONF_SHELLY_PRO_3EM_PASSWORD,
     CONF_SOC_ENTITY,
     CONF_SOC_LIMIT_ENTITY,
     DEFAULT_BATTERY_PACKS,
@@ -62,28 +65,28 @@ from .const import (
     DEFAULT_DEVICE_PROFILE,
     DEFAULT_EXPERT_MODE_ENABLED,
     DEFAULT_FEED_IN_TARIFF,
-    DEFAULT_INSTALLED_PV_WP,
-    DEFAULT_LEARNED_PLANNING_ENABLED,
     DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
     DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+    DEFAULT_INSTALLED_PV_WP,
+    DEFAULT_LEARNED_PLANNING_ENABLED,
     DEFAULT_PACK_CAPACITY_KWH,
     DOMAIN,
+    GRID_MODE_DIRECT_SHELLY,
     GRID_MODE_NONE,
-    GRID_MODE_SINGLE,
-    GRID_MODE_SPLIT,
+    GRID_MODE_SHELLY_3EM,
     GRID_MODE_SHELLY_PRO_3EM,
     GRID_MODE_SHELLY_PRO_3EM_MODBUS,
     GRID_MODE_SHELLY_PRO_3EM_OPTIONS,
-    GRID_MODE_DIRECT_SHELLY,
-    GRID_MODE_SHELLY_3EM,
+    GRID_MODE_SINGLE,
+    GRID_MODE_SPLIT,
     LOWEST_CELL_VOLTAGE_CONFIG_KEYS,
     SETTING_BATTERY_PACKS,
     SETTING_CELL_VOLTAGE_CUTOFF,
     SETTING_CELL_VOLTAGE_RESUME,
     SETTING_CELL_VOLTAGE_WARNING,
-    SETTING_LEARNED_PLANNING_ENABLED,
     SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
     SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
+    SETTING_LEARNED_PLANNING_ENABLED,
 )
 from .core.models import ZendureTransport
 from .device_profiles import (
@@ -91,6 +94,18 @@ from .device_profiles import (
     remove_deprecated_profile_overrides,
 )
 from .forecast import async_energy_forecast_sources
+from .hardware.shelly_pro_3em import validate_shelly_host
+from .hardware.zendure.cloud import ZendureCloudClient, ZendureCloudError
+from .hardware.zendure.device_matrix import (
+    VerificationLevel,
+    preferred_local_transport,
+    resolve_zendure_device,
+)
+from .hardware.zendure.legacy import (
+    async_provision_legacy_device,
+    legacy_provisioning_default,
+)
+from .hardware.zendure.zensdk import normalize_zensdk_ipv4
 from .native_config_ui import (
     STORED_APP_TOKEN_MASK,
     native_device_label,
@@ -104,13 +119,6 @@ from .native_device_setup import (
     setup_is_complete,
 )
 from .price_currency import price_input_profile, resolve_price_currency
-from .hardware.zendure.cloud import ZendureCloudClient, ZendureCloudError
-from .hardware.zendure.device_matrix import preferred_local_transport, resolve_zendure_device
-from .hardware.zendure.legacy import (
-    async_provision_legacy_device,
-    legacy_provisioning_default,
-)
-from .hardware.shelly_pro_3em import validate_shelly_host
 
 EMPTY_ENTITY_VALUES = {
     "",
@@ -250,6 +258,51 @@ def _validate_feed_in_tariff(value: Any) -> float:
     return _normalize_optional_float(value, DEFAULT_FEED_IN_TARIFF)
 
 
+def _validate_native_zensdk_ip(
+    user_input: Mapping[str, Any], identity: Any
+) -> tuple[str | None, str | None, bool]:
+    """Validate a per-device direct ZenSDK IPv4 override from the setup form."""
+
+    raw_ip = str(user_input.get(CONF_NATIVE_ZENDURE_ZENSDK_IP, "")).strip()
+    clear_ip = bool(user_input.get(CONF_NATIVE_ZENDURE_ZENSDK_IP_CLEAR, False))
+    if raw_ip and clear_ip:
+        return "zensdk_ip_clear_conflict", None, False
+    if not raw_ip:
+        return None, None, clear_ip
+    matrix = resolve_zendure_device(identity)
+    if (
+        matrix is None
+        or matrix.transport(ZendureTransport.ZENSDK).read
+        is VerificationLevel.UNSUPPORTED
+    ):
+        return "zensdk_ip_unsupported", None, False
+    try:
+        return None, normalize_zensdk_ipv4(raw_ip), False
+    except ValueError:
+        return "invalid_zensdk_ip", None, False
+
+
+def _update_native_zensdk_ip(
+    setup_map: Mapping[str, Any],
+    device_id: str,
+    address: str | None,
+    *,
+    clear: bool = False,
+    clear_blank: bool = False,
+) -> dict[str, Any]:
+    """Persist only this device's explicit LAN address in the setup map."""
+
+    result = reconcile_device_setups((), setup_map)
+    record = result["devices"].get(device_id)
+    if record is None:
+        raise ValueError("native_device_not_discovered")
+    if clear or (clear_blank and address is None):
+        record.pop("zensdk_ip", None)
+    elif address is not None:
+        record["zensdk_ip"] = address
+    return result
+
+
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Battery SmartFlow AI."""
 
@@ -345,7 +398,12 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 chosen_transport = _requested_native_transport(
                     user_input, selected.candidate.identity
                 )
-                if chosen_transport not in _native_transport_options(
+                ip_error, zensdk_ip, clear_zensdk_ip = _validate_native_zensdk_ip(
+                    user_input, selected.candidate.identity
+                )
+                if ip_error is not None:
+                    errors["base"] = ip_error
+                elif chosen_transport not in _native_transport_options(
                     selected.candidate.identity
                 ):
                     errors["base"] = "device_not_found"
@@ -408,7 +466,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             step_id="native_device",
                             errors=errors,
                             data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
-                                devices
+                                devices, target_device_id=pending
                             ),
                             description_placeholders={
                                 "device_summary": ZendureSmartFlowOptionsFlow._native_device_summary(
@@ -420,6 +478,13 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._native_setup_map,
                         selected.candidate.candidate_id,
                         chosen_transport.value,
+                    )
+                    self._native_setup_map = _update_native_zensdk_ip(
+                        self._native_setup_map,
+                        selected.candidate.candidate_id,
+                        zensdk_ip,
+                        clear=clear_zensdk_ip,
+                        clear_blank=True,
                     )
                     self._native_options.setdefault(
                         CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
@@ -1411,6 +1476,23 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             chosen_transport = _requested_native_transport(
                 user_input, selected_device.candidate.identity
             )
+            ip_error, zensdk_ip, clear_zensdk_ip = _validate_native_zensdk_ip(
+                user_input, selected_device.candidate.identity
+            )
+            if ip_error is not None:
+                return self.async_show_form(
+                    step_id="native_zendure_device",
+                    data_schema=self._native_device_schema(
+                        devices,
+                        bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+                        options,
+                        target_device_id=selected if pending is not None else None,
+                    ),
+                    errors={"base": ip_error},
+                    description_placeholders={
+                        "device_summary": self._native_device_summary(devices)
+                    },
+                )
             if chosen_transport not in _native_transport_options(
                 selected_device.candidate.identity
             ):
@@ -1533,6 +1615,13 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         )
             self._native_setup_map = save_device_setup(
                 self._native_setup_map, selected, chosen_transport.value
+            )
+            self._native_setup_map = _update_native_zensdk_ip(
+                self._native_setup_map,
+                selected,
+                zensdk_ip,
+                clear=clear_zensdk_ip,
+                clear_blank=pending is not None,
             )
             options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
             if is_active_device:
@@ -1657,6 +1746,16 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 value,
             ),
         )
+        zensdk_devices = [
+            item
+            for item in transport_devices
+            if (
+                (matrix := resolve_zendure_device(item.candidate.identity))
+                is not None
+                and matrix.transport(ZendureTransport.ZENSDK).read
+                is not VerificationLevel.UNSUPPORTED
+            )
+        ]
         schema = {
                 vol.Required(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
                     selector.SelectSelector(
@@ -1689,6 +1788,22 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     )
                 ),
             }
+        if zensdk_devices:
+            schema.update({
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_ZENSDK_IP,
+                    default=(
+                        device_record.get("zensdk_ip", "")
+                        if target_device_id is not None
+                        else ""
+                    ),
+                ): selector.TextSelector(),
+            })
+            if target_device_id is None:
+                schema[vol.Optional(
+                    CONF_NATIVE_ZENDURE_ZENSDK_IP_CLEAR,
+                    default=False,
+                )] = selector.BooleanSelector()
         if any(
             preferred_local_transport(item.candidate.identity)
             is ZendureTransport.LOCAL_MQTT

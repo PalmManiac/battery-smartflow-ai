@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
-import math
-from typing import Callable, Mapping
 
 from ...core.models import ZendureTransport
 from ...native_command_verification import (
@@ -146,11 +146,13 @@ class ZendureZenSdkCommandAdapter:
         verification: NativeCommandVerificationManager,
         *,
         clock: Callable[[], datetime] | None = None,
+        address_overrides: Mapping[str, str] | None = None,
     ) -> None:
         self._bootstrap = bootstrap
         self._post_json = post_json
         self._verification = verification
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        self._address_overrides = dict(address_overrides or {})
         self._request_id = 0
         self._last_diagnostics: dict[str, object] | None = None
 
@@ -207,6 +209,7 @@ class ZendureZenSdkCommandAdapter:
             write.properties,
             write.request_id,
             self._post_json,
+            address_override=self._address_overrides.get(authorized.device_id),
         )
         self._last_diagnostics = {
             "recorded_at": self._clock(),

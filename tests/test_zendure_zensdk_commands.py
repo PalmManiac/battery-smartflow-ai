@@ -2,40 +2,38 @@
 
 from __future__ import annotations
 
-from base64 import b64encode
-from datetime import datetime, timedelta, timezone
 import math
 import unittest
+from base64 import b64encode
+from datetime import datetime, timedelta, timezone
 
 from support import bootstrap as bootstrap_test_environment
 
-
 bootstrap_test_environment()
 
-from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
+from custom_components.battery_smartflow_ai.core.models import (
     DeviceCommand,
     ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.native_command_verification import (  # noqa: E402
-    CommandVerificationStatus,
-    NativeCommandVerificationManager,
-)
-from custom_components.battery_smartflow_ai.native_device_command_gate import (  # noqa: E402
-    AuthorizedNativeCommand,
-)
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.device_matrix import (
     SMART_MODE_ALWAYS_ONE_METADATA_KEY,
     SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.zensdk_commands import (  # noqa: E402
-    ZenSdkCommandStatus,
+from custom_components.battery_smartflow_ai.hardware.zendure.zensdk_commands import (
     ZendureZenSdkCommandAdapter,
+    ZenSdkCommandStatus,
     map_zensdk_command,
 )
-
+from custom_components.battery_smartflow_ai.native_command_verification import (
+    CommandVerificationStatus,
+    NativeCommandVerificationManager,
+)
+from custom_components.battery_smartflow_ai.native_device_command_gate import (
+    AuthorizedNativeCommand,
+)
 
 NOW = datetime(2026, 9, 5, 10, 0, tzinfo=timezone.utc)
 DEVICE = "cloud_mqtt:device-real-1"
@@ -94,6 +92,33 @@ def output_command(value=301):
 
 
 class ZenSdkCommandAdapterTests(unittest.IsolatedAsyncioTestCase):
+    async def test_adapter_uses_the_selected_devices_configured_address(self):
+        data = await make_bootstrap()
+        calls = []
+        manager = NativeCommandVerificationManager()
+
+        async def post(url, **kwargs):
+            calls.append((url, kwargs))
+            return Response({"success": True}, 200)
+
+        adapter = ZendureZenSdkCommandAdapter(
+            data,
+            post,
+            manager,
+            clock=lambda: NOW,
+            address_overrides={DEVICE: "192.168.1.99"},
+        )
+        result = await adapter.execute(authorized(output_command()))
+
+        self.assertEqual(result.status, ZenSdkCommandStatus.SENT)
+        self.assertEqual(
+            calls[0][0], "http://192.168.1.99/properties/write"
+        )
+        self.assertEqual(
+            adapter.diagnostics()["address_source"], "configured_ip"
+        )
+        self.assertNotIn("192.168.1.99", repr(adapter.diagnostics()))
+
     async def test_offgrid_mode_is_a_single_verified_property_write(self):
         data = await make_bootstrap()
         calls = []
