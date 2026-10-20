@@ -508,7 +508,20 @@ class NativeZendureRuntime:
         now = datetime.now(timezone.utc)
         for system_id, item in zip(sorted(self._inventory.devices), overview):
             state = self._states.get(system_id)
+            device = self._inventory.devices.get(system_id)
             last_data = item.last_message_at
+            configured_transport = self._device_configured_transport(system_id)
+            selected_control_transport = (
+                self._selected_control_transport(device).transport
+                if device is not None
+                else None
+            )
+            active_control_transport = (
+                self._active_control_transport()
+                if self._control_enabled and system_id == self._selected_device
+                else None
+            )
+            displayed_transport = active_control_transport or selected_control_transport
             systems.append(
                 {
                     "id": item.public_id,
@@ -521,8 +534,8 @@ class NativeZendureRuntime:
                         item.control_state is not DeviceControlState.UNSUPPORTED,
                     ),
                     "configured_transport": (
-                        self._device_setups.get(system_id, {}).get("transport")
-                        if isinstance(self._device_setups.get(system_id), Mapping)
+                        configured_transport.value
+                        if configured_transport is not None
                         else None
                     ),
                     "available_transports": self._available_device_transports(
@@ -534,11 +547,9 @@ class NativeZendureRuntime:
                     "online": item.online,
                     "status": item.status_text,
                     "transport": (
-                        self._active_control_transport().value
-                        if self._control_enabled
-                        and system_id == self._selected_device
-                        and self._active_control_transport() is not None
-                        else item.selected_transport.value
+                        displayed_transport.value
+                        if displayed_transport is not None
+                        else None
                     ),
                     "observed_transport": (
                         state.observed_transport.value if state is not None else None
