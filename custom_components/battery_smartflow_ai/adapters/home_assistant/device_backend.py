@@ -16,6 +16,12 @@ ModeWriter = Callable[[str], Awaitable[None]]
 PowerWriter = Callable[..., Awaitable[None]]
 
 
+def uses_native_device_path(*, connection_type: str) -> bool:
+    """Return whether a config entry belongs to the V6 native device path."""
+
+    return str(connection_type or "") == "native"
+
+
 class HomeAssistantEntityBackend:
     """Map a neutral DeviceCommand to the current Select/Number writers."""
 

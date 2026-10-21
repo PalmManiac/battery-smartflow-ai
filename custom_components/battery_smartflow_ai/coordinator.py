@@ -236,6 +236,7 @@ from .device_command import DeviceCommandBuilder, clamp_number_power_request
 from .command_execution_state import confirmed_command_state_updates
 from .adapters.home_assistant.device_backend import (
     HomeAssistantEntityBackend,
+    uses_native_device_path,
 )
 from .adapters.home_assistant.clock import HomeAssistantClock
 from .adapters.home_assistant.state_store import HomeAssistantStateStore
@@ -3013,6 +3014,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 result = await native_runtime.async_execute_device_command(command)
                 self._persist.update(
                     confirmed_command_state_updates(command, result)
+                )
+            elif uses_native_device_path(
+                connection_type=self.entry.data.get("connection_type", ""),
+            ):
+                # V6 native entries use only the native device path. If that
+                # path cannot accept a command, never fall back to legacy HA
+                # entity IDs that V6 setup does not configure.
+                result = CommandExecutionResult(
+                    status=CommandExecutionStatus.SKIPPED,
+                    reason="native_control_disabled",
                 )
             else:
                 result = await self._device_backend.execute(

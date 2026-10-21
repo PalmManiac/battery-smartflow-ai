@@ -16,6 +16,7 @@ from custom_components.battery_smartflow_ai.adapters.home_assistant.device_comma
 )
 from custom_components.battery_smartflow_ai.adapters.home_assistant.device_backend import (  # noqa: E402
     HomeAssistantEntityBackend,
+    uses_native_device_path,
 )
 from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
     CommandExecutionStatus,
@@ -145,6 +146,12 @@ class DeviceCommandExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("entity unavailable", result.error or "")
         self.assertFalse(result.output_written)
 
+    def test_v6_native_setup_never_uses_legacy_ha_entity_backend(self) -> None:
+        self.assertTrue(uses_native_device_path(connection_type="native"))
+        self.assertFalse(
+            uses_native_device_path(connection_type="legacy")
+        )
+
     def test_issue_269_names_remain_compatibility_aliases(self) -> None:
         self.assertIs(
             HomeAssistantEntityCommandExecutor,
@@ -180,6 +187,8 @@ class DeviceCommandExecutorTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("await self._set_output_limit(", coordinator)
         self.assertIn("self._device_backend: DeviceBackend", coordinator)
         self.assertIn("await self._device_backend.execute(", coordinator)
+        self.assertIn("elif uses_native_device_path(", coordinator)
+        self.assertIn('reason="native_control_disabled"', coordinator)
         self.assertNotIn("self._device_command_executor", coordinator)
         self.assertGreaterEqual(
             coordinator.count("await self._execute_device_command("),
