@@ -1766,13 +1766,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
         source.battery_power,
         allowFallback ? ["battery power", "batterieleistung", "native hardware power w"] : null,
       );
-      let batteryLane = configuredBattery && this._powerWatts(configuredBattery) !== null
-        ? { ...batterySpec, entity: configuredBattery }
-        : null;
-      if (!batteryLane && Array.isArray(source.native_battery_power) && source.native_battery_power.length) {
+      const nativeBatterySources = Array.isArray(source.native_battery_power)
+        ? source.native_battery_power
+        : [];
+      const nativeBatteryLane = () => {
+        if (!nativeBatterySources.length) return null;
         let totalWatts = 0;
         let complete = true;
-        for (const pair of source.native_battery_power) {
+        for (const pair of nativeBatterySources) {
           const chargeEntity = resolve(pair.charge_entity, null);
           const dischargeEntity = resolve(pair.discharge_entity, null);
           const chargeWatts = this._powerWatts(chargeEntity);
@@ -1789,8 +1790,19 @@ class BatterySmartFlowDashboard extends HTMLElement {
             break;
           }
         }
-        if (complete) batteryLane = { ...batterySpec, entity: null, watts: totalWatts, native: true };
-      }
+        return complete
+          ? { ...batterySpec, entity: null, watts: totalWatts, native: true }
+          : null;
+      };
+      // In a multi-system entry the configured battery sensor belongs to the
+      // selected control system. Prefer the complete native total so the
+      // whole-house flow does not silently show only that one system.
+      const nativeAggregate = nativeBatterySources.length > 1 ? nativeBatteryLane() : null;
+      let batteryLane = nativeAggregate
+        || (configuredBattery && this._powerWatts(configuredBattery) !== null
+          ? { ...batterySpec, entity: configuredBattery }
+          : null);
+      if (!batteryLane) batteryLane = nativeBatteryLane();
       if (!batteryLane && configuredBattery) {
         batteryLane = { ...batterySpec, entity: configuredBattery };
       }
