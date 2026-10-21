@@ -58,16 +58,19 @@ class HomeAssistantEntityBackend:
         mode_written = False
         input_written = False
         output_written = False
+        current_write = "device command"
 
         async def write_power() -> None:
-            nonlocal input_written, output_written
+            nonlocal current_write, input_written, output_written
             if command.should_write_input:
+                current_write = "input limit (number.set_value)"
                 await self._set_input_limit(
                     command.input_limit_w,
                     force=force_power,
                 )
                 input_written = True
             if command.should_write_output:
+                current_write = "output limit (number.set_value)"
                 await self._set_output_limit(
                     command.output_limit_w,
                     force=force_power,
@@ -78,6 +81,7 @@ class HomeAssistantEntityBackend:
             if power_before_mode:
                 await write_power()
             if command.should_write_mode:
+                current_write = "AC mode (select.select_option)"
                 await self._set_ac_mode(command.ac_mode)
                 mode_written = True
             if not power_before_mode:
@@ -89,7 +93,7 @@ class HomeAssistantEntityBackend:
                 mode_written=mode_written,
                 input_written=input_written,
                 output_written=output_written,
-                error=f"{type(err).__name__}: {err}",
+                error=f"{current_write} failed: {type(err).__name__}: {err}",
             )
             raise DeviceBackendExecutionError(result) from err
 
