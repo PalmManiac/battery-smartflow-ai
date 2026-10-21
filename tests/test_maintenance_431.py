@@ -369,7 +369,10 @@ class Maintenance431Tests(unittest.TestCase):
             grid_export_w=0.0,
             pv_w=0.0,
             house_load_w=942.0,
-            avg_charge_price=0.20,
+            # The displayed economic threshold can use the economics snapshot
+            # even when the legacy trade average is unavailable.
+            avg_charge_price=None,
+            economics_average_battery_charge_price=0.20,
             expensive_threshold=0.38552,
             very_expensive_threshold=0.50,
             profit_margin_pct=15.0,
