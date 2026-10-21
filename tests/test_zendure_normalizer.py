@@ -266,6 +266,65 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             [pack.pack_id for pack in replacement.state.packs], ["pack-new"]
         )
 
+    async def test_hyper_inventory_requires_confirmation_for_pack_additions(self):
+        normalizer = ZendureCloudNormalizer(
+            await make_bootstrap(primary_model="Hyper 2000")
+        )
+        one_pack = {
+            "properties": {},
+            "packData": [
+                {"sn": "pack-a", "packType": 5, "socLevel": 70},
+            ],
+        }
+        two_packs = {
+            "properties": {},
+            "packData": [
+                {"sn": "pack-a", "packType": 5, "socLevel": 70},
+                {"sn": "pack-b", "packType": 5, "socLevel": 68},
+            ],
+        }
+        replacement_packs = {
+            "properties": {},
+            "packData": [
+                {"sn": "pack-a", "packType": 5, "socLevel": 70},
+                {"sn": "pack-c", "packType": 5, "socLevel": 66},
+            ],
+        }
+
+        initial = normalizer.apply(report(self.at, one_pack))
+        self.assertEqual(
+            [pack.pack_id for pack in initial.state.packs], ["pack-a"]
+        )
+
+        transient_addition = normalizer.apply(
+            report(self.at + timedelta(seconds=1), two_packs)
+        )
+        self.assertEqual(
+            [pack.pack_id for pack in transient_addition.state.packs], ["pack-a"]
+        )
+        confirmed_addition = normalizer.apply(
+            report(self.at + timedelta(seconds=2), two_packs)
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in confirmed_addition.state.packs},
+            {"pack-a", "pack-b"},
+        )
+
+        transient_identity_change = normalizer.apply(
+            report(self.at + timedelta(seconds=3), replacement_packs)
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in transient_identity_change.state.packs},
+            {"pack-a", "pack-b"},
+        )
+        confirmed_identity_change = normalizer.apply(
+            report(self.at + timedelta(seconds=4), replacement_packs)
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in confirmed_identity_change.state.packs},
+            {"pack-a", "pack-c"},
+        )
+
     async def test_hyper_inventory_ignores_single_report_with_missing_pack(self):
         normalizer = ZendureCloudNormalizer(
             await make_bootstrap(primary_model="Hyper 2000")

@@ -286,7 +286,7 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
             [pack.pack_id for pack in replacement.state.packs], ["new-pack"]
         )
 
-    async def test_hyper_pack_membership_requires_confirmed_removal(self):
+    async def test_hyper_pack_membership_requires_confirmed_changes(self):
         fusion = NativeSourceFusion(
             await make_bootstrap(product_model="Hyper 2000")
         )
@@ -330,6 +330,37 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(
             [pack.pack_id for pack in confirmed_removal.state.packs], ["pack-a"]
+        )
+
+    async def test_hyper_pack_addition_is_hidden_until_confirmed(self):
+        fusion = NativeSourceFusion(
+            await make_bootstrap(product_model="Hyper 2000")
+        )
+        one_pack = [{"sn": "pack-a", "packType": 5, "socLevel": 70}]
+        two_packs = [
+            {"sn": "pack-a", "packType": 5, "socLevel": 70},
+            {"sn": "pack-b", "packType": 5, "socLevel": 68},
+        ]
+
+        initial = fusion.apply(
+            report(self.now, {}, packs=one_pack)
+        )
+        self.assertEqual(
+            [pack.pack_id for pack in initial.state.packs], ["pack-a"]
+        )
+
+        transient_addition = fusion.apply(
+            report(self.now + timedelta(seconds=1), {}, packs=two_packs)
+        )
+        self.assertEqual(
+            [pack.pack_id for pack in transient_addition.state.packs], ["pack-a"]
+        )
+        confirmed_addition = fusion.apply(
+            report(self.now + timedelta(seconds=2), {}, packs=two_packs)
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in confirmed_addition.state.packs},
+            {"pack-a", "pack-b"},
         )
 
     def test_diagnostics_contain_selection_not_values(self):

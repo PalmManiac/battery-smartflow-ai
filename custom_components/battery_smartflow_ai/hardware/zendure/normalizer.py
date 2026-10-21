@@ -524,11 +524,17 @@ class ZendureCloudNormalizer:
             else self._hems_activity[system_id].measurement(now=current)
         )
 
+        pack_membership = self._pack_memberships[system_id].current
+        if requires_stable_pack_membership(self._models.get(system_id)):
+            visible_pack_ids = pack_membership
+        else:
+            visible_pack_ids = None
         packs = tuple(
             self._pack_snapshot(system_id, pack_id, accumulator, current, online)
             for pack_id, accumulator in sorted(
                 self._pack_values[system_id].items()
             )
+            if visible_pack_ids is None or pack_id in visible_pack_ids
         )
         state = NeutralDeviceState(
             system_id=system_id,
@@ -669,7 +675,7 @@ class ZendureCloudNormalizer:
         if complete_snapshot and all(pack_id is not None for pack_id in pack_ids):
             membership = self._pack_memberships[system_id].observe(
                 frozenset(pack_ids),
-                confirm_removals=requires_stable_pack_membership(
+                confirm_changes=requires_stable_pack_membership(
                     self._models.get(system_id)
                 ),
             )

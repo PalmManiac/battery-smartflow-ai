@@ -367,7 +367,7 @@ class NativeSourceFusion:
         if all(pack_id is not None for pack_id in pack_ids):
             self._pack_memberships[system_id].observe(
                 frozenset(pack_ids),
-                confirm_removals=requires_stable_pack_membership(
+                confirm_changes=requires_stable_pack_membership(
                     self._models.get(system_id)
                 ),
             )
