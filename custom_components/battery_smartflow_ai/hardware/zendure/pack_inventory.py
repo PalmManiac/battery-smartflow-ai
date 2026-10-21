@@ -5,11 +5,11 @@ from __future__ import annotations
 LEGACY_GROUPED_PACK_MODELS = frozenset(
     {"hyper2000", "hub2000", "solarflowhub2000"}
 )
-_PACK_REMOVAL_CONFIRMATIONS = 2
+_PACK_MEMBERSHIP_CONFIRMATIONS = 2
 
 
 def requires_stable_pack_membership(product_model: str | None) -> bool:
-    """Return whether a model needs confirmation before retiring pack IDs."""
+    """Return whether a model needs confirmation before changing pack IDs."""
 
     model_key = "".join(
         character
@@ -20,12 +20,13 @@ def requires_stable_pack_membership(product_model: str | None) -> bool:
 
 
 class PackMembershipStabilizer:
-    """Keep known packs through one incomplete report for grouped legacy models.
+    """Require repeated complete reports before changing a grouped pack list.
 
-    New pack identities are admitted immediately. A report that removes any
-    known identity is held as a candidate until the same membership appears in
-    two consecutive complete reports. This avoids a single sparse or transient
-    report making the battery inventory appear to shrink and expand rapidly.
+    The initial complete report establishes the baseline. Every later change,
+    including additions, removals, and identity replacements, is held as a
+    candidate until the same membership appears in two consecutive complete
+    reports. Alternating reports therefore cannot make the visible inventory
+    flicker between different pack sets.
     """
 
     def __init__(self) -> None:
@@ -37,20 +38,15 @@ class PackMembershipStabilizer:
         self,
         pack_ids: frozenset[str],
         *,
-        confirm_removals: bool,
+        confirm_changes: bool,
     ) -> frozenset[str]:
         candidate = frozenset(pack_ids)
-        if self.current is None or not confirm_removals:
+        if self.current is None or not confirm_changes:
             self.current = candidate
             self._clear_candidate()
             return self.current
 
         if candidate == self.current:
-            self._clear_candidate()
-            return self.current
-
-        if self.current.issubset(candidate):
-            self.current = candidate
             self._clear_candidate()
             return self.current
 
@@ -60,13 +56,9 @@ class PackMembershipStabilizer:
             self._candidate = candidate
             self._candidate_count = 1
 
-        if self._candidate_count >= _PACK_REMOVAL_CONFIRMATIONS:
+        if self._candidate_count >= _PACK_MEMBERSHIP_CONFIRMATIONS:
             self.current = candidate
             self._clear_candidate()
-        else:
-            # Preserve previously known identities while allowing newly seen
-            # packs through immediately; only removals are debounced.
-            self.current = self.current | candidate
         return self.current
 
     def _clear_candidate(self) -> None:
