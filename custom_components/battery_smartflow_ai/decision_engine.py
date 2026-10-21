@@ -313,7 +313,6 @@ class ArbitrageRule(BaseRule):
             
         if (
             engine._current_import_price(ctx) is not None
-            and ctx.avg_charge_price is not None
             and ctx.soc > ctx.soc_min
             and ctx.ai_mode == "automatic"
             and engine._automatic_discharge_context_allows(ctx)
