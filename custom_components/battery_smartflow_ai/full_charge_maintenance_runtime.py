@@ -23,11 +23,14 @@ class FullChargeMaintenanceRuntime:
         self._planner = planner or FullChargeMaintenancePlanner()
         self._records: dict[str, FullChargeMaintenanceRecord] = {}
         self._last_decision: FullChargeMaintenanceDecision | None = None
+        self._decisions: dict[str, FullChargeMaintenanceDecision] = {}
 
     def restore(self, payload: Mapping[str, Any] | None) -> tuple[str, ...]:
         """Restore valid records independently and report invalid opaque keys."""
 
         self._records.clear()
+        self._decisions.clear()
+        self._last_decision = None
         invalid: list[str] = []
         if not isinstance(payload, Mapping):
             return () if payload is None else ("invalid_document",)
@@ -51,7 +54,7 @@ class FullChargeMaintenanceRuntime:
         *,
         interval_days: int = 30,
     ) -> FullChargeMaintenanceDecision:
-        """Evaluate and retain one selected device only."""
+        """Evaluate and retain one system independently of the others."""
 
         record = self._records.get(device_id)
         if record is None:
@@ -71,6 +74,7 @@ class FullChargeMaintenanceRuntime:
         decision = self._planner.evaluate(record, data)
         self._records[device_id] = decision.record
         self._last_decision = decision
+        self._decisions[device_id] = decision
         return decision
 
     def persisted_state(self) -> dict[str, Any]:
@@ -84,10 +88,14 @@ class FullChargeMaintenanceRuntime:
             },
         })
 
-    def sensor_data(self) -> dict[str, Any]:
-        """Expose the latest selected-device decision without physical identity."""
+    def sensor_data(self, device_id: str | None = None) -> dict[str, Any]:
+        """Expose one device decision or the latest decision if unspecified."""
 
-        decision = self._last_decision
+        decision = (
+            self._decisions.get(device_id)
+            if device_id is not None
+            else self._last_decision
+        )
         if decision is None:
             return {
                 "full_charge_maintenance_state": MaintenanceState.UNKNOWN.value,
@@ -109,4 +117,12 @@ class FullChargeMaintenanceRuntime:
                 record.next_recommended_full_at
             ),
             "full_charge_maintenance_active": record.active,
+        }
+
+    def sensor_data_by_device(self) -> dict[str, dict[str, Any]]:
+        """Return independent status snapshots keyed by native system ID."""
+
+        return {
+            device_id: self.sensor_data(device_id)
+            for device_id in sorted(self._decisions)
         }

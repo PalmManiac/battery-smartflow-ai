@@ -72,6 +72,26 @@ class FullChargeMaintenanceRuntimeTests(unittest.TestCase):
         self.assertTrue(records["device-a"]["active"])
         self.assertFalse(records["device-b"]["active"])
 
+    def test_sensor_data_can_select_each_devices_independent_decision(self):
+        runtime = FullChargeMaintenanceRuntime()
+        runtime.evaluate("device-a", input_data())
+        runtime.evaluate(
+            "device-b",
+            input_data(enabled=False, price_window_favorable=False),
+        )
+
+        self.assertEqual(
+            runtime.sensor_data("device-a")["full_charge_maintenance_state"],
+            MaintenanceState.CHARGING_TO_FULL.value,
+        )
+        self.assertEqual(
+            runtime.sensor_data("device-b")["full_charge_maintenance_state"],
+            MaintenanceState.BLOCKED.value,
+        )
+        self.assertEqual(
+            set(runtime.sensor_data_by_device()), {"device-a", "device-b"}
+        )
+
     def test_one_corrupt_record_does_not_destroy_valid_device_history(self):
         runtime = FullChargeMaintenanceRuntime()
         invalid = runtime.restore({

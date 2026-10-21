@@ -220,6 +220,7 @@ from .mode_arbiter import ModeArbiter, build_mode_arbiter_config
 from .regulation_models import RegulationRuntimeState
 from .core.models import (
     CommandExecutionResult,
+    CommandExecutionStatus,
     DeviceCapabilities,
     DeviceCommand,
     ZendureTransport,
@@ -671,6 +672,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "cell_voltage_status": "disabled",
             "cell_voltage_emergency_active": False,
             "cell_voltage_emergency_started_at": None,
+            "cell_voltage_emergency_devices": {},
+            "per_system_cell_protection_command_active": {},
+            "per_system_maintenance_command_active": {},
             "cell_voltage_discharge_blocked": False,
             "cell_voltage_resume_threshold": None,
             "cell_voltage_post_emergency_discharge_locked": False,
@@ -2802,31 +2806,39 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         )
 
+    def _get_cell_voltage_minimums_by_device(self) -> dict[str, float]:
+        native = getattr(self, "native_zendure", None)
+        if native is None or not (
+            native.control_enabled
+            or self.entry.data.get("connection_type") == "native"
+        ):
+            return {}
+        if hasattr(native, "cell_voltage_minimum_by_device"):
+            return native.cell_voltage_minimum_by_device()
+        state = native.selected_device_state()
+        if state is None:
+            return {}
+        values = []
+        for pack in state.packs:
+            measured = pack.cell_min_v
+            value = (
+                _to_float(measured.value)
+                if measured is not None and measured.valid
+                else None
+            )
+            if value is not None and math.isfinite(value):
+                values.append(float(value))
+        return {native.selected_device_id: min(values)} if values else {}
+
     def _get_lowest_cell_voltage_values(self) -> list[float]:
         values: list[float] = []
-
-        if not self._cell_voltage_protection_enabled():
-            return values
 
         native = getattr(self, "native_zendure", None)
         if native is not None and (
             native.control_enabled
             or self.entry.data.get("connection_type") == "native"
         ):
-            state = native.selected_device_state()
-            if state is None:
-                return []
-            values = []
-            for pack in state.packs:
-                measured = pack.cell_min_v
-                value = (
-                    _to_float(measured.value)
-                    if measured is not None and measured.valid
-                    else None
-                )
-                if value is not None and math.isfinite(value):
-                    values.append(value)
-            return values
+            return list(self._get_cell_voltage_minimums_by_device().values())
 
         for entity_id in self.entities.lowest_cell_voltage_entities:
             val = _to_float(self._state(entity_id), None)
@@ -3984,7 +3996,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         now_utc = dt_util.as_utc(now)
         
-        post_load_drop_hold_s = float(profile.get("POST_LOAD_DROP_HOLD_S", 60.0) or 60.0)
         post_output_overshoot_hold_s = float(
             profile.get("POST_OUTPUT_OVERSHOOT_HOLD_S", 60.0) or 60.0
         )
@@ -4597,6 +4608,65 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._persist["cell_voltage_emergency_active"] = active
         return active
+
+    def _update_per_device_cell_voltage_emergencies(
+        self, minimums_by_device: Mapping[str, float]
+    ) -> dict[str, bool]:
+        """Persist independent cell-emergency latches for native systems."""
+
+        raw_previous = self._persist.get("cell_voltage_emergency_devices", {})
+        previous = raw_previous if isinstance(raw_previous, Mapping) else {}
+        result: dict[str, bool] = {}
+        updated: dict[str, dict[str, Any]] = {}
+        now = self._clock.utc_now()
+        selected_id = getattr(
+            getattr(self, "native_zendure", None), "selected_device_id", None
+        )
+        for system_id in set(previous).union(minimums_by_device):
+            old = previous.get(system_id, {})
+            old = old if isinstance(old, Mapping) else {}
+            active_before = bool(old.get("active", False))
+            if system_id == selected_id and not previous:
+                active_before = bool(
+                    self._persist.get("cell_voltage_emergency_active", False)
+                )
+            started_at = self._parse_commit_dt(old.get("started_at"))
+            if system_id == selected_id and not previous and active_before:
+                started_at = started_at or self._parse_commit_dt(
+                    self._persist.get("cell_voltage_emergency_started_at")
+                ) or now
+            voltage = minimums_by_device.get(system_id)
+            if voltage is None:
+                active = active_before
+            else:
+                active = next_cell_voltage_emergency_state(
+                    previously_active=active_before,
+                    protection_enabled=self._cell_voltage_protection_enabled(),
+                    lowest_cell_voltage=voltage,
+                    warning_voltage=float(self._get_setting(
+                        SETTING_CELL_VOLTAGE_WARNING,
+                        DEFAULT_CELL_VOLTAGE_WARNING,
+                    )),
+                    resume_voltage=float(self._get_setting(
+                        SETTING_CELL_VOLTAGE_RESUME,
+                        DEFAULT_CELL_VOLTAGE_RESUME,
+                    )),
+                    minimum_charge_elapsed=cell_voltage_emergency_minimum_elapsed(
+                        started_at=started_at if active_before else None,
+                        now=now,
+                    ),
+                )
+            if active and started_at is None:
+                started_at = now
+            if not active:
+                started_at = None
+            result[str(system_id)] = active
+            updated[str(system_id)] = {
+                "active": active,
+                "started_at": started_at.isoformat() if started_at else None,
+            }
+        self._persist["cell_voltage_emergency_devices"] = updated
+        return result
 
     def _update_cell_voltage_post_emergency_discharge_lock(
         self,
@@ -5716,6 +5786,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
 
             global_lowest_cell_voltage = self._get_global_lowest_cell_voltage()
+            cell_voltage_by_device = self._get_cell_voltage_minimums_by_device()
+            selected_native_id = getattr(native_runtime, "selected_device_id", None)
+            selected_cell_voltage = cell_voltage_by_device.get(
+                selected_native_id,
+                None
+                if (
+                    native_runtime is not None
+                    and self.entry.data.get("connection_type") == "native"
+                )
+                else global_lowest_cell_voltage,
+            )
             cell_voltage_status = self._get_cell_voltage_status(global_lowest_cell_voltage)
             cell_voltage_soc_plausibility = self._get_cell_voltage_soc_plausibility(
                 soc=float(soc),
@@ -5728,7 +5809,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self._persist["cell_voltage_soc_plausibility"] = cell_voltage_soc_plausibility
 
             cell_voltage_discharge_blocked = self._update_cell_voltage_discharge_hysteresis(
-                global_lowest_cell_voltage
+                selected_cell_voltage
             )
             cell_voltage_discharge_blocked = bool(
                 cell_voltage_discharge_blocked
@@ -5768,10 +5849,107 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif float(soc) > float(soc_min):
                 self._persist["trade_cycle_below_soc_min"] = False
 
+            per_device_cell_emergency = (
+                self._update_per_device_cell_voltage_emergencies(
+                    cell_voltage_by_device
+                )
+            )
             cell_voltage_emergency_active = (
                 self._update_cell_voltage_emergency_hysteresis(
-                    global_lowest_cell_voltage
+                    selected_cell_voltage
                 )
+            )
+            if selected_native_id is not None:
+                cell_voltage_emergency_active = per_device_cell_emergency.get(
+                    selected_native_id, cell_voltage_emergency_active
+                )
+            emergency_commands_active_raw = self._persist.get(
+                "per_system_cell_protection_command_active", {}
+            )
+            emergency_commands_active = (
+                dict(emergency_commands_active_raw)
+                if isinstance(emergency_commands_active_raw, Mapping)
+                else {}
+            )
+            if (
+                native_runtime is not None
+                and bool(getattr(native_runtime, "control_enabled", False))
+                and ai_mode != AI_MODE_MANUAL
+                and self._cell_voltage_protection_enabled()
+            ):
+                for system_id, emergency_active in per_device_cell_emergency.items():
+                    if (
+                        system_id == selected_native_id
+                        or not emergency_active
+                        or system_id not in cell_voltage_by_device
+                    ):
+                        continue
+                    device_limit_w = native_runtime.maximum_charge_power_for(
+                        system_id
+                    )
+                    emergency_limit_w = min(
+                        device_limit_w,
+                        max(0.0, float(self._get_setting(
+                            SETTING_EMERGENCY_CHARGE,
+                            DEFAULT_EMERGENCY_CHARGE,
+                        ))),
+                    )
+                    if emergency_limit_w <= 0.0:
+                        continue
+                    emergency_command = DeviceCommand(
+                        ac_mode=ZENDURE_MODE_INPUT,
+                        input_limit_w=emergency_limit_w,
+                        output_limit_w=0.0,
+                        reason="cell_voltage_emergency_charge",
+                        should_write_mode=True,
+                        should_write_input=True,
+                        should_write_output=True,
+                        metadata={"command_path": "per_system_cell_protection"},
+                    )
+                    result = await native_runtime.async_execute_device_command(
+                        emergency_command,
+                        device_id=system_id,
+                    )
+                    if result.status is not CommandExecutionStatus.APPLIED:
+                        _LOGGER.debug(
+                            "Per-system cell-protection command was not applied: %s",
+                            result.reason,
+                        )
+                    else:
+                        emergency_commands_active[system_id] = True
+            if (
+                native_runtime is not None
+                and bool(getattr(native_runtime, "control_enabled", False))
+            ):
+                for system_id in tuple(emergency_commands_active):
+                    should_release = (
+                        ai_mode == AI_MODE_MANUAL
+                        or not self._cell_voltage_protection_enabled()
+                        or not per_device_cell_emergency.get(system_id, False)
+                    )
+                    if (
+                        system_id == selected_native_id
+                        or system_id not in cell_voltage_by_device
+                        or not should_release
+                    ):
+                        continue
+                    release_result = await native_runtime.async_execute_device_command(
+                        DeviceCommand(
+                            ac_mode=ZENDURE_MODE_OUTPUT,
+                            input_limit_w=0.0,
+                            output_limit_w=0.0,
+                            reason="cell_voltage_emergency_release",
+                            should_write_mode=True,
+                            should_write_input=True,
+                            should_write_output=True,
+                            metadata={"command_path": "per_system_cell_protection"},
+                        ),
+                        device_id=system_id,
+                    )
+                    if release_result.status is CommandExecutionStatus.APPLIED:
+                        emergency_commands_active.pop(system_id, None)
+            self._persist["per_system_cell_protection_command_active"] = (
+                emergency_commands_active
             )
 
             manual_mode_active = ai_mode == AI_MODE_MANUAL
@@ -5974,8 +6152,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._engine._learned_planning_waits_for_window(ctx)
             )
 
-            maintenance_status = self._full_charge_maintenance.sensor_data()
+            maintenance_status = self._full_charge_maintenance.sensor_data(
+                getattr(native_runtime, "selected_device_id", None)
+            )
             maintenance_decision = None
+            per_system_maintenance: list[tuple[str, Any]] = []
+            maintenance_pv_share_w = max(0.0, float(grid_export or 0.0))
             maintenance_enabled = bool(self.entry.options.get(
                 SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
                 DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
@@ -5983,37 +6165,146 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if (
                 native_runtime is not None
                 and hasattr(native_runtime, "full_charge_maintenance_input")
-                and getattr(native_runtime, "selected_device_id", None)
+                and getattr(native_runtime, "discovered_device_ids", ())
             ):
-                maintenance_input = native_runtime.full_charge_maintenance_input(
-                    now=now,
-                    enabled=maintenance_enabled,
-                    pv_window_favorable=bool(
-                        pv_charge_latched
-                        or float(grid_export or 0.0)
-                        >= float(pv_charge_start_export_w)
-                    ),
-                    price_window_favorable=bool(
-                        price_now is not None
-                        and self._engine._is_valley_price_now(ctx)
-                    ),
-                    strategic_charge_active=bool(
-                        self._persist.get("charge_commit_active", False)
-                    ),
-                    automation_allowed=bool(ai_mode != AI_MODE_MANUAL),
-                )
-                if maintenance_input is not None:
-                    maintenance_decision = self._full_charge_maintenance.evaluate(
-                        native_runtime.selected_device_id,
+                for system_id in native_runtime.discovered_device_ids:
+                    maintenance_input = native_runtime.full_charge_maintenance_input(
+                        device_id=system_id,
+                        now=now,
+                        enabled=maintenance_enabled,
+                        pv_window_favorable=bool(
+                            pv_charge_latched
+                            or float(grid_export or 0.0)
+                            >= float(pv_charge_start_export_w)
+                        ),
+                        price_window_favorable=bool(
+                            price_now is not None
+                            and self._engine._is_valley_price_now(ctx)
+                        ),
+                        strategic_charge_active=bool(
+                            system_id == native_runtime.selected_device_id
+                            and self._persist.get("charge_commit_active", False)
+                        ),
+                        automation_allowed=bool(ai_mode != AI_MODE_MANUAL),
+                    )
+                    if maintenance_input is None:
+                        continue
+                    system_decision = self._full_charge_maintenance.evaluate(
+                        system_id,
                         maintenance_input,
                         interval_days=int(self.entry.options.get(
                             SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
                             DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
                         )),
                     )
-                    maintenance_status = self._full_charge_maintenance.sensor_data()
-                    if maintenance_decision.temporary_user_limit_override:
-                        ctx.soc_max = 100.0
+                    per_system_maintenance.append((system_id, system_decision))
+                    if system_id == native_runtime.selected_device_id:
+                        maintenance_decision = system_decision
+                        if system_decision.temporary_user_limit_override:
+                            ctx.soc_max = 100.0
+                pv_request_count = sum(
+                    decision_item.request_full_charge
+                    and decision_item.temporary_user_limit_override
+                    and decision_item.selected_window.value == "pv_surplus"
+                    for system_id, decision_item in per_system_maintenance
+                )
+                maintenance_pv_share_w = (
+                    max(0.0, float(grid_export or 0.0))
+                    / max(1, pv_request_count)
+                )
+                maintenance_commands_raw = self._persist.get(
+                    "per_system_maintenance_command_active", {}
+                )
+                maintenance_commands_active = (
+                    dict(maintenance_commands_raw)
+                    if isinstance(maintenance_commands_raw, Mapping)
+                    else {}
+                )
+                for system_id, system_decision in per_system_maintenance:
+                    if (
+                        system_id == native_runtime.selected_device_id
+                        or per_device_cell_emergency.get(system_id, False)
+                        or not system_decision.request_full_charge
+                        or not system_decision.temporary_user_limit_override
+                        or not maintenance_enabled
+                        or ai_mode == AI_MODE_MANUAL
+                    ):
+                        continue
+                    charge_limit_w = native_runtime.maximum_charge_power_for(
+                        system_id
+                    )
+                    if charge_limit_w <= 0.0:
+                        continue
+                    if system_decision.selected_window.value == "pv_surplus":
+                        charge_limit_w = min(
+                            charge_limit_w,
+                            maintenance_pv_share_w,
+                        )
+                    if charge_limit_w <= 0.0:
+                        continue
+                    maintenance_command = DeviceCommand(
+                        ac_mode=ZENDURE_MODE_INPUT,
+                        input_limit_w=charge_limit_w,
+                        output_limit_w=0.0,
+                        reason="full_charge_maintenance",
+                        should_write_mode=True,
+                        should_write_input=True,
+                        should_write_output=True,
+                        metadata={"command_path": "per_system_maintenance"},
+                    )
+                    result = await native_runtime.async_execute_device_command(
+                        maintenance_command,
+                        device_id=system_id,
+                    )
+                    if result.status is not CommandExecutionStatus.APPLIED:
+                        _LOGGER.debug(
+                            "Per-system full-charge maintenance command was not "
+                            "applied for a configured device: %s",
+                            result.reason,
+                        )
+                    else:
+                        maintenance_commands_active[system_id] = True
+                requested_secondary = {
+                    system_id
+                    for system_id, system_decision in per_system_maintenance
+                    if (
+                        system_id != native_runtime.selected_device_id
+                        and system_decision.request_full_charge
+                        and system_decision.temporary_user_limit_override
+                        and maintenance_enabled
+                        and ai_mode != AI_MODE_MANUAL
+                        and not per_device_cell_emergency.get(system_id, False)
+                    )
+                }
+                for system_id in tuple(maintenance_commands_active):
+                    if system_id in requested_secondary:
+                        continue
+                    if per_device_cell_emergency.get(system_id, False):
+                        maintenance_commands_active.pop(system_id, None)
+                        continue
+                    if system_id not in cell_voltage_by_device:
+                        continue
+                    release_result = await native_runtime.async_execute_device_command(
+                        DeviceCommand(
+                            ac_mode=ZENDURE_MODE_OUTPUT,
+                            input_limit_w=0.0,
+                            output_limit_w=0.0,
+                            reason="full_charge_maintenance_complete",
+                            should_write_mode=True,
+                            should_write_input=True,
+                            should_write_output=True,
+                            metadata={"command_path": "per_system_maintenance"},
+                        ),
+                        device_id=system_id,
+                    )
+                    if release_result.status is CommandExecutionStatus.APPLIED:
+                        maintenance_commands_active.pop(system_id, None)
+                self._persist["per_system_maintenance_command_active"] = (
+                    maintenance_commands_active
+                )
+                maintenance_status = self._full_charge_maintenance.sensor_data(
+                    getattr(native_runtime, "selected_device_id", None)
+                )
 
             decision = self._engine.evaluate(ctx)
             strategy_selection = self._engine.last_strategy_selection
@@ -6023,7 +6314,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 maintenance_decision,
                 configured_soc_max=float(soc_max),
                 max_charge_w=float(max_charge),
-                grid_export_w=float(grid_export or 0.0),
+                grid_export_w=(
+                    maintenance_pv_share_w
+                    if (
+                        maintenance_decision is not None
+                        and maintenance_decision.selected_window.value == "pv_surplus"
+                    )
+                    else float(grid_export or 0.0)
+                ),
                 automation_allowed=bool(
                     ai_mode != AI_MODE_MANUAL and maintenance_enabled
                 ),
@@ -6042,7 +6340,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     measured_charge_w=float(battery_charge_w or 0.0),
                     soc=float(soc),
                     resume_soc=float(soc_min) + max(0.0, float(resume_margin)),
-                    global_lowest_cell_voltage=global_lowest_cell_voltage,
+                    global_lowest_cell_voltage=selected_cell_voltage,
                 )
             )
             cell_voltage_discharge_blocked = bool(
