@@ -265,6 +265,17 @@ class NativeZendureRuntime:
             return None
         return state
 
+    def fresh_device_states(self):
+        """Return fresh states for every discovered main system, if complete."""
+
+        states = []
+        for system_id, device in sorted(self._inventory.devices.items()):
+            state = self._states.get(system_id)
+            if state is None or not _fresh_native_state(state, device=device):
+                return ()
+            states.append(state)
+        return tuple(states)
+
     def debug_state_snapshot(self) -> dict[str, Any]:
         """Return every normalized measurement for discovered systems and packs."""
 

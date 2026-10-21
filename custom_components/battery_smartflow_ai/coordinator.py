@@ -362,7 +362,52 @@ def _to_float(v: Any, default: float | None = None) -> float | None:
         return float(s)
     except Exception:
         return default
-        
+
+
+def _native_battery_power_totals(states) -> tuple[float, float] | None:
+    """Return complete native charge/discharge totals across main systems."""
+
+    states = tuple(states or ())
+    if len(states) < 2:
+        return None
+
+    charge_total = 0.0
+    discharge_total = 0.0
+    for state in states:
+        charge = state.charge_power_w
+        discharge = state.discharge_power_w
+        charge_value = (
+            _to_float(charge.value)
+            if charge is not None and charge.valid
+            else None
+        )
+        discharge_value = (
+            _to_float(discharge.value)
+            if discharge is not None and discharge.valid
+            else None
+        )
+        if charge_value is not None and not math.isfinite(charge_value):
+            charge_value = None
+        if discharge_value is not None and not math.isfinite(discharge_value):
+            discharge_value = None
+
+        if charge_value is not None and discharge_value is not None:
+            charge_total += max(0.0, charge_value)
+            discharge_total += max(0.0, discharge_value)
+        elif charge_value is not None and charge_value > 1.0 and (
+            discharge_value is None or discharge_value <= 1.0
+        ):
+            charge_total += charge_value
+        elif discharge_value is not None and discharge_value > 1.0 and (
+            charge_value is None or charge_value <= 1.0
+        ):
+            discharge_total += discharge_value
+        else:
+            return None
+
+    return charge_total, discharge_total
+
+
 def _clamp_season_counter(value: Any) -> int:
     """Limit the season hysteresis counter to a sane range.
 
@@ -2764,11 +2809,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return values
 
         native = getattr(self, "native_zendure", None)
-        if native is not None and native.control_enabled:
+        if native is not None and (
+            native.control_enabled
+            or self.entry.data.get("connection_type") == "native"
+        ):
             state = native.selected_device_state()
             if state is None:
                 return []
-            return [float(pack.cell_min_v.value) for pack in state.packs if pack.cell_min_v.valid]
+            values = []
+            for pack in state.packs:
+                measured = pack.cell_min_v
+                value = (
+                    _to_float(measured.value)
+                    if measured is not None and measured.valid
+                    else None
+                )
+                if value is not None and math.isfinite(value):
+                    values.append(value)
+            return values
 
         for entity_id in self.entities.lowest_cell_voltage_entities:
             val = _to_float(self._state(entity_id), None)
@@ -2956,6 +3014,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         self._store_command_execution_result(result)
         return result
+
 
     async def _set_ac_mode(self, mode: str) -> None:
         """Write the AC mode reliably.
@@ -5521,13 +5580,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             elif price_now is None:
                 engine_health = "no_current_price"
 
+            house_load_battery_charge_w = battery_charge_w
+            house_load_battery_discharge_w = battery_discharge_w
+            house_load_battery_power_source = battery_power_source
+            all_native_states = getattr(
+                native_runtime,
+                "fresh_device_states",
+                lambda: (),
+            )()
+            native_battery_totals = _native_battery_power_totals(
+                all_native_states
+            )
+            if native_battery_totals is not None:
+                (
+                    house_load_battery_charge_w,
+                    house_load_battery_discharge_w,
+                ) = native_battery_totals
+                house_load_battery_power_source = "native_multi_system"
+
             house_load = max(
                 0.0,
                 float(grid_import)
                 + float(pv_w)
-                + float(battery_discharge_w)
+                + float(house_load_battery_discharge_w)
                 - float(grid_export)
-                - float(battery_charge_w)
+                - float(house_load_battery_charge_w)
             )
 
             # V4.1.0 learned charge-window planning:
@@ -7950,6 +8027,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "soc_limits_valid": bool(soc_limits_valid),
                 "power_limits_valid": bool(power_limits_valid),
                 "house_load": int(round(house_load, 0)),
+                "house_load_battery_charge_w": round(
+                    house_load_battery_charge_w, 1
+                ),
+                "house_load_battery_discharge_w": round(
+                    house_load_battery_discharge_w, 1
+                ),
+                "house_load_battery_power_source": (
+                    house_load_battery_power_source
+                ),
                 
                 # V4.2.0 regulation / grid history diagnostics
                 "regulation_grid_now_w": float(grid_history_state.grid_now_w),
