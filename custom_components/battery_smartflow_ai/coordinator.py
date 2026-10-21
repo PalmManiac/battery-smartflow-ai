@@ -7531,10 +7531,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 command_execution_started = (
                     self._clock.monotonic() if timing_enabled else None
                 )
-                execution_result = await self._execute_device_command(
-                    regulation_device_command,
-                    force_power=True,
-                )
+                try:
+                    execution_result = await self._execute_device_command(
+                        regulation_device_command,
+                        force_power=True,
+                    )
+                except DeviceBackendExecutionError as err:
+                    # A rejected write does not invalidate measurements already
+                    # collected for this update. Keep the coordinator data
+                    # available, retain the failed command result, and retry
+                    # through the normal regulation cycle.
+                    execution_result = err.result
+                    _LOGGER.error(
+                        "Zendure regulation write failed; keeping the latest "
+                        "coordinator data available: %s",
+                        err.result.error or err.result.reason,
+                    )
                 if command_execution_started is not None:
                     command_execution_seconds = max(
                         0.0,
