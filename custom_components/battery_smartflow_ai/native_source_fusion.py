@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import fields
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
 from .core.models import (
     MeasuredValue,
@@ -12,11 +13,6 @@ from .core.models import (
     NeutralPackState,
     ReportedDeviceSetpoints,
     ZendureTransport,
-)
-from .native_read_source import (
-    NativeReadSourceArbiter,
-    SelectedMeasurement,
-    SourceMeasurement,
 )
 from .hardware.zendure.cloud import ZendureCloudBootstrap
 from .hardware.zendure.cloud_mqtt import CloudMqttMessage
@@ -27,7 +23,15 @@ from .hardware.zendure.normalizer import (
     NormalizationResult,
     ZendureCloudNormalizer,
 )
-
+from .hardware.zendure.pack_inventory import (
+    PackMembershipStabilizer,
+    requires_stable_pack_membership,
+)
+from .native_read_source import (
+    NativeReadSourceArbiter,
+    SelectedMeasurement,
+    SourceMeasurement,
+)
 
 _TRANSPORTS = (
     ZendureTransport.ZENSDK,
@@ -110,7 +114,14 @@ class NativeSourceFusion:
         self._debug_properties: dict[
             tuple[ZendureTransport, str], dict[str, Any]
         ] = {}
-        self._pack_membership: dict[str, frozenset[str]] = {}
+        self._pack_memberships = {
+            item.candidate.candidate_id: PackMembershipStabilizer()
+            for item in bootstrap.devices
+        }
+        self._models = {
+            item.candidate.candidate_id: item.candidate.identity.product_model
+            for item in bootstrap.devices
+        }
 
     def apply(
         self, message: CloudMqttMessage, *, now: datetime | None = None
@@ -273,7 +284,7 @@ class NativeSourceFusion:
             system_id,
             states,
             select,
-            self._pack_membership.get(system_id),
+            self._pack_memberships[system_id].current,
         )
         preferred = trace["soc_pct"].transport
         if preferred is None:
@@ -354,7 +365,12 @@ class NativeSourceFusion:
             for pack in raw_packs
         )
         if all(pack_id is not None for pack_id in pack_ids):
-            self._pack_membership[system_id] = frozenset(pack_ids)
+            self._pack_memberships[system_id].observe(
+                frozenset(pack_ids),
+                confirm_removals=requires_stable_pack_membership(
+                    self._models.get(system_id)
+                ),
+            )
 
     def _fuse_packs(self, system_id, states, select, membership=None):
         by_source = {

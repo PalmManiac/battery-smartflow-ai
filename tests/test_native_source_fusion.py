@@ -2,26 +2,26 @@
 
 from __future__ import annotations
 
-from base64 import b64encode
-from datetime import datetime, timedelta, timezone
 import json
 import unittest
+from base64 import b64encode
+from datetime import datetime, timedelta, timezone
 
 from support import bootstrap
 
 bootstrap()
 
-from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
+from custom_components.battery_smartflow_ai.core.models import (
     ValueValidity,
     ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     CloudMqttMessage,
 )
-from custom_components.battery_smartflow_ai.native_source_fusion import (  # noqa: E402
+from custom_components.battery_smartflow_ai.native_source_fusion import (
     NativeSourceFusion,
 )
 
@@ -34,7 +34,7 @@ class Response:
         return self.value
 
 
-async def make_bootstrap(device_ids=("device-1",)):
+async def make_bootstrap(device_ids=("device-1",), product_model="SolarFlow2400AC"):
     token = b64encode(b"https://api.example.com.app-secret").decode()
 
     async def post(*_args, **_kwargs):
@@ -46,7 +46,7 @@ async def make_bootstrap(device_ids=("device-1",)):
                     {
                         "deviceKey": device_id,
                         "productKey": "product-1",
-                        "productModel": "SolarFlow2400AC",
+                        "productModel": product_model,
                         "online": True,
                     }
                     for device_id in device_ids
@@ -286,6 +286,52 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
             [pack.pack_id for pack in replacement.state.packs], ["new-pack"]
         )
 
+    async def test_hyper_pack_membership_requires_confirmed_removal(self):
+        fusion = NativeSourceFusion(
+            await make_bootstrap(product_model="Hyper 2000")
+        )
+        both_packs = [
+            {"sn": "pack-a", "packType": 5, "socLevel": 70},
+            {"sn": "pack-b", "packType": 5, "socLevel": 68},
+        ]
+        only_first_pack = [
+            {"sn": "pack-a", "packType": 5, "socLevel": 70},
+        ]
+
+        fusion.apply(report(self.now, {}, packs=both_packs))
+        transient = fusion.apply(
+            report(
+                self.now + timedelta(seconds=1),
+                {},
+                packs=only_first_pack,
+            )
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in transient.state.packs},
+            {"pack-a", "pack-b"},
+        )
+
+        fusion.apply(
+            report(self.now + timedelta(seconds=2), {}, packs=both_packs)
+        )
+        fusion.apply(
+            report(
+                self.now + timedelta(seconds=3),
+                {},
+                packs=only_first_pack,
+            )
+        )
+        confirmed_removal = fusion.apply(
+            report(
+                self.now + timedelta(seconds=4),
+                {},
+                packs=only_first_pack,
+            )
+        )
+        self.assertEqual(
+            [pack.pack_id for pack in confirmed_removal.state.packs], ["pack-a"]
+        )
+
     def test_diagnostics_contain_selection_not_values(self):
         self.fusion.apply(report(self.now, {"electricLevel": 50}, transport="zensdk"))
         diagnostics = self.fusion.source_diagnostics("cloud_mqtt:device-1")
@@ -347,7 +393,10 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
 class NativeReadToleranceTests(unittest.TestCase):
     def test_numeric_tolerance_avoids_false_safety_conflict(self):
         from custom_components.battery_smartflow_ai.core.models import MeasuredValue
-        from custom_components.battery_smartflow_ai.native_read_source import NativeReadSourceArbiter, SourceMeasurement
+        from custom_components.battery_smartflow_ai.native_read_source import (
+            NativeReadSourceArbiter,
+            SourceMeasurement,
+        )
 
         selected = NativeReadSourceArbiter().select(
             "soc_pct",
