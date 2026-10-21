@@ -2,37 +2,36 @@
 
 from __future__ import annotations
 
+import json
+import unittest
 from base64 import b64encode
 from dataclasses import fields
 from datetime import datetime, timedelta, timezone
-import json
-import unittest
 
 from support import bootstrap
 
-
 bootstrap()
 
-from custom_components.battery_smartflow_ai.core.models import (  # noqa: E402
+from custom_components.battery_smartflow_ai.core.models import (
     DeviceOperatingMode,
     NeutralDeviceState,
     ValueValidity,
     ZendureTransport,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (
     ZendureCloudClient,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.cloud_mqtt import (
     CloudMqttMessage,
 )
-from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (  # noqa: E402
+from custom_components.battery_smartflow_ai.hardware.zendure.initial_sync import (
+    ZendureInitialSyncRecorder,
+)
+from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (
     MAIN_PROPERTY_MAPPINGS,
     PACK_PROPERTY_MAPPINGS,
     MappingScope,
     ZendureCloudNormalizer,
-)
-from custom_components.battery_smartflow_ai.hardware.zendure.initial_sync import (  # noqa: E402
-    ZendureInitialSyncRecorder,
 )
 
 
@@ -265,6 +264,49 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             [pack.pack_id for pack in replacement.state.packs], ["pack-new"]
+        )
+
+    async def test_hyper_inventory_ignores_single_report_with_missing_pack(self):
+        normalizer = ZendureCloudNormalizer(
+            await make_bootstrap(primary_model="Hyper 2000")
+        )
+        both_packs = {
+            "properties": {},
+            "packData": [
+                {"sn": "pack-a", "packType": 5, "socLevel": 70},
+                {"sn": "pack-b", "packType": 5, "socLevel": 68},
+            ],
+        }
+        only_first_pack = {
+            "properties": {},
+            "packData": [
+                {"sn": "pack-a", "packType": 5, "socLevel": 70},
+            ],
+        }
+
+        normalizer.apply(report(self.at, both_packs))
+        transient = normalizer.apply(
+            report(self.at + timedelta(seconds=1), only_first_pack)
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in transient.state.packs},
+            {"pack-a", "pack-b"},
+        )
+
+        recovered = normalizer.apply(
+            report(self.at + timedelta(seconds=2), both_packs)
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in recovered.state.packs},
+            {"pack-a", "pack-b"},
+        )
+
+        normalizer.apply(report(self.at + timedelta(seconds=3), only_first_pack))
+        confirmed_removal = normalizer.apply(
+            report(self.at + timedelta(seconds=4), only_first_pack)
+        )
+        self.assertEqual(
+            [pack.pack_id for pack in confirmed_removal.state.packs], ["pack-a"]
         )
 
     async def test_command_echo_cannot_become_reported_device_state(self):

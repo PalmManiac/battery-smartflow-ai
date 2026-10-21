@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
-import math
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from ...core.models import (
     DeviceOperatingMode,
@@ -25,7 +26,11 @@ from .cloud_mqtt import (
 )
 from .device_matrix import resolve_zendure_device
 from .hems_activity import HemsActivityDiagnostic, HemsActivityTracker
-
+from .pack_inventory import (
+    LEGACY_GROUPED_PACK_MODELS,
+    PackMembershipStabilizer,
+    requires_stable_pack_membership,
+)
 
 # Zendure systems normally report individual property groups close enough for
 # a short visual freshness window.  The Legacy Hyper 2000 and Hub 2000 use a
@@ -35,9 +40,7 @@ from .hems_activity import HemsActivityDiagnostic, HemsActivityTracker
 # independently fail-closed at 30 seconds in ``native_zendure_runtime``.
 DEFAULT_STALE_AFTER_SECONDS = 90.0
 LEGACY_GROUPED_REPORT_STALE_AFTER_SECONDS = 180.0
-_LEGACY_GROUPED_REPORT_MODELS = frozenset(
-    {"hyper2000", "hub2000", "solarflowhub2000"}
-)
+_LEGACY_GROUPED_REPORT_MODELS = LEGACY_GROUPED_PACK_MODELS
 
 
 class MappingScope(StrEnum):
@@ -310,6 +313,10 @@ class ZendureCloudNormalizer:
         }
         self._pack_values: dict[str, dict[str, _PackAccumulator]] = {
             candidate_id: {} for candidate_id in self._models
+        }
+        self._pack_memberships = {
+            candidate_id: PackMembershipStabilizer()
+            for candidate_id in self._models
         }
         self._last_message: dict[str, datetime | None] = {
             candidate_id: None for candidate_id in self._models
@@ -660,9 +667,14 @@ class ZendureCloudNormalizer:
             for raw_pack in raw_packs
         )
         if complete_snapshot and all(pack_id is not None for pack_id in pack_ids):
-            current_pack_ids = set(pack_ids)
+            membership = self._pack_memberships[system_id].observe(
+                frozenset(pack_ids),
+                confirm_removals=requires_stable_pack_membership(
+                    self._models.get(system_id)
+                ),
+            )
             for pack_id in tuple(self._pack_values[system_id]):
-                if pack_id not in current_pack_ids:
+                if pack_id not in membership:
                     del self._pack_values[system_id][pack_id]
         for raw_pack in raw_packs:
             if not isinstance(raw_pack, Mapping):
