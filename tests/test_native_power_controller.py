@@ -286,6 +286,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.device_ready)
         self.assertTrue(result.transport_available)
         self.assertTrue(result.pv_window_favorable)
+        self.assertGreater(target.maximum_charge_power_for(DEVICE), 0.0)
 
     def test_maintenance_input_fails_closed_without_native_state(self):
         target = runtime()
@@ -298,6 +299,64 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.soc_fresh)
         self.assertFalse(result.device_ready)
         self.assertFalse(result.transport_available)
+
+    async def test_per_device_command_targets_configured_non_selected_system(self):
+        target = runtime()
+        second_id = "cloud_mqtt:main-2"
+        identity = NativeDeviceIdentity(
+            ZendureTransport.CLOUD_MQTT,
+            device_id="main-2",
+            product_id="product-a",
+            product_model="SolarFlow 2400 AC",
+        )
+        second_device = MainDevice(
+            second_id,
+            "Second",
+            model="SolarFlow 2400 AC",
+            profile_key="SF2400AC",
+            selected_transport=ZendureTransport.CLOUD_MQTT,
+            available_transports=frozenset({ZendureTransport.CLOUD_MQTT}),
+            native_identities=(identity,),
+        )
+        target._inventory = DeviceInventory(
+            devices=(*target._inventory.devices.values(), second_device)
+        )
+        target._states[second_id] = state()
+        target._device_setups[second_id] = {
+            "setup_status": "configured",
+            "transport": ZendureTransport.CLOUD_MQTT.value,
+            "available_transports": [ZendureTransport.CLOUD_MQTT.value],
+        }
+        target._hems_gate.update(
+            second_id,
+            target._states[second_id].hems_active,
+            capability=VerificationLevel.VERIFIED,
+        )
+
+        result = await target.async_execute_device_command(
+            DeviceCommand(
+                "input",
+                input_limit_w=300,
+                output_limit_w=0,
+                should_write_mode=True,
+                should_write_input=True,
+                should_write_output=True,
+            ),
+            device_id=second_id,
+        )
+
+        self.assertEqual(result.status, CommandExecutionStatus.APPLIED)
+        self.assertEqual(target._transport.commands[-1].device_id, second_id)
+
+    async def test_per_device_command_blocks_unconfigured_non_selected_system(self):
+        target = runtime()
+        result = await target.async_execute_device_command(
+            DeviceCommand("input", input_limit_w=300),
+            device_id="cloud_mqtt:unknown",
+        )
+
+        self.assertEqual(result.status, CommandExecutionStatus.SKIPPED)
+        self.assertEqual(result.reason, "native_device_setup_incomplete")
 
     async def test_fresh_install_operates_natively_without_zha(self):
         target = runtime(migration_bound_device=None)

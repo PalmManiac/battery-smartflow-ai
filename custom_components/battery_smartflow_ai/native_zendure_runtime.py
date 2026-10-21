@@ -276,6 +276,42 @@ class NativeZendureRuntime:
             states.append(state)
         return tuple(states)
 
+    def fresh_device_state_map(self) -> dict[str, Any]:
+        """Return each discovered system's fresh state independently."""
+
+        return {
+            system_id: state
+            for system_id, device in sorted(self._inventory.devices.items())
+            if (state := self._states.get(system_id)) is not None
+            and _fresh_native_state(state, device=device)
+        }
+
+    def cell_voltage_minimum_by_device(self) -> dict[str, float]:
+        """Return fresh per-system minimum cell voltage readings."""
+
+        minimums: dict[str, float] = {}
+        for system_id, state in self.fresh_device_state_map().items():
+            values = []
+            for pack in state.packs:
+                measured = pack.cell_min_v
+                if measured is None or not measured.valid:
+                    continue
+                try:
+                    value = float(measured.value)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(value):
+                    values.append(value)
+            if values:
+                minimums[system_id] = min(values)
+        return minimums
+
+    @property
+    def discovered_device_ids(self) -> tuple[str, ...]:
+        """Return stable IDs for every discovered main system."""
+
+        return tuple(sorted(self._inventory.devices))
+
     def debug_state_snapshot(self) -> dict[str, Any]:
         """Return every normalized measurement for discovered systems and packs."""
 
@@ -336,9 +372,23 @@ class NativeZendureRuntime:
                          if item.candidate.candidate_id == self._selected_device), None) if self._bootstrap else None
         return native_capacity(self.selected_device_state(), expected)
 
+    def maximum_charge_power_for(self, device_id: str) -> float:
+        """Return the verified model limit for one configured system."""
+
+        device = self._inventory.devices.get(device_id)
+        if device is None:
+            return 0.0
+        transport = self._selected_control_transport(device).transport
+        identity = _identity_for_transport(device, transport)
+        matrix = resolve_zendure_device(identity) if identity is not None else None
+        if matrix is None or not matrix.native_control_approved:
+            return 0.0
+        return max(0.0, float(matrix.profile.capabilities.max_input_w))
+
     def full_charge_maintenance_input(
         self,
         *,
+        device_id: str | None = None,
         now: datetime,
         enabled: bool,
         pv_window_favorable: bool = False,
@@ -348,9 +398,23 @@ class NativeZendureRuntime:
     ) -> FullChargeMaintenanceInput | None:
         """Build one native-only maintenance observation for the core planner."""
 
-        if self._selected_device is None:
+        target_device_id = device_id or self._selected_device
+        if target_device_id is None:
             return None
-        state = self._states.get(self._selected_device)
+        state = self._states.get(target_device_id)
+        device = self._inventory.devices.get(target_device_id)
+        supported = bool(
+            device is not None
+            and device.control_state is not DeviceControlState.UNSUPPORTED
+        )
+        configured = bool(
+            self._setup_status(target_device_id, supported) == "configured"
+            and device is not None
+            and self._selected_control_transport(device).transport is not None
+        )
+        eligible_for_control = bool(
+            self._control_enabled and supported and configured
+        )
         if state is None:
             return FullChargeMaintenanceInput(
                 now=now,
@@ -366,7 +430,11 @@ class NativeZendureRuntime:
         online = state.online
         protection = state.protection_active
         hems = state.hems_active
-        authority = self._transport_router.snapshot
+        selected_transport = (
+            self._effective_control_transport(device).transport
+            if device is not None and eligible_for_control
+            else None
+        )
         return FullChargeMaintenanceInput(
             now=now,
             enabled=enabled,
@@ -378,16 +446,15 @@ class NativeZendureRuntime:
                 else None
             ),
             device_ready=bool(
-                self._control_enabled
+                eligible_for_control
                 and _fresh_at(online, now=now)
                 and online.value
                 and _fresh_at(protection, now=now)
                 and _fresh_at(hems, now=now)
             ),
             transport_available=bool(
-                authority.device_id == self._selected_device
-                and authority.transport is not None
-                and authority.synchronized
+                selected_transport is not None
+                and self._control_transport_ready(selected_transport)
             ),
             hems_active=bool(_fresh_at(hems, now=now) and hems.value),
             protection_active=bool(
@@ -1132,9 +1199,33 @@ class NativeZendureRuntime:
             return self._first_write_result
 
     async def async_execute_device_command(
-        self, command: DeviceCommand
+        self, command: DeviceCommand, *, device_id: str | None = None
     ) -> CommandExecutionResult:
-        """Route one neutral PowerController command through the native stack."""
+        """Route one neutral command through the native stack to its target."""
+
+        target_device_id = device_id or self._selected_device
+        if target_device_id is None:
+            return self._remember_command_result(_command_result(
+                CommandExecutionStatus.SKIPPED, "native_transport_not_ready"
+            ))
+        if (
+            target_device_id != self._selected_device
+            and target_device_id == self._migration_bound_device
+        ):
+            return self._remember_command_result(_command_result(
+                CommandExecutionStatus.SKIPPED, "native_migration_writer_conflict"
+            ))
+        if target_device_id != self._selected_device:
+            device = self._inventory.devices.get(target_device_id)
+            supported = bool(
+                device is not None
+                and device.control_state is not DeviceControlState.UNSUPPORTED
+            )
+            if self._setup_status(target_device_id, supported) != "configured":
+                return self._remember_command_result(_command_result(
+                    CommandExecutionStatus.SKIPPED,
+                    "native_device_setup_incomplete",
+                ))
 
         standby_confirmation = (
             command.metadata.get(SMART_MODE_STANDBY_CONFIRMED_METADATA_KEY) is True
@@ -1160,15 +1251,12 @@ class NativeZendureRuntime:
                     CommandExecutionStatus.SKIPPED,
                     "native_smart_mode_standby_superseded",
                 ))
-            if (
-                self._status != STATUS_OBSERVING
-                or self._selected_device is None
-            ):
+            if self._status != STATUS_OBSERVING:
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED, "native_transport_not_ready"
                 ))
-            state = self._states.get(self._selected_device)
-            source_device = self._inventory.devices.get(self._selected_device)
+            state = self._states.get(target_device_id)
+            source_device = self._inventory.devices.get(target_device_id)
             if (
                 state is None
                 or source_device is None
@@ -1180,7 +1268,7 @@ class NativeZendureRuntime:
             selection = self._effective_control_transport(source_device)
             control_transport = selection.transport
             self._transport_router.select(
-                self._selected_device,
+                target_device_id,
                 control_transport,
             )
             if control_transport is None:
@@ -1266,15 +1354,19 @@ class NativeZendureRuntime:
                     CommandExecutionStatus.SKIPPED, "native_setpoints_unchanged"
                 ))
             request = NativeCommandRequest(
-                self._selected_device, control_transport, final_command
+                target_device_id, control_transport, final_command
             )
             stop_requested_at = datetime.now(timezone.utc)
             context = NativeCommandContext(
                 inventory=DeviceInventory(devices=(active_device,)),
-                states={self._selected_device: state},
-                selected_device_id=self._selected_device,
+                states={target_device_id: state},
+                selected_device_id=target_device_id,
                 native_control_enabled=True,
                 available_transports=frozenset({control_transport}),
+                migration_blocked=(
+                    target_device_id != self._selected_device
+                    and target_device_id == self._migration_bound_device
+                ),
             )
             executor = None
             expected_status = None
@@ -1326,6 +1418,7 @@ class NativeZendureRuntime:
                 ))
             if (
                 not standby_confirmation
+                and target_device_id == self._selected_device
                 and self._should_delay_smart_mode_standby(
                     source_device,
                     control_transport,

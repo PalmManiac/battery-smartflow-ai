@@ -41,7 +41,7 @@ class FullChargeMaintenanceCoordinatorTests(unittest.TestCase):
         call = self.source[
             self.source.index("native_runtime.full_charge_maintenance_input("):
         ]
-        call = call[:call.index(")\n                if maintenance_input")]
+        call = call[:call.index("\n                    )")]
         self.assertIn("enabled=maintenance_enabled", call)
         before_call = self.source[:self.source.index(
             "native_runtime.full_charge_maintenance_input("
@@ -61,13 +61,14 @@ class FullChargeMaintenanceCoordinatorTests(unittest.TestCase):
 
     def test_maintenance_is_evaluated_before_strategy_and_charge_binding(self):
         maintenance = self.source.index(
-            "maintenance_decision = self._full_charge_maintenance.evaluate("
+            "system_decision = self._full_charge_maintenance.evaluate("
         )
         strategy = self.source.index("decision = self._engine.evaluate(ctx)")
         binding = self.source.index("decision = self._apply_charge_commit(")
         self.assertLess(maintenance, strategy)
         self.assertLess(strategy, binding)
         self.assertIn("ctx.soc_max = 100.0", self.source[maintenance:strategy])
+        self.assertIn("for system_id in native_runtime.discovered_device_ids:", self.source)
         self.assertIn(
             "soc_max = maintenance_application.effective_soc_max",
             self.source[strategy:binding],
