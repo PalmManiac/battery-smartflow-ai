@@ -799,34 +799,22 @@ class NativeZendureRuntime:
             statistics=self.statistics_state(),
             migration_bound_device=self._migration_bound_device,
         )
-        # Display the explicit user selection even while current telemetry is
-        # still being verified. Readiness and last observed source remain
-        # separate diagnostics; an unavailable Local path must not look like
-        # the configuration silently changed back to Cloud.
-        selected_transport = self._selected_local_transport()
-        if selected_transport is None or self._selected_device is None:
+        # Display each device's explicit user selection even while telemetry
+        # is being verified. Inventory identities can still carry the Cloud
+        # discovery transport, so using them directly makes configured
+        # secondary systems appear to have silently fallen back to Cloud.
+        devices = tuple(sorted(self._inventory.devices.items()))
+        if not devices:
             return overview
-        selected_index = next(
-            (
-                index
-                for index, (system_id, _device) in enumerate(
-                    sorted(self._inventory.devices.items())
-                )
-                if system_id == self._selected_device
-            ),
-            None,
-        )
-        if selected_index is None:
-            return overview
-        return tuple(
-            with_control_state(
-                replace(item, selected_transport=selected_transport),
-                self._hardware_control_state(),
-            )
-            if index == selected_index
-            else item
-            for index, item in enumerate(overview)
-        )
+        displayed = []
+        for (system_id, device), item in zip(devices, overview):
+            selected_transport = self._selected_control_transport(device).transport
+            if selected_transport is not None:
+                item = replace(item, selected_transport=selected_transport)
+            if system_id == self._selected_device:
+                item = with_control_state(item, self._hardware_control_state())
+            displayed.append(item)
+        return tuple(displayed)
 
     def restore_statistics(self, data: Any) -> None:
         """Restore locally accumulated, per-device lifetime statistics."""
