@@ -31,6 +31,9 @@ from custom_components.battery_smartflow_ai.hardware.zendure.cloud import (
 from custom_components.battery_smartflow_ai.hardware.zendure.normalizer import (
     ZendureCloudNormalizer,
 )
+from custom_components.battery_smartflow_ai.hardware.zendure.privacy import (
+    public_device_id,
+)
 from custom_components.battery_smartflow_ai.hardware.zendure.zensdk import (
     ZenSdkReadAttempt,
     ZenSdkReadResult,
@@ -161,6 +164,60 @@ async def make_bootstrap(
 
 
 class ZenSdkReadTests(unittest.IsolatedAsyncioTestCase):
+    async def test_cloud_debug_diagnostics_include_safe_message_trace(self):
+        observed_at = datetime(2026, 10, 22, 10, 15, tzinfo=timezone.utc)
+        raw_device_id = "cloud_mqtt:private-device-id"
+        runtime = NativeZendureRuntime(
+            SimpleNamespace(),
+            app_token="configured",
+            selected_device=None,
+            notify=lambda: None,
+        )
+        runtime._transport = SimpleNamespace(
+            state=SimpleNamespace(value="connected"),
+            connection_variant="read_only",
+            connection_phase="connected",
+            connection_diagnostics={},
+            command_diagnostics={"commands": []},
+            last_message_at=observed_at,
+            diagnostic_message_count=1,
+            diagnostic_messages_dropped=0,
+            device_states={
+                raw_device_id: SimpleNamespace(
+                    last_message_at=observed_at,
+                    online=True,
+                    property_updated_at={"electricLevel": observed_at},
+                )
+            },
+            diagnostic_messages=(
+                {
+                    "received_at": observed_at,
+                    "device_id": public_device_id(raw_device_id),
+                    "topic_pattern": "root/<product>/<device>/properties/report",
+                    "state_message": True,
+                    "property_names": ["electricLevel"],
+                },
+            ),
+        )
+
+        diagnostics = runtime.diagnostic_data()
+
+        cloud = diagnostics["cloud_mqtt"]
+        self.assertEqual(
+            cloud["devices"][0]["property_updated_at"]["electricLevel"],
+            "2026-10-22T10:15:00Z",
+        )
+        self.assertEqual(
+            cloud["recent_messages"][0]["topic_pattern"],
+            "root/<product>/<device>/properties/report",
+        )
+        self.assertEqual(cloud["recent_message_count_total"], 1)
+        self.assertEqual(cloud["recent_messages_dropped"], 0)
+        self.assertEqual(
+            cloud["recent_messages"][0]["device_id"], "ZD_DEVICE_A1"
+        )
+        self.assertNotIn(raw_device_id, repr(diagnostics))
+
     async def test_runtime_loads_only_valid_per_device_zensdk_addresses(self):
         runtime = NativeZendureRuntime(
             SimpleNamespace(),

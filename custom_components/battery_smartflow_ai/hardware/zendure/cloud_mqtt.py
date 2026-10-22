@@ -35,7 +35,7 @@ from .cloud_mqtt_commands import (
     CloudPropertyWrite,
     ZendureCloudCommandAdapter,
 )
-from .privacy import ZendureDiagnosticSanitizer
+from .privacy import ZendureDiagnosticSanitizer, public_device_id
 
 CLOUD_STATE_METADATA_KEYS = frozenset(
     {
@@ -55,6 +55,8 @@ CLOUD_STATE_METADATA_KEYS = frozenset(
 
 _LOGGER = logging.getLogger(__name__)
 _MAX_RETAINED_MESSAGES = 10_000
+_MAX_RECENT_DIAGNOSTIC_MESSAGES = 256
+_MAX_DIAGNOSTIC_PROPERTY_NAMES = 100
 _COMMAND_READBACK_TIMEOUT_SECONDS = 15.0
 _SUBSCRIPTION_ACK_TIMEOUT_SECONDS = 5.0
 
@@ -180,6 +182,10 @@ class ZendureCloudMqttTransport:
         self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._reconnect_delays = reconnect_delays
         self._messages: deque[CloudMqttMessage] = deque(maxlen=max_messages)
+        self._diagnostic_messages: deque[dict[str, Any]] = deque(
+            maxlen=_MAX_RECENT_DIAGNOSTIC_MESSAGES
+        )
+        self._diagnostic_message_count = 0
         self._state = ConnectionState.DISCONNECTED
         self._session: CloudMqttSession | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -239,6 +245,33 @@ class ZendureCloudMqttTransport:
     @property
     def device_states(self) -> Mapping[str, CloudMqttDeviceState]:
         return dict(self._devices)
+
+    @property
+    def diagnostic_messages(self) -> tuple[dict[str, Any], ...]:
+        """Return a bounded metadata-only trace of recently received packets."""
+
+        return tuple(
+            {
+                **item,
+                "property_names": list(item["property_names"]),
+            }
+            for item in self._diagnostic_messages
+        )
+
+    @property
+    def diagnostic_message_count(self) -> int:
+        """Return the total number of packets seen by this transport."""
+
+        return self._diagnostic_message_count
+
+    @property
+    def diagnostic_messages_dropped(self) -> int:
+        """Return how many old packets fell out of the bounded trace."""
+
+        return max(
+            0,
+            self._diagnostic_message_count - len(self._diagnostic_messages),
+        )
 
     @property
     def command_diagnostics(self) -> Mapping[str, Any]:
@@ -599,6 +632,34 @@ class ZendureCloudMqttTransport:
         )
         self._messages.append(message)
         state_message = is_zendure_state_message(message)
+        property_names = sorted(_property_names(parsed, topic=topic))
+        self._diagnostic_message_count += 1
+        self._diagnostic_messages.append(
+            {
+                "received_at": received_at,
+                "device_id": (
+                    public_device_id(candidate_id)
+                    if candidate_id is not None
+                    else None
+                ),
+                "topic_pattern": _diagnostic_topic_pattern(
+                    topic,
+                    candidate_id=candidate_id,
+                    routes=self._routes,
+                ),
+                "payload_format": payload_format,
+                "known_topic": known_topic,
+                "state_message": state_message,
+                "retained": retained,
+                "property_names": property_names[
+                    :_MAX_DIAGNOSTIC_PROPERTY_NAMES
+                ],
+                "property_name_count": len(property_names),
+                "property_names_truncated": (
+                    len(property_names) > _MAX_DIAGNOSTIC_PROPERTY_NAMES
+                ),
+            }
+        )
         if state_message:
             self._last_message_at = received_at
         if candidate_id is not None and state_message:
@@ -781,6 +842,52 @@ def _property_names(value: Any, *, topic: str = "") -> set[str]:
             if name not in CLOUD_STATE_METADATA_KEYS
         }
     return set()
+
+
+def _diagnostic_topic_pattern(
+    topic: str,
+    *,
+    candidate_id: str | None,
+    routes: list[tuple[str, str, str | None]],
+) -> str:
+    """Describe a received topic without exporting account or device IDs."""
+
+    segments = [part for part in topic.split("/") if part]
+    if candidate_id is not None:
+        for device_id, route_candidate_id, _product_id in routes:
+            if route_candidate_id != candidate_id:
+                continue
+            try:
+                device_index = segments.index(device_id)
+            except ValueError:
+                continue
+            if segments and segments[0] == "iot":
+                prefix = "iot"
+            elif topic.startswith("/"):
+                prefix = "slash"
+            else:
+                prefix = "root"
+            suffix = "/".join(segments[device_index + 1 :]) or "<topic>"
+            return f"{prefix}/<product>/<device>/{suffix}"
+
+    category = next(
+        (
+            suffix.lstrip("/")
+            for suffix in (
+                "/properties/read/reply",
+                "/properties/report",
+                "/properties/write/reply",
+                "/properties/energy",
+                "/function/invoke/reply",
+                "/event/error",
+                "/event/device",
+                "/state",
+            )
+            if topic.rstrip("/").endswith(suffix)
+        ),
+        "other",
+    )
+    return f"unrouted/{category}"
 
 
 def _online_value(value: Any) -> bool | None:

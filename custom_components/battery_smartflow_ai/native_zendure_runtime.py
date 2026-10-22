@@ -2188,9 +2188,21 @@ class NativeZendureRuntime:
                     "last_message_at": state.last_message_at,
                     "online": state.online,
                     "property_count": len(state.property_updated_at),
+                    "property_updated_at": dict(
+                        sorted(state.property_updated_at.items())
+                    ),
                 }
                 for candidate_id, state in sorted(device_states.items())
             ],
+            "recent_message_count_total": getattr(
+                transport, "diagnostic_message_count", 0
+            ),
+            "recent_messages_dropped": getattr(
+                transport, "diagnostic_messages_dropped", 0
+            ),
+            "recent_messages": list(
+                getattr(transport, "diagnostic_messages", ())
+            ),
         }
 
     def _zensdk_health(self, candidate_id: str, now: datetime) -> dict[str, Any]:
