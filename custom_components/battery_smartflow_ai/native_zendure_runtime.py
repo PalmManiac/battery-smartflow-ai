@@ -71,6 +71,7 @@ from .native_command_verification import (
     EffectStatus,
     NativeCommandVerificationManager,
 )
+from .native_config_ui import native_serial_suffix
 from .native_device_command_gate import (
     NativeCommandContext,
     NativeCommandRequest,
@@ -662,6 +663,9 @@ class NativeZendureRuntime:
                         {
                             "id": pack.public_id,
                             "model": pack.pack_model,
+                            "serial_suffix": native_serial_suffix(
+                                pack.serial_number
+                            ),
                         }
                         for pack in item.packs
                     ],

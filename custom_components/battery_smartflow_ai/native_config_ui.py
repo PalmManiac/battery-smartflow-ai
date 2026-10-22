@@ -30,6 +30,15 @@ def native_device_name(display_name: Any, model: Any) -> str:
     return f"{name} – {product_model}"
 
 
+def native_serial_suffix(serial_number: Any) -> str | None:
+    """Return only the final four alphanumeric serial characters for display."""
+
+    normalized = "".join(
+        character for character in str(serial_number or "") if character.isalnum()
+    )
+    return normalized[-4:] if len(normalized) >= 4 else None
+
+
 def native_device_label(
     display_name: Any,
     model: Any,

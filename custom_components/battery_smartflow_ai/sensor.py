@@ -70,7 +70,7 @@ from .diagnostic_values import (
     zendure_documented_status_state,
 )
 from .hardware.zendure.normalizer import RAW_MAIN_DIAGNOSTICS
-from .native_config_ui import native_device_name
+from .native_config_ui import native_device_name, native_serial_suffix
 from .native_device_overview import (
     NATIVE_HARDWARE_DISPLAY_GRACE_SECONDS,
     NativeDisplayValueGrace,
@@ -2201,9 +2201,17 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
                 native_device_name(parent.display_name, parent.model)
                 if parent is not None else "Zendure"
             )
+            serial_suffix = native_serial_suffix(
+                item.serial_number if item else None
+            )
+            serial_label = f" · SN {serial_suffix}" if serial_suffix else ""
             self._attr_device_info = DeviceInfo(
                 identifiers={native_pack_device_identifier(public_id)},
-                name=f"{parent_name} {_battery_pack_label(coordinator.hass.config.language)} {pack_number}",
+                name=(
+                    f"{parent_name} "
+                    f"{_battery_pack_label(coordinator.hass.config.language)} "
+                    f"{pack_number}{serial_label}"
+                ),
                 manufacturer="Zendure",
                 model=(item.pack_model or "Unknown battery pack") if item else None,
                 serial_number=item.serial_number if item else None,
