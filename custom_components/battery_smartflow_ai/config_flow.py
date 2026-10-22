@@ -332,7 +332,11 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Discover first; native setup never requires entities from another integration."""
         errors = {}
         if user_input is not None:
-            token = resolve_app_token_input(user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN), None)
+            existing_options = dict(getattr(self, "_native_options", {}))
+            token = resolve_app_token_input(
+                user_input.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
+                existing_options.get(CONF_NATIVE_ZENDURE_APP_TOKEN),
+            )
             try:
                 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -356,8 +360,41 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 self._native_options[CONF_NATIVE_ZENDURE_APP_TOKEN] = token
                 self._native_setup_map = reconcile_device_setups(
-                    self._native_bootstrap.devices
+                    self._native_bootstrap.devices,
+                    self._native_options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+                    legacy_selected_device=self._native_options.get(
+                        CONF_NATIVE_ZENDURE_SELECTED_DEVICE
+                    ),
+                    legacy_transport=self._native_options.get(
+                        CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT
+                    ),
                 )
+                if getattr(self, "_native_reconfigure", False):
+                    self._native_reconfigure_device_ids = [
+                        item.candidate.candidate_id
+                        for item in self._native_bootstrap.devices
+                        if item.candidate.supported
+                    ]
+                    self._native_reconfigure_index = 0
+                    if not self._native_reconfigure_device_ids:
+                        return self.async_show_form(
+                            step_id="native_login",
+                            errors={"base": "no_supported_devices"},
+                            data_schema=vol.Schema(
+                                {
+                                    vol.Optional(
+                                        CONF_NATIVE_ZENDURE_APP_TOKEN,
+                                        default=STORED_APP_TOKEN_MASK,
+                                    ): selector.TextSelector(
+                                        selector.TextSelectorConfig(
+                                            type=selector.TextSelectorType.PASSWORD
+                                        )
+                                    )
+                                }
+                            ),
+                        )
+                else:
+                    self._native_reconfigure_device_ids = None
                 return await self.async_step_native_device()
             except ZendureCloudError as error:
                 errors["base"] = error.reason
@@ -366,7 +403,17 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="native_login", errors=errors,
             data_schema=vol.Schema({
-                vol.Required(CONF_NATIVE_ZENDURE_APP_TOKEN): selector.TextSelector(
+                (
+                    vol.Optional(
+                        CONF_NATIVE_ZENDURE_APP_TOKEN,
+                        default=STORED_APP_TOKEN_MASK,
+                    )
+                    if getattr(self, "_native_reconfigure", False)
+                    and getattr(self, "_native_options", {}).get(
+                        CONF_NATIVE_ZENDURE_APP_TOKEN
+                    )
+                    else vol.Required(CONF_NATIVE_ZENDURE_APP_TOKEN)
+                ): selector.TextSelector(
                     selector.TextSelectorConfig(type=selector.TextSelectorType.PASSWORD)
                 ),
             }),
@@ -376,17 +423,27 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         devices = self._native_bootstrap.devices
         if getattr(self, "_native_setup_map", None) is None:
             self._native_setup_map = reconcile_device_setups(devices)
-        pending = next(
-            (
-                item.candidate.candidate_id
-                for item in devices
-                if item.candidate.supported
-                and self._native_setup_map["devices"].get(
-                    item.candidate.candidate_id, {}
-                ).get("setup_status") != SETUP_COMPLETE
-            ),
-            None,
-        )
+        if getattr(self, "_native_reconfigure_device_ids", None) is not None:
+            pending = (
+                self._native_reconfigure_device_ids[
+                    self._native_reconfigure_index
+                ]
+                if self._native_reconfigure_index
+                < len(self._native_reconfigure_device_ids)
+                else None
+            )
+        else:
+            pending = next(
+                (
+                    item.candidate.candidate_id
+                    for item in devices
+                    if item.candidate.supported
+                    and self._native_setup_map["devices"].get(
+                        item.candidate.candidate_id, {}
+                    ).get("setup_status") != SETUP_COMPLETE
+                ),
+                None,
+            )
         errors = {}
         if user_input is not None:
             selected = next(
@@ -435,9 +492,14 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         wifi_ssid = str(user_input.get(
                             CONF_NATIVE_ZENDURE_LEGACY_WIFI_SSID, ""
                         )).strip()
-                        wifi_password = str(user_input.get(
-                            CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD, ""
-                        ))
+                        wifi_password = resolve_app_token_input(
+                            user_input.get(
+                                CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD
+                            ),
+                            self._native_options.get(
+                                CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD
+                            ),
+                        )
                         if local_port != 1883:
                             errors["base"] = "legacy_port_required"
                         elif not wifi_ssid or not wifi_password:
@@ -474,7 +536,14 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             step_id="native_device",
                             errors=errors,
                             data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
-                                devices, target_device_id=pending
+                                devices,
+                                bool(
+                                    getattr(self, "_native_options", {}).get(
+                                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                                    )
+                                ),
+                                getattr(self, "_native_options", None),
+                                target_device_id=pending,
                             ),
                             description_placeholders={
                                 "device_summary": ZendureSmartFlowOptionsFlow._native_device_summary(
@@ -494,17 +563,26 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         clear=clear_zensdk_ip,
                         clear_blank=True,
                     )
-                    self._native_options.setdefault(
-                        CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
-                        selected.candidate.candidate_id,
+                    active_device_id = self._native_options.get(
+                        CONF_NATIVE_ZENDURE_SELECTED_DEVICE
                     )
-                    self._native_options.setdefault(
-                        CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
-                        chosen_transport.value,
-                    )
-                    self._native_options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
-                        user_input.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
-                    )
+                    if not active_device_id:
+                        active_device_id = selected.candidate.candidate_id
+                        self._native_options[
+                            CONF_NATIVE_ZENDURE_SELECTED_DEVICE
+                        ] = active_device_id
+                    if selected.candidate.candidate_id == active_device_id:
+                        self._native_options[
+                            CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT
+                        ] = chosen_transport.value
+                        if not getattr(self, "_native_reconfigure", False):
+                            self._native_options[
+                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED
+                            ] = bool(
+                                user_input.get(
+                                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                                )
+                            )
                     for key in (
                         CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
                         CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
@@ -514,7 +592,61 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
                     ):
                         if key in user_input:
-                            self._native_options[key] = user_input[key]
+                            if key in {
+                                CONF_NATIVE_ZENDURE_LOCAL_MQTT_PASSWORD,
+                                CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
+                            }:
+                                self._native_options[key] = resolve_app_token_input(
+                                    user_input[key],
+                                    self._native_options.get(key),
+                                )
+                            else:
+                                self._native_options[key] = user_input[key]
+                    if getattr(self, "_native_reconfigure_device_ids", None) is not None:
+                        self._native_reconfigure_index += 1
+                        if self._native_reconfigure_index < len(
+                            self._native_reconfigure_device_ids
+                        ):
+                            next_id = self._native_reconfigure_device_ids[
+                                self._native_reconfigure_index
+                            ]
+                            return self.async_show_form(
+                                step_id="native_device",
+                                data_schema=(
+                                    ZendureSmartFlowOptionsFlow._native_device_schema(
+                                        devices,
+                                        bool(
+                                            self._native_options.get(
+                                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                                                False,
+                                            )
+                                        ),
+                                        self._native_options,
+                                        target_device_id=next_id,
+                                    )
+                                ),
+                                description_placeholders={
+                                    "device_summary": (
+                                        ZendureSmartFlowOptionsFlow._native_device_summary(
+                                            devices
+                                        )
+                                    )
+                                },
+                            )
+                        self._native_options[
+                            CONF_NATIVE_ZENDURE_DEVICE_SETUPS
+                        ] = self._native_setup_map
+                        entry = self._migration_entry
+                        self._user_input["connection_type"] = "native"
+                        self._user_input.setdefault(
+                            CONF_DEVICE_PROFILE, profile.profile_key
+                        )
+                        return self.async_update_and_abort(
+                            entry,
+                            data=self._user_input,
+                            options=self._native_options,
+                            reason="reconfigure_success",
+                        )
                     if setup_is_complete(self._native_setup_map):
                         self._native_options[
                             CONF_NATIVE_ZENDURE_DEVICE_SETUPS
@@ -564,7 +696,14 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="native_device", errors=errors,
             data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
-                devices, target_device_id=pending
+                devices,
+                bool(
+                    getattr(self, "_native_options", {}).get(
+                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                    )
+                ),
+                getattr(self, "_native_options", None),
+                target_device_id=pending,
             ),
             description_placeholders={
                 "device_summary": (
@@ -685,6 +824,10 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._native_options = dict(entry.options)
             return await self.async_step_native_login()
 
+        self._migration_entry = entry
+        self._native_options = dict(entry.options)
+        self._native_reconfigure = True
+
         if user_input is not None:
             self._user_input = dict(entry.data)
             self._user_input.update(user_input)
@@ -756,6 +899,11 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
             if not errors:
+                if getattr(self, "_native_reconfigure", False):
+                    self._user_input = cleaned
+                    self._native_options = dict(entry.options)
+                    self._native_options.update(options_updates)
+                    return await self.async_step_native_login()
                 # The entry update listener reloads the integration after the
                 # data/options change, so use the non-reloading flow helper.
                 return self.async_update_and_abort(
@@ -1308,10 +1456,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None):
         self._working_options = {}
-        native_configured = bool(
-            self.config_entry.options.get(CONF_NATIVE_ZENDURE_APP_TOKEN)
-            or self.config_entry.data.get("connection_type") == "native"
-        )
         return self.async_show_menu(
             step_id="init",
             menu_options=[
@@ -1319,7 +1463,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "expert",
                 "dashboard",
                 "smart_mode",
-                "native_zendure",
                 "training",
                 "debug",
             ],
@@ -1843,12 +1986,11 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         else ""
                     ),
                 ): selector.TextSelector(),
-            })
-            if target_device_id is None:
-                schema[vol.Optional(
+                vol.Optional(
                     CONF_NATIVE_ZENDURE_ZENSDK_IP_CLEAR,
                     default=False,
-                )] = selector.BooleanSelector()
+                ): selector.BooleanSelector(),
+            })
         if any(
             preferred_local_transport(item.candidate.identity)
             is ZendureTransport.LOCAL_MQTT

@@ -21,6 +21,7 @@
       "timeout": "Zendure Cloud did not respond in time.",
       "invalid_response": "Zendure Cloud returned an unexpected response.",
       "no_devices": "No Zendure devices were found for this account.",
+      "no_supported_devices": "No supported Zendure systems were found for this account.",
       "no_mqtt_credentials": "Zendure did not return Cloud MQTT access data.",
       "duplicate_device_id": "Zendure returned duplicate device identities.",
       "incomplete_device": "Zendure returned an incomplete device record.",
@@ -297,7 +298,6 @@
           "expert": "Expert mode",
           "dashboard": "HEMS dashboard",
           "smart_mode": "Zendure Smart Mode",
-          "native_zendure": "Native Zendure",
           "training": "Regulation training",
           "debug": "Debug mode"
         }
