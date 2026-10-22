@@ -297,8 +297,9 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
         flow._native_bootstrap = await make_bootstrap()
         flow._native_options = {const.CONF_NATIVE_ZENDURE_APP_TOKEN: "private-test-token"}
-        menu = await flow.async_step_user()
-        self.assertEqual(menu["menu_options"][0], "native_login")
+        start = await flow.async_step_user()
+        self.assertEqual(start["step_id"], "native_login")
+        self.assertNotIn("menu_options", start)
         result = await flow.async_step_native_device({
             const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: "cloud_mqtt:device-1",
             const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: True,
@@ -338,12 +339,73 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(const.CONF_SOC_ENTITY, keys)
         self.assertEqual(entry.data[const.CONF_SOC_ENTITY], "sensor.old")
 
-    def test_external_pv_entity_remains_required_for_legacy_setup(self):
+    def test_new_setup_has_no_legacy_entity_selection_route(self):
         flow = load_flow_classes()()
         flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
-        schema = flow._base_schema().schema
-        pv_key = next(key for key in schema if key.schema == const.CONF_PV_ENTITY)
-        self.assertIsInstance(pv_key, vol.Required)
+        self.assertFalse(hasattr(flow, "async_step_legacy"))
+        select_source = (
+            Path(__file__).parents[1]
+            / "custom_components"
+            / "battery_smartflow_ai"
+            / "select.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("services.async_call", select_source)
+
+    async def test_legacy_reconfigure_converts_entry_and_prunes_battery_ids(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        entry = SimpleNamespace(
+            entry_id="old-entry",
+            data={
+                const.CONF_SOC_ENTITY: "sensor.old_soc",
+                const.CONF_AC_MODE_ENTITY: "select.old_mode",
+                const.CONF_INPUT_LIMIT_ENTITY: "number.old_input",
+                const.CONF_OUTPUT_LIMIT_ENTITY: "number.old_output",
+                const.CONF_NATIVE_PV_ENTITY: "sensor.old_native_pv",
+                const.CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY: "sensor.old_charge",
+                const.CONF_OFFGRID_MODE_ENTITY: "select.old_offgrid",
+                const.CONF_PV_ENTITY: "sensor.pv",
+                const.CONF_GRID_MODE: const.GRID_MODE_SINGLE,
+                const.CONF_GRID_POWER_ENTITY: "sensor.grid",
+            },
+            options={
+                const.CONF_DEVICE_PROFILE: "SF2400AC",
+                const.CONF_BATTERY_AC_POWER_ENTITY: "sensor.old_battery_power",
+                const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: False,
+                const.SETTING_LEARNED_PLANNING_ENABLED: True,
+                const.CONF_LOWEST_CELL_VOLTAGE_PACK_1: "sensor.old_cell",
+            },
+        )
+        flow._get_reconfigure_entry = lambda: entry
+        start = await flow.async_step_reconfigure()
+        self.assertEqual(start["step_id"], "native_login")
+        self.assertIs(flow._migration_entry, entry)
+
+        flow._user_input = dict(entry.data)
+        flow._user_input[const.CONF_DEVICE_PROFILE] = "SF2400AC"
+        flow._native_options = {
+            const.CONF_NATIVE_ZENDURE_APP_TOKEN: "new-token",
+            const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: False,
+        }
+        result = await flow.async_step_grid({})
+
+        self.assertEqual(result["type"], "abort")
+        self.assertEqual(result["entry"], entry)
+        self.assertEqual(result["data"]["connection_type"], "native")
+        self.assertNotIn(const.CONF_SOC_ENTITY, result["data"])
+        self.assertNotIn(const.CONF_AC_MODE_ENTITY, result["data"])
+        self.assertNotIn(const.CONF_INPUT_LIMIT_ENTITY, result["data"])
+        self.assertNotIn(const.CONF_OUTPUT_LIMIT_ENTITY, result["data"])
+        self.assertNotIn(const.CONF_NATIVE_PV_ENTITY, result["data"])
+        self.assertNotIn(const.CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY, result["data"])
+        self.assertNotIn(const.CONF_OFFGRID_MODE_ENTITY, result["data"])
+        self.assertNotIn(const.CONF_BATTERY_AC_POWER_ENTITY, result["options"])
+        self.assertEqual(result["data"][const.CONF_PV_ENTITY], "sensor.pv")
+        self.assertEqual(result["data"][const.CONF_GRID_POWER_ENTITY], "sensor.grid")
+        self.assertEqual(result["options"][const.CONF_NATIVE_ZENDURE_APP_TOKEN], "new-token")
+        self.assertTrue(result["options"][const.SETTING_LEARNED_PLANNING_ENABLED])
+        self.assertNotIn(const.CONF_DEVICE_PROFILE, result["options"])
+        self.assertNotIn(const.CONF_LOWEST_CELL_VOLTAGE_PACK_1, result["options"])
 
     def test_native_reconfiguration_keeps_pv_entity_optional(self):
         flow = load_flow_classes()()
