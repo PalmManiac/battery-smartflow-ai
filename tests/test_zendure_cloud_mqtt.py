@@ -292,6 +292,65 @@ class CloudMqttTransportTests(unittest.IsolatedAsyncioTestCase):
             {"socLevel", "solarInputPower", "hyperTmp"},
         )
 
+    async def test_diagnostic_trace_records_safe_topic_and_property_metadata(self):
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=self.factory,
+            clock=lambda: self.now,
+        )
+        await transport.async_start()
+        self.sessions[0].emit(
+            "/product-a/main-1/properties/report",
+            json.dumps(
+                {
+                    "properties": {
+                        "electricLevel": 55,
+                        "solarInputPower": 800,
+                    }
+                }
+            ).encode(),
+        )
+        await asyncio.sleep(0)
+
+        trace = transport.diagnostic_messages
+        self.assertEqual(len(trace), 1)
+        self.assertEqual(trace[0]["received_at"], self.now)
+        self.assertTrue(trace[0]["device_id"].startswith("device_"))
+        self.assertEqual(
+            trace[0]["topic_pattern"],
+            "slash/<product>/<device>/properties/report",
+        )
+        self.assertTrue(trace[0]["state_message"])
+        self.assertEqual(
+            trace[0]["property_names"],
+            ["electricLevel", "solarInputPower"],
+        )
+        self.assertNotIn("product-a", repr(trace))
+        self.assertNotIn("main-1", repr(trace))
+        self.assertNotIn("800", repr(trace))
+        await transport.async_stop()
+
+    async def test_diagnostic_trace_is_bounded(self):
+        transport = ZendureCloudMqttTransport(
+            self.data,
+            session_factory=self.factory,
+            clock=lambda: self.now,
+        )
+        await transport.async_start()
+        for value in range(300):
+            self.sessions[0].emit(
+                "/product-a/main-1/properties/report",
+                json.dumps({"properties": {"electricLevel": value}}).encode(),
+            )
+        await asyncio.sleep(0)
+
+        trace = transport.diagnostic_messages
+        self.assertEqual(len(trace), 256)
+        self.assertEqual(trace[-1]["property_names"], ["electricLevel"])
+        self.assertEqual(transport.diagnostic_message_count, 300)
+        self.assertEqual(transport.diagnostic_messages_dropped, 44)
+        await transport.async_stop()
+
     async def test_legacy_bridge_copy_is_not_counted_as_cloud_observation(self):
         transport = ZendureCloudMqttTransport(
             self.data, session_factory=self.factory, clock=lambda: self.now
