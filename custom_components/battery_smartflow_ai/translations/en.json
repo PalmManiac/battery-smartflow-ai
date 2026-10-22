@@ -175,7 +175,7 @@
         "data_description": {
           "native_zendure_selected_device": "Configure each supported main system in turn. Packs cannot be controlled independently; multi-device power regulation is not enabled in this release.",
           "native_zendure_control_transport": "Cloud is the recommended starting path for Legacy devices and works immediately after account discovery. Use Local MQTT only after the device itself sends current data to the local broker. ZenSDK remains recommended for supported newer systems.",
-          "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the selected supported communication path. Disable this switch to retain the established Z-HA control path.",
+          "native_zendure_control_enabled": "Enables BSFAI commands over the selected supported native communication path. When disabled, the Zendure connection remains read-only and no Home Assistant entity control is used.",
           "native_zendure_local_mqtt_server": "Shown only when the account contains a verified legacy family. The device is provisioned automatically on the first switch to Local MQTT unless this is explicitly skipped.",
           "native_zendure_local_mqtt_port": "Usually 1883 for a local unencrypted broker.",
           "native_zendure_local_mqtt_username": "Broker account used by BSFAI; it is kept private.",
@@ -350,7 +350,7 @@
         "data_description": {
           "native_zendure_selected_device": "Configure each supported main system in turn. Packs cannot be controlled independently; multi-device power regulation is not enabled in this release.",
           "native_zendure_control_transport": "Cloud is the recommended starting path for Legacy devices and works immediately after account discovery. Use Local MQTT only after the device itself sends current data to the local broker. ZenSDK remains recommended for supported newer systems.",
-          "native_zendure_control_enabled": "Explicitly transfers BSFAI command output from the Z-HA entities to the selected supported communication path.",
+          "native_zendure_control_enabled": "Enables BSFAI commands over the selected supported native communication path. When disabled, the Zendure connection remains read-only and no Home Assistant entity control is used.",
           "native_zendure_local_mqtt_server": "Address sent to the Legacy device over Bluetooth and used by BSFAI.",
           "native_zendure_local_mqtt_port": "Legacy devices use standard unencrypted port 1883.",
           "native_zendure_local_mqtt_username": "Broker account used only by BSFAI; BSFAI uses these credentials only for its own broker connection.",

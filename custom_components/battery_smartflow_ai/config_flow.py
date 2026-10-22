@@ -177,6 +177,23 @@ OPTIONAL_ENTITY_KEYS = (
     CONF_PV_FORECAST_TOMORROW_ENTITY,
 )
 
+# These belonged to the V5 single-device/Z-HA control model. Native V6 obtains
+# battery state and sends commands through its per-system device adapter.
+LEGACY_BATTERY_ENTITY_KEYS = (
+    CONF_SOC_ENTITY,
+    CONF_SOC_LIMIT_ENTITY,
+    CONF_PACK_CAPACITY_KWH,
+    CONF_BATTERY_AC_POWER_ENTITY,
+    CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
+    CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
+    CONF_NATIVE_PV_ENTITY,
+    CONF_AC_MODE_ENTITY,
+    CONF_INPUT_LIMIT_ENTITY,
+    CONF_OUTPUT_LIMIT_ENTITY,
+    CONF_OFFGRID_POWER_ENTITY,
+    CONF_OFFGRID_MODE_ENTITY,
+)
+
 
 def _normalize_optional_entity(value: Any) -> str | None:
     """Normalize optional entity values stored by older config flows.
@@ -309,19 +326,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 5
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
-        return self.async_show_menu(step_id="user", menu_options=["native_login", "legacy"])
-
-    async def async_step_legacy(self, user_input: dict[str, Any] | None = None):
-        if user_input is not None:
-            self._user_input = dict(user_input)
-            return await self.async_step_grid()
-
-        return self.async_show_form(
-            step_id="legacy",
-            data_schema=self._base_schema(
-                forecast_options=await self._forecast_options()
-            ),
-        )
+        return await self.async_step_native_login(user_input)
 
     async def async_step_native_login(self, user_input=None):
         """Discover first; native setup never requires entities from another integration."""
@@ -346,7 +351,10 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._native_bootstrap = await ZendureCloudClient(
                     post_json
                 ).async_discover(token)
-                self._native_options = {CONF_NATIVE_ZENDURE_APP_TOKEN: token}
+                self._native_options = dict(
+                    getattr(self, "_native_options", {})
+                )
+                self._native_options[CONF_NATIVE_ZENDURE_APP_TOKEN] = token
                 self._native_setup_map = reconcile_device_setups(
                     self._native_bootstrap.devices
                 )
@@ -494,13 +502,8 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
                         chosen_transport.value,
                     )
-                    self._native_options.setdefault(
-                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
-                        bool(
-                            user_input.get(
-                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
-                            )
-                        ),
+                    self._native_options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
+                        user_input.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
                     )
                     for key in (
                         CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
@@ -530,10 +533,13 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 CONF_NATIVE_ZENDURE_LEGACY_WIFI_PASSWORD,
                             }
                         })
-                        self._user_input = {
-                            "connection_type": "native",
-                            CONF_DEVICE_PROFILE: profile.profile_key,
-                        }
+                        self._user_input = dict(
+                            getattr(self, "_migration_entry", None).data
+                            if getattr(self, "_migration_entry", None) is not None
+                            else {}
+                        )
+                        self._user_input["connection_type"] = "native"
+                        self._user_input[CONF_DEVICE_PROFILE] = profile.profile_key
                         return await self.async_step_native_external()
                     next_id = next(
                         item.candidate.candidate_id for item in devices
@@ -568,13 +574,16 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_native_external(self, user_input=None):
+        migration_entry = getattr(self, "_migration_entry", None)
         if user_input is not None:
             self._user_input.update(user_input)
             return await self.async_step_grid()
         return self.async_show_form(
             step_id="native_external",
             data_schema=self._base_schema(
-                native=True, forecast_options=await self._forecast_options()
+                migration_entry,
+                native=True,
+                forecast_options=await self._forecast_options(),
             ),
         )
 
@@ -627,6 +636,30 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._native_options = getattr(self, "_native_options", {})
                 self._native_options[shelly_password_key] = shelly_password
 
+            migration_entry = getattr(self, "_migration_entry", None)
+            if not errors and migration_entry is not None:
+                # Preserve the config entry identity and non-hardware inputs.
+                # Home Assistant state storage is keyed by entry_id, so this
+                # also retains learned state and accumulated statistics.
+                for key in LEGACY_BATTERY_ENTITY_KEYS:
+                    self._user_input.pop(key, None)
+                self._user_input["connection_type"] = "native"
+
+                options = dict(migration_entry.options)
+                options.update(getattr(self, "_native_options", {}))
+                for key in (
+                    *LEGACY_BATTERY_ENTITY_KEYS,
+                    *LOWEST_CELL_VOLTAGE_CONFIG_KEYS,
+                ):
+                    options.pop(key, None)
+                options.pop(CONF_DEVICE_PROFILE, None)
+                return self.async_update_and_abort(
+                    migration_entry,
+                    data=self._user_input,
+                    options=options,
+                    reason="reconfigure_success",
+                )
+
             if not errors:
                 return self.async_create_entry(
                     title="Battery SmartFlow AI",
@@ -636,12 +669,21 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="grid",
-            data_schema=self._grid_schema(grid_mode),
+            data_schema=self._grid_schema(
+                grid_mode, getattr(self, "_migration_entry", None)
+            ),
             errors=errors,
         )
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None):
         entry = self._get_reconfigure_entry()
+
+        if entry.data.get("connection_type") != "native":
+            # Convert the existing config entry in place so its options and
+            # entry-id-backed runtime store survive the move from V5 controls.
+            self._migration_entry = entry
+            self._native_options = dict(entry.options)
+            return await self.async_step_native_login()
 
         if user_input is not None:
             self._user_input = dict(entry.data)
@@ -1069,7 +1111,10 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             hardware_keys = {
                 CONF_DEVICE_PROFILE, CONF_SOC_ENTITY, CONF_SOC_LIMIT_ENTITY,
                 CONF_PACK_CAPACITY_KWH, CONF_NATIVE_PV_ENTITY,
-                CONF_BATTERY_AC_POWER_ENTITY, CONF_AC_MODE_ENTITY,
+                CONF_BATTERY_AC_POWER_ENTITY,
+                CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
+                CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
+                CONF_AC_MODE_ENTITY,
                 CONF_INPUT_LIMIT_ENTITY, CONF_OUTPUT_LIMIT_ENTITY,
                 CONF_OFFGRID_POWER_ENTITY, CONF_OFFGRID_MODE_ENTITY,
             }

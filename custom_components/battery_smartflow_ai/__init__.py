@@ -213,6 +213,33 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
+    migration_notification_id = f"{DOMAIN}_native_v6_migration_{entry.entry_id}"
+    try:
+        from homeassistant.components import persistent_notification
+    except ImportError:
+        persistent_notification = None
+
+    if persistent_notification is not None:
+        if entry.data.get("connection_type") == "native":
+            persistent_notification.async_dismiss(hass, migration_notification_id)
+        else:
+            persistent_notification.async_create(
+                hass,
+                "This entry still uses the V5 Home Assistant battery controls. V6 no "
+                "longer sends commands through those entities. Open the integration "
+                "entry and choose Reconfigure to connect Zendure natively. Your "
+                "price, PV, grid, Shelly, options, and saved runtime data are kept "
+                "during the guided conversion.",
+                title="Battery SmartFlow AI: V6 reconfiguration required",
+                notification_id=migration_notification_id,
+            )
+    if entry.data.get("connection_type") != "native":
+        _LOGGER.warning(
+            "Legacy Battery SmartFlow AI entry %s is read-only in V6; use the "
+            "entry reconfigure flow to connect Zendure natively",
+            entry.entry_id,
+        )
+
     handoff: DebugRecorderHandoff = hass.data.setdefault(
         f"{DOMAIN}_debug_recorder_handoff", DebugRecorderHandoff()
     )

@@ -17,7 +17,6 @@ from homeassistant.helpers.event import (
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .ac_mode_options import canonical_ac_mode, resolve_ac_mode_option
 from .ai_status import map_ai_status
 from .soc_plausibility import SocAccountingDecision, evaluate_soc_for_accounting
 from .const import (
@@ -226,7 +225,7 @@ from .core.models import (
     ZendureTransport,
     ValueValidity,
 )
-from .core.ports import Clock, DeviceBackend, DeviceBackendExecutionError
+from .core.ports import Clock, DeviceBackendExecutionError
 from .regulation_power_controller import (
     RegulationPowerController,
     build_regulation_power_config,
@@ -234,10 +233,6 @@ from .regulation_power_controller import (
 from .feedforward_shadow import evaluate_feedforward_shadow
 from .device_command import DeviceCommandBuilder, clamp_number_power_request
 from .command_execution_state import confirmed_command_state_updates
-from .adapters.home_assistant.device_backend import (
-    HomeAssistantEntityBackend,
-    uses_native_device_path,
-)
 from .adapters.home_assistant.clock import HomeAssistantClock
 from .adapters.home_assistant.state_store import HomeAssistantStateStore
 from .v5_migration import migrate_persisted_v47_state
@@ -608,12 +603,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         
         self._device_command_builder = DeviceCommandBuilder()
-        self._device_backend: DeviceBackend = HomeAssistantEntityBackend(
-            capabilities=self._device_profile.capabilities,
-            set_ac_mode=self._set_ac_mode,
-            set_input_limit=self._set_input_limit,
-            set_output_limit=self._set_output_limit,
-        )
         self._command_effectiveness_config = CommandEffectivenessConfig()
         self._clock = clock or HomeAssistantClock()
         self._grid_sensor_gap_grace = GridSensorGapGrace(
@@ -2924,62 +2913,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def set_manual_action(self, action: str) -> None:
         self.runtime_mode["manual_action"] = action
         
-    def _prepare_number_write(
-        self,
-        *,
-        entity_id: str,
-        requested_w: float,
-        diagnostic_prefix: str,
-    ) -> int:
-        """Clamp a power request to the Number entity's live limits.
-
-        V4.3.0-dev5.7:
-        Some devices may narrow their Number entity range dynamically.
-        Sending a value above that live range can be rejected by Home Assistant
-        or ignored by the device.
-
-        Store both the original request and the effective value for diagnostics.
-        """
-
-        requested = max(0.0, float(requested_w or 0.0))
-        min_value = _to_float(
-            self._attr(entity_id, "min"),
-            None,
-        )
-        max_value = _to_float(
-            self._attr(entity_id, "max"),
-            None,
-        )
-
-        effective_int = clamp_number_power_request(
-            requested,
-            min_value=min_value,
-            max_value=max_value,
-        )
-        requested_int = int(round(requested, 0))
-
-        self._persist[
-            f"{diagnostic_prefix}_requested_w"
-        ] = requested_int
-
-        self._persist[
-            f"{diagnostic_prefix}_effective_w"
-        ] = effective_int
-
-        self._persist[
-            f"{diagnostic_prefix}_entity_min_w"
-        ] = min_value
-
-        self._persist[
-            f"{diagnostic_prefix}_entity_max_w"
-        ] = max_value
-
-        self._persist[
-            f"{diagnostic_prefix}_clamped"
-        ] = effective_int != requested_int
-
-        return effective_int
-
     def _store_command_execution_result(
         self,
         result: CommandExecutionResult,
@@ -3015,21 +2948,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 self._persist.update(
                     confirmed_command_state_updates(command, result)
                 )
-            elif uses_native_device_path(
-                connection_type=self.entry.data.get("connection_type", ""),
-            ):
-                # V6 native entries use only the native device path. If that
-                # path cannot accept a command, never fall back to legacy HA
-                # entity IDs that V6 setup does not configure.
+            else:
+                # V6 commands may only use the native per-system adapter. A
+                # disabled/unavailable native path or an unconverted V5 entry
+                # must never reach the legacy HA entity writers.
                 result = CommandExecutionResult(
                     status=CommandExecutionStatus.SKIPPED,
-                    reason="native_control_disabled",
-                )
-            else:
-                result = await self._device_backend.execute(
-                    command,
-                    force_power=force_power,
-                    power_before_mode=power_before_mode,
+                    reason=(
+                        "native_control_disabled"
+                        if self.entry.data.get("connection_type") == "native"
+                        else "native_setup_required"
+                    ),
                 )
         except DeviceBackendExecutionError as err:
             self._store_command_execution_result(err.result)
@@ -3038,225 +2967,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._store_command_execution_result(result)
         return result
 
-
-    async def _set_ac_mode(self, mode: str) -> None:
-        """Write the AC mode reliably.
-
-        V4.3.0-dev5.7:
-        - compare against the real Select entity
-        - do not trust the internal cache alone
-        - wait for Home Assistant to accept the service call
-        - update the cache only after a successful call
-        """
-
-        requested_mode = canonical_ac_mode(mode)
-        if requested_mode is None:
-            raise ValueError(f"Unsupported AC mode: {mode!r}")
-
-        entity_state = self.hass.states.get(self.entities.ac_mode)
-        current_raw = str(entity_state.state if entity_state is not None else "")
-        current_mode = canonical_ac_mode(current_raw) or current_raw
-
-        options = (
-            entity_state.attributes.get("options")
-            if entity_state is not None
-            else None
-        )
-        service_option = requested_mode
-        if isinstance(options, (list, tuple)) and options:
-            service_option = resolve_ac_mode_option(requested_mode, options)
-            if service_option is None:
-                raise ValueError(
-                    "AC mode select does not expose one unambiguous "
-                    f"{requested_mode!r} option: {options!r}"
-                )
-
-        cached_raw = str(self._persist.get("last_set_mode") or "")
-        cached_mode = canonical_ac_mode(cached_raw) or cached_raw
-
-        self._persist["mode_write_requested"] = requested_mode
-        self._persist["mode_write_entity_state"] = current_mode
-
-        cache_matches = (
-            cached_mode == requested_mode
-        )
-
-        entity_matches = (
-            current_mode == requested_mode
-        )
-
-        # Skip only when both our internal cache and the real Select entity agree.
-        if cache_matches and entity_matches:
-            self._persist["mode_write_skipped"] = True
-            self._persist["mode_write_skip_reason"] = (
-                "cache_and_entity_match"
-            )
-            return
-
-        # The real entity is already correct, but our cache is stale.
-        # Synchronize the cache without sending another device command.
-        if entity_matches:
-            self._persist["last_set_mode"] = requested_mode
-            self._persist["mode_write_skipped"] = True
-            self._persist["mode_write_skip_reason"] = (
-                "entity_match_cache_resynced"
-            )
-            return
-
-        self._persist["mode_write_skipped"] = False
-        self._persist["mode_write_skip_reason"] = "none"
-
-        await self.hass.services.async_call(
-            "select",
-            "select_option",
-            {
-                "entity_id": self.entities.ac_mode,
-                "option": service_option,
-            },
-            blocking=True,
-        )
-
-        # Update our internal cache only after Home Assistant accepted the call.
-        self._persist["last_set_mode"] = requested_mode
-        self._persist["mode_write_last_success"] = requested_mode
-
-    async def _set_input_limit(
-        self,
-        watts: float,
-        *,
-        force: bool = False,
-    ) -> None:
-        """Write the effective INPUT limit reliably.
-
-        V4.3.0-dev5.7:
-        - respect dynamic Number entity limits
-        - compare against the real entity state
-        - do not trust the internal cache alone
-        - update the cache only after a successful service call
-        """
-
-        val = self._prepare_number_write(
-            entity_id=self.entities.input_limit,
-            requested_w=float(watts),
-            diagnostic_prefix="input_write",
-        )
-
-        cached_value = _to_float(
-            self._persist.get("last_set_input_w"),
-            None,
-        )
-
-        entity_value = _to_float(
-            self._state(self.entities.input_limit),
-            None,
-        )
-
-        cache_matches = bool(
-            cached_value is not None
-            and int(round(cached_value, 0)) == val
-        )
-
-        entity_matches = bool(
-            entity_value is not None
-            and abs(float(entity_value) - float(val)) < 1.0
-        )
-
-        self._persist["input_write_entity_state_w"] = entity_value
-
-        # Skip only when both our cache and the real Number entity agree.
-        if cache_matches and entity_matches and not force:
-            self._persist["input_write_skipped"] = True
-            self._persist["input_write_skip_reason"] = (
-                "cache_and_entity_match"
-            )
-            return
-
-        self._persist["input_write_skipped"] = False
-        self._persist["input_write_skip_reason"] = "none"
-
-        await self.hass.services.async_call(
-            "number",
-            "set_value",
-            {
-                "entity_id": self.entities.input_limit,
-                "value": val,
-            },
-            blocking=True,
-        )
-
-        # Update only after Home Assistant accepted the service call.
-        self._persist["last_set_input_w"] = val
-        # Zendure-HA handles an inputLimit write as a complete INPUT command and
-        # includes outputLimit=0. Keep the local regulation cache aligned
-        # without issuing a second, relay-triggering outputLimit=0 command.
-        self._persist["last_set_output_w"] = 0
-        self._persist["input_write_last_success_w"] = val
-
-    async def _set_output_limit(
-        self,
-        watts: float,
-        *,
-        force: bool = False,
-    ) -> None:
-        """Write the effective OUTPUT limit reliably.
-
-        V4.3.0-dev5.7:
-        Uses the same live-limit and Soll-/Ist synchronization as INPUT.
-        """
-
-        val = self._prepare_number_write(
-            entity_id=self.entities.output_limit,
-            requested_w=float(watts),
-            diagnostic_prefix="output_write",
-        )
-
-        cached_value = _to_float(
-            self._persist.get("last_set_output_w"),
-            None,
-        )
-
-        entity_value = _to_float(
-            self._state(self.entities.output_limit),
-            None,
-        )
-
-        cache_matches = bool(
-            cached_value is not None
-            and int(round(cached_value, 0)) == val
-        )
-
-        entity_matches = bool(
-            entity_value is not None
-            and abs(float(entity_value) - float(val)) < 1.0
-        )
-
-        self._persist["output_write_entity_state_w"] = entity_value
-
-        if cache_matches and entity_matches and not force:
-            self._persist["output_write_skipped"] = True
-            self._persist["output_write_skip_reason"] = (
-                "cache_and_entity_match"
-            )
-            return
-
-        self._persist["output_write_skipped"] = False
-        self._persist["output_write_skip_reason"] = "none"
-
-        await self.hass.services.async_call(
-            "number",
-            "set_value",
-            {
-                "entity_id": self.entities.output_limit,
-                "value": val,
-            },
-            blocking=True,
-        )
-
-        self._persist["last_set_output_w"] = val
-        # Zendure-HA handles an outputLimit write as a complete OUTPUT command
-        # and includes inputLimit=0.
-        self._persist["last_set_input_w"] = 0
-        self._persist["output_write_last_success_w"] = val
 
     def _get_setting(self, key: str, default: float) -> float:
         try:
