@@ -743,7 +743,11 @@ class NativeZendureRuntime:
                 {
                     **{key: system[key] for key in system_fields if key in system},
                     "packs": [
-                        {key: pack[key] for key in ("id", "model") if key in pack}
+                        {
+                            key: pack[key]
+                            for key in ("id", "model", "serial_suffix")
+                            if key in pack
+                        }
                         for pack in system.get("packs", [])
                         if isinstance(pack, dict)
                     ],
