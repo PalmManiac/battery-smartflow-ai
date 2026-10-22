@@ -575,14 +575,16 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._native_options[
                             CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT
                         ] = chosen_transport.value
-                        if not getattr(self, "_native_reconfigure", False):
-                            self._native_options[
-                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED
-                            ] = bool(
-                                user_input.get(
+                        self._native_options[
+                            CONF_NATIVE_ZENDURE_CONTROL_ENABLED
+                        ] = bool(
+                            user_input.get(
+                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                                self._native_options.get(
                                     CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
-                                )
+                                ),
                             )
+                        )
                     for key in (
                         CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
                         CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
@@ -1463,6 +1465,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "expert",
                 "dashboard",
                 "smart_mode",
+                "native_zendure",
                 "training",
                 "debug",
             ],
@@ -1813,7 +1816,12 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             )
             options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
             if is_active_device:
-                options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
+                options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
+                    user_input.get(
+                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                        options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False),
+                    )
+                )
                 options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = chosen_transport.value
             self._working_options = options
             migration = self.config_entry.data.get("v5_migration")
@@ -1975,6 +1983,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                vol.Optional(
+                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                    default=native_control_enabled,
+                ): selector.BooleanSelector(),
             }
         if zensdk_devices:
             schema.update({
