@@ -82,7 +82,18 @@ def pack_capacity_kwh(serial: str | None, pack_type: str | None) -> float | None
     return profile.capacity_kwh if profile is not None else None
 
 
-def native_capacity(state: NeutralDeviceState | None, expected_count: int | None = None) -> NativeCapacity:
+def native_capacity(
+    state: NeutralDeviceState | None,
+    expected_count: int | None = None,
+    *,
+    require_fresh_pack_soc: bool = True,
+) -> NativeCapacity:
+    """Calculate capacity from confirmed pack profiles and inventory.
+
+    Control callers may waive per-pack SoC freshness only when they separately
+    require a fresh aggregate system SoC. Pack SoC is not needed to identify a
+    pack's nominal capacity.
+    """
     if state is None:
         return NativeCapacity(expected_count, None, "inventory_pending")
     diagnostics = getattr(state, "diagnostics", {})
@@ -100,7 +111,7 @@ def native_capacity(state: NeutralDeviceState | None, expected_count: int | None
         return NativeCapacity(expected_count, None, "inventory_incomplete")
     total = 0.0
     for pack in packs.values():
-        if not pack.soc_pct.valid:
+        if require_fresh_pack_soc and not pack.soc_pct.valid:
             return NativeCapacity(len(packs), None, "pack_data_unavailable")
         capacity = pack_capacity_kwh(
             pack.serial_number, pack.pack_type.value if pack.pack_type.valid else None,

@@ -796,6 +796,22 @@ class BatterySmartFlowDashboard extends HTMLElement {
     });
   }
 
+  _packEntities(entities, pack, systemName, packNumber) {
+    const publicId = String(pack?.id || "");
+    const marker = publicId ? `_native_pack_${publicId}_` : "";
+    const registry = (this._hass && this._hass.entities) || {};
+    const registered = marker
+      ? entities.filter((entity) => {
+          const entry = registry[entity.entity_id];
+          return entry?.platform === "battery_smartflow_ai" &&
+            String(entry.unique_id || "").includes(marker);
+        })
+      : [];
+    return registered.length
+      ? registered
+      : this._deviceEntities(entities, systemName, packNumber);
+  }
+
   _detailLabel(entity, systemName = "", packNumber = null) {
     let label = entity.attributes.friendly_name || this._t("telemetry");
     const knownSystem = systemName || (this._currentSystems || [])
@@ -1272,9 +1288,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
       .find((entity) => /state of charge|ladezustand|soc pct|soc percent/.test(textFor(entity))) || null;
   }
 
-  _findPackSoc(entities, systemName, packNumber) {
+  _findPackSoc(entities, pack, systemName, packNumber) {
     const textFor = (entity) => this._searchText(`${entity.entity_id} ${this._label(entity)}`);
-    const candidates = this._deviceEntities(entities, systemName, packNumber).filter((entity) =>
+    const candidates = this._packEntities(entities, pack, systemName, packNumber).filter((entity) =>
       entity.entity_id.startsWith("sensor.")
       && !this._isSocLimitEntity(entity)
       && !["unknown", "unavailable"].includes(entity.state)
@@ -1987,9 +2003,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
             const packCards = (system.packs || []).map((pack, index) => {
               const packNumber = index + 1;
               const detailId = `pack-details-${systemIndex}-${packNumber}`;
-              const packEntities = this._deviceEntities(entities, system.name, packNumber);
+              const packEntities = this._packEntities(entities, pack, system.name, packNumber);
               const packRows = this._detailRows(packEntities, 5, system.name, packNumber);
-              const soc = this._findPackSoc(entities, system.name, packNumber);
+              const soc = this._findPackSoc(entities, pack, system.name, packNumber);
               const socLevel = soc == null ? "0" : String(soc);
               const socBand = soc == null ? "unknown" : soc < 20 ? "low" : soc < 50 ? "medium" : "high";
               const socLabel = this._escape(`${this._t("battery_pack")} ${packNumber} · ${socLevel} % SoC`);
