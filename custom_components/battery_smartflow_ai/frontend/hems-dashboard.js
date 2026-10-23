@@ -1794,15 +1794,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
           ? { ...batterySpec, entity: null, watts: totalWatts, native: true }
           : null;
       };
-      // In a multi-system entry the configured battery sensor belongs to the
-      // selected control system. Prefer the complete native total so the
-      // whole-house flow does not silently show only that one system.
-      const nativeAggregate = nativeBatterySources.length > 1 ? nativeBatteryLane() : null;
-      let batteryLane = nativeAggregate
-        || (configuredBattery && this._powerWatts(configuredBattery) !== null
-          ? { ...batterySpec, entity: configuredBattery }
-          : null);
-      if (!batteryLane) batteryLane = nativeBatteryLane();
+      // Native Zendure charge/discharge telemetry is the authoritative battery
+      // flow. A configured sensor can represent a derived residual (for
+      // example PV minus grid input) rather than actual battery power, so use
+      // it only when the native measurements are unavailable.
+      let batteryLane = nativeBatteryLane();
+      if (!batteryLane && configuredBattery && this._powerWatts(configuredBattery) !== null) {
+        batteryLane = { ...batterySpec, entity: configuredBattery };
+      }
       if (!batteryLane && configuredBattery) {
         batteryLane = { ...batterySpec, entity: configuredBattery };
       }
