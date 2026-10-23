@@ -363,6 +363,42 @@ class NativeSourceFusionTests(unittest.IsolatedAsyncioTestCase):
             {"pack-a", "pack-b"},
         )
 
+    async def test_hyper_pack_count_keeps_mixed_pack_inventory_stable(self):
+        fusion = NativeSourceFusion(
+            await make_bootstrap(product_model="Hyper 2000")
+        )
+        pack_s = {"sn": "C01F-pack-s", "packType": 300, "socLevel": 70}
+        pack_x = {"sn": "C01E-pack-x", "packType": 300, "socLevel": 68}
+
+        partial = fusion.apply(
+            report(self.now, {"packNum": 2}, packs=[pack_s])
+        )
+        self.assertEqual(partial.state.packs, ())
+
+        full = fusion.apply(
+            report(
+                self.now + timedelta(seconds=1),
+                {"packNum": 2},
+                packs=[pack_s, pack_x],
+            )
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in full.state.packs},
+            {"C01F-pack-s", "C01E-pack-x"},
+        )
+
+        sparse_group = fusion.apply(
+            report(
+                self.now + timedelta(seconds=2),
+                {"packNum": 2},
+                packs=[pack_s],
+            )
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in sparse_group.state.packs},
+            {"C01F-pack-s", "C01E-pack-x"},
+        )
+
     def test_diagnostics_contain_selection_not_values(self):
         self.fusion.apply(report(self.now, {"electricLevel": 50}, transport="zensdk"))
         diagnostics = self.fusion.source_diagnostics("cloud_mqtt:device-1")

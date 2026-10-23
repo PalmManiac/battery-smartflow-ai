@@ -7,6 +7,7 @@ Unknown families never inherit the main device's or another pack's capacity.
 from dataclasses import dataclass
 
 from .core.models import NeutralDeviceState
+from .hardware.zendure.pack_inventory import normalize_pack_count
 
 
 @dataclass(frozen=True)
@@ -82,7 +83,17 @@ def pack_capacity_kwh(serial: str | None, pack_type: str | None) -> float | None
 
 
 def native_capacity(state: NeutralDeviceState | None, expected_count: int | None = None) -> NativeCapacity:
-    if state is None or not state.packs:
+    if state is None:
+        return NativeCapacity(expected_count, None, "inventory_pending")
+    diagnostics = getattr(state, "diagnostics", {})
+    reported_count = diagnostics.get("packNum") if hasattr(diagnostics, "get") else None
+    if reported_count is not None and getattr(reported_count, "valid", False):
+        count = normalize_pack_count(getattr(reported_count, "value", None))
+        if count is not None:
+            # A live device report supersedes the count captured at bootstrap;
+            # this matters when a pack is added after the initial discovery.
+            expected_count = count
+    if not state.packs:
         return NativeCapacity(expected_count, None, "inventory_pending")
     packs = {pack.pack_id: pack for pack in state.packs}
     if expected_count is not None and expected_count != len(packs):

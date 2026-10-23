@@ -29,6 +29,8 @@ from .hems_activity import HemsActivityDiagnostic, HemsActivityTracker
 from .pack_inventory import (
     LEGACY_GROUPED_PACK_MODELS,
     PackMembershipStabilizer,
+    normalize_pack_count,
+    reported_pack_count,
     requires_stable_pack_membership,
 )
 
@@ -79,6 +81,13 @@ def _binary(value: Any) -> bool:
     if value in (1, True):
         return True
     raise ValueError("not_binary")
+
+
+def _strict_pack_count(value: Any) -> int:
+    count = normalize_pack_count(value)
+    if count is None:
+        raise ValueError("invalid_pack_count")
+    return count
 
 
 def _kelvin_tenths_to_celsius(value: Any) -> float:
@@ -260,6 +269,10 @@ for _raw in RAW_MAIN_DIAGNOSTICS:
         _raw, _raw, MappingScope.MAIN, (bool, int, float),
         converter=(float if _raw in {"rssi", "solarPower1", "solarPower2", "solarPower3", "solarPower4", "solarPower5", "solarPower6"} else int),
     )
+MAIN_PROPERTY_MAPPINGS["packNum"] = _mapping(
+    "packNum", "packNum", MappingScope.MAIN, (int, float, str),
+    converter=_strict_pack_count,
+)
 MAIN_PROPERTY_MAPPINGS["PowerCycle"] = _mapping(
     "PowerCycle", "switching_count", MappingScope.MAIN, (int, float), minimum=0,
 )
@@ -317,6 +330,9 @@ class ZendureCloudNormalizer:
         self._pack_memberships = {
             candidate_id: PackMembershipStabilizer()
             for candidate_id in self._models
+        }
+        self._reported_pack_counts: dict[str, int | None] = {
+            candidate_id: None for candidate_id in self._models
         }
         self._last_message: dict[str, datetime | None] = {
             candidate_id: None for candidate_id in self._models
@@ -379,6 +395,9 @@ class ZendureCloudNormalizer:
         )
         payload = message.parsed_payload
         if isinstance(payload, Mapping):
+            pack_count = reported_pack_count(payload)
+            if pack_count is not None:
+                self._reported_pack_counts[system_id] = pack_count
             self._apply_error_event(
                 self._device_values[system_id],
                 message.topic,
@@ -428,6 +447,7 @@ class ZendureCloudNormalizer:
                 complete_snapshot=message.topic.rstrip("/").endswith(
                     "/properties/report"
                 ),
+                expected_count=self._reported_pack_counts[system_id],
             )
         if (
             message.topic.endswith("/properties/energy")
@@ -526,7 +546,13 @@ class ZendureCloudNormalizer:
 
         pack_membership = self._pack_memberships[system_id].current
         if requires_stable_pack_membership(self._models.get(system_id)):
-            visible_pack_ids = pack_membership
+            # If the live packNum is known but no report yet contains that
+            # many unique IDs, expose no provisional inventory.
+            visible_pack_ids = (
+                pack_membership
+                if pack_membership is not None
+                else frozenset()
+            )
         else:
             visible_pack_ids = None
         packs = tuple(
@@ -665,6 +691,7 @@ class ZendureCloudNormalizer:
         observed_at: datetime,
         *,
         complete_snapshot: bool = False,
+        expected_count: int | None = None,
     ) -> None:
         if not isinstance(raw_packs, list):
             return
@@ -678,6 +705,7 @@ class ZendureCloudNormalizer:
                 confirm_changes=requires_stable_pack_membership(
                     self._models.get(system_id)
                 ),
+                expected_count=expected_count,
             )
             for pack_id in tuple(self._pack_values[system_id]):
                 if pack_id not in membership:

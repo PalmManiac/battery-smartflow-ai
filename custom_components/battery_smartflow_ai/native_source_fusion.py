@@ -25,6 +25,7 @@ from .hardware.zendure.normalizer import (
 )
 from .hardware.zendure.pack_inventory import (
     PackMembershipStabilizer,
+    reported_pack_count,
     requires_stable_pack_membership,
 )
 from .native_read_source import (
@@ -117,6 +118,9 @@ class NativeSourceFusion:
         self._pack_memberships = {
             item.candidate.candidate_id: PackMembershipStabilizer()
             for item in bootstrap.devices
+        }
+        self._reported_pack_counts: dict[str, int | None] = {
+            item.candidate.candidate_id: None for item in bootstrap.devices
         }
         self._models = {
             item.candidate.candidate_id: item.candidate.identity.product_model
@@ -280,11 +284,20 @@ class NativeSourceFusion:
                 for item in fields(ReportedDeviceSetpoints)
             }
         )
+        pack_membership = self._pack_memberships[system_id].current
+        if (
+            pack_membership is None
+            and self._reported_pack_counts[system_id] is not None
+            and requires_stable_pack_membership(self._models.get(system_id))
+        ):
+            # Do not leak provisional pack IDs from another transport while a
+            # declared multi-pack inventory is still only partially reported.
+            pack_membership = frozenset()
         packs = self._fuse_packs(
             system_id,
             states,
             select,
-            self._pack_memberships[system_id].current,
+            pack_membership,
         )
         preferred = trace["soc_pct"].transport
         if preferred is None:
@@ -343,25 +356,29 @@ class NativeSourceFusion:
     def _record_complete_pack_membership(
         self, message: CloudMqttMessage
     ) -> None:
-        """Use a complete report to retire pack identities no longer present.
+        """Use count-confirmed reports to reconcile pack IDs across sources.
 
         Cloud ``state`` packets are partial updates, so only a full
         ``properties/report`` carrying an identifiable pack list can replace
-        the current membership. Applying the authoritative set at fusion level
-        also retires an old ID cached by another native transport.
+        membership. If a report declares ``packNum``, sparse lists do not
+        represent the complete inventory. Applying confirmed membership at
+        fusion level also retires an old ID cached by another native transport.
         """
 
-        if not message.topic.rstrip("/").endswith("/properties/report"):
-            return
         system_id = message.device_candidate_id
         payload = message.parsed_payload
-        if system_id is None or not isinstance(payload, dict):
+        if system_id is None or not isinstance(payload, Mapping):
+            return
+        pack_count = reported_pack_count(payload)
+        if pack_count is not None:
+            self._reported_pack_counts[system_id] = pack_count
+        if not message.topic.rstrip("/").endswith("/properties/report"):
             return
         raw_packs = payload.get("packData")
         if not isinstance(raw_packs, list):
             return
         pack_ids = tuple(
-            _pack_id(pack) if isinstance(pack, dict) else None
+            _pack_id(pack) if isinstance(pack, Mapping) else None
             for pack in raw_packs
         )
         if all(pack_id is not None for pack_id in pack_ids):
@@ -370,6 +387,7 @@ class NativeSourceFusion:
                 confirm_changes=requires_stable_pack_membership(
                     self._models.get(system_id)
                 ),
+                expected_count=self._reported_pack_counts[system_id],
             )
 
     def _fuse_packs(self, system_id, states, select, membership=None):
