@@ -6614,6 +6614,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
             )
 
+            # Charge pricing may fall back to the requested charge power when
+            # measured charging is absent. The physical energy ledger must
+            # never account that command as delivered energy, so only reuse
+            # the pricing attribution when actual battery charge is measured.
+            measured_charge_pricing = (
+                current_charge_pricing
+                if float(battery_charge_w) > 30.0
+                else None
+            )
+
             # V4.6.0 economics energy accounting uses measured battery/grid
             # power and the already centralized charge-source attribution.
             # Each physical direction is represented once: total grid export
@@ -6643,8 +6653,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 direct_native_pv_to_home_power(
                     native_pv_w=float(native_pv_w),
                     native_pv_to_battery_w=float(
-                        current_charge_pricing.pv_part_w
-                        if current_charge_pricing.active
+                        measured_charge_pricing.pv_part_w
+                        if measured_charge_pricing is not None
+                        and measured_charge_pricing.active
                         else 0.0
                     ),
                     ac_output_w=float(native_ac_output.value),
@@ -6659,13 +6670,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 sampled_at=now,
                 power=EconomicPowerFlows(
                     grid_to_battery_w=float(
-                        current_charge_pricing.grid_part_w
-                        if current_charge_pricing.active
+                        measured_charge_pricing.grid_part_w
+                        if measured_charge_pricing is not None
+                        and measured_charge_pricing.active
                         else 0.0
                     ),
                     pv_to_battery_w=float(
-                        current_charge_pricing.pv_part_w
-                        if current_charge_pricing.active
+                        measured_charge_pricing.pv_part_w
+                        if measured_charge_pricing is not None
+                        and measured_charge_pricing.active
                         else 0.0
                     ),
                     grid_export_w=float(grid_export),
