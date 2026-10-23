@@ -405,7 +405,14 @@ class NativeZendureRuntime:
 
         expected = next((item.pack_count for item in self._bootstrap.devices
                          if item.candidate.candidate_id == self._selected_device), None) if self._bootstrap else None
-        return native_capacity(self.selected_device_state(), expected)
+        state = self.selected_device_state()
+        return native_capacity(
+            state,
+            expected,
+            require_fresh_pack_soc=not (
+                state is not None and state.soc_pct.valid
+            ),
+        )
 
     def maximum_charge_power_for(self, device_id: str) -> float:
         """Return the verified model limit for one configured system."""
