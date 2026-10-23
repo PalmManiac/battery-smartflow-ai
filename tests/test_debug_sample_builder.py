@@ -303,6 +303,54 @@ class DebugSampleBuilderTests(unittest.TestCase):
         )
         self.assertEqual(sample["native_state"]["device_state"]["pv_power_w"]["value"], 42)
 
+    def test_captures_safe_idle_trigger_and_command_outcome(self) -> None:
+        sample = build_debug_sample(
+            timestamp=self.now,
+            details={
+                "decision_reason": "native_capacity_unavailable",
+                "safe_idle_event": {
+                    "trigger": "native_capacity_unavailable",
+                    "trigger_values": {"capacity_status": "pack_count_unavailable"},
+                    "command": {
+                        "path": "safe_idle",
+                        "requested_output_limit_w": 0.0,
+                        "backend_result_status": "applied",
+                        "output_written": True,
+                    },
+                },
+            },
+            configured_entities={"grid_power": "sensor.grid_power"},
+            entity_availability={"grid_power": False},
+            native_state={"status": "captured"},
+        ).as_dict()
+
+        self.assertEqual(
+            sample["strategy"]["decision_reason"],
+            "native_capacity_unavailable",
+        )
+        self.assertEqual(
+            sample["command"]["safe_idle"]["trigger_values"][
+                "capacity_status"
+            ],
+            "pack_count_unavailable",
+        )
+        self.assertEqual(
+            sample["command"]["safe_idle"]["command"][
+                "requested_output_limit_w"
+            ],
+            0.0,
+        )
+        self.assertTrue(
+            sample["command"]["safe_idle"]["command"][
+                "output_written"
+            ]
+        )
+        self.assertEqual(
+            sample["raw_values"]["entities"]["grid_power"]["status"],
+            "unavailable",
+        )
+        self.assertEqual(sample["native_state"]["status"], "captured")
+
     def test_configured_entity_snapshot_captures_state_and_safe_metadata(self) -> None:
         class State:
             state = "123.4"

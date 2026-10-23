@@ -4645,9 +4645,30 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             skip_reason=("none" if stop_input or stop_output else "unchanged"),
             metadata={"command_path": "safe_idle"},
         )
-        await self._execute_device_command(
-            safe_idle_command,
-            force_power=True,
+        try:
+            command_result = await self._execute_device_command(
+                safe_idle_command,
+                force_power=True,
+            )
+        except DeviceBackendExecutionError as err:
+            await self._async_capture_safe_idle_debug_event(
+                reason=reason,
+                raw_values=raw_values,
+                current_mode=current_mode,
+                last_input_w=last_input_w,
+                last_output_w=last_output_w,
+                command=safe_idle_command,
+                result=err.result,
+            )
+            raise
+        await self._async_capture_safe_idle_debug_event(
+            reason=reason,
+            raw_values=raw_values,
+            current_mode=current_mode,
+            last_input_w=last_input_w,
+            last_output_w=last_output_w,
+            command=safe_idle_command,
+            result=command_result,
         )
 
         self._persist["last_set_input_w"] = 0
@@ -4694,6 +4715,66 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "technical_reason": reason,
             "strategy_priority": 800,
         }
+
+    async def _async_capture_safe_idle_debug_event(
+        self,
+        *,
+        reason: str,
+        raw_values: dict[str, Any],
+        current_mode: str,
+        last_input_w: float,
+        last_output_w: float,
+        command: DeviceCommand,
+        result: CommandExecutionResult,
+    ) -> None:
+        """Capture the exact trigger and outcome when a safe-idle stop is sent."""
+
+        if not self._debug_recorder.is_active:
+            return
+
+        await self._async_capture_debug_sample(
+            now=self._clock.utc_now(),
+            details={
+                "ai_mode": str(
+                    self.runtime_mode.get("ai_mode") or AI_MODE_AUTOMATIC
+                ),
+                "decision_action": "standby",
+                "decision_reason": reason,
+                "strategy_state": "idle_safe",
+                "visible_state": "safe_idle",
+                "safe_idle_event": {
+                    "trigger": reason,
+                    "trigger_values": dict(raw_values),
+                    "previous_mode": current_mode,
+                    "last_commanded_input_w": last_input_w,
+                    "last_commanded_output_w": last_output_w,
+                    "command": {
+                        "path": "safe_idle",
+                        "requested_mode": command.ac_mode,
+                        "requested_input_limit_w": (
+                            command.input_limit_w
+                            if command.should_write_input
+                            else None
+                        ),
+                        "requested_output_limit_w": (
+                            command.output_limit_w
+                            if command.should_write_output
+                            else None
+                        ),
+                        "writes_input_limit": command.should_write_input,
+                        "writes_output_limit": command.should_write_output,
+                        "skipped": command.skipped,
+                        "skip_reason": command.skip_reason,
+                        "backend_result_status": result.status.value,
+                        "backend_result_reason": result.reason,
+                        "mode_written": result.mode_written,
+                        "input_written": result.input_written,
+                        "output_written": result.output_written,
+                        "error_present": bool(result.error),
+                    },
+                },
+            },
+        )
 
     async def _hold_active_output_during_grid_gap(
         self,
