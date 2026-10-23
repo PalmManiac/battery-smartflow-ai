@@ -61,6 +61,24 @@ class DebugIntegrationContractTests(unittest.TestCase):
         self.assertIn("not self._debug_recorder.is_active", ast.unparse(statements[1].test))
         self.assertIn("build_debug_sample", ast.unparse(capture))
 
+    def test_safe_idle_captures_trigger_and_command_result(self) -> None:
+        tree = ast.parse((COMPONENT / "coordinator.py").read_text(encoding="utf-8"))
+        methods = {
+            node.name: ast.unparse(node)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef)
+        }
+
+        safe_idle = methods["_enter_safe_idle"]
+        event_capture = methods["_async_capture_safe_idle_debug_event"]
+        self.assertIn("result=err.result", safe_idle)
+        self.assertIn("result=command_result", safe_idle)
+        self.assertIn("await self._async_capture_safe_idle_debug_event", safe_idle)
+        self.assertIn("'trigger': reason", event_capture)
+        self.assertIn("'trigger_values': dict(raw_values)", event_capture)
+        self.assertIn("'backend_result_status': result.status.value", event_capture)
+        self.assertIn("'output_written': result.output_written", event_capture)
+
     def test_file_export_runs_via_home_assistant_executor(self) -> None:
         source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
 

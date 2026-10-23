@@ -290,6 +290,9 @@ def build_debug_sample(
         "output_write": _prefixed(details, "output_write_"),
         "effectiveness": _prefixed(details, "command_effectiveness_"),
     }
+    safe_idle_event = details.get("safe_idle_event")
+    if isinstance(safe_idle_event, Mapping):
+        command["safe_idle"] = safe_idle_event
     timing = _selected(details, _TIMING_KEYS)
     timing = {
         key.removeprefix("timing_"): value
@@ -303,7 +306,14 @@ def build_debug_sample(
         and key not in _PRICE_KEYS
         and key not in _STRATEGY_KEYS
         and key not in _TIMING_KEYS
-        and key not in {"set_mode", "set_input_w", "set_output_w", "pv_outlook"}
+        and key
+        not in {
+            "set_mode",
+            "set_input_w",
+            "set_output_w",
+            "pv_outlook",
+            "safe_idle_event",
+        }
         and not key.startswith((
             "automatic_", "regulation_", "charge_source_allocation_",
             "learned_planning_", "forecast_", "charge_commit_",
