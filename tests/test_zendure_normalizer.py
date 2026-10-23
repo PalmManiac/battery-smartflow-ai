@@ -368,6 +368,67 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             [pack.pack_id for pack in confirmed_removal.state.packs], ["pack-a"]
         )
 
+    async def test_hyper_pack_count_prevents_sparse_group_from_shrinking_inventory(self):
+        normalizer = ZendureCloudNormalizer(
+            await make_bootstrap(primary_model="Hyper 2000")
+        )
+        pack_s = {"sn": "C01F-pack-s", "packType": 300, "socLevel": 70}
+        pack_x = {"sn": "C01E-pack-x", "packType": 300, "socLevel": 68}
+
+        partial_initial = normalizer.apply(
+            report(
+                self.at,
+                {"properties": {"packNum": 2}, "packData": [pack_s]},
+            )
+        )
+        self.assertEqual(partial_initial.state.packs, ())
+
+        complete = normalizer.apply(
+            report(
+                self.at + timedelta(seconds=1),
+                {"properties": {"packNum": 2}, "packData": [pack_s, pack_x]},
+            )
+        )
+        self.assertEqual(
+            {pack.pack_id for pack in complete.state.packs},
+            {"C01F-pack-s", "C01E-pack-x"},
+        )
+
+        sparse_group = None
+        for second in (2, 3, 4):
+            sparse_group = normalizer.apply(
+                report(
+                    self.at + timedelta(seconds=second),
+                    {"properties": {"packNum": 2}, "packData": [pack_s]},
+                )
+            )
+        self.assertEqual(
+            {pack.pack_id for pack in sparse_group.state.packs},
+            {"C01F-pack-s", "C01E-pack-x"},
+        )
+        self.assertEqual(
+            next(pack for pack in sparse_group.state.packs if pack.pack_id == "C01E-pack-x").soc_pct.value,
+            68.0,
+        )
+
+        first_removed_pack_report = normalizer.apply(
+            report(
+                self.at + timedelta(seconds=5),
+                {"properties": {"packNum": 1}, "packData": [pack_s]},
+            )
+        )
+        self.assertEqual(len(first_removed_pack_report.state.packs), 2)
+        confirmed_removal = normalizer.apply(
+            report(
+                self.at + timedelta(seconds=6),
+                {"properties": {"packNum": 1}, "packData": [pack_s]},
+            )
+        )
+        self.assertEqual(
+            [pack.pack_id for pack in confirmed_removal.state.packs],
+            ["C01F-pack-s"],
+        )
+
     async def test_command_echo_cannot_become_reported_device_state(self):
         normalizer = ZendureCloudNormalizer(self.bootstrap)
         result = normalizer.apply(

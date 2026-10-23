@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import ast
 import unittest
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Mapping
 
 import voluptuous as vol
 from support import bootstrap
@@ -82,6 +82,31 @@ class NativeCapacityTests(unittest.TestCase):
         pack = observed_pack("F02N-test", "main")
         pack.soc_pct = MeasuredValue.absent(ValueValidity.STALE)
         self.assertEqual(native_capacity(SimpleNamespace(packs=[pack])).reason, "pack_data_unavailable")
+
+    def test_live_pack_count_overrides_bootstrap_for_mixed_hyper_packs(self):
+        pack_s = observed_pack("C01F-pack-s", "main")
+        pack_s.pack_type = MeasuredValue.available(300)
+        pack_x = observed_pack("C01E-pack-x", "main")
+        pack_x.pack_type = MeasuredValue.available(300)
+        state = SimpleNamespace(
+            packs=[pack_s, pack_x],
+            diagnostics={"packNum": MeasuredValue.available(2)},
+        )
+
+        result = native_capacity(state, expected_count=1)
+
+        self.assertEqual(result.pack_count, 2)
+        self.assertEqual(result.capacity_kwh, 3.84)
+        self.assertEqual(result.reason, "pack_profiles")
+
+        incomplete = native_capacity(
+            SimpleNamespace(
+                packs=[pack_s],
+                diagnostics={"packNum": MeasuredValue.available(2)},
+            ),
+            expected_count=1,
+        )
+        self.assertEqual(incomplete.reason, "inventory_incomplete")
 
     def test_internal_large_pack_is_not_mistaken_for_ab1000(self):
         self.assertEqual(pack_capacity_kwh("B000-test", "70"), 8.0)
