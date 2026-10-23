@@ -19,7 +19,7 @@ ECONOMIC_DISCHARGE_REASONS = {
     "price_based_discharge",
 }
 
-LEARNED_DISCHARGE_YIELD_HYSTERESIS_RATIO = 0.01
+DISCHARGE_YIELD_HYSTERESIS_RATIO = 0.01
 
 
 def completed_charge_stop_decision(
@@ -301,7 +301,47 @@ def learned_commit_should_yield_to_discharge(
         threshold = float(effective_discharge_threshold)
         hysteresis = max(
             float(price_hysteresis or 0.0),
-            abs(threshold) * LEARNED_DISCHARGE_YIELD_HYSTERESIS_RATIO,
+            abs(threshold) * DISCHARGE_YIELD_HYSTERESIS_RATIO,
+        )
+    except (TypeError, ValueError):
+        # Missing/invalid price context must not immediately undo a yield.
+        return True
+
+    return price >= threshold - hysteresis
+
+
+def charge_commit_should_yield_to_discharge(
+    *,
+    commit: ChargeCommitState,
+    selected_reason: str,
+    current_price: float | None = None,
+    effective_discharge_threshold: float | None = None,
+    price_hysteresis: float = 0.0,
+    yield_latched: bool = False,
+) -> bool:
+    """Return whether an active AC charge binding must pause for discharge.
+
+    Any committed AC charge must yield once the strategy selects economic
+    discharge. Keep it paused until price falls below the discharge threshold
+    by the hysteresis margin so competing decisions cannot restart charging
+    while the price remains in the discharge range.
+    """
+
+    if not bool(commit.active):
+        return False
+
+    if str(selected_reason or "") in ECONOMIC_DISCHARGE_REASONS:
+        return True
+
+    if not yield_latched and str(commit.phase or "") != "yielded":
+        return False
+
+    try:
+        price = float(current_price)
+        threshold = float(effective_discharge_threshold)
+        hysteresis = max(
+            float(price_hysteresis or 0.0),
+            abs(threshold) * DISCHARGE_YIELD_HYSTERESIS_RATIO,
         )
     except (TypeError, ValueError):
         # Missing/invalid price context must not immediately undo a yield.

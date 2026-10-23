@@ -100,7 +100,7 @@ class ChargeCommitState:
     #   so the required energy can still be available before the deadline.
     #
     # yielded:
-    #   A non-forced learned charge temporarily yielded to economic discharge.
+    #   An AC charge binding temporarily yielded to economic discharge.
     #   It remains paused through the discharge threshold's hysteresis band.
     #
     # completed / aborted:
