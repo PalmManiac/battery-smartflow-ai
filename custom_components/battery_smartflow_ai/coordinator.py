@@ -177,11 +177,11 @@ from .soc_sensor_grace import (
 from .charge_source_allocator import ChargeSourceAllocator
 from .charge_commit_policy import (
     automatic_peak_reserve_abort_reason,
+    charge_commit_should_yield_to_discharge,
     current_inactive_commit_abort_reason,
     completed_charge_stop_decision,
     learned_commit_is_forced,
     learned_commit_price_phase,
-    learned_commit_should_yield_to_discharge,
     learned_plan_may_complete_active_commit,
     preserved_learned_commit_power,
     strategic_reserve_price_conflict,
@@ -1581,13 +1581,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     ) -> DecisionResult:
         """Keep a charge binding alive without reserving the whole system.
 
-        V4.3.0-dev5.8.1:
-        A waiting AC charge binding only postpones its own grid charging.
+        A waiting or yielded AC charge binding only postpones its own grid charging.
         It must not suppress profitable discharge, PV passthrough or a real
         emergency charge.
 
-        The binding itself remains active and may start later when its original
-        learned price condition is reached.
+        The binding itself remains active and may resume when its price
+        condition is reached again.
         """
 
         action = str(base_decision.action or "")
@@ -1835,11 +1834,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # recalculation must not send the same charge binding back to
             # waiting. The binding then continues until target SoC or a real
             # abort condition is reached.
+            yield_latched = str(commit.phase or "") == "yielded"
             if str(commit.commit_type or "") == "learned":
                 current_phase = str(
                     commit.phase or "waiting"
                 )
-                yield_latched = current_phase == "yielded"
 
                 forced = learned_commit_is_forced(
                     commit=commit,
@@ -1876,34 +1875,40 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         price_too_high=price_too_high,
                     )
 
-                # The Decision Engine has already verified that economic
-                # discharge is genuinely possible (SoC, protection, data and
-                # Automatic permissions included). A non-forced learned binding
-                # must yield instead of overriding that selected OUTPUT action.
-                if learned_commit_should_yield_to_discharge(
+            # The Decision Engine has already verified that economic discharge
+            # is genuinely possible (SoC, protection, data and Automatic
+            # permissions included). Every AC binding must yield instead of
+            # overriding that selected OUTPUT action.
+            should_yield_to_discharge = charge_commit_should_yield_to_discharge(
+                commit=commit,
+                selected_reason=str(decision.reason or ""),
+                current_price=price_now,
+                effective_discharge_threshold=(
+                    effective_discharge_threshold
+                ),
+                price_hysteresis=float(
+                    self.price_comparison_tolerance
+                ),
+                yield_latched=yield_latched,
+            )
+            if should_yield_to_discharge:
+                commit.phase = "yielded"
+            elif (
+                yield_latched
+                and str(commit.commit_type or "") != "learned"
+            ):
+                commit.phase = "active"
+
+            commit.updated_at = now_utc
+            self._store_charge_commit(commit)
+
+            if commit.phase in {"waiting", "yielded"}:
+                return self._waiting_charge_commit_decision(
+                    base_decision=decision,
                     commit=commit,
-                    now=now_utc,
-                    selected_reason=str(decision.reason or ""),
-                    current_price=price_now,
-                    effective_discharge_threshold=(
-                        effective_discharge_threshold
-                    ),
-                    price_hysteresis=float(
-                        self.price_comparison_tolerance
-                    ),
-                    yield_latched=yield_latched,
-                ):
-                    commit.phase = "yielded"
+                )
 
-                commit.updated_at = now_utc
-                self._store_charge_commit(commit)
-
-                if commit.phase in {"waiting", "yielded"}:
-                    return self._waiting_charge_commit_decision(
-                        base_decision=decision,
-                        commit=commit,
-                    )
-
+            if str(commit.commit_type or "") == "learned":
                 # The target, timing and power form one planning snapshot. A
                 # shrinking live need must not taper the stored 800 W request to
                 # the planner's 100 W minimum while the old target SoC remains.
