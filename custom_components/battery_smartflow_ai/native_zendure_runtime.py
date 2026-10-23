@@ -314,10 +314,12 @@ class NativeZendureRuntime:
         return tuple(sorted(self._inventory.devices))
 
     def debug_state_snapshot(self) -> dict[str, Any]:
-        """Return every normalized measurement for discovered systems and packs."""
+        """Return normalized measurements and runtime status for debug samples."""
 
         system_ids = sorted(set(self._states).union(self._inventory.devices))
         states = {}
+        runtime_status = []
+        now = datetime.now(timezone.utc)
         for system_id in system_ids:
             state = self._states.get(system_id)
             states[system_id] = {
@@ -327,6 +329,37 @@ class NativeZendureRuntime:
                     if self._normalizer is not None else {}
                 ),
             }
+            device = self._inventory.devices.get(system_id)
+            if device is None:
+                continue
+            control_state = (
+                self._hardware_control_state()
+                if system_id == self._selected_device
+                else device.control_state
+            )
+            runtime_status.append(
+                {
+                    "device": _public_id("DEVICE", system_id),
+                    "selected": system_id == self._selected_device,
+                    "control_state": control_state.value,
+                    "inventory_state": device.control_state.value,
+                    "online": device.online,
+                    "selected_transport": (
+                        self._selected_control_transport(device).transport.value
+                        if self._selected_control_transport(device).transport
+                        is not None
+                        else None
+                    ),
+                    "hems_status": device.hems_status.value,
+                    "hems_active": device.hems_active,
+                    "hems_observed_at": device.hems_observed_at,
+                    "hems_blocks_control": (
+                        control_state is DeviceControlState.HEMS_BLOCKED
+                    ),
+                    "last_message_at": state.last_message_at if state else None,
+                    "zensdk_health": self._zensdk_health(system_id, now),
+                }
+            )
         devices_without_state = sorted(
             set(self._inventory.devices).difference(self._states)
         )
@@ -335,6 +368,7 @@ class NativeZendureRuntime:
             "selected_device": self._selected_device,
             "systems": states,
             "devices_without_state": devices_without_state,
+            "runtime_status": runtime_status,
         }
 
     @property
