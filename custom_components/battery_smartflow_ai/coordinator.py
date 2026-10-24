@@ -180,6 +180,7 @@ from .charge_commit_policy import (
     charge_commit_should_yield_to_discharge,
     current_inactive_commit_abort_reason,
     completed_charge_stop_decision,
+    learned_charge_price_conflict,
     learned_commit_is_forced,
     learned_commit_price_phase,
     learned_plan_may_complete_active_commit,
@@ -1317,29 +1318,54 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         effective_discharge_threshold: float | None,
         very_expensive_threshold: float | None,
     ) -> bool:
-        """Return whether an optional reserve charge conflicts with discharge economics.
+        """Return whether a strategic AC charge conflicts with discharge economics.
 
-        Planned and learned charge windows have already evaluated the complete
-        future price curve, required energy, deadline and available charging slots.
-        Their decisions must therefore not be overridden afterwards by the simpler
-        effective-discharge-threshold check.
-
-        The guard remains active for optional peak-reserve charging so it cannot
-        start or continue inside either the configured forced-discharge range or
-        an effective economic-discharge window.
+        Learned planning can optimize across future price slots, but its active
+        and forced start reasons must still yield when the current price is
+        already in the effective discharge range. Optional peak-reserve charging
+        keeps the same guard against both configured and economic discharge.
         """
 
-        if reason not in CHARGE_COMMIT_RESERVE_REASONS:
-            return False
+        if reason in CHARGE_COMMIT_RESERVE_REASONS:
+            return strategic_reserve_price_conflict(
+                reason=reason,
+                price_now=price_now,
+                effective_discharge_threshold=(
+                    effective_discharge_threshold
+                ),
+                very_expensive_threshold=very_expensive_threshold,
+                tolerance=float(self.price_comparison_tolerance),
+            )
 
-        return strategic_reserve_price_conflict(
+        return learned_charge_price_conflict(
             reason=reason,
             price_now=price_now,
-            effective_discharge_threshold=(
-                effective_discharge_threshold
-            ),
+            effective_discharge_threshold=effective_discharge_threshold,
             very_expensive_threshold=very_expensive_threshold,
             tolerance=float(self.price_comparison_tolerance),
+        )
+
+
+    def _strategic_ac_charge_blocked_decision(
+        self,
+        decision: DecisionResult,
+    ) -> DecisionResult:
+        """Return an idle decision when a learned charge hits the price guard."""
+        return DecisionResult(
+            action="idle",
+            ac_mode="output",
+            charge_w=0.0,
+            discharge_w=0.0,
+            reason="strategic_ac_charge_blocked_price_conflict",
+            target_soc=decision.target_soc,
+            current_peak_threshold=decision.current_peak_threshold,
+            current_valley_threshold=decision.current_valley_threshold,
+            economic_discharge_threshold=(
+                decision.economic_discharge_threshold
+            ),
+            effective_discharge_threshold=(
+                decision.effective_discharge_threshold
+            ),
         )
 
 
@@ -1816,6 +1842,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if stop_decision is not None:
                     return stop_decision
 
+                if (
+                    abort_reason == "price_condition_lost"
+                    and str(decision.action or "") == "charge"
+                    and str(decision.ac_mode or "") == "input"
+                    and float(decision.charge_w or 0.0) > 0.0
+                ):
+                    return self._strategic_ac_charge_blocked_decision(
+                        decision
+                    )
+
                 return decision
                 
             # V4.3.0-dev5.8:
@@ -1958,22 +1994,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "price_condition_lost"
             )
 
-            return DecisionResult(
-                action="idle",
-                ac_mode="output",
-                charge_w=0.0,
-                discharge_w=0.0,
-                reason="strategic_ac_charge_blocked_price_conflict",
-                target_soc=decision.target_soc,
-                current_peak_threshold=decision.current_peak_threshold,
-                current_valley_threshold=decision.current_valley_threshold,
-                economic_discharge_threshold=(
-                    decision.economic_discharge_threshold
-                ),
-                effective_discharge_threshold=(
-                    decision.effective_discharge_threshold
-                ),
-            )
+            return self._strategic_ac_charge_blocked_decision(decision)
 
         # No active commit: start one for strategic AC charge decisions.
         if (

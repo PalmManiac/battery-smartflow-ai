@@ -99,6 +99,52 @@ def strategic_reserve_price_conflict(
     if str(reason or "") != "summer_peak_reserve_charge":
         return False
 
+    return _charge_price_conflict(
+        price_now=price_now,
+        effective_discharge_threshold=effective_discharge_threshold,
+        very_expensive_threshold=very_expensive_threshold,
+        tolerance=tolerance,
+    )
+
+
+def learned_charge_price_conflict(
+    *,
+    reason: str,
+    price_now: float | None,
+    effective_discharge_threshold: float | None,
+    very_expensive_threshold: float | None,
+    tolerance: float,
+) -> bool:
+    """Return whether a learned charge conflicts with current discharge prices.
+
+    Learned plans may optimize across future price slots, but neither an
+    acceptable-price start nor a forced latest start should begin grid charging
+    while the current price already qualifies for battery discharge.
+    """
+    if str(reason or "") not in {
+        "learned_charge_window_active",
+        "learned_charge_window_latest_start_reached",
+        "learned_charge_window_deadline_too_close_start_now",
+    }:
+        return False
+
+    return _charge_price_conflict(
+        price_now=price_now,
+        effective_discharge_threshold=effective_discharge_threshold,
+        very_expensive_threshold=very_expensive_threshold,
+        tolerance=tolerance,
+    )
+
+
+def _charge_price_conflict(
+    *,
+    price_now: float | None,
+    effective_discharge_threshold: float | None,
+    very_expensive_threshold: float | None,
+    tolerance: float,
+) -> bool:
+    """Compare a strategic charge against the configured discharge limits."""
+
     try:
         current_price = float(price_now)
     except (TypeError, ValueError):
