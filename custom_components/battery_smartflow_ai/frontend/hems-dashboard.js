@@ -117,6 +117,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         }
         return;
       }
+      const groupEdit = nodeFor("[data-group-edit]");
+      if (groupEdit) {
+        this._openOptionsFlow(groupEdit.dataset.entryId, "systems_groups");
+        return;
+      }
       const optionsNext = nodeFor("[data-options-next]");
       if (optionsNext) {
         this._submitOptionsFlow(optionsNext.dataset.optionsNext);
@@ -385,7 +390,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
       automatic: ["Automatik", "Automatic"], self_sufficient: ["Autarkie", "Self-sufficient"], manual: ["Manuell", "Manual"], standby: ["Standby", "Standby"], charge: ["Laden", "Charge"], pv_surplus: ["PV-Überschussladen", "PV surplus charge"], discharge: ["Entladen", "Discharge"], constant_discharge: ["Konstante Entladung", "Constant discharge"],
       limits_group: ["Leistungs- und SoC-Grenzen", "Power and SoC limits"], price_group: ["Preisstrategie", "Price strategy"], forecast_group: ["PV und Prognose", "PV and forecast"], other_group: ["Weitere Einstellungen", "Other settings"], allowed_range: ["Zulässiger Bereich", "Allowed range"], apply: ["Übernehmen", "Apply"], saving: ["Speichere …", "Saving…"], saved: ["Gespeichert", "Saved"], failed: ["Fehler", "Failed"], manual_action_hint: ["Die manuelle Aktion wird über den separaten Aktionsregler gesteuert.", "Manual action is controlled with the separate action selector."],
       hardware_limits: ["Hardware-SoC-Grenzen", "Hardware SoC limits"], read_only: ["Nur lesbare Telemetrie", "Read-only telemetry"], hardware_explain: ["Diese Werte werden von der Hardware gemeldet. BSFAI stellt dafür keine unterstützte Schreibsteuerung bereit; sie dienen hier nur zur Information.", "These values are reported by the hardware. BSFAI does not expose a supported write control for them, so they are shown for reference only."], control_explain: ["Die Steuerung nutzt die vorhandenen BSFAI-Entitäten und Home-Assistant-Dienste. Das Dashboard schreibt nicht direkt an die Zendure-Hardware.", "Controls use existing BSFAI entities and Home Assistant services. The dashboard does not write directly to Zendure hardware."],
-      systems: ["Systeme", "systems"], packs: ["Akku-Packs", "packs"], system: ["Zendure-System", "Zendure system"], zendure_hardware: ["Zendure-Hardware", "Zendure hardware"], dashboard_views: ["Dashboard-Ansichten", "Dashboard views"],
+      systems: ["Systeme", "systems"], packs: ["Akku-Packs", "packs"], system: ["Zendure-System", "Zendure system"], zendure_hardware: ["Zendure-Hardware", "Zendure hardware"], dashboard_views: ["Dashboard-Ansichten", "Dashboard views"], setup_required: ["Einrichtung erforderlich", "Setup required"],
+      systems_groups: ["Systeme & Gruppen", "Systems & groups"], group_create: ["Gruppe anlegen", "Create group"], group_edit_select: ["Gruppe bearbeiten", "Edit group"], group_remove: ["Gruppe entfernen", "Remove group"], group_id: ["Gruppe", "Group"], name: ["Gruppenname", "Group name"], members: ["Systeme in der Gruppe", "Systems in group"],
+      battery_groups: ["Batteriegruppen", "Battery groups"], ungrouped_systems: ["Eingerichtet, aber ungruppiert", "Configured but ungrouped"], no_groups_yet: ["Noch keine Gruppen angelegt.", "No groups created yet."], no_group_members: ["Keine Systeme zugeordnet.", "No systems assigned."], manage_groups: ["Gruppen verwalten", "Manage groups"],
       details: ["Details", "Details"], hide_details: ["Schließen", "Close"], seconds_ago: ["Sek. zuvor", "s ago"],
       configured_path: ["Eingestellt", "Configured"], selected_path: ["Gewählt / aktiv", "Selected / active"], observed_data_source: ["Zuletzt beobachtete Datenquelle", "Last observed data source"],
       home_assistant: ["Home Assistant", "Home Assistant"], show_history: ["Verlauf ansehen", "View history"], back_to_dashboard: ["Zurück zum Dashboard", "Back to dashboard"], current_value: ["Aktueller Wert", "Current value"], sensor_history: ["Sensorverlauf", "Sensor history"], day: ["Tag", "Day"], week: ["Woche", "Week"], month: ["Monat", "Month"], history_chart: ["Sensorverlauf", "Sensor history"], history_empty: ["Für diesen Zeitraum sind keine aufgezeichneten Verlaufsdaten verfügbar.", "No recorded history is available for this period."], history_error: ["Der Verlauf konnte nicht geladen werden. Prüfe, ob Home Assistant die Sensorhistorie speichert.", "History could not be loaded. Check whether Home Assistant records this sensor."], history_note: ["Der Verlauf wird aus den in Home Assistant gespeicherten Sensorzuständen erstellt.", "History is built from sensor states recorded by Home Assistant."], history_counter_note: ["Bei Zählern zeigt das Diagramm die Zunahme je Zeitabschnitt. Rücksetzungen werden nicht als negative Energie dargestellt.", "For counters, the chart shows increases per interval. Resets are not shown as negative energy."], period_increase: ["Zunahme im Zeitraum", "Increase in period"], max_interval: ["Größtes Intervall", "Largest interval"], minimum: ["Minimum", "Minimum"], maximum: ["Maximum", "Maximum"], latest: ["Letzter Wert", "Latest"],
@@ -778,6 +785,53 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `<section class="section health-summary ${needsAttention ? "attention" : "healthy"}" aria-label="${this._escape(this._t("system_health"))}"><div class="section-head"><h2>${this._escape(this._t("system_health"))}</h2><span class="health-state">${this._escape(this._t(needsAttention ? "attention" : "all_online"))}</span></div><div class="health-grid"><article><small>${this._escape(this._t("online_systems"))}</small><strong>${online} / ${systems.length}</strong></article><article><small>${this._escape(this._t("offline_systems"))}</small><strong>${offline}</strong></article><article><small>${this._escape(this._t("oldest_telemetry"))}</small><strong>${this._escape(oldest == null ? this._t("unavailable") : this._formatAge(oldest))}</strong></article></div></section>`;
   }
 
+  _batteryGroupMemberCard(member, entities) {
+    const system = (this._currentSystems || []).find((item) => item.id === member.id);
+    const online = system ? Boolean(system.online) : member.online === true;
+    const name = system?.name || member.label || this._t("system");
+    const model = system?.model || member.model || this._t("unavailable");
+    const transport = this._topologyTransport(
+      system?.configured_transport || system?.transport || member.transport,
+    );
+    const packs = system?.packs || [];
+    const packCount = system ? packs.length : member.pack_count;
+    const packSoc = packs.map((pack, index) => {
+      const soc = this._findPackSoc(entities, pack, system.name, index + 1);
+      return soc == null
+        ? ""
+        : `<span>${this._escape(this._t("battery_pack"))} ${index + 1}: ${this._escape(soc)} %</span>`;
+    }).filter(Boolean).join("");
+    const status = system
+      ? this._topologyStatus(system.status)
+      : this._t(online ? "online" : "offline");
+    const setupRequired = member.setup_status === "setup_required";
+    return `<article class="group-member-card" style="padding:12px;border:1px solid var(--line);border-radius:9px;background:#172b3a"><div class="system-head"><div><strong>${this._escape(name)}</strong><small>${this._escape(model)}</small></div><span class="status ${online ? "" : "offline"}">${this._escape(this._t(online ? "online" : "offline"))}</span></div><div class="device-meta">${this._escape(this._t("configured_path"))}: ${this._escape(transport)} · ${this._escape(this._t("status"))}: ${this._escape(status)} · ${this._escape(this._t("packs"))}: ${this._escape(packCount ?? "—")}${setupRequired ? ` · ${this._escape(this._t("setup_required"))}` : ""}</div>${packSoc ? `<div class="device-meta">${packSoc}</div>` : ""}</article>`;
+  }
+
+  _batteryGroupsView(entities) {
+    const entries = this._panel?.config?.battery_groups || [];
+    const content = entries.map((entry) => {
+      const groups = (entry.groups || []).map((group) => {
+        const members = group.members || [];
+        const online = members.filter((member) => {
+          const system = (this._currentSystems || []).find((item) => item.id === member.id);
+          return system ? Boolean(system.online) : member.online === true;
+        }).length;
+        const healthy = members.length > 0 && online === members.length;
+        const groupStatus = members.length ? `${online} / ${members.length} · ${this._t(healthy ? "all_online" : "attention")}` : this._t("no_group_members");
+        return `<article class="group-summary-card" style="padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:10px"><div class="system-head"><strong>${this._escape(group.name)}</strong><span class="status ${healthy ? "" : "offline"}">${this._escape(groupStatus)}</span></div><div class="group-member-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin-top:10px">${members.length ? members.map((member) => this._batteryGroupMemberCard(member, entities)).join("") : `<p class="muted">${this._escape(this._t("no_group_members"))}</p>`}</div></article>`;
+      }).join("");
+      const ungrouped = (entry.ungrouped || []).length
+        ? `<article class="group-summary-card" style="padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:10px"><strong>${this._escape(this._t("ungrouped_systems"))}</strong><div class="group-member-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin-top:10px">${entry.ungrouped.map((member) => this._batteryGroupMemberCard(member, entities)).join("")}</div></article>`
+        : "";
+      const empty = !groups && !ungrouped
+        ? `<p class="muted">${this._escape(this._t("no_groups_yet"))}</p>`
+        : "";
+      return `<div class="group-summary-entry">${entry.system ? `<small>${this._escape(entry.system)}</small>` : ""}<div class="group-summary-grid">${groups}${ungrouped}${empty}</div><button class="apply" type="button" data-group-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("manage_groups"))}</button></div>`;
+    }).join("");
+    return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("battery_groups"))}</h2></div>${content}</section>`;
+  }
+
   _deviceEntities(entities, deviceName, packNumber) {
     const prefix = this._searchText(deviceName);
     if (!prefix) return [];
@@ -960,6 +1014,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _optionsFieldLabel(name) {
     const labels = {
+      name: ["Gruppenname", "Group name"],
+      members: ["Systeme in der Gruppe", "Systems in group"],
+      group_id: ["Gruppe", "Group"],
       installed_pv_wp: ["Installierte PV-Leistung (Wp)", "Installed PV power (Wp)"],
       expert_mode_enabled: ["Expertenmodus aktivieren", "Enable expert mode"],
       learned_planning_enabled: ["Lernende Ladeplanung aktivieren", "Enable learned charge planning"],
@@ -1001,10 +1058,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }
     const title = step.step_id === "general" ? this._t("general_settings")
       : step.step_id === "smart_mode" ? this._t("smart_mode_settings")
-        : this._t("expert_settings");
+        : step.step_id === "systems_groups" || step.step_id.startsWith("group_") ? this._t("systems_groups")
+          : this._t("expert_settings");
     let content = "";
     if (step.type === "menu") {
-      const menuLabel = { general: "general_settings", expert: "expert_settings", smart_mode: "smart_mode_settings", debug: "debug_settings" };
+      const menuLabel = { general: "general_settings", expert: "expert_settings", smart_mode: "smart_mode_settings", debug: "debug_settings", systems_groups: "systems_groups", group_create: "group_create", group_edit_select: "group_edit_select", group_remove: "group_remove" };
       content = (step.menu_options || []).filter((option) => menuLabel[option]).map((option) => `<button class="apply" type="button" data-options-next="${this._escape(option)}">${this._escape(this._t(menuLabel[option]))}</button>`).join("");
     } else if (step.type === "form") {
       const fields = (step.data_schema || []).map((field) => {
@@ -1021,7 +1079,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
             const optionLabel = typeof option === "object" ? (option.label || option.value) : option;
             return `<option value="${this._escape(optionValue)}" ${String(optionValue) === String(value) ? "selected" : ""}>${this._escape(optionLabel)}</option>`;
           }).join("");
-          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}">${options}</select></label>`;
+          const multiple = Boolean(config.multiple);
+          const selectedValues = multiple ? (Array.isArray(value) ? value.map(String) : []) : [String(value)];
+          const multiOptions = (config.options || []).map((option) => {
+            const optionValue = typeof option === "object" ? option.value : option;
+            const optionLabel = typeof option === "object" ? (option.label || option.value) : option;
+            return `<option value="${this._escape(optionValue)}" ${selectedValues.includes(String(optionValue)) ? "selected" : ""}>${this._escape(optionLabel)}</option>`;
+          }).join("");
+          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}" ${multiple ? "multiple" : ""}>${multiple ? multiOptions : options}</select></label>`;
         }
         if (fieldType === "entity") {
           const domain = config.domain || "sensor";
@@ -1032,7 +1097,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const number = fieldType === "number";
         return `<label class="option-field"><span>${label}</span><input data-option-field="${name}" type="${number ? "number" : "text"}" value="${this._escape(value)}" ${config.min !== undefined ? `min="${config.min}"` : ""} ${config.max !== undefined ? `max="${config.max}"` : ""} ${config.step !== undefined ? `step="${config.step}"` : ""}></label>`;
       }).join("");
-      content = `${fields}<button class="apply" type="button" data-options-submit>${this._escape(step.step_id === "general" || step.step_id === "smart_mode" || step.step_id === "expert_cell_voltage_config" ? this._t("options_save") : this._t("options_continue"))}</button>`;
+      content = `${fields}<button class="apply" type="button" data-options-submit>${this._escape(["general", "smart_mode", "expert_cell_voltage_config", "group_create", "group_edit", "group_remove"].includes(step.step_id) ? this._t("options_save") : this._t("options_continue"))}</button>`;
     }
     this._optionsFlowTitle = title;
     this._optionsFlowBody = content;
@@ -1047,7 +1112,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const userInput = {};
       this.shadowRoot.querySelectorAll("[data-option-field]").forEach((field) => {
         userInput[field.dataset.optionField] = field.type === "checkbox" ? field.checked
-          : field.type === "number" ? Number(field.value) : field.value;
+          : field.multiple ? Array.from(field.selectedOptions, (option) => option.value)
+            : field.type === "number" ? Number(field.value) : field.value;
       });
       Object.assign(data, userInput);
     }
@@ -1980,6 +2046,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
       ? this._energyView(entities)
       : this._view === "economics"
         ? this._economicsView(entities)
+      : this._view === "groups"
+        ? this._batteryGroupsView(entities)
       : this._view === "controls"
           ? this._controls(entities)
           : this._view === "settings"
@@ -2097,7 +2165,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
         <section class="section"><div class="section-head"><h2>${this._escape(this._t("energy_overview"))}</h2><small>${this._escape(this._t("live_values"))}</small></div><div class="metric-groups">${cards}</div></section>
-        <nav aria-label="${this._escape(this._t("dashboard_views"))}"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">${this._escape(this._t("overview"))}</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">${this._escape(this._t("energy"))}</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">${this._escape(this._t("economics"))}</button><button class="tab ${this._view === "controls" ? "active" : ""}" data-view="controls">${this._escape(this._t("controls"))}</button><button class="tab ${this._view === "settings" ? "active" : ""}" data-view="settings">${this._escape(this._t("menu_settings"))}</button></nav>
+        <nav aria-label="${this._escape(this._t("dashboard_views"))}"><button class="tab ${this._view === "overview" ? "active" : ""}" data-view="overview">${this._escape(this._t("overview"))}</button><button class="tab ${this._view === "energy" ? "active" : ""}" data-view="energy">${this._escape(this._t("energy"))}</button><button class="tab ${this._view === "economics" ? "active" : ""}" data-view="economics">${this._escape(this._t("economics"))}</button><button class="tab ${this._view === "groups" ? "active" : ""}" data-view="groups">${this._escape(this._t("systems_groups"))}</button><button class="tab ${this._view === "controls" ? "active" : ""}" data-view="controls">${this._escape(this._t("controls"))}</button><button class="tab ${this._view === "settings" ? "active" : ""}" data-view="settings">${this._escape(this._t("menu_settings"))}</button></nav>
         ${activeContent}
         <p class="footer">${this._escape(this._t("footer"))}</p>
       </main>`;

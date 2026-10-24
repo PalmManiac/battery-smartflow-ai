@@ -267,6 +267,11 @@
     }
   },
   "options": {
+    "abort": {
+      "invalid_group": "Die Batteriegruppe konnte nicht gespeichert werden. Prüfe Namen und Systemauswahl.",
+      "no_groups": "Es gibt keine Batteriegruppen zum Bearbeiten oder Entfernen.",
+      "group_not_found": "Die ausgewählte Batteriegruppe ist nicht mehr vorhanden."
+    },
     "error": {
       "invalid_zensdk_ip": "Gib eine private IPv4-Adresse des Zendure-Geräts ein.",
       "zensdk_ip_unsupported": "Dieses Zendure-Modell unterstützt keine direkten ZenSDK-Messwerte.",
@@ -281,6 +286,7 @@
           "expert": "Expertenmodus",
           "dashboard": "HEMS-Dashboard",
           "smart_mode": "Zendure-SmartMode",
+          "systems_groups": "Systeme & Gruppen",
           "native_zendure": "Natives Zendure",
           "training": "Regelungstraining",
           "debug": "Debug-Modus"
@@ -309,6 +315,11 @@
           "installed_pv_wp": "Installierte theoretische PV-Modulleistung der Anlage in Wp. Dieser Wert wird für relative PV-Kontextschwellen und weitere PV-bezogene Logik verwendet."
         }
       },
+      "systems_groups": {"title": "Systeme & Gruppen", "description": "Lege dauerhafte Gruppen für eingerichtete Systeme an. Neu erkannte Geräte bleiben ungruppiert, bis du sie zuordnest. Eine Gruppenmitgliedschaft aktiviert keine gleichzeitige Leistungsregelung.", "menu_options": {"group_create": "Gruppe anlegen", "group_edit_select": "Gruppe bearbeiten oder Systeme verschieben", "group_remove": "Gruppe entfernen"}},
+      "group_create": {"title": "Batteriegruppe anlegen", "description": "Vergib einen Namen und füge optional eingerichtete Systeme hinzu. Bereits einer anderen Gruppe zugeordnete Systeme werden beim Speichern verschoben.", "data": {"name": "Gruppenname", "members": "Systeme in der Gruppe"}},
+      "group_edit_select": {"title": "Batteriegruppe auswählen", "data": {"group_id": "Gruppe"}},
+      "group_edit": {"title": "Batteriegruppe bearbeiten", "description": "Bereits einer anderen Gruppe zugeordnete Systeme werden beim Speichern verschoben. Entfernte Systeme bleiben eingerichtet und ungruppiert.", "data": {"name": "Gruppenname", "members": "Systeme in der Gruppe"}},
+      "group_remove": {"title": "Batteriegruppe entfernen", "description": "Beim Entfernen der Gruppe bleiben die Systeme eingerichtet und werden ungruppiert.", "data": {"group_id": "Gruppe"}},
       "training_start": {
         "title": "Passives Regelungstraining starten",
         "description": "Das Training beobachtet ausschließlich den realen Betrieb. Es ändert keine Live-Regelparameter und sendet keine experimentellen Befehle. Das Ergebnis bleibt ein Shadow-Vorschlag.",

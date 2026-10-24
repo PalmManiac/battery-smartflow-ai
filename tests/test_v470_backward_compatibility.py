@@ -100,7 +100,7 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
 
                 assert await integration.async_migrate_entry(hass, entry)
                 update = hass.config_entries.updates[-1][1]
-                assert update["version"] == 5
+                assert update["version"] == 6
                 assert update["data"] == {
                     "soc_entity": "sensor.existing_soc",
                     "custom": "keep",
@@ -118,6 +118,7 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
                 assert update["options"] == {
                     "soc_min": 12.0,
                     "profile_overrides": {"TARGET_IMPORT_W": 75.0},
+                    "battery_groups": {"version": 1, "groups": {}},
                 }
 
                 current = SimpleNamespace(
@@ -134,8 +135,11 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
                 assert await integration.async_migrate_entry(hass, current)
                 assert len(hass.config_entries.updates) == update_count + 1
                 current_update = hass.config_entries.updates[-1][1]
-                assert current_update["version"] == 5
-                assert current_update["options"] == {"soc_min": 10.0}
+                assert current_update["version"] == 6
+                assert current_update["options"] == {
+                    "soc_min": 10.0,
+                    "battery_groups": {"version": 1, "groups": {}},
+                }
 
                 assert await integration.async_unload_entry(hass, entry)
                 assert coordinator.shutdown

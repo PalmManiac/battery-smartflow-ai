@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping
 from typing import Any
+from uuid import uuid4
 
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
+from .battery_groups import (
+    migrate_single_device_group,
+    remove_group,
+    save_group,
+)
 from .const import (
     CONF_AC_MODE_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
     CONF_BATTERY_AC_POWER_ENTITY,
+    CONF_BATTERY_GROUPS,
     CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
     CONF_DEVICE_PROFILE,
     CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
@@ -323,7 +331,7 @@ def _update_native_zensdk_ip(
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Battery SmartFlow AI."""
 
-    VERSION = 5
+    VERSION = 6
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         return await self.async_step_native_login(user_input)
@@ -1466,9 +1474,195 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "dashboard",
                 "smart_mode",
                 "native_zendure",
+                "systems_groups",
                 "training",
                 "debug",
             ],
+        )
+
+    async def async_step_systems_groups(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Open the persistent device and battery-group editor."""
+
+        menu_options = ["group_create"]
+        if self._group_choices():
+            menu_options.extend(("group_edit_select", "group_remove"))
+        return self.async_show_menu(
+            step_id="systems_groups", menu_options=menu_options
+        )
+
+    def _group_config(self):
+        """Read groups and include the safe one-time legacy-system migration."""
+
+        options = self.config_entry.options
+        return migrate_single_device_group(
+            options.get(CONF_BATTERY_GROUPS),
+            setup_map=options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+            selected_device_id=options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
+        )
+
+    def _group_device_choices(self, *, include_members=()):
+        """Build safe display labels for configured systems and saved members."""
+
+        options = self.config_entry.options
+        setup_map = options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS, {})
+        records = setup_map.get("devices", {}) if isinstance(setup_map, Mapping) else {}
+        choices = {}
+        if isinstance(records, Mapping):
+            for device_id, record in records.items():
+                if not isinstance(device_id, str) or not isinstance(record, Mapping):
+                    continue
+                if record.get("setup_status") != SETUP_COMPLETE:
+                    continue
+                name = str(record.get("display_name") or record.get("model") or "Zendure")
+                model = str(record.get("model") or "").strip()
+                if model and model.casefold() not in name.casefold():
+                    name = f"{name} – {model}"
+                suffix = record.get("serial_suffix")
+                if suffix:
+                    name = f"{name} · SN {suffix}"
+                if record.get("online") is False:
+                    name = f"{name} (offline)"
+                choices[device_id] = name
+        groups = self._group_config()
+        for group in groups["groups"].values():
+            for device_id in group["members"]:
+                if device_id not in choices:
+                    public_suffix = hashlib.sha256(device_id.encode()).hexdigest()[:6]
+                    choices[device_id] = f"Offline / derzeit nicht erkannt ({public_suffix})"
+        for device_id in include_members:
+            if device_id not in choices:
+                public_suffix = hashlib.sha256(device_id.encode()).hexdigest()[:6]
+                choices[device_id] = f"Offline / derzeit nicht erkannt ({public_suffix})"
+        return [
+            {"value": device_id, "label": label}
+            for device_id, label in sorted(choices.items(), key=lambda item: item[1].casefold())
+        ]
+
+    def _group_choices(self):
+        groups = self._group_config()["groups"]
+        return [
+            {"value": group_id, "label": group["name"]}
+            for group_id, group in sorted(groups.items(), key=lambda item: item[1]["name"].casefold())
+        ]
+
+    async def async_step_group_create(self, user_input=None):
+        """Create one named group; all chosen memberships are explicit."""
+
+        if user_input is not None:
+            try:
+                groups = save_group(
+                    self._group_config(),
+                    group_id=uuid4().hex,
+                    name=user_input["name"],
+                    members=user_input.get("members", []),
+                    move_members=True,
+                )
+            except (KeyError, TypeError, ValueError):
+                return self.async_abort(reason="invalid_group")
+            options = dict(self.config_entry.options)
+            options[CONF_BATTERY_GROUPS] = groups
+            return self.async_create_entry(title="", data=options)
+
+        return self.async_show_form(
+            step_id="group_create",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("name"): str,
+                    vol.Optional("members", default=[]): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=self._group_device_choices(),
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_group_edit_select(self, user_input=None):
+        """Select a saved group to rename or move configured devices."""
+
+        choices = self._group_choices()
+        if not choices:
+            return self.async_abort(reason="no_groups")
+        if user_input is not None:
+            self._active_group_id = str(user_input["group_id"])
+            return await self.async_step_group_edit()
+        return self.async_show_form(
+            step_id="group_edit_select",
+            data_schema=vol.Schema(
+                {vol.Required("group_id"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=choices, mode=selector.SelectSelectorMode.DROPDOWN)
+                )}
+            ),
+        )
+
+    async def async_step_group_edit(self, user_input=None):
+        """Persist one group edit and atomically move selected memberships."""
+
+        group_id = getattr(self, "_active_group_id", None)
+        groups = self._group_config()
+        current = groups["groups"].get(group_id)
+        if current is None:
+            return self.async_abort(reason="group_not_found")
+        if user_input is not None:
+            try:
+                groups = save_group(
+                    groups,
+                    group_id=group_id,
+                    name=user_input["name"],
+                    members=user_input.get("members", []),
+                    move_members=True,
+                )
+            except (KeyError, TypeError, ValueError):
+                return self.async_abort(reason="invalid_group")
+            options = dict(self.config_entry.options)
+            options[CONF_BATTERY_GROUPS] = groups
+            return self.async_create_entry(title="", data=options)
+        schema = vol.Schema(
+            {
+                vol.Required("name"): str,
+                vol.Optional("members", default=[]): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=self._group_device_choices(
+                            include_members=current["members"]
+                        ),
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="group_edit",
+            data_schema=self.add_suggested_values_to_schema(
+                schema,
+                {"name": current["name"], "members": current["members"]},
+            ),
+        )
+
+    async def async_step_group_remove(self, user_input=None):
+        """Remove only the selected group, leaving its devices ungrouped."""
+
+        choices = self._group_choices()
+        if not choices:
+            return self.async_abort(reason="no_groups")
+        if user_input is not None:
+            options = dict(self.config_entry.options)
+            options[CONF_BATTERY_GROUPS] = remove_group(
+                self._group_config(),
+                str(user_input["group_id"]),
+            )
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="group_remove",
+            data_schema=vol.Schema(
+                {vol.Required("group_id"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(options=choices, mode=selector.SelectSelectorMode.DROPDOWN)
+                )}
+            ),
         )
 
     async def async_step_smart_mode(

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 
+from .battery_groups import migrate_single_device_group
 from .const import (
+    CONF_BATTERY_GROUPS,
     CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1,
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
@@ -390,6 +392,14 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Current device profiles own this value; remove stale user overrides.
         new_options = remove_deprecated_profile_overrides(new_options)
         new_version = 5
+
+    if new_version == 5:
+        new_options[CONF_BATTERY_GROUPS] = migrate_single_device_group(
+            new_options.get(CONF_BATTERY_GROUPS),
+            setup_map=new_options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+            selected_device_id=new_options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
+        )
+        new_version = 6
 
     if (
         new_version != entry.version

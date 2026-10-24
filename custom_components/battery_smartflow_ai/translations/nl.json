@@ -267,6 +267,11 @@
     }
   },
   "options": {
+    "abort": {
+      "invalid_group": "De batterijgroep kon niet worden opgeslagen. Controleer de naam en systeemselectie.",
+      "no_groups": "Er zijn geen batterijgroepen om te bewerken of verwijderen.",
+      "group_not_found": "De geselecteerde batterijgroep bestaat niet meer."
+    },
     "error": {
       "invalid_zensdk_ip": "Voer een privé IPv4-adres van het Zendure-apparaat in.",
       "zensdk_ip_unsupported": "Dit Zendure-model ondersteunt geen directe ZenSDK-metingen.",
@@ -281,6 +286,7 @@
           "dashboard": "HEMS-dashboard",
           "expert": "Expertmodus",
           "smart_mode": "Zendure Smart Mode",
+          "systems_groups": "Systemen en groepen",
           "native_zendure": "Native Zendure-test",
           "training": "Regelingstraining",
           "debug": "Debugmodus"
@@ -309,6 +315,11 @@
           "installed_pv_wp": "Theoretisch geïnstalleerd PV-modulevermogen van de installatie in Wp. Deze waarde wordt gebruikt voor relatieve PV-contextdrempels en andere PV-logica."
         }
       },
+      "systems_groups": {"title": "Systemen en groepen", "description": "Maak blijvende groepen voor geconfigureerde systemen. Nieuw ontdekte apparaten blijven zonder groep totdat je ze toewijst. Groepslidmaatschap activeert geen regeling van meerdere apparaten.", "menu_options": {"group_create": "Groep maken", "group_edit_select": "Groep bewerken of systemen verplaatsen", "group_remove": "Groep verwijderen"}},
+      "group_create": {"title": "Batterijgroep maken", "description": "Kies een naam en voeg eventueel geconfigureerde systemen toe. Een systeem uit een andere groep wordt bij opslaan verplaatst.", "data": {"name": "Groepsnaam", "members": "Systemen in groep"}},
+      "group_edit_select": {"title": "Batterijgroep kiezen", "data": {"group_id": "Groep"}},
+      "group_edit": {"title": "Batterijgroep bewerken", "description": "Systemen uit een andere groep worden bij opslaan verplaatst. Verwijderde systemen blijven geconfigureerd en zonder groep.", "data": {"name": "Groepsnaam", "members": "Systemen in groep"}},
+      "group_remove": {"title": "Batterijgroep verwijderen", "description": "De systemen blijven geconfigureerd en zonder groep na het verwijderen.", "data": {"group_id": "Groep"}},
       "training_start": {
         "title": "Passieve regelingstraining starten",
         "description": "De training observeert alleen het werkelijke gedrag. Er worden geen actieve regelparameters gewijzigd en geen experimentele opdrachten verzonden. Het resultaat blijft een shadow-voorstel.",
