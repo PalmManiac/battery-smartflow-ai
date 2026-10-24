@@ -12,6 +12,7 @@ from typing import Any
 
 from .core.models import ZendureTransport
 from .hardware.zendure.device_matrix import preferred_local_transport
+from .native_config_ui import native_serial_suffix
 
 SETUP_SCHEMA_VERSION = 1
 SETUP_REQUIRED = "setup_required"
@@ -64,7 +65,17 @@ def reconcile_device_setups(
             record.pop("transport", None)
         elif record.get("setup_status") == SETUP_UNSUPPORTED:
             record["setup_status"] = SETUP_REQUIRED
-        record["model"] = getattr(identity, "product_model", None)
+        model = getattr(identity, "product_model", None)
+        if model:
+            record["model"] = model
+        display_name = str(getattr(candidate, "display_name", "") or "").strip()
+        if display_name:
+            record["display_name"] = display_name
+        serial_suffix = native_serial_suffix(
+            getattr(identity, "serial_number", None)
+        )
+        if serial_suffix:
+            record["serial_suffix"] = serial_suffix
         record["pack_count"] = getattr(item, "pack_count", None)
         record["online"] = bool(getattr(item, "online", False))
         local = preferred_local_transport(identity) if supported else None

@@ -267,6 +267,11 @@
     }
   },
   "options": {
+    "abort": {
+      "invalid_group": "Le groupe de batteries n’a pas pu être enregistré. Vérifiez son nom et les systèmes sélectionnés.",
+      "no_groups": "Aucun groupe de batteries à modifier ou supprimer.",
+      "group_not_found": "Le groupe de batteries sélectionné n’existe plus."
+    },
     "error": {
       "invalid_zensdk_ip": "Saisissez une adresse IPv4 privée de l’appareil Zendure.",
       "zensdk_ip_unsupported": "Ce modèle Zendure ne prend pas en charge la lecture directe par ZenSDK.",
@@ -281,6 +286,7 @@
           "dashboard": "Tableau de bord HEMS",
           "expert": "Mode expert",
           "smart_mode": "Mode Smart Zendure",
+          "systems_groups": "Systèmes et groupes",
           "native_zendure": "Test Zendure natif",
           "training": "Entraînement de régulation",
           "debug": "Mode débogage"
@@ -309,6 +315,11 @@
           "installed_pv_wp": "Puissance théorique des modules PV installés en Wp. Cette valeur est utilisée pour les seuils relatifs du contexte PV et d’autres logiques liées au PV."
         }
       },
+      "systems_groups": {"title": "Systèmes et groupes", "description": "Créez des groupes persistants pour les systèmes configurés. Les nouveaux appareils restent sans groupe jusqu’à leur affectation. L’appartenance à un groupe n’active pas la régulation de plusieurs appareils.", "menu_options": {"group_create": "Créer un groupe", "group_edit_select": "Modifier un groupe ou déplacer des systèmes", "group_remove": "Supprimer un groupe"}},
+      "group_create": {"title": "Créer un groupe de batteries", "description": "Choisissez un nom et ajoutez éventuellement des systèmes configurés. Un système déjà dans un autre groupe est déplacé lors de l’enregistrement.", "data": {"name": "Nom du groupe", "members": "Systèmes du groupe"}},
+      "group_edit_select": {"title": "Choisir un groupe de batteries", "data": {"group_id": "Groupe"}},
+      "group_edit": {"title": "Modifier le groupe de batteries", "description": "Les systèmes sélectionnés dans un autre groupe sont déplacés lors de l’enregistrement. Les systèmes retirés restent configurés et sans groupe.", "data": {"name": "Nom du groupe", "members": "Systèmes du groupe"}},
+      "group_remove": {"title": "Supprimer le groupe de batteries", "description": "Les systèmes restent configurés et sans groupe après la suppression.", "data": {"group_id": "Groupe"}},
       "training_start": {
         "title": "Démarrer l’entraînement passif de la régulation",
         "description": "L’entraînement observe uniquement le fonctionnement réel. Il ne modifie pas les paramètres de régulation actifs et n’envoie aucune commande expérimentale. Le résultat reste une proposition shadow.",

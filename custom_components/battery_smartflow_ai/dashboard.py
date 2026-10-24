@@ -13,11 +13,13 @@ from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_BATTERY_AC_POWER_ENTITY,
+    CONF_BATTERY_GROUPS,
     CONF_GRID_EXPORT_ENTITY,
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_POWER_ENTITY,
     CONF_HEMS_DASHBOARD_ENABLED,
     CONF_NATIVE_PV_ENTITY,
+    CONF_NATIVE_ZENDURE_DEVICE_SETUPS,
     CONF_OFFGRID_POWER_ENTITY,
     CONF_PRICE_NOW_ENTITY,
     CONF_PV_ENTITY,
@@ -133,10 +135,80 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
     training_entries = []
     sensor_entities: dict[str, list[str]] = {key: [] for key in _DASHBOARD_SENSOR_KEYS}
     forecast_source_keys = set()
+    battery_groups = []
     entity_registry = er.async_get(hass)
     for entry in entries:
         if entry is None:
             continue
+        group_config = entry.options.get(CONF_BATTERY_GROUPS, {})
+        groups = group_config.get("groups", {}) if isinstance(group_config, dict) else {}
+        setup_config = entry.options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS, {})
+        setup_devices = (
+            setup_config.get("devices", {}) if isinstance(setup_config, dict) else {}
+        )
+
+        def device_label(device_id, setup_devices=setup_devices):
+            public_id = "ZD_DEVICE_" + hashlib.sha256(
+                f"bsfai:DEVICE:{device_id}".encode()
+            ).hexdigest()[:12]
+            record = setup_devices.get(device_id, {}) if isinstance(setup_devices, dict) else {}
+            if isinstance(record, dict):
+                label = str(record.get("display_name") or record.get("model") or "Zendure")
+                model = str(record.get("model") or "").strip()
+                if model and model.casefold() not in label.casefold():
+                    label = f"{label} – {model}"
+                if record.get("serial_suffix"):
+                    label = f"{label} · SN {record['serial_suffix']}"
+                return {
+                    "id": public_id,
+                    "label": label,
+                    "model": model or None,
+                    "transport": record.get("transport"),
+                    "pack_count": record.get("pack_count"),
+                    "online": record.get("online"),
+                    "setup_status": record.get("setup_status"),
+                }
+            return {
+                "id": public_id,
+                "label": f"Offline / nicht erkannt ({hashlib.sha256(device_id.encode()).hexdigest()[:6]})",
+                "online": False,
+                "setup_status": "unknown",
+            }
+
+        claimed = set()
+        group_summaries = []
+        if isinstance(groups, dict):
+            for group_id, group in groups.items():
+                if not isinstance(group_id, str) or not isinstance(group, dict):
+                    continue
+                members = group.get("members", [])
+                if not isinstance(members, list):
+                    continue
+                claimed.update(member for member in members if isinstance(member, str))
+                group_summaries.append(
+                    {
+                        "name": str(group.get("name") or "Gruppe"),
+                        "members": [device_label(member) for member in members if isinstance(member, str)],
+                    }
+                )
+        ungrouped = []
+        if isinstance(setup_devices, dict):
+            for device_id, record in setup_devices.items():
+                if (
+                    isinstance(device_id, str)
+                    and isinstance(record, dict)
+                    and record.get("setup_status") in {"configured", "setup_required"}
+                    and device_id not in claimed
+                ):
+                    ungrouped.append(device_label(device_id))
+        battery_groups.append(
+            {
+                "entry_id": entry.entry_id,
+                "system": entry.title,
+                "groups": group_summaries,
+                "ungrouped": ungrouped,
+            }
+        )
         training_entries.append(
             {
                 "entry_id": entry.entry_id,
@@ -360,6 +432,7 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
             "forecast_sources": forecast_sources,
             "sensor_entities": sensor_entities,
             "training_entries": training_entries,
+            "battery_groups": battery_groups,
             "system_signal_entity_ids": [
                 registry_entry.entity_id
                 for registry_entry in entity_registry.entities.values()

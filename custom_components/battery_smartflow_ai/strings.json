@@ -284,6 +284,11 @@
     }
   },
   "options": {
+    "abort": {
+      "invalid_group": "The battery group could not be saved. Check its name and system selection.",
+      "no_groups": "There are no battery groups to edit or remove.",
+      "group_not_found": "The selected battery group no longer exists."
+    },
     "error": {
       "invalid_zensdk_ip": "Enter a private IPv4 address for the Zendure device.",
       "zensdk_ip_unsupported": "This Zendure model does not support direct ZenSDK readings.",
@@ -298,9 +303,38 @@
           "expert": "Expert mode",
           "dashboard": "HEMS dashboard",
           "smart_mode": "Zendure Smart Mode",
+          "systems_groups": "Systems & groups",
           "training": "Regulation training",
           "debug": "Debug mode"
         }
+      },
+      "systems_groups": {
+        "title": "Systems & groups",
+        "description": "Create and manage persistent groups for configured systems. Newly discovered devices remain ungrouped until you assign them. Group membership does not enable multi-device power regulation.",
+        "menu_options": {
+          "group_create": "Create group",
+          "group_edit_select": "Edit group or move systems",
+          "group_remove": "Remove group"
+        }
+      },
+      "group_create": {
+        "title": "Create battery group",
+        "description": "Choose a name and optionally add configured systems. Selecting a system already in another group moves it when you save.",
+        "data": {"name": "Group name", "members": "Systems in group"}
+      },
+      "group_edit_select": {
+        "title": "Choose battery group",
+        "data": {"group_id": "Group"}
+      },
+      "group_edit": {
+        "title": "Edit battery group",
+        "description": "Selecting a system already in another group moves it when you save. Systems removed from this group remain configured and ungrouped.",
+        "data": {"name": "Group name", "members": "Systems in group"}
+      },
+      "group_remove": {
+        "title": "Remove battery group",
+        "description": "Removing a group does not remove its systems. They remain configured and ungrouped.",
+        "data": {"group_id": "Group"}
       },
       "native_zendure": {
         "title": "Native Zendure connection",
