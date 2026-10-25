@@ -1535,6 +1535,22 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             if device_id not in choices:
                 public_suffix = hashlib.sha256(device_id.encode()).hexdigest()[:6]
                 choices[device_id] = f"Offline / derzeit nicht erkannt ({public_suffix})"
+        label_counts: dict[str, int] = {}
+        for label in choices.values():
+            normalized = label.casefold()
+            label_counts[normalized] = label_counts.get(normalized, 0) + 1
+        for device_id, label in tuple(choices.items()):
+            if label_counts.get(label.casefold(), 0) <= 1:
+                continue
+            record = records.get(device_id, {}) if isinstance(records, Mapping) else {}
+            serial_suffix = (
+                str(record.get("serial_suffix") or "").strip()
+                if isinstance(record, Mapping)
+                else ""
+            )
+            suffix = serial_suffix or hashlib.sha256(device_id.encode()).hexdigest()[:6]
+            marker = "SN" if serial_suffix else "ID"
+            choices[device_id] = f"{label} · {marker} {suffix}"
         return [
             {"value": device_id, "label": label}
             for device_id, label in sorted(choices.items(), key=lambda item: item[1].casefold())
