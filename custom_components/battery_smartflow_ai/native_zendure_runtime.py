@@ -2857,7 +2857,8 @@ def _skip_matching_writes(command: DeviceCommand, state: Any) -> DeviceCommand:
     charge_power = state.charge_power_w
     discharge_power = state.discharge_power_w
     zero_power_command = bool(
-        command.ac_mode == "output"
+        not command.should_write_offgrid_mode
+        and command.ac_mode == "output"
         and float(command.input_limit_w) == 0
         and float(command.output_limit_w) == 0
     )
