@@ -1109,9 +1109,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
           const domain = config.domain || "sensor";
           const entities = Object.keys(this._hass?.states || {}).filter((entityId) => !domain || entityId.startsWith(`${domain}.`)).sort();
           const multiple = Boolean(config.multiple);
+          const required = field.required !== false;
           const selectedValues = multiple ? (Array.isArray(value) ? value.map(String) : []) : [String(value)];
           const options = [...(multiple ? [] : [`<option value="">—</option>`]), ...entities.map((entityId) => `<option value="${this._escape(entityId)}" ${selectedValues.includes(entityId) ? "selected" : ""}>${this._escape(this._hass.states[entityId]?.attributes?.friendly_name || entityId)}</option>`)].join("");
-          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}" ${multiple ? "multiple" : ""}>${options}</select></label>`;
+          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}" data-option-required="${required}" ${multiple ? "multiple" : ""}>${options}</select></label>`;
         }
         const number = fieldType === "number";
         return `<label class="option-field"><span>${label}</span><input data-option-field="${name}" type="${number ? "number" : "text"}" value="${this._escape(value)}" ${config.min !== undefined ? `min="${config.min}"` : ""} ${config.max !== undefined ? `max="${config.max}"` : ""} ${config.step !== undefined ? `step="${config.step}"` : ""}></label>`;
@@ -1135,6 +1136,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
     } else {
       const userInput = {};
       this.shadowRoot.querySelectorAll("[data-option-field]").forEach((field) => {
+        if (field.dataset.optionRequired === "false" && (field.value === "" || (field.multiple && field.selectedOptions.length === 0))) return;
         userInput[field.dataset.optionField] = field.type === "checkbox" ? field.checked
           : field.multiple ? Array.from(field.selectedOptions, (option) => option.value)
             : field.type === "number" ? Number(field.value) : field.value;
