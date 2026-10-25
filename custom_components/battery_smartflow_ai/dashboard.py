@@ -14,6 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from .const import (
     CONF_BATTERY_AC_POWER_ENTITY,
     CONF_BATTERY_GROUPS,
+    CONF_ENERGY_SCOPES,
     CONF_GRID_EXPORT_ENTITY,
     CONF_GRID_IMPORT_ENTITY,
     CONF_GRID_POWER_ENTITY,
@@ -33,6 +34,7 @@ from .const import (
     GRID_MODE_SHELLY_PRO_3EM_MODBUS,
     INTEGRATION_VERSION,
 )
+from .energy_scopes import normalize_energy_scope_config
 
 _PANEL_PATH = "battery-smartflow-ai"
 _PANEL_URL = "/battery_smartflow_ai/hems-dashboard.js"
@@ -49,7 +51,7 @@ _SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.43"
+DASHBOARD_VERSION = "1.0.44"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -201,12 +203,53 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                     and device_id not in claimed
                 ):
                     ungrouped.append(device_label(device_id))
+        raw_scopes = entry.options.get(CONF_ENERGY_SCOPES)
+        try:
+            scope_config = normalize_energy_scope_config(raw_scopes)
+        except (TypeError, ValueError):
+            scope_config = {"scopes": {}}
+        group_names = {
+            group_id: str(group.get("name") or "Gruppe")
+            for group_id, group in groups.items()
+            if isinstance(group_id, str) and isinstance(group, dict)
+        } if isinstance(groups, dict) else {}
+        scope_summaries = []
+        for scope_id, scope in scope_config["scopes"].items():
+            grid_entities = (
+                scope["grid_power_entities"]
+                + scope["grid_import_entities"]
+                + scope["grid_export_entities"]
+            )
+            scope_summaries.append(
+                {
+                    "id": scope_id,
+                    "name": scope["name"],
+                    "groups": [
+                        group_names[group_id]
+                        for group_id in scope["group_ids"]
+                        if group_id in group_names
+                    ],
+                    "grid_mode": scope["grid_mode"],
+                    "grid_entities": grid_entities,
+                    "grid_phase_entities": scope["grid_phase_power_entities"],
+                    "pv_sources": [
+                        {
+                            "name": source["name"],
+                            "mode": source["mode"],
+                            "power_entities": source["power_entities"],
+                            "forecast_count": len(source["forecast_entry_ids"]),
+                        }
+                        for source in scope["pv_sources"]
+                    ],
+                }
+            )
         battery_groups.append(
             {
                 "entry_id": entry.entry_id,
                 "system": entry.title,
                 "groups": group_summaries,
                 "ungrouped": ungrouped,
+                "energy_scopes": scope_summaries,
             }
         )
         training_entries.append(

@@ -23,6 +23,7 @@ from .const import (
     CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
     CONF_DEVICE_PROFILE,
     CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
+    CONF_ENERGY_SCOPES,
     # V3.5.0
     CONF_EXPERT_MODE_ENABLED,
     CONF_FEED_IN_TARIFF,
@@ -100,6 +101,22 @@ from .core.models import ZendureTransport
 from .device_profiles import (
     DEVICE_PROFILE_MODELS,
     remove_deprecated_profile_overrides,
+)
+from .energy_scopes import (
+    GRID_MODE_NONE as ENERGY_GRID_MODE_NONE,
+)
+from .energy_scopes import (
+    GRID_MODE_SIGNED as ENERGY_GRID_MODE_SIGNED,
+)
+from .energy_scopes import (
+    GRID_MODE_SPLIT as ENERGY_GRID_MODE_SPLIT,
+)
+from .energy_scopes import (
+    PV_SOURCE_AGGREGATE,
+    PV_SOURCE_COMPONENTS,
+    normalize_energy_scope_config,
+    remove_energy_scope,
+    save_energy_scope,
 )
 from .forecast import async_energy_forecast_sources
 from .hardware.shelly_pro_3em import validate_shelly_host
@@ -1475,9 +1492,280 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "smart_mode",
                 "native_zendure",
                 "systems_groups",
+                "energy_scopes",
                 "training",
                 "debug",
             ],
+        )
+
+    def _energy_scope_config(self):
+        return normalize_energy_scope_config(
+            self.config_entry.options.get(CONF_ENERGY_SCOPES)
+        )
+
+    def _energy_scope_choices(self):
+        scopes = self._energy_scope_config()["scopes"]
+        return [
+            {"value": scope_id, "label": scope["name"]}
+            for scope_id, scope in sorted(
+                scopes.items(), key=lambda item: item[1]["name"].casefold()
+            )
+        ]
+
+    async def async_step_energy_scopes(self, user_input=None):
+        """Manage persistent measurement and forecast scopes."""
+
+        menu_options = ["energy_scope_create"]
+        if self._energy_scope_choices():
+            menu_options.extend(
+                ("energy_scope_edit_select", "energy_scope_remove_select")
+            )
+        return self.async_show_menu(
+            step_id="energy_scopes", menu_options=menu_options
+        )
+
+    def _energy_scope_schema(self, current=None):
+        current = current or {}
+        groups = self._group_choices()
+        if not groups:
+            groups = [{"value": "", "label": "Keine Gruppe zugeordnet"}]
+        return vol.Schema(
+            {
+                vol.Required("name", default=current.get("name", "")): str,
+                vol.Optional("group_ids", default=current.get("group_ids", [])): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=groups,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    "grid_mode", default=current.get("grid_mode", ENERGY_GRID_MODE_NONE)
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            ENERGY_GRID_MODE_NONE,
+                            ENERGY_GRID_MODE_SIGNED,
+                            ENERGY_GRID_MODE_SPLIT,
+                        ],
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                        translation_key="energy_scope_grid_mode",
+                    )
+                ),
+                vol.Optional(
+                    "grid_power_entities",
+                    default=current.get("grid_power_entities", []),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", multiple=True)
+                ),
+                vol.Optional(
+                    "grid_phase_power_entities",
+                    default=current.get("grid_phase_power_entities", []),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", multiple=True)
+                ),
+                vol.Optional(
+                    "grid_import_entities",
+                    default=current.get("grid_import_entities", []),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", multiple=True)
+                ),
+                vol.Optional(
+                    "grid_export_entities",
+                    default=current.get("grid_export_entities", []),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", multiple=True)
+                ),
+                vol.Optional(
+                    "price_entity", default=current.get("price_entity")
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+                vol.Optional(
+                    "export_price_entity", default=current.get("export_price_entity")
+                ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            }
+        )
+
+    async def async_step_energy_scope_create(self, user_input=None):
+        if user_input is not None:
+            self._active_energy_scope_id = uuid4().hex
+            self._draft_energy_scope = {
+                **user_input,
+                "pv_sources": [],
+            }
+            return self.async_show_menu(
+                step_id="energy_scope_pv_sources",
+                menu_options=["energy_scope_pv_add", "energy_scope_save"],
+            )
+        return self.async_show_form(
+            step_id="energy_scope_create",
+            data_schema=self._energy_scope_schema(),
+        )
+
+    async def async_step_energy_scope_pv_sources(self, user_input=None):
+        """Collect and map each PV source and its forecast provider."""
+
+        menu_options = ["energy_scope_pv_add", "energy_scope_save"]
+        if self._draft_energy_scope.get("pv_sources"):
+            menu_options.append("energy_scope_pv_remove_select")
+        if self._active_energy_scope_id in self._energy_scope_config()["scopes"]:
+            menu_options.insert(0, "energy_scope_edit")
+        return self.async_show_menu(
+            step_id="energy_scope_pv_sources", menu_options=menu_options
+        )
+
+    async def async_step_energy_scope_edit_select(self, user_input=None):
+        choices = self._energy_scope_choices()
+        if user_input is not None:
+            scope_id = str(user_input["scope_id"])
+            scope = self._energy_scope_config()["scopes"].get(scope_id)
+            if scope is None:
+                return self.async_abort(reason="scope_not_found")
+            self._active_energy_scope_id = scope_id
+            self._draft_energy_scope = dict(scope)
+            return await self.async_step_energy_scope_pv_sources()
+        return self.async_show_form(
+            step_id="energy_scope_edit_select",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("scope_id"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=choices,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_energy_scope_edit(self, user_input=None):
+        if user_input is not None:
+            self._draft_energy_scope.update(user_input)
+            return await self.async_step_energy_scope_pv_sources()
+        return self.async_show_form(
+            step_id="energy_scope_edit",
+            data_schema=self._energy_scope_schema(self._draft_energy_scope),
+        )
+
+    async def async_step_energy_scope_pv_add(self, user_input=None):
+        if user_input is not None:
+            source = {
+                "id": uuid4().hex,
+                "name": user_input["source_name"],
+                "mode": user_input["source_mode"],
+                "power_entities": user_input.get("power_entities", []),
+                "forecast_entry_ids": user_input.get("forecast_entry_ids", []),
+                "installed_power_wp": user_input.get("installed_power_wp"),
+            }
+            self._draft_energy_scope.setdefault("pv_sources", []).append(source)
+            return await self.async_step_energy_scope_pv_sources()
+        try:
+            forecast_options = await async_energy_forecast_sources(self.hass)
+        except Exception:
+            forecast_options = []
+        return self.async_show_form(
+            step_id="energy_scope_pv_add",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("source_name"): str,
+                    vol.Required("source_mode", default=PV_SOURCE_AGGREGATE): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[PV_SOURCE_AGGREGATE, PV_SOURCE_COMPONENTS],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                            translation_key="energy_scope_pv_mode",
+                        )
+                    ),
+                    vol.Optional("power_entities", default=[]): selector.EntitySelector(
+                        selector.EntitySelectorConfig(domain="sensor", multiple=True)
+                    ),
+                    vol.Optional("installed_power_wp"): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0,
+                            max=100000,
+                            step=10,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="Wp",
+                        )
+                    ),
+                    vol.Optional(
+                        "forecast_entry_ids", default=[]
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=forecast_options,
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_energy_scope_pv_remove_select(self, user_input=None):
+        sources = self._draft_energy_scope.get("pv_sources", [])
+        choices = [
+            {"value": source["id"], "label": source["name"]}
+            for source in sources
+        ]
+        if user_input is not None:
+            source_id = str(user_input["source_id"])
+            self._draft_energy_scope["pv_sources"] = [
+                source for source in sources if source["id"] != source_id
+            ]
+            return await self.async_step_energy_scope_pv_sources()
+        if not choices:
+            return self.async_abort(reason="no_pv_sources")
+        return self.async_show_form(
+            step_id="energy_scope_pv_remove_select",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("source_id"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=choices,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
+        )
+
+    async def async_step_energy_scope_save(self, user_input=None):
+        scope_id = getattr(self, "_active_energy_scope_id", None)
+        scope = getattr(self, "_draft_energy_scope", None)
+        if not scope_id or not isinstance(scope, dict):
+            return self.async_abort(reason="scope_not_found")
+        try:
+            config = save_energy_scope(
+                self._energy_scope_config(), scope_id=scope_id, scope=scope
+            )
+        except (TypeError, ValueError):
+            return self.async_show_form(
+                step_id="energy_scope_edit",
+                data_schema=self._energy_scope_schema(scope),
+                errors={"base": "invalid_energy_scope"},
+            )
+        options = dict(self.config_entry.options)
+        options[CONF_ENERGY_SCOPES] = config
+        return self.async_create_entry(title="", data=options)
+
+    async def async_step_energy_scope_remove_select(self, user_input=None):
+        choices = self._energy_scope_choices()
+        if user_input is not None:
+            options = dict(self.config_entry.options)
+            options[CONF_ENERGY_SCOPES] = remove_energy_scope(
+                self._energy_scope_config(), str(user_input["scope_id"])
+            )
+            return self.async_create_entry(title="", data=options)
+        return self.async_show_form(
+            step_id="energy_scope_remove_select",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("scope_id"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=choices,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                }
+            ),
         )
 
     async def async_step_systems_groups(

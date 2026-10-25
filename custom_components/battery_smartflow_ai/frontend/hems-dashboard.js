@@ -122,6 +122,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._openOptionsFlow(groupEdit.dataset.entryId, "systems_groups");
         return;
       }
+      const energyScopeEdit = nodeFor("[data-energy-scope-edit]");
+      if (energyScopeEdit) {
+        this._openOptionsFlow(energyScopeEdit.dataset.entryId, "energy_scopes");
+        return;
+      }
       const optionsNext = nodeFor("[data-options-next]");
       if (optionsNext) {
         this._submitOptionsFlow(optionsNext.dataset.optionsNext);
@@ -392,6 +397,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       hardware_limits: ["Hardware-SoC-Grenzen", "Hardware SoC limits"], read_only: ["Nur lesbare Telemetrie", "Read-only telemetry"], hardware_explain: ["Diese Werte werden von der Hardware gemeldet. BSFAI stellt dafür keine unterstützte Schreibsteuerung bereit; sie dienen hier nur zur Information.", "These values are reported by the hardware. BSFAI does not expose a supported write control for them, so they are shown for reference only."], control_explain: ["Die Steuerung nutzt die vorhandenen BSFAI-Entitäten und Home-Assistant-Dienste. Das Dashboard schreibt nicht direkt an die Zendure-Hardware.", "Controls use existing BSFAI entities and Home Assistant services. The dashboard does not write directly to Zendure hardware."],
       systems: ["Systeme", "systems"], packs: ["Akku-Packs", "packs"], system: ["Zendure-System", "Zendure system"], zendure_hardware: ["Zendure-Hardware", "Zendure hardware"], dashboard_views: ["Dashboard-Ansichten", "Dashboard views"], setup_required: ["Einrichtung erforderlich", "Setup required"],
       systems_groups: ["Systeme & Gruppen", "Systems & groups"], group_create: ["Gruppe anlegen", "Create group"], group_edit_select: ["Gruppe bearbeiten", "Edit group"], group_remove: ["Gruppe entfernen", "Remove group"], group_id: ["Gruppe", "Group"], name: ["Gruppenname", "Group name"], members: ["Systeme in der Gruppe", "Systems in group"],
+      energy_scopes: ["Energie-Scopes verwalten", "Manage energy scopes"], energy_scope_create: ["Scope anlegen", "Create scope"], energy_scope_edit_select: ["Scope bearbeiten", "Edit scope"], energy_scope_remove_select: ["Scope entfernen", "Remove scope"], energy_scope_edit: ["Scope-Daten", "Scope settings"], energy_scope_pv_sources: ["PV- und Forecast-Quellen", "PV and forecast sources"], energy_scope_pv_add: ["PV-Quelle zuordnen", "Add PV source"], energy_scope_pv_remove_select: ["PV-Quelle entfernen", "Remove PV source"], energy_scope_save: ["Scope speichern", "Save scope"], scope_id: ["EnergyScope", "EnergyScope"], source_id: ["PV-Quelle", "PV source"], source_name: ["PV-Anlage / Bezeichnung", "PV system / name"], source_mode: ["Messart", "Measurement type"], power_entities: ["PV-Leistungssensoren", "PV power sensors"], installed_power_wp: ["Installierte Leistung", "Installed capacity"], forecast_entry_ids: ["Zugehörige Prognose-Instanzen", "Related forecast instances"], group_ids: ["Zugeordnete Gruppen", "Assigned groups"], grid_mode: ["Netzmessart", "Grid measurement type"], grid_power_entities: ["Vorzeichenbehaftete Netzsensoren", "Signed grid sensors"], grid_phase_power_entities: ["Vorzeichenbehaftete Sensoren je Phase", "Signed per-phase sensors"], grid_import_entities: ["Netzbezugssensoren", "Grid import sensors"], grid_export_entities: ["Netzeinspeisungssensoren", "Grid export sensors"], price_entity: ["Bezugspreis-Sensor", "Import price sensor"], export_price_entity: ["Einspeisepreis-Sensor", "Export price sensor"], scope_unassigned: ["Keiner Gruppe zugeordnet", "Not assigned to a group"], scope_no_grid: ["Keine Netzquelle", "No grid source"], scope_power_sensors: ["Leistungssensoren", "power sensors"], scope_forecasts: ["Prognosen", "forecasts"], scope_grid_sensors: ["Netzsensoren", "grid sensors"], scope_phase_sensors: ["Phasenmessungen", "phase readings"], scope_groups: ["Gruppen", "Groups"], scope_no_pv: ["Noch keine PV-Quellen.", "No PV sources yet."], scope_none: ["Noch keine EnergyScopes konfiguriert.", "No EnergyScopes configured yet."],
       battery_groups: ["Batteriegruppen", "Battery groups"], ungrouped_systems: ["Eingerichtet, aber ungruppiert", "Configured but ungrouped"], no_groups_yet: ["Noch keine Gruppen angelegt.", "No groups created yet."], no_group_members: ["Keine Systeme zugeordnet.", "No systems assigned."], manage_groups: ["Gruppen verwalten", "Manage groups"],
       details: ["Details", "Details"], hide_details: ["Schließen", "Close"], seconds_ago: ["Sek. zuvor", "s ago"],
       configured_path: ["Eingestellt", "Configured"], selected_path: ["Gewählt / aktiv", "Selected / active"], observed_data_source: ["Zuletzt beobachtete Datenquelle", "Last observed data source"],
@@ -828,7 +834,15 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const empty = !groups && !ungrouped
         ? `<p class="muted">${this._escape(this._t("no_groups_yet"))}</p>`
         : "";
-      return `<div class="group-summary-entry">${entry.system ? `<small>${this._escape(entry.system)}</small>` : ""}<div class="group-summary-grid">${groups}${ungrouped}${empty}</div><button class="apply" type="button" data-group-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("manage_groups"))}</button></div>`;
+      const scopes = (entry.energy_scopes || []).map((scope) => {
+        const groupNames = scope.groups?.length ? scope.groups.join(", ") : this._t("scope_unassigned");
+        const grid = (scope.grid_entities || []).length ? scope.grid_entities.join(", ") : this._t("scope_no_grid");
+        const phases = (scope.grid_phase_entities || []).map((entityId) => `${this._escape(this._hass?.states?.[entityId]?.attributes?.friendly_name || entityId)}: ${this._escape(this._value(this._hass?.states?.[entityId]))}`).join(" · ");
+        const pvSources = (scope.pv_sources || []).map((source) => `${this._escape(source.name)} · ${this._escape(source.mode)} · ${Number(source.power_entities.length)} ${this._t("scope_power_sensors")} · ${Number(source.forecast_count)} ${this._t("scope_forecasts")}`).join("<br>");
+        return `<article class="group-summary-card" style="padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:10px"><div class="system-head"><strong>${this._escape(scope.name)}</strong><span>${this._escape(this._t("scope_groups"))}: ${this._escape(groupNames)}</span></div><div class="device-meta">${this._escape(this._t("grid_mode"))}: ${this._escape(scope.grid_mode)} · ${this._escape(this._t("scope_grid_sensors"))}: ${this._escape(grid)}</div>${phases ? `<div class="device-meta">${this._escape(this._t("scope_phase_sensors"))}: ${phases}</div>` : ""}<div class="device-meta">${pvSources || this._escape(this._t("scope_no_pv"))}</div></article>`;
+      }).join("");
+      const scopeEmpty = scopes ? "" : `<p class="muted">${this._escape(this._t("scope_none"))}</p>`;
+      return `<div class="group-summary-entry">${entry.system ? `<small>${this._escape(entry.system)}</small>` : ""}<div class="group-summary-grid">${groups}${ungrouped}${empty}</div><button class="apply" type="button" data-group-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("manage_groups"))}</button><h3>${this._escape(this._t("energy_scopes"))}</h3><div class="group-summary-grid">${scopes}${scopeEmpty}</div><button class="apply" type="button" data-energy-scope-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("energy_scopes"))}</button></div>`;
     }).join("");
     return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("battery_groups"))}</h2></div>${content}</section>`;
   }
@@ -1060,10 +1074,12 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const title = step.step_id === "general" ? this._t("general_settings")
       : step.step_id === "smart_mode" ? this._t("smart_mode_settings")
         : step.step_id === "systems_groups" || step.step_id.startsWith("group_") ? this._t("systems_groups")
+          : step.step_id === "energy_scopes" || step.step_id.startsWith("energy_scope") ? this._t("energy_scopes")
           : this._t("expert_settings");
     let content = "";
     if (step.type === "menu") {
       const menuLabel = { general: "general_settings", expert: "expert_settings", smart_mode: "smart_mode_settings", debug: "debug_settings", systems_groups: "systems_groups", group_create: "group_create", group_edit_select: "group_edit_select", group_remove: "group_remove" };
+      Object.assign(menuLabel, { energy_scopes: "energy_scopes", energy_scope_create: "energy_scope_create", energy_scope_edit_select: "energy_scope_edit_select", energy_scope_remove_select: "energy_scope_remove_select", energy_scope_edit: "energy_scope_edit", energy_scope_pv_sources: "energy_scope_pv_sources", energy_scope_pv_add: "energy_scope_pv_add", energy_scope_pv_remove_select: "energy_scope_pv_remove_select", energy_scope_save: "energy_scope_save" });
       content = (step.menu_options || []).filter((option) => menuLabel[option]).map((option) => `<button class="apply" type="button" data-options-next="${this._escape(option)}">${this._escape(this._t(menuLabel[option]))}</button>`).join("");
     } else if (step.type === "form") {
       const fields = (step.data_schema || []).map((field) => {
@@ -1092,8 +1108,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
         if (fieldType === "entity") {
           const domain = config.domain || "sensor";
           const entities = Object.keys(this._hass?.states || {}).filter((entityId) => !domain || entityId.startsWith(`${domain}.`)).sort();
-          const options = [`<option value="">—</option>`, ...entities.map((entityId) => `<option value="${this._escape(entityId)}" ${entityId === value ? "selected" : ""}>${this._escape(this._hass.states[entityId]?.attributes?.friendly_name || entityId)}</option>`)].join("");
-          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}">${options}</select></label>`;
+          const multiple = Boolean(config.multiple);
+          const selectedValues = multiple ? (Array.isArray(value) ? value.map(String) : []) : [String(value)];
+          const options = [...(multiple ? [] : [`<option value="">—</option>`]), ...entities.map((entityId) => `<option value="${this._escape(entityId)}" ${selectedValues.includes(entityId) ? "selected" : ""}>${this._escape(this._hass.states[entityId]?.attributes?.friendly_name || entityId)}</option>`)].join("");
+          return `<label class="option-field"><span>${label}</span><select data-option-field="${name}" ${multiple ? "multiple" : ""}>${options}</select></label>`;
         }
         const number = fieldType === "number";
         return `<label class="option-field"><span>${label}</span><input data-option-field="${name}" type="${number ? "number" : "text"}" value="${this._escape(value)}" ${config.min !== undefined ? `min="${config.min}"` : ""} ${config.max !== undefined ? `max="${config.max}"` : ""} ${config.step !== undefined ? `step="${config.step}"` : ""}></label>`;
