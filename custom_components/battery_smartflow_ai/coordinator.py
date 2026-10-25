@@ -52,6 +52,9 @@ from .const import (
     CONF_BATTERY_AC_POWER_ENTITY,
     CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
     CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
+    CONF_BATTERY_GROUPS,
+    CONF_ENERGY_SCOPES,
+    CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
     CONF_DEVICE_PROFILE,
     CONF_PROFILE_OVERRIDES,
     CONF_REGULATION_TRAINING_CANDIDATE,
@@ -285,6 +288,11 @@ from .manual_standby import active_power_direction
 from .full_charge_maintenance_runtime import FullChargeMaintenanceRuntime
 from .full_charge_maintenance_control import apply_maintenance_charge_request
 from .grid_event_refresh import grid_refresh_delay, grid_value_changed
+from .energy_scopes import (
+    GRID_MODE_SIGNED as ENERGY_GRID_MODE_SIGNED,
+    GRID_MODE_SPLIT as ENERGY_GRID_MODE_SPLIT,
+    normalize_energy_scope_config,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -424,6 +432,7 @@ def _clamp_season_counter(value: Any) -> int:
 class SelectedEntities:
     soc: str
     pv: str | None
+    pv_entities: tuple[str, ...]
     native_pv: str | None
     pv_forecast_today: str | None
     pv_forecast_tomorrow: str | None
@@ -440,14 +449,51 @@ class SelectedEntities:
     soc_limit: str | None
     grid_mode: str
     grid_power: str | None
+    grid_power_entities: tuple[str, ...]
+    grid_phase_power_entities: tuple[str, ...]
     grid_import: str | None
+    grid_import_entities: tuple[str, ...]
     grid_export: str | None
+    grid_export_entities: tuple[str, ...]
     lowest_cell_voltage_entities: tuple[str | None, ...]
     offgrid_power: str | None
     offgrid_mode: str | None
 
 
 class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
+    @staticmethod
+    def _selected_energy_scope(entry: ConfigEntry) -> dict[str, Any]:
+        """Resolve the EnergyScope assigned to the selected device's group."""
+
+        selected_device_id = (
+            entry.options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+            or entry.data.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+        )
+        if not isinstance(selected_device_id, str) or not selected_device_id:
+            return {}
+        group_config = entry.options.get(CONF_BATTERY_GROUPS, {})
+        groups = group_config.get("groups", {}) if isinstance(group_config, Mapping) else {}
+        selected_group_id = None
+        if isinstance(groups, Mapping):
+            for group_id, group in groups.items():
+                members = group.get("members", ()) if isinstance(group, Mapping) else ()
+                if selected_device_id in members:
+                    selected_group_id = str(group_id)
+                    break
+        if selected_group_id is None:
+            return {}
+        try:
+            scope_config = normalize_energy_scope_config(
+                entry.options.get(CONF_ENERGY_SCOPES)
+            )
+        except (TypeError, ValueError):
+            _LOGGER.exception("Invalid EnergyScope configuration; using legacy sources")
+            return {}
+        for scope in scope_config["scopes"].values():
+            if selected_group_id in scope["group_ids"]:
+                return scope
+        return {}
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -487,12 +533,45 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if isinstance(raw_forecast_entries, str):
             raw_forecast_entries = (raw_forecast_entries,)
 
+        selected_scope = self._selected_energy_scope(entry)
+        self._energy_scope = selected_scope
+        scoped_pv_entities = tuple(
+            dict.fromkeys(
+                entity_id
+                for source in selected_scope.get("pv_sources", ())
+                for entity_id in source.get("power_entities", ())
+            )
+        )
+        if selected_scope:
+            raw_forecast_entries = tuple(
+                dict.fromkeys(
+                    forecast_id
+                    for source in selected_scope.get("pv_sources", ())
+                    for forecast_id in source.get("forecast_entry_ids", ())
+                )
+            )
+        scoped_grid_mode = selected_scope.get("grid_mode")
+        grid_mode = (
+            GRID_MODE_SINGLE
+            if scoped_grid_mode == ENERGY_GRID_MODE_SIGNED
+            else GRID_MODE_SPLIT
+            if scoped_grid_mode == ENERGY_GRID_MODE_SPLIT
+            else GRID_MODE_NONE
+            if selected_scope
+            else str(entry.data.get(CONF_GRID_MODE, GRID_MODE_NONE))
+        )
+
         self.entities = SelectedEntities(
             soc=str(entry.data.get(CONF_SOC_ENTITY, "")),
             pv=entry.data.get(CONF_PV_ENTITY),
+            pv_entities=scoped_pv_entities,
             native_pv=entry.data.get(CONF_NATIVE_PV_ENTITY),
-            pv_forecast_today=entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY),
-            pv_forecast_tomorrow=entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY),
+            pv_forecast_today=(
+                None if selected_scope else entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY)
+            ),
+            pv_forecast_tomorrow=(
+                None if selected_scope else entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY)
+            ),
             pv_forecast_config_entries=tuple(
                 str(value)
                 for value in raw_forecast_entries
@@ -504,19 +583,49 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             ),
             additional_battery_charge=entry.data.get(CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY),
             additional_battery_discharge=entry.data.get(CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY),
-            price_export=entry.data.get(CONF_PRICE_EXPORT_ENTITY),
-            price_now=entry.data.get(CONF_PRICE_NOW_ENTITY),
-            dynamic_feed_in_price=entry.data.get(
-                CONF_DYNAMIC_FEED_IN_PRICE_ENTITY
+            price_export=(
+                selected_scope.get("export_price_entity")
+                if selected_scope and selected_scope.get("export_price_entity")
+                else entry.data.get(CONF_PRICE_EXPORT_ENTITY)
+            ),
+            price_now=(
+                selected_scope.get("price_entity")
+                if selected_scope and selected_scope.get("price_entity")
+                else entry.data.get(CONF_PRICE_NOW_ENTITY)
+            ),
+            dynamic_feed_in_price=(
+                selected_scope.get("export_price_entity")
+                if selected_scope and selected_scope.get("export_price_entity")
+                else entry.data.get(CONF_DYNAMIC_FEED_IN_PRICE_ENTITY)
             ),
             ac_mode=str(entry.data.get(CONF_AC_MODE_ENTITY, "")),
             input_limit=str(entry.data.get(CONF_INPUT_LIMIT_ENTITY, "")),
             output_limit=str(entry.data.get(CONF_OUTPUT_LIMIT_ENTITY, "")),
             soc_limit=entry.data.get(CONF_SOC_LIMIT_ENTITY),
-            grid_mode=str(entry.data.get(CONF_GRID_MODE, GRID_MODE_NONE)),
-            grid_power=entry.data.get(CONF_GRID_POWER_ENTITY),
-            grid_import=entry.data.get(CONF_GRID_IMPORT_ENTITY),
-            grid_export=entry.data.get(CONF_GRID_EXPORT_ENTITY),
+            grid_mode=grid_mode,
+            grid_power=(
+                None if selected_scope else entry.data.get(CONF_GRID_POWER_ENTITY)
+            ),
+            grid_power_entities=tuple(
+                selected_scope.get("grid_power_entities", ()) if selected_scope else ()
+            ),
+            grid_phase_power_entities=tuple(
+                selected_scope.get("grid_phase_power_entities", ())
+                if selected_scope
+                else ()
+            ),
+            grid_import=(
+                None if selected_scope else entry.data.get(CONF_GRID_IMPORT_ENTITY)
+            ),
+            grid_import_entities=tuple(
+                selected_scope.get("grid_import_entities", ()) if selected_scope else ()
+            ),
+            grid_export=(
+                None if selected_scope else entry.data.get(CONF_GRID_EXPORT_ENTITY)
+            ),
+            grid_export_entities=tuple(
+                selected_scope.get("grid_export_entities", ()) if selected_scope else ()
+            ),
             offgrid_power=entry.data.get(CONF_OFFGRID_POWER_ENTITY),
             offgrid_mode=entry.data.get(CONF_OFFGRID_MODE_ENTITY),
             lowest_cell_voltage_entities=tuple(
@@ -773,14 +882,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def grid_event_entity_ids(self) -> tuple[str, ...]:
         """Return configured HA grid-power sources that can trigger a refresh."""
 
-        if self.entities.grid_mode == GRID_MODE_SINGLE:
+        if self.entities.grid_power_entities or self.entities.grid_phase_power_entities:
+            entity_ids = self.entities.grid_power_entities or self.entities.grid_phase_power_entities
+        elif self.entities.grid_import_entities or self.entities.grid_export_entities:
+            entity_ids = (
+                self.entities.grid_import_entities
+                + self.entities.grid_export_entities
+            )
+        elif self.entities.grid_mode == GRID_MODE_SINGLE:
             entity_ids = (self.entities.grid_power,)
         elif self.entities.grid_mode == GRID_MODE_SPLIT:
             entity_ids = (self.entities.grid_import, self.entities.grid_export)
         else:
             # Direct Shelly measurements are polled through their own timer.
             return ()
-        return tuple(str(entity_id) for entity_id in entity_ids if entity_id)
+        return tuple(dict.fromkeys(str(entity_id) for entity_id in entity_ids if entity_id))
 
     def async_start_grid_event_refresh(self):
         """Subscribe to meaningful selected-grid updates with bounded refreshes."""
@@ -2767,6 +2883,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         return profile
 
     def _get_installed_pv_wp(self) -> float:
+        if self._energy_scope:
+            sources = self._energy_scope.get("pv_sources", ())
+            if sources and all(
+                source.get("installed_power_wp") is not None
+                for source in sources
+            ):
+                return sum(float(source["installed_power_wp"]) for source in sources)
         try:
             value = self.entry.options.get(
                 CONF_INSTALLED_PV_WP,
@@ -3020,6 +3143,49 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return gp, 0.0
             return 0.0, abs(gp)
 
+        if self.entities.grid_power_entities:
+            readings = [
+                _to_float(self._state(entity_id), None)
+                for entity_id in self.entities.grid_power_entities
+            ]
+            if any(value is None or not math.isfinite(float(value)) for value in readings):
+                return None, None
+            signed_power = sum(float(value) for value in readings)
+            return (
+                (signed_power, 0.0)
+                if signed_power >= 0
+                else (0.0, abs(signed_power))
+            )
+
+        if self.entities.grid_phase_power_entities:
+            readings = [
+                _to_float(self._state(entity_id), None)
+                for entity_id in self.entities.grid_phase_power_entities
+            ]
+            if any(value is None or not math.isfinite(float(value)) for value in readings):
+                return None, None
+            return (
+                sum(max(0.0, float(value)) for value in readings),
+                sum(max(0.0, -float(value)) for value in readings),
+            )
+
+        if self.entities.grid_import_entities or self.entities.grid_export_entities:
+            imports = [
+                _to_float(self._state(entity_id), None)
+                for entity_id in self.entities.grid_import_entities
+            ]
+            exports = [
+                _to_float(self._state(entity_id), None)
+                for entity_id in self.entities.grid_export_entities
+            ]
+            if (
+                not imports
+                or not exports
+                or any(value is None or not math.isfinite(float(value)) for value in imports + exports)
+            ):
+                return None, None
+            return sum(float(value) for value in imports), sum(float(value) for value in exports)
+
         if mode == GRID_MODE_SINGLE and self.entities.grid_power:
             gp = _to_float(self._state(self.entities.grid_power), None)
             if gp is None:
@@ -3045,7 +3211,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         is represented by the measured acquisition duration instead.
         """
 
-        if self.entities.grid_mode == GRID_MODE_SINGLE:
+        if self.entities.grid_power_entities or self.entities.grid_phase_power_entities:
+            entity_ids = self.entities.grid_power_entities or self.entities.grid_phase_power_entities
+        elif self.entities.grid_import_entities or self.entities.grid_export_entities:
+            entity_ids = self.entities.grid_import_entities + self.entities.grid_export_entities
+        elif self.entities.grid_mode == GRID_MODE_SINGLE:
             entity_ids = (self.entities.grid_power,)
         elif self.entities.grid_mode == GRID_MODE_SPLIT:
             entity_ids = (self.entities.grid_import, self.entities.grid_export)
@@ -3073,6 +3243,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             for state in states
         ]
         return max(ages)
+
+    def _get_pv_power(self) -> tuple[float | None, list[Any]]:
+        """Read every configured PV component as one complete scope total."""
+
+        entity_ids = (
+            self.entities.pv_entities
+            if self._energy_scope
+            else (self.entities.pv,) if self.entities.pv else ()
+        )
+        raw_values = [self._state(entity_id) for entity_id in entity_ids]
+        if not entity_ids:
+            return None, raw_values
+        readings = [_to_float(raw, None) for raw in raw_values]
+        if any(value is None or not math.isfinite(float(value)) for value in readings):
+            return None, raw_values
+        return sum(float(value) for value in readings), raw_values
 
     async def _async_refresh_shelly_grid_power(self) -> None:
         """Refresh the configured local Shelly grid reading."""
@@ -4914,7 +5100,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if native_soc is not None and native_soc.valid
                 else "home_assistant_entity"
             )
-            pv = _to_float(self._state(self.entities.pv), None)
+            pv, pv_raw_values = self._get_pv_power()
             native_pv = _to_float(self._state(self.entities.native_pv), None)
             if native_state is not None:
                 native_pv = float(native_state.pv_power_w.value) if native_state.pv_power_w.valid else None
@@ -4931,7 +5117,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     reason="soc_invalid",
                     raw_values={
                         "soc_raw": self._state(self.entities.soc),
-                        "pv_raw": self._state(self.entities.pv),
+                        "pv_raw": pv_raw_values,
                         "native_soc_validity": (
                             str(native_soc.validity)
                             if native_soc is not None
@@ -5184,7 +5370,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         reason="soc_invalid",
                         raw_values={
                             "soc_raw": self._state(self.entities.soc),
-                            "pv_raw": self._state(self.entities.pv),
+                            "pv_raw": pv_raw_values,
                             "soc_cached_value_pct": previous_soc,
                             "soc_cached_age_seconds": soc_sensor_gap_age_seconds,
                             "soc_sensor_gap_grace_seconds": (

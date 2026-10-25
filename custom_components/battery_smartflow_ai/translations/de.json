@@ -275,7 +275,8 @@
     "error": {
       "invalid_zensdk_ip": "Gib eine private IPv4-Adresse des Zendure-Geräts ein.",
       "zensdk_ip_unsupported": "Dieses Zendure-Modell unterstützt keine direkten ZenSDK-Messwerte.",
-      "zensdk_ip_clear_conflict": "Gib eine Adresse ein oder wähle automatische Erkennung, nicht beides."
+      "zensdk_ip_clear_conflict": "Gib eine Adresse ein oder wähle automatische Erkennung, nicht beides.",
+      "invalid_energy_scope": "Der EnergyScope konnte nicht gespeichert werden. Prüfe die Netz-Messart und ob PV- oder Prognosequellen mehrfach zugeordnet sind."
     },
     "step": {
       "init": {
@@ -287,6 +288,7 @@
           "dashboard": "HEMS-Dashboard",
           "smart_mode": "Zendure-SmartMode",
           "systems_groups": "Systeme & Gruppen",
+          "energy_scopes": "Energie-Scopes",
           "native_zendure": "Natives Zendure",
           "training": "Regelungstraining",
           "debug": "Debug-Modus"
@@ -320,6 +322,14 @@
       "group_edit_select": {"title": "Batteriegruppe auswählen", "data": {"group_id": "Gruppe"}},
       "group_edit": {"title": "Batteriegruppe bearbeiten", "description": "Bereits einer anderen Gruppe zugeordnete Systeme werden beim Speichern verschoben. Entfernte Systeme bleiben eingerichtet und ungruppiert.", "data": {"name": "Gruppenname", "members": "Systeme in der Gruppe"}},
       "group_remove": {"title": "Batteriegruppe entfernen", "description": "Beim Entfernen der Gruppe bleiben die Systeme eingerichtet und werden ungruppiert.", "data": {"group_id": "Gruppe"}},
+      "energy_scopes": {"title": "Energie-Scopes", "description": "Ordne Netzmessungen, PV-Anlagen, Prognosequellen und Preiskontext Batteriegruppen zu. Dies konfiguriert Messkontexte; eine produktive Mehrgeräte-Regelung wird dadurch nicht aktiviert.", "menu_options": {"energy_scope_create": "EnergyScope anlegen", "energy_scope_edit_select": "EnergyScope bearbeiten", "energy_scope_remove_select": "EnergyScope entfernen"}},
+      "energy_scope_create": {"title": "EnergyScope anlegen", "description": "Wähle Gruppen und Netz-/Preiskontext. Im nächsten Schritt kannst du PV-Anlagen hinzufügen und die jeweilige Prognosequelle zuordnen.", "data": {"name": "Bezeichnung", "group_ids": "Zugeordnete Batteriegruppen", "grid_mode": "Netz-Messart", "grid_power_entities": "Vorzeichenbehaftete Netzsensoren", "grid_phase_power_entities": "Vorzeichenbehaftete Netzsensoren je Phase", "grid_import_entities": "Netzbezugssensoren", "grid_export_entities": "Netzeinspeisungssensoren", "price_entity": "Aktueller Bezugspreis-Sensor", "export_price_entity": "Dynamischer Einspeisepreis-Sensor"}},
+      "energy_scope_edit_select": {"title": "EnergyScope auswählen", "data": {"scope_id": "EnergyScope"}},
+      "energy_scope_edit": {"title": "EnergyScope bearbeiten", "description": "Im vorzeichenbehafteten Modus werden Netzsensoren summiert. Im getrennten Modus werden Bezug und Einspeisung separat summiert. Jede Batteriegruppe kann nur einem EnergyScope zugeordnet sein.", "data": {"name": "Bezeichnung", "group_ids": "Zugeordnete Batteriegruppen", "grid_mode": "Netz-Messart", "grid_power_entities": "Vorzeichenbehaftete Netzsensoren", "grid_phase_power_entities": "Vorzeichenbehaftete Netzsensoren je Phase", "grid_import_entities": "Netzbezugssensoren", "grid_export_entities": "Netzeinspeisungssensoren", "price_entity": "Aktueller Bezugspreis-Sensor", "export_price_entity": "Dynamischer Einspeisepreis-Sensor"}},
+      "energy_scope_pv_sources": {"title": "PV- und Prognosequellen", "description": "PV-Anlagen und Prognosen werden gemeinsam zugeordnet, damit unterschiedliche Dachausrichtungen getrennt bleiben. Die Messart unterscheidet einen Gesamtsensor von einzelnen Komponentensensoren.", "menu_options": {"energy_scope_edit": "Scope-Einstellungen bearbeiten", "energy_scope_pv_add": "PV-Anlage und Prognose zuordnen", "energy_scope_pv_remove_select": "PV-Anlage entfernen", "energy_scope_save": "EnergyScope speichern"}},
+      "energy_scope_pv_add": {"title": "PV-Anlage hinzufügen", "description": "Wähle einen Gesamtsensor oder mehrere Komponentensensoren. Ordne nur Prognosen zu, die diese PV-Anlage abbilden.", "data": {"source_name": "Name der PV-Anlage", "source_mode": "Messart", "power_entities": "PV-Leistungssensoren", "installed_power_wp": "Installierte PV-Leistung (Wp)", "forecast_entry_ids": "Prognosequellen für diese PV-Anlage"}},
+      "energy_scope_pv_remove_select": {"title": "PV-Anlage entfernen", "data": {"source_id": "PV-Anlage"}},
+      "energy_scope_remove_select": {"title": "EnergyScope entfernen", "description": "Beim Entfernen bleiben Batteriegruppen und Geräte unverändert.", "data": {"scope_id": "EnergyScope"}},
       "training_start": {
         "title": "Passives Regelungstraining starten",
         "description": "Das Training beobachtet ausschließlich den realen Betrieb. Es ändert keine Live-Regelparameter und sendet keine experimentellen Befehle. Das Ergebnis bleibt ein Shadow-Vorschlag.",
@@ -439,6 +449,19 @@
         "shelly_pro_3em": "Shelly Pro 3EM Gen2 (lokales HTTP)",
         "shelly_pro_3em_modbus": "Shelly Pro 3EM Gen2 (Modbus TCP)",
         "shelly_3em": "Shelly 3EM Gen1 (lokal)"
+      }
+    },
+    "energy_scope_grid_mode": {
+      "options": {
+        "none": "Keine Netzsensoren",
+        "signed": "Vorzeichenbehaftete Sensorwerte",
+        "split": "Getrennte Sensoren für Bezug und Einspeisung"
+      }
+    },
+    "energy_scope_pv_mode": {
+      "options": {
+        "aggregate": "Ein Gesamtsensor",
+        "components": "Getrennte Komponentensensoren"
       }
     }
   },
