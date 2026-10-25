@@ -51,7 +51,7 @@ _SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.44"
+DASHBOARD_VERSION = "1.0.45"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
