@@ -6,3 +6,5 @@
 * [V5.1.0 Portal](user-guide.md#v510-the-bsfai-portal)
 * [User Guide](user-guide.md)
 * [Dashboard Wirtschaft & Preise](dashboard-wirtschaft-preise.md)
+* [Sensorenkatalog](sensoren.md)
+* [Sensor Catalog](sensors.md)
