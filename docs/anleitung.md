@@ -28,6 +28,7 @@
 * [Kapitel 10 – Best Practices](#kapitel-10--best-practices--empfohlene-einstellungen)
 * [Anhang 1 – Geräteprofil-Parameter](#anhang-1--geräteprofil-parameter)
 * [Anhang 2 – Wichtige Diagnosewerte für Support](#anhang-2--wichtige-diagnosewerte-für-support)
+* [Anhang 3 – Vollständiger Sensorkatalog](#anhang-3--vollständiger-sensorkatalog)
 
 ---
 
@@ -1860,8 +1861,12 @@ zusätzlichen Kosten:
   tatsächlich für eine Entladung gilt.
 * **Ökonomische Entladeschwelle:** Mindestpreis, ab dem sich die Entladung unter
   Berücksichtigung des bewerteten Ladepreises und der Gewinnmarge rechnet.
-* **Ø bisheriger Akku-Ladepreis:** geschätzter Durchschnittswert der aktuell
-  gespeicherten Energie.
+* **Ø Ladepreis gesamt (Netz + PV):** gewichteter Durchschnitt der in der
+  Economics-Bilanz erfassten Batterieladungen. Dieser Gesamtwert wird nicht bei
+  SoC-Min zurückgesetzt.
+* **Ø Ladepreis aktuell (geschätzt):** SoC-basierte Schätzung für den aktuellen
+  Ladezyklus; sie wird bei bestätigtem SoC-Min zurückgesetzt und ist kein
+  exakter Preis der noch gespeicherten Restenergie.
 * **Ø Wert der Batterieentladung:** durchschnittlicher wirtschaftlicher Wert der
   bisher abgegebenen Batterieenergie.
 
@@ -1930,22 +1935,22 @@ Eine korrekte Hauslast ist wichtig für:
 
 ---
 
-## Ø Ladepreis Akku
+## Ladepreis-Sensoren
 
-Der durchschnittliche Ladepreis ist ein gewichteter Wert.
+BSFAI zeigt zwei unterschiedliche Durchschnittswerte:
 
-Er beschreibt, zu welchem Preis die aktuell gespeicherte Energie ungefähr geladen wurde.
+* **Ø Ladepreis gesamt (Netz + PV):** gewichteter Durchschnitt aller in der
+  Economics-Gesamtbilanz erfassten Ladeenergie. Netzladung wird mit dem
+  Bezugspreis, PV-Ladung mit dem angesetzten PV-Opportunitätswert bewertet.
+  Dieser Wert umfasst die gespeicherte Gesamtbilanz und wird bei SoC-Min nicht
+  zurückgesetzt. Er ist kein Preis der aktuell im Akku verbliebenen Energie.
+* **Ø Ladepreis aktuell (geschätzt):** SoC-basierte Näherung für den aktuellen
+  Ladezyklus. Sie wird bei bestätigtem SoC-Min zurückgesetzt und bleibt eine
+  Schätzung, keine Einzelverfolgung jeder gespeicherten Kilowattstunde.
 
-Er wird genutzt für:
-
-* wirtschaftliche Entladung
-* Profitberechnung
-* Preisvergleich
-
-Bei Netzladung fließt der aktuelle Netzpreis ein. Bei PV-Ladung wird eine
-konfigurierte Einspeisevergütung als entgangener Erlös verwendet. Bei gemischter
-Ladung entsteht ein gewichteter Mischpreis. Der Durchschnittswert wird mit dem
-nächsten erkannten Energiezuwachs fortgeschrieben.
+Für die ökonomische Entladeschwelle verwendet BSFAI bevorzugt **Ø Ladepreis
+gesamt (Netz + PV)**; **Ø Ladepreis aktuell (geschätzt)** dient als Rückfallwert,
+wenn der Gesamtwert nicht verfügbar ist.
 
 ---
 
@@ -1957,8 +1962,8 @@ möglicher Mischpreis werden nicht als separate Sensoren angelegt. Bei Bedarf
 stehen sie im Debug-Paket.
 
 Der **angerechnete Ladepreis** kann bereits während der Ladung sichtbar sein.
-Der **Ø Ladepreis Akku** wird dagegen erst mit einem erkannten SoC- bzw.
-Energiezuwachs dauerhaft gewichtet.
+Die beiden Durchschnittspreise werden mit den jeweils erfassten Lade- und
+SoC-Daten aktualisiert.
 
 ---
 
@@ -3646,6 +3651,19 @@ Zusätzlich hilfreich:
 > Die technische Detailtiefe liegt seit V4.4 bewusst im JSON-Paket. Zusätzliche
 > dauerhaft aktive Diagnoseentitäten oder große Recorder-Attribute sollen nicht
 > allein für eine mögliche spätere Supportanfrage aktiviert werden.
+
+---
+
+# Anhang 3 – Vollständiger Sensorkatalog
+
+Die vollständigen Tabellen führen **BSFAI-Sensoren** getrennt von den
+**Zendure-Hardware-Sensoren** auf. Sie beschreiben auch optionale und
+standardmäßig deaktivierte Diagnosewerte.
+
+* [Deutscher Sensorkatalog](sensoren.md)
+* [English sensor catalog](sensors.md)
+
+In Kapitel 6 werden die wichtigsten Sensoren ausführlich erklärt.
 
 ---
 

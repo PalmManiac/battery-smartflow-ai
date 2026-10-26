@@ -28,6 +28,7 @@
 * [Chapter 10 – Best Practices](#chapter-10--best-practices--recommended-settings)
 * [Appendix 1 - Device Profile Parameters](#appendix-1--device-profile-parameters)
 * [Appendix 2 – Important Diagnostic Values for Support](#appendix-2--important-diagnostic-values-for-support)
+* [Appendix 3 – Complete Sensor Catalog](#appendix-3--complete-sensor-catalog)
 
 ---
 
@@ -1832,8 +1833,11 @@ costs:
   active rules have been applied.
 * **Economic discharge threshold:** The minimum price at which discharging pays
   off after the valued charging price and profit margin are considered.
-* **Average battery charging price:** Estimated average cost of the energy
-  currently stored in the battery.
+* **Avg. total charge price (grid + PV):** Weighted average of charging energy
+  recorded in the Economics ledger. This total is not reset at minimum SoC.
+* **Current avg. charge price (estimated):** SoC-based estimate for the current
+  charge cycle. It resets at confirmed minimum SoC and is not an exact price for
+  the energy remaining in the battery.
 * **Average battery discharge value:** Average economic value of the battery
   energy delivered so far.
 
@@ -1902,22 +1906,22 @@ A correct household load is important for:
 
 ---
 
-## Average battery charging price
+## Battery charge price sensors
 
-The average charging price is a weighted value.
+BSFAI provides two different average values:
 
-It describes the approximate price at which the currently stored energy was charged.
+* **Avg. total charge price (grid + PV):** Weighted average of all charging
+  energy recorded in the Economics lifetime ledger. Grid charging uses the
+  import price; PV charging uses its valued opportunity cost. This value is not
+  reset at minimum SoC and does not represent the cost of energy currently
+  remaining in the battery.
+* **Current avg. charge price (estimated):** SoC-based estimate for the current
+  charge cycle. It resets at confirmed minimum SoC and does not track the exact
+  purchase price of each unit of energy in the battery.
 
-It is used for:
-
-* economic discharging
-* Profit calculation
-* Price comparison
-
-When it comes to grid charging, the current grid price is taken into account. With PV charging there is one
-configured feed-in tariff is used as lost revenue. With mixed
-charging results in a weighted mixed price. The average value is with the
-updated with the next detected energy increase.
+The economic discharge threshold uses **Avg. total charge price (grid + PV)**
+when available. **Current avg. charge price (estimated)** is the fallback when
+the total value is unavailable.
 
 ---
 
@@ -1928,9 +1932,9 @@ internally determined charging source, PV/grid shares and any mixed-price state
 are not created as separate sensors. They are available in the debug package
 when required.
 
-The **applied charging price** can already be visible during charging.
-The **Ø charging price battery**, on the other hand, is only activated when a SoC or
-Energy increase permanently weighted.
+The **applied charging price** can already be visible during charging. The
+average charge price sensors update as the corresponding charging and SoC data
+is recorded.
 
 ---
 
@@ -3603,6 +3607,18 @@ Additionally helpful:
 > Since V4.4, the technical level of detail has deliberately been in the JSON package. Additional
 > permanently active diagnostic entities or large recorder attributes should not
 > only be activated for a possible later support request.
+
+---
+
+# Appendix 3 – Complete Sensor Catalog
+
+The full tables list **BSFAI sensors** separately from **Zendure hardware
+sensors**. They also describe optional and disabled-by-default diagnostic values.
+
+* [Deutscher Sensorkatalog](sensoren.md)
+* [English sensor catalog](sensors.md)
+
+Chapter 6 explains the most important sensors in more detail.
 
 ---
 
