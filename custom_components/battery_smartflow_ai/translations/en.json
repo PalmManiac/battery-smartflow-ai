@@ -1481,7 +1481,7 @@
         }
       },
       "avg_charge_price": {
-        "name": "Prices – Legacy SoC-estimated average battery charge price"
+        "name": "Prices – Current avg. charge price (estimated)"
       },
       "profit_eur": {
         "name": "Balance since start – Legacy trading profit"
@@ -1568,7 +1568,7 @@
         "name": "Prices – Avg. PV opportunity value"
       },
       "economics_average_battery_charge_price": {
-        "name": "Prices – Avg. battery charge price (grid + PV)"
+        "name": "Prices – Avg. total charge price (grid + PV)"
       },
       "economics_average_export_price": {
         "name": "Prices – Avg. export price"
