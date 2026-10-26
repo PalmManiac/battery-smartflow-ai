@@ -157,27 +157,26 @@ Dieser Anhang listet die von der Integration erzeugten Sensoren. BSFAI-Berechnun
 | Nennkapazität | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `capacity_kwh` |
 | Batterieleistung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `power_w` |
 | Off-Grid-Leistung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `offgrid_power_w` |
-| Zellspannungsdifferenz | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `cell_delta_v` |
 | WLAN-Signalstärke | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `rssi` |
 | Geschätzte Restlaufzeit bis leer | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `remaining_output_time` |
-| Verfügbare Energie | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `available_energy` |
-| Wirkungsgrad (Roundtrip) | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `roundtrip_efficiency` |
-| Gesamtenergie Laden | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `charged_energy` |
-| Gesamtenergie Entladen | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `discharged_energy` |
-| Gesamte PV-Energie | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `pv_energy` |
+| Verfügbare Energie | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `available_energy_kwh` |
+| Wirkungsgrad (Roundtrip) | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `roundtrip_efficiency_pct` |
+| Gesamtenergie Laden | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `charged_energy_kwh` |
+| Gesamtenergie Entladen | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `discharged_energy_kwh` |
+| Gesamte PV-Energie | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `pv_energy_kwh` |
 | Schaltvorgänge | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `switching_count` |
-| Hardware-SoC-Minimum | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `soc_min` |
-| Hardware-SoC-Maximum | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `soc_max` |
-| Batterieheizung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `heating` |
+| Hardware-SoC-Minimum | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `hardware_soc_min` |
+| Hardware-SoC-Maximum | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `hardware_soc_max` |
+| Batterieheizung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `heating_active` |
 | Sollwert-Speicherung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `setpoint_storage` |
-| Gerätedaten | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `data_ready` |
-| Netzverbindung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `grid_connection` |
-| PV-Status | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `pv_status` |
-| SoC-Kalibrierung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `soc_calibration` |
-| Durchleitung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `passthrough` |
-| Rückfluss | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `reverse_flow` |
-| Off-Grid-Modus | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `offgrid_mode` |
-| Fehlerstatus | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `error_status` |
+| Gerätedaten | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `dataReady` |
+| Netzverbindung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `gridState` |
+| PV-Status | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `pvStatus` |
+| SoC-Kalibrierung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `socStatus` |
+| Durchleitung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `pass` |
+| Rückfluss | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `reverseState` |
+| Off-Grid-Modus | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `gridOffMode` |
+| Fehlerstatus | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `is_error` |
 | Online-Status | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `online` |
 | Ladezustand | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `soc_pct` |
 | Ladeleistung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `charge_power_w` |
@@ -187,16 +186,7 @@ Dieser Anhang listet die von der Integration erzeugten Sensoren. BSFAI-Berechnun
 | PV-Leistung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `pv_power_w` |
 | Betriebsmodus | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `mode` |
 | Temperatur | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `temperature_c` |
-| Maximale Zelltemperatur | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `cell_temperature_c` |
 | Batteriespannung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `battery_voltage_v` |
-| Spannung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `voltage_v` |
-| Strom | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `current_a` |
-| Niedrigste Zellspannung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `cell_min_v` |
-| Höchste Zellspannung | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `cell_max_v` |
-| Statuscode | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `state_code` |
-| Pack-Typ | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `pack_type` |
-| Fehlercode | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `fault_code` |
-| Schutz aktiv | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `protection_active` |
 | Firmware | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `firmware` |
 | Produkt-ID | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `product_id` |
 | Geräteprofil | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `profile` |
@@ -205,9 +195,10 @@ Dieser Anhang listet die von der Integration erzeugten Sensoren. BSFAI-Berechnun
 | Zendure HEMS | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `hems` |
 | Letzter Datenempfang | Vom Zendure-Hauptgerät gemeldeter aktueller Mess- oder Statuswert. Verfügbarkeit modellabhängig. | `last_message` |
 
+
 **Akku-Packs**
 
-| Diese Werte erscheinen je erkanntem Pack als eigene Sensoren.
+Diese Werte erscheinen je erkanntem Pack als eigene Sensoren.
 
 | Sensor | Bedeutung | Schlüssel |
 |---|---|---|
@@ -232,33 +223,3 @@ Dieser Anhang listet die von der Integration erzeugten Sensoren. BSFAI-Berechnun
 | Letzter Datenempfang | Messwert oder Status, den das jeweilige Zendure-Akku-Pack meldet. Manche Diagnosewerte sind standardmäßig deaktiviert. | `last_message` |
 
 **Optionale Rohdiagnose des Hauptgeräts**
-
-| Feld | Beschreibung |
-|---|---|
-| `acStatus` | Rohwert `acStatus` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `aiState` | Rohwert `aiState` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `batCalTime` | Rohwert `batCalTime` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `bindstate` | Rohwert `bindstate` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `dcStatus` | Rohwert `dcStatus` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `factoryModeState` | Rohwert `factoryModeState` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `gridStandard` | Rohwert `gridStandard` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `IOTState` | Rohwert `IOTState` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `LCNState` | Rohwert `LCNState` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `localAPIEnable` | Rohwert `localAPIEnable` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `net` | Rohwert `net` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `oldMode` | Rohwert `oldMode` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `OTAState` | Rohwert `OTAState` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `phaseSwitch` | Rohwert `phaseSwitch` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `socLimit` | Rohwert `socLimit` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `socCompSwitch` | Rohwert `socCompSwitch` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `writeRsp` | Rohwert `writeRsp` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `packNum` | Rohwert `packNum` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `PowerCycle` | Rohwert `PowerCycle` direkt aus Zendure; Bedeutung modell- und firmwareabhängig. |
-| `solarPower1` | Leistung des jeweiligen MPPT-Eingangs, sofern geliefert. |
-| `solarPower2` | Leistung des jeweiligen MPPT-Eingangs, sofern geliefert. |
-| `solarPower3` | Leistung des jeweiligen MPPT-Eingangs, sofern geliefert. |
-| `solarPower4` | Leistung des jeweiligen MPPT-Eingangs, sofern geliefert. |
-| `solarPower5` | Leistung des jeweiligen MPPT-Eingangs, sofern geliefert. |
-| `solarPower6` | Leistung des jeweiligen MPPT-Eingangs, sofern geliefert. |
-
-Die internen Schlüssel dienen der Suche in Entwicklerwerkzeugen. Anzeigenamen können durch Home Assistant oder den Nutzer angepasst werden.

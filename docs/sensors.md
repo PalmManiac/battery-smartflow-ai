@@ -151,33 +151,32 @@ This appendix lists sensors created by the integration. BSFAI calculation and st
 
 **Main unit**
 
-| Sensor | Meaning | Schlüssel |
+| Sensor | Meaning | `key` |
 |---|---|---|
 | Battery count | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pack_count` |
 | Nominal capacity | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `capacity_kwh` |
 | Battery power | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `power_w` |
 | Off-grid power | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `offgrid_power_w` |
-| Cell voltage difference | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `cell_delta_v` |
 | Wi-Fi signal strength | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `rssi` |
 | Estimated time until empty | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `remaining_output_time` |
-| Available energy | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `available_energy` |
-| Round-trip efficiency | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `roundtrip_efficiency` |
-| Total energy charged | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `charged_energy` |
-| Total energy discharged | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `discharged_energy` |
-| Total PV energy | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pv_energy` |
+| Available energy | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `available_energy_kwh` |
+| Round-trip efficiency | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `roundtrip_efficiency_pct` |
+| Total energy charged | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `charged_energy_kwh` |
+| Total energy discharged | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `discharged_energy_kwh` |
+| Total PV energy | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pv_energy_kwh` |
 | Switching operations | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `switching_count` |
-| Hardware minimum SoC | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `soc_min` |
-| Hardware maximum SoC | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `soc_max` |
-| Battery heating | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `heating` |
+| Hardware minimum SoC | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `hardware_soc_min` |
+| Hardware maximum SoC | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `hardware_soc_max` |
+| Battery heating | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `heating_active` |
 | Setpoint storage | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `setpoint_storage` |
-| Device data | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `data_ready` |
-| Grid connection | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `grid_connection` |
-| PV status | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pv_status` |
-| SoC calibration | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `soc_calibration` |
-| Pass-through | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `passthrough` |
-| Reverse flow | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `reverse_flow` |
-| Off-grid mode | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `offgrid_mode` |
-| Error status | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `error_status` |
+| Device data | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `dataReady` |
+| Grid connection | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `gridState` |
+| PV status | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pvStatus` |
+| SoC calibration | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `socStatus` |
+| Pass-through | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pass` |
+| Reverse flow | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `reverseState` |
+| Off-grid mode | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `gridOffMode` |
+| Error status | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `is_error` |
 | Online status | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `online` |
 | State of charge | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `soc_pct` |
 | Charge power | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `charge_power_w` |
@@ -187,16 +186,7 @@ This appendix lists sensors created by the integration. BSFAI calculation and st
 | PV power | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pv_power_w` |
 | Operating mode | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `mode` |
 | Temperature | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `temperature_c` |
-| Maximum cell temperature | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `cell_temperature_c` |
 | Battery voltage | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `battery_voltage_v` |
-| Voltage | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `voltage_v` |
-| Current | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `current_a` |
-| Lowest cell voltage | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `cell_min_v` |
-| Highest cell voltage | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `cell_max_v` |
-| State code | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `state_code` |
-| Pack type | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `pack_type` |
-| Fault code | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `fault_code` |
-| Protection active | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `protection_active` |
 | Firmware | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `firmware` |
 | Product ID | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `product_id` |
 | Device profile | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `profile` |
@@ -205,11 +195,12 @@ This appendix lists sensors created by the integration. BSFAI calculation and st
 | Zendure HEMS | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `hems` |
 | Last data received | Current measurement or status reported by the Zendure main unit. Availability depends on model. | `last_message` |
 
+
 **Battery packs**
 
-| These values appear as separate sensors for each detected pack.
+These values appear as separate sensors for each detected pack.
 
-| Sensor | Meaning | Schlüssel |
+| Sensor | Meaning | `key` |
 |---|---|---|
 | Status | Measurement or status reported by the respective Zendure battery pack. Some diagnostic values are disabled by default. | `status` |
 | Cell voltage difference | Measurement or status reported by the respective Zendure battery pack. Some diagnostic values are disabled by default. | `cell_delta_v` |
@@ -260,14 +251,3 @@ This appendix lists sensors created by the integration. BSFAI calculation and st
 | `solarPower4` | Power for the respective MPPT input, when provided. |
 | `solarPower5` | Power for the respective MPPT input, when provided. |
 | `solarPower6` | Power for the respective MPPT input, when provided. |
-
-| Feld | Description |
-|---|---|
-| `solarPower1` | Power for the corresponding MPPT input, when provided by the device. |
-| `solarPower2` | Power for the corresponding MPPT input, when provided by the device. |
-| `solarPower3` | Power for the corresponding MPPT input, when provided by the device. |
-| `solarPower4` | Power for the corresponding MPPT input, when provided by the device. |
-| `solarPower5` | Power for the corresponding MPPT input, when provided by the device. |
-| `solarPower6` | Power for the corresponding MPPT input, when provided by the device. |
-
-Internal keys help locate entities in developer tools. Display names can be changed by Home Assistant or the user.
