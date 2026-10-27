@@ -270,10 +270,13 @@
     "abort": {
       "invalid_group": "De batterijgroep kon niet worden opgeslagen. Controleer de naam en systeemselectie.",
       "no_groups": "Er zijn geen batterijgroepen om te bewerken of verwijderen.",
-      "group_not_found": "De geselecteerde batterijgroep bestaat niet meer."
+      "group_not_found": "De geselecteerde batterijgroep bestaat niet meer.",
+      "topology_record_in_use": "Dit item wordt nog gebruikt door een apparaatuitgang of circuit.",
+      "topology_record_missing": "Het geselecteerde topologie-item bestaat niet meer."
     },
     "error": {
       "invalid_energy_scope": "De sensortoewijzing kon niet worden opgeslagen. Controleer de meetmethode van het net en of PV- of prognosebronnen dubbel zijn toegewezen.",
+      "invalid_electrical_topology": "De topologie is tegenstrijdig. Controleer de fase, het circuit en het lastgebied.",
       "invalid_zensdk_ip": "Voer een privé IPv4-adres van het Zendure-apparaat in.",
       "zensdk_ip_unsupported": "Dit Zendure-model ondersteunt geen directe ZenSDK-metingen.",
       "zensdk_ip_clear_conflict": "Voer een adres in of kies automatische detectie, niet allebei."
@@ -289,6 +292,7 @@
           "smart_mode": "Zendure Smart Mode",
           "systems_groups": "Systemen en groepen",
           "energy_scopes": "Sensortoewijzingen",
+          "electrical_topology": "Elektrische topologie",
           "native_zendure": "Native Zendure-test",
           "training": "Regelingstraining",
           "debug": "Debugmodus"
@@ -323,6 +327,13 @@
       "group_edit": {"title": "Batterijgroep bewerken", "description": "Systemen uit een andere groep worden bij opslaan verplaatst. Verwijderde systemen blijven geconfigureerd en zonder groep.", "data": {"name": "Groepsnaam", "members": "Systemen in groep"}},
       "group_remove": {"title": "Batterijgroep verwijderen", "description": "De systemen blijven geconfigureerd en zonder groep na het verwijderen.", "data": {"group_id": "Groep"}},
       "energy_scopes": {"title": "Sensortoewijzingen", "description": "Koppel netmetingen, PV-installaties, prognoses en prijsinformatie aan batterijgroepen.", "menu_options": {"energy_scope_create": "Sensortoewijzing maken", "energy_scope_edit_select": "Sensortoewijzing bewerken", "energy_scope_remove_select": "Sensortoewijzing verwijderen"}},
+      "electrical_topology": {"title": "Elektrische topologie", "description": "Beschrijf circuits, gedeelde bovenliggende limieten en off-grid-lastgebieden. Deze configuratie schakelt geen apparaatbesturing in.", "menu_options": {"topology_circuit_add": "Circuit toevoegen", "topology_circuit_remove": "Circuit verwijderen", "topology_domain_add": "Lastgebied toevoegen", "topology_domain_remove": "Lastgebied verwijderen", "topology_connection_add": "Apparaatuitgang koppelen", "topology_connection_remove": "Apparaatuitgang verwijderen"}},
+      "topology_circuit_add": {"title": "Circuit toevoegen", "description": "Er wordt geen stroom- of vermogenslimiet verondersteld. Vul alleen toepasselijke limieten in.", "data": {"name": "Naam", "phase": "Fase", "max_current_a": "Maximale stroom (A)", "max_power_w": "Maximaal vermogen (W)", "parent_circuit_id": "Gedeeld bovenliggend circuit"}},
+      "topology_domain_add": {"title": "Lastgebied toevoegen", "data": {"name": "Naam van lastgebied", "kind": "Type lastgebied"}},
+      "topology_connection_add": {"title": "Apparaatuitgang koppelen", "data": {"device_id": "Zendure-systeem", "output_id": "Naam van uitgang", "kind": "Type uitgang", "circuit_id": "Circuit", "load_domain_id": "Lastgebied"}},
+      "topology_circuit_remove": {"title": "Circuit verwijderen", "data": {"record_id": "Circuit"}},
+      "topology_domain_remove": {"title": "Lastgebied verwijderen", "data": {"record_id": "Lastgebied"}},
+      "topology_connection_remove": {"title": "Apparaatuitgang verwijderen", "data": {"record_id": "Apparaatuitgang"}},
       "energy_scope_create": {"title": "Sensortoewijzing maken", "description": "Kies groepen en de net- en prijscontext en koppel daarna PV-installaties aan hun prognoses.", "data": {"name": "Naam van de toewijzing", "group_ids": "Toegewezen batterijgroepen", "grid_mode": "Meetmethode van het net", "grid_power_entities": "Gesigneerde netvermogenssensoren", "grid_phase_power_entities": "Gesigneerde netsensoren per fase", "grid_import_entities": "Sensoren voor netafname", "grid_export_entities": "Sensoren voor teruglevering", "price_entity": "Sensor voor actuele inkoopprijs", "export_price_entity": "Sensor voor dynamische terugleverprijs"}, "data_description": {"grid_power_entities": "Totaal vermogen van de netaansluiting in watt: afname positief, teruglevering negatief. Gebruik de meetmethode met teken.", "grid_phase_power_entities": "Afzonderlijke fasevermogens in watt met hetzelfde teken. Alternatief voor een totaalsensor; als beide zijn gekozen krijgt de totaalsensor voorrang.", "grid_import_entities": "Actueel netafnamevermogen in watt. Alleen voor gescheiden meting; kies ook een sensor voor teruglevering.", "grid_export_entities": "Actueel terugleververmogen in watt. Alleen voor gescheiden meting; kies ook een sensor voor netafname."}},
       "energy_scope_edit_select": {"title": "Sensortoewijzing kiezen", "data": {"scope_id": "Sensortoewijzing"}},
       "energy_scope_edit": {"title": "Sensortoewijzing bewerken", "description": "Elke batterijgroep kan aan één sensortoewijzing worden gekoppeld.", "data": {"name": "Naam van de toewijzing", "group_ids": "Toegewezen batterijgroepen", "grid_mode": "Meetmethode van het net", "grid_power_entities": "Gesigneerde netvermogenssensoren", "grid_phase_power_entities": "Gesigneerde netsensoren per fase", "grid_import_entities": "Sensoren voor netafname", "grid_export_entities": "Sensoren voor teruglevering", "price_entity": "Sensor voor actuele inkoopprijs", "export_price_entity": "Sensor voor dynamische terugleverprijs"}, "data_description": {"grid_power_entities": "Totaal vermogen van de netaansluiting in watt: afname positief, teruglevering negatief. Gebruik de meetmethode met teken.", "grid_phase_power_entities": "Afzonderlijke fasevermogens in watt met hetzelfde teken. Alternatief voor een totaalsensor; als beide zijn gekozen krijgt de totaalsensor voorrang.", "grid_import_entities": "Actueel netafnamevermogen in watt. Alleen voor gescheiden meting; kies ook een sensor voor teruglevering.", "grid_export_entities": "Actueel terugleververmogen in watt. Alleen voor gescheiden meting; kies ook een sensor voor netafname."}},

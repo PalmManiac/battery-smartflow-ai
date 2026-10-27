@@ -270,13 +270,16 @@
     "abort": {
       "invalid_group": "Die Batteriegruppe konnte nicht gespeichert werden. Prüfe Namen und Systemauswahl.",
       "no_groups": "Es gibt keine Batteriegruppen zum Bearbeiten oder Entfernen.",
-      "group_not_found": "Die ausgewählte Batteriegruppe ist nicht mehr vorhanden."
+      "group_not_found": "Die ausgewählte Batteriegruppe ist nicht mehr vorhanden.",
+      "topology_record_in_use": "Der Eintrag wird noch von einem Geräteausgang oder Stromkreis verwendet.",
+      "topology_record_missing": "Der ausgewählte Topologie-Eintrag ist nicht mehr vorhanden."
     },
     "error": {
       "invalid_zensdk_ip": "Gib eine private IPv4-Adresse des Zendure-Geräts ein.",
       "zensdk_ip_unsupported": "Dieses Zendure-Modell unterstützt keine direkten ZenSDK-Messwerte.",
       "zensdk_ip_clear_conflict": "Gib eine Adresse ein oder wähle automatische Erkennung, nicht beides.",
-      "invalid_energy_scope": "Die Sensorzuordnung konnte nicht gespeichert werden. Prüfe die Netz-Messart und ob PV- oder Prognosequellen mehrfach zugeordnet sind."
+      "invalid_energy_scope": "Die Sensorzuordnung konnte nicht gespeichert werden. Prüfe die Netz-Messart und ob PV- oder Prognosequellen mehrfach zugeordnet sind.",
+      "invalid_electrical_topology": "Die Topologie ist widersprüchlich. Prüfe Phase, Stromkreis und Lastbereich."
     },
     "step": {
       "init": {
@@ -289,6 +292,7 @@
           "smart_mode": "Zendure-SmartMode",
           "systems_groups": "Systeme & Gruppen",
           "energy_scopes": "Sensorzuordnungen",
+          "electrical_topology": "Elektrische Topologie",
           "native_zendure": "Natives Zendure",
           "training": "Regelungstraining",
           "debug": "Debug-Modus"
@@ -323,6 +327,13 @@
       "group_edit": {"title": "Batteriegruppe bearbeiten", "description": "Bereits einer anderen Gruppe zugeordnete Systeme werden beim Speichern verschoben. Entfernte Systeme bleiben eingerichtet und ungruppiert.", "data": {"name": "Gruppenname", "members": "Systeme in der Gruppe"}},
       "group_remove": {"title": "Batteriegruppe entfernen", "description": "Beim Entfernen der Gruppe bleiben die Systeme eingerichtet und werden ungruppiert.", "data": {"group_id": "Gruppe"}},
       "energy_scopes": {"title": "Sensorzuordnungen", "description": "Ordne Netzmessungen, PV-Anlagen, Prognosequellen und Preiskontext Batteriegruppen zu. Dies konfiguriert Messkontexte; eine produktive Mehrgeräte-Regelung wird dadurch nicht aktiviert.", "menu_options": {"energy_scope_create": "Sensorzuordnung anlegen", "energy_scope_edit_select": "Sensorzuordnung bearbeiten", "energy_scope_remove_select": "Sensorzuordnung entfernen"}},
+      "electrical_topology": {"title": "Elektrische Topologie", "description": "Beschreibt Stromkreise, gemeinsame vorgeschaltete Grenzen und Off-Grid-Lastbereiche. Diese Konfiguration aktiviert keine Gerätesteuerung.", "menu_options": {"topology_circuit_add": "Stromkreis hinzufügen", "topology_circuit_remove": "Stromkreis entfernen", "topology_domain_add": "Lastbereich hinzufügen", "topology_domain_remove": "Lastbereich entfernen", "topology_connection_add": "Geräteausgang zuordnen", "topology_connection_remove": "Geräteausgang entfernen"}},
+      "topology_circuit_add": {"title": "Stromkreis hinzufügen", "description": "Es wird keine Strom- oder Leistungsgrenze vorausgesetzt. Trage nur tatsächlich geltende Grenzen ein.", "data": {"name": "Name", "phase": "Phase", "max_current_a": "Maximalstrom (A)", "max_power_w": "Maximale Leistung (W)", "parent_circuit_id": "Gemeinsame vorgeschaltete Sicherung"}},
+      "topology_domain_add": {"title": "Lastbereich hinzufügen", "data": {"name": "Name des Lastbereichs", "kind": "Art des Lastbereichs"}},
+      "topology_connection_add": {"title": "Geräteausgang zuordnen", "data": {"device_id": "Zendure-System", "output_id": "Ausgangsbezeichnung", "kind": "Ausgangsart", "circuit_id": "Stromkreis", "load_domain_id": "Lastbereich"}},
+      "topology_circuit_remove": {"title": "Stromkreis entfernen", "data": {"record_id": "Stromkreis"}},
+      "topology_domain_remove": {"title": "Lastbereich entfernen", "data": {"record_id": "Lastbereich"}},
+      "topology_connection_remove": {"title": "Geräteausgang entfernen", "data": {"record_id": "Geräteausgang"}},
       "energy_scope_create": {"title": "Sensorzuordnung anlegen", "description": "Wähle Gruppen und Netz-/Preiskontext. Im nächsten Schritt kannst du PV-Anlagen hinzufügen und die jeweilige Prognosequelle zuordnen.", "data": {"name": "Bezeichnung", "group_ids": "Zugeordnete Batteriegruppen", "grid_mode": "Netz-Messart", "grid_power_entities": "Vorzeichenbehaftete Netzsensoren", "grid_phase_power_entities": "Vorzeichenbehaftete Netzsensoren je Phase", "grid_import_entities": "Netzbezugssensoren", "grid_export_entities": "Netzeinspeisungssensoren", "price_entity": "Aktueller Bezugspreis-Sensor", "export_price_entity": "Dynamischer Einspeisepreis-Sensor"}, "data_description": {"grid_power_entities": "Gesamtleistung am Netzanschluss in Watt: Bezug positiv, Einspeisung negativ. Im vorzeichenbehafteten Modus verwenden.", "grid_phase_power_entities": "Einzelne Phasenleistungen in Watt mit demselben Vorzeichen. Alternative zum Gesamtsensor; falls beides gewählt ist, hat der Gesamtsensor Vorrang.", "grid_import_entities": "Aktuelle Netzbezugsleistung in Watt. Nur bei getrennter Messung verwenden; zusammen mit einem Einspeisesensor auswählen.", "grid_export_entities": "Aktuelle Netzeinspeiseleistung in Watt. Nur bei getrennter Messung verwenden; zusammen mit einem Bezugssensor auswählen."}},
       "energy_scope_edit_select": {"title": "Sensorzuordnung auswählen", "data": {"scope_id": "Sensorzuordnung"}},
       "energy_scope_edit": {"title": "Sensorzuordnung bearbeiten", "description": "Im vorzeichenbehafteten Modus werden Netzsensoren summiert. Im getrennten Modus werden Bezug und Einspeisung separat summiert. Jede Batteriegruppe kann nur einer Sensorzuordnung zugeordnet sein.", "data": {"name": "Bezeichnung", "group_ids": "Zugeordnete Batteriegruppen", "grid_mode": "Netz-Messart", "grid_power_entities": "Vorzeichenbehaftete Netzsensoren", "grid_phase_power_entities": "Vorzeichenbehaftete Netzsensoren je Phase", "grid_import_entities": "Netzbezugssensoren", "grid_export_entities": "Netzeinspeisungssensoren", "price_entity": "Aktueller Bezugspreis-Sensor", "export_price_entity": "Dynamischer Einspeisepreis-Sensor"}, "data_description": {"grid_power_entities": "Gesamtleistung am Netzanschluss in Watt: Bezug positiv, Einspeisung negativ. Im vorzeichenbehafteten Modus verwenden.", "grid_phase_power_entities": "Einzelne Phasenleistungen in Watt mit demselben Vorzeichen. Alternative zum Gesamtsensor; falls beides gewählt ist, hat der Gesamtsensor Vorrang.", "grid_import_entities": "Aktuelle Netzbezugsleistung in Watt. Nur bei getrennter Messung verwenden; zusammen mit einem Einspeisesensor auswählen.", "grid_export_entities": "Aktuelle Netzeinspeiseleistung in Watt. Nur bei getrennter Messung verwenden; zusammen mit einem Bezugssensor auswählen."}},

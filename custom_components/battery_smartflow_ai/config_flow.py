@@ -23,6 +23,7 @@ from .const import (
     CONF_CELL_VOLTAGE_PROTECTION_ENABLED,
     CONF_DEVICE_PROFILE,
     CONF_DYNAMIC_FEED_IN_PRICE_ENTITY,
+    CONF_ELECTRICAL_TOPOLOGY,
     CONF_ENERGY_SCOPES,
     # V3.5.0
     CONF_EXPERT_MODE_ENABLED,
@@ -102,6 +103,7 @@ from .device_profiles import (
     DEVICE_PROFILE_MODELS,
     remove_deprecated_profile_overrides,
 )
+from .electrical_topology import normalize_electrical_topology, save_electrical_topology
 from .energy_scopes import (
     GRID_MODE_NONE as ENERGY_GRID_MODE_NONE,
 )
@@ -1493,6 +1495,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "native_zendure",
                 "systems_groups",
                 "energy_scopes",
+                "electrical_topology",
                 "training",
                 "debug",
             ],
@@ -1775,6 +1778,276 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 }
             ),
         )
+
+    def _electrical_topology_config(self):
+        return normalize_electrical_topology(
+            self.config_entry.options.get(CONF_ELECTRICAL_TOPOLOGY)
+        )
+
+    def _electrical_topology_menu(self):
+        config = self._electrical_topology_config()
+        menu = ["topology_circuit_add", "topology_domain_add"]
+        if config["circuits"] and self._group_device_choices():
+            menu.append("topology_connection_add")
+        if config["circuits"]:
+            menu.extend(("topology_circuit_edit_select", "topology_circuit_remove"))
+        if config["load_domains"]:
+            menu.extend(("topology_domain_edit_select", "topology_domain_remove"))
+        if config["connections"]:
+            menu.extend(("topology_connection_edit_select", "topology_connection_remove"))
+        return menu
+
+    def _save_electrical_topology(self, config):
+        options = dict(self.config_entry.options)
+        options[CONF_ELECTRICAL_TOPOLOGY] = save_electrical_topology(config)
+        return self.async_create_entry(title="", data=options)
+
+    async def async_step_electrical_topology(self, user_input=None):
+        """Manage physical circuits, load domains and Zendure outputs."""
+        return self.async_show_menu(step_id="electrical_topology", menu_options=self._electrical_topology_menu())
+
+    @staticmethod
+    def _topology_select(choices):
+        return selector.SelectSelector(selector.SelectSelectorConfig(options=choices, mode=selector.SelectSelectorMode.DROPDOWN))
+
+    def _topology_connection_choices(self, connections):
+        device_ids = tuple(item["device_id"] for item in connections)
+        devices = {
+            item["value"]: item["label"]
+            for item in self._group_device_choices(include_members=device_ids)
+        }
+        return [
+            {
+                "value": item["id"],
+                "label": f"{devices.get(item['device_id'], 'Zendure')} · {item['output_id']} · {item['kind']}",
+            }
+            for item in connections
+        ]
+
+    async def async_step_topology_circuit_add(self, user_input=None):
+        config = self._electrical_topology_config()
+        if user_input is not None:
+            config["circuits"][uuid4().hex] = {
+                "name": user_input["name"], "phase": user_input["phase"],
+                "max_current_a": user_input.get("max_current_a"),
+                "max_power_w": user_input.get("max_power_w"),
+                "parent_circuit_id": user_input.get("parent_circuit_id") or None,
+            }
+            try:
+                return self._save_electrical_topology(config)
+            except (TypeError, ValueError):
+                return self.async_abort(reason="invalid_electrical_topology")
+        parents = [{"value": "", "label": "—"}] + [
+            {"value": key, "label": item["name"]} for key, item in config["circuits"].items()
+        ]
+        return self.async_show_form(step_id="topology_circuit_add", data_schema=vol.Schema({
+            vol.Required("name"): str,
+            vol.Required("phase", default="unknown"): self._topology_select([
+                {"value": phase, "label": phase.upper()} for phase in ("l1", "l2", "l3", "unknown")
+            ]),
+            vol.Optional("max_current_a"): selector.NumberSelector(selector.NumberSelectorConfig(
+                min=0.1, step=0.1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="A")),
+            vol.Optional("max_power_w"): selector.NumberSelector(selector.NumberSelectorConfig(
+                min=1, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="W")),
+            vol.Optional("parent_circuit_id", default=""): self._topology_select(parents),
+        }))
+
+    async def async_step_topology_circuit_edit_select(self, user_input=None):
+        config = self._electrical_topology_config()
+        choices = [{"value": key, "label": item["name"]} for key, item in config["circuits"].items()]
+        if user_input is not None:
+            self._active_topology_circuit_id = str(user_input["record_id"])
+            return await self.async_step_topology_circuit_edit()
+        return self.async_show_form(step_id="topology_circuit_edit_select", data_schema=vol.Schema({
+            vol.Required("record_id"): self._topology_select(choices),
+        }))
+
+    async def async_step_topology_circuit_edit(self, user_input=None):
+        config = self._electrical_topology_config()
+        circuit_id = getattr(self, "_active_topology_circuit_id", "")
+        current = config["circuits"].get(circuit_id)
+        if current is None:
+            return self.async_abort(reason="topology_record_missing")
+        if user_input is not None:
+            config["circuits"][circuit_id] = {
+                "name": user_input["name"], "phase": user_input["phase"],
+                "max_current_a": user_input.get("max_current_a"),
+                "max_power_w": user_input.get("max_power_w"),
+                "parent_circuit_id": user_input.get("parent_circuit_id") or None,
+            }
+            try:
+                return self._save_electrical_topology(config)
+            except (TypeError, ValueError):
+                return self.async_abort(reason="invalid_electrical_topology")
+        parents = [{"value": "", "label": "—"}] + [
+            {"value": key, "label": item["name"]} for key, item in config["circuits"].items() if key != circuit_id
+        ]
+        return self.async_show_form(step_id="topology_circuit_edit", data_schema=vol.Schema({
+            vol.Required("name", default=current["name"]): str,
+            vol.Required("phase", default=current["phase"]): self._topology_select([
+                {"value": phase, "label": phase.upper()} for phase in ("l1", "l2", "l3", "unknown")
+            ]),
+            vol.Optional("max_current_a", default=current["max_current_a"]): selector.NumberSelector(selector.NumberSelectorConfig(
+                min=0.1, step=0.1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="A")),
+            vol.Optional("max_power_w", default=current["max_power_w"]): selector.NumberSelector(selector.NumberSelectorConfig(
+                min=1, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="W")),
+            vol.Optional("parent_circuit_id", default=current["parent_circuit_id"] or ""): self._topology_select(parents),
+        }))
+
+    async def async_step_topology_domain_add(self, user_input=None):
+        config = self._electrical_topology_config()
+        if user_input is not None:
+            config["load_domains"][uuid4().hex] = {"name": user_input["name"], "kind": user_input["kind"]}
+            return self._save_electrical_topology(config)
+        return self.async_show_form(step_id="topology_domain_add", data_schema=vol.Schema({
+            vol.Required("name"): str,
+            vol.Required("kind"): self._topology_select([
+                {"value": "grid", "label": "Grid / Netz"},
+                {"value": "off_grid", "label": "Off-grid / Inselbetrieb"},
+            ]),
+        }))
+
+    async def async_step_topology_domain_edit_select(self, user_input=None):
+        config = self._electrical_topology_config()
+        choices = [{"value": key, "label": item["name"]} for key, item in config["load_domains"].items()]
+        if user_input is not None:
+            self._active_topology_domain_id = str(user_input["record_id"])
+            return await self.async_step_topology_domain_edit()
+        return self.async_show_form(step_id="topology_domain_edit_select", data_schema=vol.Schema({
+            vol.Required("record_id"): self._topology_select(choices),
+        }))
+
+    async def async_step_topology_domain_edit(self, user_input=None):
+        config = self._electrical_topology_config()
+        domain_id = getattr(self, "_active_topology_domain_id", "")
+        current = config["load_domains"].get(domain_id)
+        if current is None:
+            return self.async_abort(reason="topology_record_missing")
+        if user_input is not None:
+            config["load_domains"][domain_id] = {"name": user_input["name"], "kind": user_input["kind"]}
+            try:
+                return self._save_electrical_topology(config)
+            except (TypeError, ValueError):
+                return self.async_abort(reason="topology_record_in_use")
+        return self.async_show_form(step_id="topology_domain_edit", data_schema=vol.Schema({
+            vol.Required("name", default=current["name"]): str,
+            vol.Required("kind", default=current["kind"]): self._topology_select([
+                {"value": "grid", "label": "Grid / Netz"},
+                {"value": "off_grid", "label": "Off-grid / Inselbetrieb"},
+            ]),
+        }))
+
+    async def async_step_topology_connection_add(self, user_input=None):
+        config = self._electrical_topology_config()
+        if user_input is not None:
+            config["connections"].append({
+                "id": uuid4().hex, "device_id": user_input["device_id"],
+                "output_id": user_input["output_id"], "kind": user_input["kind"],
+                "circuit_id": user_input.get("circuit_id") or None,
+                "load_domain_id": user_input.get("load_domain_id") or None,
+            })
+            try:
+                return self._save_electrical_topology(config)
+            except (TypeError, ValueError):
+                return self.async_abort(reason="invalid_electrical_topology")
+        circuits = [
+            {"value": key, "label": item["name"]} for key, item in config["circuits"].items()
+        ]
+        domains = [{"value": "", "label": "—"}] + [
+            {"value": key, "label": item["name"]} for key, item in config["load_domains"].items()
+        ]
+        return self.async_show_form(step_id="topology_connection_add", data_schema=vol.Schema({
+            vol.Required("device_id"): self._topology_select(self._group_device_choices()),
+            vol.Required("output_id"): str,
+            vol.Required("kind"): self._topology_select([
+                {"value": "grid", "label": "Netzausgang"},
+                {"value": "off_grid", "label": "Off-Grid-Ausgang"},
+            ]),
+            vol.Required("circuit_id"): self._topology_select(circuits),
+            vol.Optional("load_domain_id", default=""): self._topology_select(domains),
+        }))
+
+    async def async_step_topology_connection_edit_select(self, user_input=None):
+        config = self._electrical_topology_config()
+        choices = self._topology_connection_choices(config["connections"])
+        if user_input is not None:
+            self._active_topology_connection_id = str(user_input["record_id"])
+            return await self.async_step_topology_connection_edit()
+        return self.async_show_form(step_id="topology_connection_edit_select", data_schema=vol.Schema({
+            vol.Required("record_id"): self._topology_select(choices),
+        }))
+
+    async def async_step_topology_connection_edit(self, user_input=None):
+        config = self._electrical_topology_config()
+        connection_id = getattr(self, "_active_topology_connection_id", "")
+        current = next((item for item in config["connections"] if item["id"] == connection_id), None)
+        if current is None:
+            return self.async_abort(reason="topology_record_missing")
+        if user_input is not None:
+            config["connections"] = [item for item in config["connections"] if item["id"] != connection_id]
+            config["connections"].append({
+                "id": connection_id, "device_id": user_input["device_id"],
+                "output_id": user_input["output_id"], "kind": user_input["kind"],
+                "circuit_id": user_input.get("circuit_id") or None,
+                "load_domain_id": user_input.get("load_domain_id") or None,
+            })
+            try:
+                return self._save_electrical_topology(config)
+            except (TypeError, ValueError):
+                return self.async_abort(reason="invalid_electrical_topology")
+        circuits = [
+            {"value": key, "label": item["name"]} for key, item in config["circuits"].items()
+        ]
+        domains = [{"value": "", "label": "—"}] + [
+            {"value": key, "label": item["name"]} for key, item in config["load_domains"].items()
+        ]
+        devices = self._group_device_choices(include_members=(current["device_id"],))
+        return self.async_show_form(step_id="topology_connection_edit", data_schema=vol.Schema({
+            vol.Required("device_id", default=current["device_id"]): self._topology_select(devices),
+            vol.Required("output_id", default=current["output_id"]): str,
+            vol.Required("kind", default=current["kind"]): self._topology_select([
+                {"value": "grid", "label": "Netzausgang"},
+                {"value": "off_grid", "label": "Off-Grid-Ausgang"},
+            ]),
+            vol.Required("circuit_id", default=current["circuit_id"]): self._topology_select(circuits),
+            vol.Optional("load_domain_id", default=current["load_domain_id"] or ""): self._topology_select(domains),
+        }))
+
+    async def _topology_remove_step(self, user_input, *, collection, step_id):
+        config = self._electrical_topology_config()
+        records = config[collection]
+        if user_input is not None:
+            selected_id = str(user_input.get("record_id") or "")
+            if collection == "circuits" and any(
+                item.get("circuit_id") == selected_id or item.get("parent_circuit_id") == selected_id
+                for item in [*config["connections"], *config["circuits"].values()]
+            ):
+                return self.async_abort(reason="topology_record_in_use")
+            if collection == "load_domains" and any(
+                item.get("load_domain_id") == selected_id for item in config["connections"]
+            ):
+                return self.async_abort(reason="topology_record_in_use")
+            if collection == "connections":
+                config[collection] = [item for item in records if item["id"] != selected_id]
+            else:
+                records.pop(selected_id, None)
+            return self._save_electrical_topology(config)
+        if collection == "connections":
+            choices = self._topology_connection_choices(records)
+        else:
+            choices = [{"value": key, "label": item["name"]} for key, item in records.items()]
+        return self.async_show_form(step_id=step_id, data_schema=vol.Schema({
+            vol.Required("record_id"): self._topology_select(choices),
+        }))
+
+    async def async_step_topology_circuit_remove(self, user_input=None):
+        return await self._topology_remove_step(user_input, collection="circuits", step_id="topology_circuit_remove")
+
+    async def async_step_topology_domain_remove(self, user_input=None):
+        return await self._topology_remove_step(user_input, collection="load_domains", step_id="topology_domain_remove")
+
+    async def async_step_topology_connection_remove(self, user_input=None):
+        return await self._topology_remove_step(user_input, collection="connections", step_id="topology_connection_remove")
 
     async def async_step_systems_groups(
         self, user_input: dict[str, Any] | None = None

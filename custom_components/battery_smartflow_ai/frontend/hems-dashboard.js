@@ -148,6 +148,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._openOptionsFlow(energyScopeEdit.dataset.entryId, "energy_scopes");
         return;
       }
+      const topologyEdit = nodeFor("[data-topology-edit]");
+      if (topologyEdit) {
+        this._openOptionsFlow(topologyEdit.dataset.entryId, "electrical_topology");
+        return;
+      }
       const optionsNext = nodeFor("[data-options-next]");
       if (optionsNext) {
         this._submitOptionsFlow(optionsNext.dataset.optionsNext);
@@ -386,6 +391,35 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const language = String(locale || "").toLowerCase().split(/[-_]/)[0];
     const energyMappingLabels = {
       energy_scopes: { de: "Sensorzuordnungen", en: "Sensor assignments", fr: "Affectations de capteurs", nl: "Sensortoewijzingen" },
+      electrical_topology: { de: "Elektrische Topologie", en: "Electrical topology", fr: "Topologie électrique", nl: "Elektrische topologie" },
+      topology_circuit_add: { de: "Stromkreis hinzufügen", en: "Add circuit", fr: "Ajouter un circuit", nl: "Circuit toevoegen" },
+      topology_circuit_edit_select: { de: "Stromkreis bearbeiten", en: "Edit circuit", fr: "Modifier un circuit", nl: "Circuit bewerken" },
+      topology_circuit_edit: { de: "Stromkreis bearbeiten", en: "Edit circuit", fr: "Modifier un circuit", nl: "Circuit bewerken" },
+      topology_circuit_remove: { de: "Stromkreis entfernen", en: "Remove circuit", fr: "Supprimer un circuit", nl: "Circuit verwijderen" },
+      topology_domain_add: { de: "Lastbereich hinzufügen", en: "Add load domain", fr: "Ajouter une zone de charge", nl: "Lastgebied toevoegen" },
+      topology_domain_edit_select: { de: "Lastbereich bearbeiten", en: "Edit load domain", fr: "Modifier une zone de charge", nl: "Lastgebied bewerken" },
+      topology_domain_edit: { de: "Lastbereich bearbeiten", en: "Edit load domain", fr: "Modifier une zone de charge", nl: "Lastgebied bewerken" },
+      topology_domain_remove: { de: "Lastbereich entfernen", en: "Remove load domain", fr: "Supprimer une zone de charge", nl: "Lastgebied verwijderen" },
+      topology_connection_add: { de: "Geräteausgang zuordnen", en: "Map device output", fr: "Associer une sortie d’appareil", nl: "Apparaatuitgang koppelen" },
+      topology_connection_edit_select: { de: "Geräteausgang bearbeiten", en: "Edit device output", fr: "Modifier une sortie d’appareil", nl: "Apparaatuitgang bewerken" },
+      topology_connection_edit: { de: "Geräteausgang bearbeiten", en: "Edit device output", fr: "Modifier une sortie d’appareil", nl: "Apparaatuitgang bewerken" },
+      topology_connection_remove: { de: "Geräteausgang entfernen", en: "Remove device output", fr: "Supprimer une sortie d’appareil", nl: "Apparaatuitgang verwijderen" },
+      topology_phase_l1: { de: "Phase L1", en: "Phase L1", fr: "Phase L1", nl: "Fase L1" },
+      topology_phase_l2: { de: "Phase L2", en: "Phase L2", fr: "Phase L2", nl: "Fase L2" },
+      topology_phase_l3: { de: "Phase L3", en: "Phase L3", fr: "Phase L3", nl: "Fase L3" },
+      topology_phase_unknown: { de: "Phase unbekannt", en: "Phase unknown", fr: "Phase inconnue", nl: "Fase onbekend" },
+      topology_domain_grid: { de: "Netzbereich", en: "Grid domain", fr: "Zone réseau", nl: "Netgebied" },
+      topology_domain_off_grid: { de: "Inselbereich", en: "Off-grid domain", fr: "Zone hors réseau", nl: "Off-gridgebied" },
+      topology_output_grid: { de: "Netzausgang", en: "Grid output", fr: "Sortie réseau", nl: "Netaansluiting" },
+      topology_output_off_grid: { de: "Off-Grid-Ausgang", en: "Off-grid output", fr: "Sortie hors réseau", nl: "Off-griduitgang" },
+      topology_summary_circuits: { de: "Stromkreise", en: "Circuits", fr: "Circuits", nl: "Circuits" },
+      topology_summary_domains: { de: "Lastbereiche", en: "Load domains", fr: "Zones de charge", nl: "Lastgebieden" },
+      topology_summary_connections: { de: "Geräteausgänge", en: "Device outputs", fr: "Sorties des appareils", nl: "Apparaatuitgangen" },
+      topology_no_limit: { de: "Keine Grenze eingetragen", en: "No limit configured", fr: "Aucune limite définie", nl: "Geen limiet ingesteld" },
+      topology_empty: { de: "Noch keine Topologie konfiguriert.", en: "No electrical topology configured yet.", fr: "Aucune topologie électrique configurée.", nl: "Er is nog geen elektrische topologie ingesteld." },
+      invalid_electrical_topology: { de: "Die Topologie ist widersprüchlich. Prüfe Phase, Stromkreis und Lastbereich.", en: "The topology is inconsistent. Check the phase, circuit and load domain.", fr: "La topologie est incohérente. Vérifiez la phase, le circuit et la zone de charge.", nl: "De topologie is tegenstrijdig. Controleer de fase, het circuit en het lastgebied." },
+      topology_record_in_use: { de: "Der Eintrag wird noch von einem Geräteausgang oder Stromkreis verwendet.", en: "This item is still used by a device output or circuit.", fr: "Cet élément est encore utilisé par une sortie ou un circuit.", nl: "Dit item wordt nog gebruikt door een apparaatuitgang of circuit." },
+      topology_record_missing: { de: "Der ausgewählte Topologie-Eintrag ist nicht mehr vorhanden.", en: "The selected topology item no longer exists.", fr: "L’élément de topologie sélectionné n’existe plus.", nl: "Het geselecteerde topologie-item bestaat niet meer." },
       energy_scope_create: { de: "Sensorzuordnung anlegen", en: "Create sensor assignment", fr: "Créer une affectation de capteurs", nl: "Sensortoewijzing maken" },
       energy_scope_edit_select: { de: "Sensorzuordnung bearbeiten", en: "Edit sensor assignment", fr: "Modifier l’affectation de capteurs", nl: "Sensortoewijzing bewerken" },
       energy_scope_remove_select: { de: "Sensorzuordnung entfernen", en: "Remove sensor assignment", fr: "Supprimer l’affectation de capteurs", nl: "Sensortoewijzing verwijderen" },
@@ -407,6 +441,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       observation_mode: ["Beobachtungsmodus", "Observation mode"], setup_state: ["Einrichtung", "Setup"], setup_configured: ["Eingerichtet", "Configured"], setup_required: ["Einrichtung erforderlich", "Setup required"], setup_unsupported: ["Nicht unterstützt · nur lesbar", "Unsupported · read-only"], transport_cloud_mqtt: ["MQTT-Cloud", "MQTT-Cloud"], transport_local: ["Lokal", "Local"], transport_zensdk: ["ZenSDK", "ZenSDK"], transport_home_assistant: ["Home Assistant / Z-HA", "Home Assistant / Z-HA"],
       menu_settings: ["Einstellungen & Training", "Settings & training"],
       general_settings: ["Allgemein", "General"], expert_settings: ["Expertenmodus", "Expert mode"], smart_mode_settings: ["SmartMode-Verhalten", "Smart Mode behavior"], smart_mode_help: ["Bei Geräten mit direkter SmartMode-Steuerung: Aktiviert bleibt smartMode=1 im Leerlauf gesetzt. Deaktiviert nutzt das bisherige Modellverhalten.", "For devices with direct Smart Mode control: enabled keeps smartMode=1 while idle; disabled uses the existing model behavior."], debug_settings: ["Debug-Modus", "Debug mode"], settings_shortcuts: ["Einstellungen", "Settings"], settings_description: ["Diese Bereiche sind auch weiterhin über das Zahnrad-Menü erreichbar.", "These sections remain available from the gear menu as well."], debug_description: ["Technische Aufzeichnung für die Fehlersuche. Sie kann Sensor-, Geräte-, Energie- und Preiswerte enthalten. Prüfe das Paket vor dem Teilen auf private Informationen.", "Technical recording for troubleshooting. It may contain sensor, device, energy and price values. Review the package for private information before sharing."], debug_warning: ["Debug-Aufzeichnung starten? Sie kann Sensor-, Geräte-, Energie- und Preiswerte enthalten. Prüfe das Paket vor dem Teilen auf private Informationen.", "Start debug recording? It may contain sensor, device, energy and price values. Review the package for private information before sharing."], debug_active: ["Aufzeichnung läuft", "Recording active"], debug_idle: ["Keine Aufzeichnung aktiv", "No recording active"], debug_samples: ["Erfasste Datensätze", "Samples recorded"], debug_end: ["Endet", "Ends"], debug_duration: ["Aufzeichnungsdauer", "Recording duration"], debug_start: ["Debug-Aufzeichnung starten", "Start debug recording"], debug_stop: ["Aufzeichnung beenden und exportieren", "Stop and export recording"], debug_started: ["Aufzeichnung gestartet", "Recording started"], debug_stopped: ["Aufzeichnung beendet", "Recording stopped"], settings_saved: ["Einstellungen gespeichert.", "Settings saved."], settings_closed: ["Einstellungsdialog geschlossen.", "Settings dialog closed."], options_continue: ["Weiter", "Continue"], options_save: ["Speichern", "Save"], options_cancel: ["Schließen", "Close"],
+      topology_name: ["Name", "Name"], topology_phase: ["Phase", "Phase"], topology_max_current_a: ["Maximalstrom (A)", "Maximum current (A)"], topology_max_power_w: ["Maximale Leistung (W)", "Maximum power (W)"], topology_parent_circuit_id: ["Gemeinsame vorgeschaltete Sicherung", "Shared upstream circuit"], topology_kind: ["Art des Lastbereichs", "Load domain type"], topology_device_id: ["Zendure-System", "Zendure system"], topology_output_id: ["Ausgangsbezeichnung", "Output name"], topology_circuit_id: ["Stromkreis", "Circuit"], topology_load_domain_id: ["Lastbereich", "Load domain"], topology_record_id: ["Eintrag", "Entry"],
       no_training_entries: ["Keine Regelungstrainings-Entität gefunden.", "No regulation training entity was found."],
       training_title: ["Regelungstraining", "Regulation training"], training_description: ["Das Training beobachtet Lade- und Entladephasen, ohne die aktive Regelung zu verändern.", "Training observes charge and discharge periods without changing active regulation."],
       training_status: ["Status", "Status"], training_active: ["Läuft", "Running"], training_idle: ["Inaktiv", "Idle"], training_samples: ["Trainingsdaten", "Training samples"], training_result: ["Ergebnis", "Result"], training_duration: ["Trainingsdauer", "Training duration"], training_direction: ["Trainingsrichtung", "Training direction"], training_both: ["Laden und Entladen", "Charge and discharge"], training_charge: ["Nur Laden", "Charging only"], training_discharge: ["Nur Entladen", "Discharging only"], start_training: ["Training starten", "Start training"], stop_training: ["Training beenden", "Stop training"],
@@ -881,7 +916,19 @@ class BatterySmartFlowDashboard extends HTMLElement {
         return `<article class="group-summary-card" style="padding:14px;margin:10px 0;border:1px solid var(--line);border-radius:10px"><div class="system-head"><strong>${this._escape(scope.name)}</strong><span>${this._escape(this._t("scope_groups"))}: ${this._escape(groupNames)}</span></div><div class="device-meta">${this._escape(this._t("grid_mode"))}: ${this._escape(scope.grid_mode)} · ${this._escape(this._t("scope_grid_sensors"))}: ${this._escape(grid)}</div>${phases ? `<div class="device-meta">${this._escape(this._t("scope_phase_sensors"))}: ${phases}</div>` : ""}<div class="device-meta">${pvSources || this._escape(this._t("scope_no_pv"))}</div></article>`;
       }).join("");
       const scopeEmpty = scopes ? "" : `<p class="muted">${this._escape(this._t("scope_none"))}</p>`;
-      return `<div class="group-summary-entry">${entry.system ? `<small>${this._escape(entry.system)}</small>` : ""}<div class="group-summary-grid">${groups}${ungrouped}${empty}</div><button class="apply" type="button" data-group-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("manage_groups"))}</button><h3>${this._escape(this._t("energy_scopes"))}</h3><div class="group-summary-grid">${scopes}${scopeEmpty}</div><button class="apply" type="button" data-energy-scope-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("energy_scopes"))}</button></div>`;
+      const topology = entry.electrical_topology || {};
+      const circuits = (topology.circuits || []).map((circuit) => {
+        const limits = [circuit.max_current_a ? `${circuit.max_current_a} A` : "", circuit.max_power_w ? `${circuit.max_power_w} W` : ""].filter(Boolean).join(" / ") || this._t("topology_no_limit");
+        return `${this._escape(circuit.name)} · ${this._escape(this._t(`topology_phase_${circuit.phase}`))} · ${this._escape(limits)}${circuit.upstream ? ` · ↑ ${this._escape(circuit.upstream)}` : ""}`;
+      }).join("<br>");
+      const domains = (topology.load_domains || []).map((domain) => `${this._escape(domain.name)} · ${this._escape(this._t(`topology_domain_${domain.kind}`))}`).join("<br>");
+      const connections = (topology.connections || []).map((connection) => `${this._escape(connection.device)} · ${this._escape(connection.output_id)} · ${this._escape(this._t(`topology_output_${connection.kind}`))}${connection.circuit ? ` · ${this._escape(connection.circuit)}` : ""}${connection.load_domain ? ` · ${this._escape(connection.load_domain)}` : ""}`).join("<br>");
+      const topologySummary = [
+        circuits ? `<strong>${this._escape(this._t("topology_summary_circuits"))}</strong><br>${circuits}` : "",
+        domains ? `<strong>${this._escape(this._t("topology_summary_domains"))}</strong><br>${domains}` : "",
+        connections ? `<strong>${this._escape(this._t("topology_summary_connections"))}</strong><br>${connections}` : "",
+      ].filter(Boolean).join("<hr>") || this._t("topology_empty");
+      return `<div class="group-summary-entry">${entry.system ? `<small>${this._escape(entry.system)}</small>` : ""}<div class="group-summary-grid">${groups}${ungrouped}${empty}</div><button class="apply" type="button" data-group-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("manage_groups"))}</button><h3>${this._escape(this._t("energy_scopes"))}</h3><div class="group-summary-grid">${scopes}${scopeEmpty}</div><button class="apply" type="button" data-energy-scope-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("energy_scopes"))}</button><h3>${this._escape(this._t("electrical_topology"))}</h3><article class="group-summary-card">${topologySummary}</article><button class="apply" type="button" data-topology-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("electrical_topology"))}</button></div>`;
     }).join("");
     return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("battery_groups"))}</h2></div>${content}</section>`;
   }
@@ -1069,6 +1116,40 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _optionsFieldLabel(name, stepId = "") {
     if (name === "name" && stepId.startsWith("energy_scope")) return this._selectorText("assignmentName");
+    if (stepId.startsWith("topology_")) {
+      const language = String(this._hass?.locale?.language || "en").toLowerCase().split(/[-_]/)[0];
+      const topologyLabels = {
+        name: {de: "Name", en: "Name", fr: "Nom", nl: "Naam"},
+        phase: {de: "Phase", en: "Phase", fr: "Phase", nl: "Fase"},
+        max_current_a: {de: "Maximalstrom (A)", en: "Maximum current (A)", fr: "Courant maximal (A)", nl: "Maximale stroom (A)"},
+        max_power_w: {de: "Maximale Leistung (W)", en: "Maximum power (W)", fr: "Puissance maximale (W)", nl: "Maximaal vermogen (W)"},
+        parent_circuit_id: {de: "Gemeinsame vorgeschaltete Sicherung", en: "Shared upstream circuit", fr: "Circuit amont partagé", nl: "Gedeeld bovenliggend circuit"},
+        kind: {de: "Art", en: "Type", fr: "Type", nl: "Type"},
+        device_id: {de: "Zendure-System", en: "Zendure system", fr: "Système Zendure", nl: "Zendure-systeem"},
+        output_id: {de: "Ausgangsbezeichnung", en: "Output name", fr: "Nom de la sortie", nl: "Naam van uitgang"},
+        circuit_id: {de: "Stromkreis", en: "Circuit", fr: "Circuit", nl: "Circuit"},
+        load_domain_id: {de: "Lastbereich", en: "Load domain", fr: "Zone de charge", nl: "Lastgebied"},
+        record_id: {de: "Eintrag", en: "Entry", fr: "Élément", nl: "Item"},
+      };
+      if (topologyLabels[name]?.[language]) return topologyLabels[name][language];
+    }
+    if (stepId.startsWith("topology_")) {
+      const language = String(this._hass?.locale?.language || "en").toLowerCase().split(/[-_]/)[0];
+      const labels = {
+        name: {de: "Name", en: "Name", fr: "Nom", nl: "Naam"},
+        phase: {de: "Phase", en: "Phase", fr: "Phase", nl: "Fase"},
+        max_current_a: {de: "Maximalstrom (A)", en: "Maximum current (A)", fr: "Courant maximal (A)", nl: "Maximale stroom (A)"},
+        max_power_w: {de: "Maximale Leistung (W)", en: "Maximum power (W)", fr: "Puissance maximale (W)", nl: "Maximaal vermogen (W)"},
+        parent_circuit_id: {de: "Gemeinsame vorgeschaltete Sicherung", en: "Shared upstream circuit", fr: "Circuit amont partagé", nl: "Gedeeld bovenliggend circuit"},
+        kind: {de: "Art", en: "Type", fr: "Type", nl: "Type"},
+        device_id: {de: "Zendure-System", en: "Zendure system", fr: "Système Zendure", nl: "Zendure-systeem"},
+        output_id: {de: "Ausgangsbezeichnung", en: "Output name", fr: "Nom de la sortie", nl: "Naam van uitgang"},
+        circuit_id: {de: "Stromkreis", en: "Circuit", fr: "Circuit", nl: "Circuit"},
+        load_domain_id: {de: "Lastbereich", en: "Load domain", fr: "Zone de charge", nl: "Lastgebied"},
+        record_id: {de: "Eintrag", en: "Entry", fr: "Élément", nl: "Item"},
+      };
+      if (labels[name]?.[language]) return labels[name][language];
+    }
     if (stepId.startsWith("energy_scope")) {
       const language = String(this._hass?.locale?.language || "en").toLowerCase().split(/[-_]/)[0];
       const labels = {
@@ -1174,21 +1255,26 @@ class BatterySmartFlowDashboard extends HTMLElement {
   _renderOptionsFlow(step) {
     if (!step || step.type === "abort" || step.type === "create_entry") {
       const finished = step?.type === "create_entry";
+      const messageKey = step?.type === "abort" && step.reason && this._t(step.reason) !== step.reason
+        ? step.reason
+        : finished ? "settings_saved" : "settings_closed";
       this._optionsFlowId = null;
       this._scheduleRender();
-      this._showNotice(this._t(finished ? "settings_saved" : "settings_closed"));
+      this._showNotice(this._t(messageKey));
       return;
     }
     this._optionsRevision = (this._optionsRevision || 0) + 1;
-    const title = step.step_id === "general" ? this._t("general_settings")
+      const title = step.step_id === "general" ? this._t("general_settings")
       : step.step_id === "smart_mode" ? this._t("smart_mode_settings")
         : step.step_id === "systems_groups" || step.step_id.startsWith("group_") ? this._t("systems_groups")
           : step.step_id === "energy_scopes" || step.step_id.startsWith("energy_scope") ? this._t(step.step_id)
+          : step.step_id === "electrical_topology" || step.step_id.startsWith("topology_") ? this._t(step.step_id)
           : this._t("expert_settings");
     let content = "";
     if (step.type === "menu") {
       const menuLabel = { general: "general_settings", expert: "expert_settings", smart_mode: "smart_mode_settings", debug: "debug_settings", systems_groups: "systems_groups", group_create: "group_create", group_edit_select: "group_edit_select", group_remove: "group_remove" };
       Object.assign(menuLabel, { energy_scopes: "energy_scopes", energy_scope_create: "energy_scope_create", energy_scope_edit_select: "energy_scope_edit_select", energy_scope_remove_select: "energy_scope_remove_select", energy_scope_edit: "energy_scope_edit", energy_scope_pv_sources: "energy_scope_pv_sources", energy_scope_pv_add: "energy_scope_pv_add", energy_scope_pv_remove_select: "energy_scope_pv_remove_select", energy_scope_save: "energy_scope_save" });
+      Object.assign(menuLabel, { electrical_topology: "electrical_topology", topology_circuit_add: "topology_circuit_add", topology_circuit_edit_select: "topology_circuit_edit_select", topology_circuit_remove: "topology_circuit_remove", topology_domain_add: "topology_domain_add", topology_domain_edit_select: "topology_domain_edit_select", topology_domain_remove: "topology_domain_remove", topology_connection_add: "topology_connection_add", topology_connection_edit_select: "topology_connection_edit_select", topology_connection_remove: "topology_connection_remove" });
       content = (step.menu_options || []).filter((option) => menuLabel[option]).map((option) => `<button class="apply" type="button" data-options-next="${this._escape(option)}">${this._escape(this._t(menuLabel[option]))}</button>`).join("");
     } else if (step.type === "form") {
       const fields = (step.data_schema || []).map((field) => {
@@ -1239,9 +1325,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
           return `<label class="option-field"><span>${label}${help ? `<small class="option-help">${this._escape(help)}</small>` : ""}</span><select data-option-field="${name}" data-option-required="${required}" ${multiple ? "multiple" : ""}>${options}</select></label>`;
         }
         const number = fieldType === "number";
-        return `<label class="option-field"><span>${label}</span><input data-option-field="${name}" type="${number ? "number" : "text"}" value="${this._escape(value)}" ${config.min !== undefined ? `min="${config.min}"` : ""} ${config.max !== undefined ? `max="${config.max}"` : ""} ${config.step !== undefined ? `step="${config.step}"` : ""}></label>`;
+        return `<label class="option-field"><span>${label}</span><input data-option-field="${name}" data-option-required="${field.required !== false}" type="${number ? "number" : "text"}" value="${this._escape(value)}" ${config.min !== undefined ? `min="${config.min}"` : ""} ${config.max !== undefined ? `max="${config.max}"` : ""} ${config.step !== undefined ? `step="${config.step}"` : ""}></label>`;
       }).join("");
-      content = `${fields}<button class="apply" type="button" data-options-submit>${this._escape(["general", "smart_mode", "expert_cell_voltage_config", "group_create", "group_edit", "group_remove"].includes(step.step_id) ? this._t("options_save") : this._t("options_continue"))}</button>`;
+      content = `${fields}<button class="apply" type="button" data-options-submit>${this._escape(["general", "smart_mode", "expert_cell_voltage_config", "group_create", "group_edit", "group_remove", "topology_circuit_add", "topology_circuit_edit", "topology_circuit_remove", "topology_domain_add", "topology_domain_edit", "topology_domain_remove", "topology_connection_add", "topology_connection_edit", "topology_connection_remove"].includes(step.step_id) ? this._t("options_save") : this._t("options_continue"))}</button>`;
     }
     this._optionsFlowTitle = title;
     this._optionsStepId = step.step_id;

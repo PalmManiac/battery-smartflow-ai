@@ -270,10 +270,13 @@
     "abort": {
       "invalid_group": "Le groupe de batteries n’a pas pu être enregistré. Vérifiez son nom et les systèmes sélectionnés.",
       "no_groups": "Aucun groupe de batteries à modifier ou supprimer.",
-      "group_not_found": "Le groupe de batteries sélectionné n’existe plus."
+      "group_not_found": "Le groupe de batteries sélectionné n’existe plus.",
+      "topology_record_in_use": "Cet élément est encore utilisé par une sortie d’appareil ou un circuit.",
+      "topology_record_missing": "L’élément de topologie sélectionné n’existe plus."
     },
     "error": {
       "invalid_energy_scope": "L’affectation de capteurs n’a pas pu être enregistrée. Vérifiez le mode de mesure réseau et les éventuelles affectations multiples des sources PV ou de prévision.",
+      "invalid_electrical_topology": "La topologie est incohérente. Vérifiez la phase, le circuit et la zone de charge.",
       "invalid_zensdk_ip": "Saisissez une adresse IPv4 privée de l’appareil Zendure.",
       "zensdk_ip_unsupported": "Ce modèle Zendure ne prend pas en charge la lecture directe par ZenSDK.",
       "zensdk_ip_clear_conflict": "Saisissez une adresse ou sélectionnez la découverte automatique, mais pas les deux."
@@ -289,6 +292,7 @@
           "smart_mode": "Mode Smart Zendure",
           "systems_groups": "Systèmes et groupes",
           "energy_scopes": "Affectations de capteurs",
+          "electrical_topology": "Topologie électrique",
           "native_zendure": "Test Zendure natif",
           "training": "Entraînement de régulation",
           "debug": "Mode débogage"
@@ -323,6 +327,13 @@
       "group_edit": {"title": "Modifier le groupe de batteries", "description": "Les systèmes sélectionnés dans un autre groupe sont déplacés lors de l’enregistrement. Les systèmes retirés restent configurés et sans groupe.", "data": {"name": "Nom du groupe", "members": "Systèmes du groupe"}},
       "group_remove": {"title": "Supprimer le groupe de batteries", "description": "Les systèmes restent configurés et sans groupe après la suppression.", "data": {"group_id": "Groupe"}},
       "energy_scopes": {"title": "Affectations de capteurs", "description": "Associez les mesures réseau, les installations PV, les prévisions et les prix aux groupes de batteries.", "menu_options": {"energy_scope_create": "Créer une affectation de capteurs", "energy_scope_edit_select": "Modifier une affectation de capteurs", "energy_scope_remove_select": "Supprimer une affectation de capteurs"}},
+      "electrical_topology": {"title": "Topologie électrique", "description": "Décrivez les circuits, les limites partagées et les zones de charge hors réseau. Cette configuration n’active pas le contrôle des appareils.", "menu_options": {"topology_circuit_add": "Ajouter un circuit", "topology_circuit_remove": "Supprimer un circuit", "topology_domain_add": "Ajouter une zone de charge", "topology_domain_remove": "Supprimer une zone de charge", "topology_connection_add": "Associer une sortie", "topology_connection_remove": "Supprimer une sortie"}},
+      "topology_circuit_add": {"title": "Ajouter un circuit", "description": "Aucune limite de courant ou de puissance n’est présumée. Saisissez uniquement les limites applicables.", "data": {"name": "Nom", "phase": "Phase", "max_current_a": "Courant maximal (A)", "max_power_w": "Puissance maximale (W)", "parent_circuit_id": "Circuit amont partagé"}},
+      "topology_domain_add": {"title": "Ajouter une zone de charge", "data": {"name": "Nom de la zone", "kind": "Type de zone"}},
+      "topology_connection_add": {"title": "Associer une sortie", "data": {"device_id": "Système Zendure", "output_id": "Nom de la sortie", "kind": "Type de sortie", "circuit_id": "Circuit", "load_domain_id": "Zone de charge"}},
+      "topology_circuit_remove": {"title": "Supprimer un circuit", "data": {"record_id": "Circuit"}},
+      "topology_domain_remove": {"title": "Supprimer une zone de charge", "data": {"record_id": "Zone de charge"}},
+      "topology_connection_remove": {"title": "Supprimer une sortie", "data": {"record_id": "Sortie"}},
       "energy_scope_create": {"title": "Créer une affectation de capteurs", "description": "Choisissez les groupes et le contexte réseau/tarif, puis associez les installations PV et leurs prévisions.", "data": {"name": "Nom de l’affectation", "group_ids": "Groupes de batteries associés", "grid_mode": "Mode de mesure réseau", "grid_power_entities": "Capteurs de puissance réseau signés", "grid_phase_power_entities": "Capteurs réseau signés par phase", "grid_import_entities": "Capteurs d’importation réseau", "grid_export_entities": "Capteurs d’exportation réseau", "price_entity": "Capteur du tarif d’achat actuel", "export_price_entity": "Capteur du tarif d’injection dynamique"}, "data_description": {"grid_power_entities": "Puissance totale du raccordement en watts : import positif, injection négative. Utilisez le mode à valeurs signées.", "grid_phase_power_entities": "Puissances individuelles par phase en watts avec les mêmes signes. Alternative au capteur total ; si les deux sont choisis, le capteur total prévaut.", "grid_import_entities": "Puissance actuelle importée en watts. Pour la mesure séparée uniquement ; sélectionnez aussi un capteur d’injection.", "grid_export_entities": "Puissance actuelle injectée en watts. Pour la mesure séparée uniquement ; sélectionnez aussi un capteur d’importation."}},
       "energy_scope_edit_select": {"title": "Choisir une affectation de capteurs", "data": {"scope_id": "Affectation de capteurs"}},
       "energy_scope_edit": {"title": "Modifier l’affectation de capteurs", "description": "Chaque groupe de batteries ne peut être associé qu’à une seule affectation de capteurs.", "data": {"name": "Nom de l’affectation", "group_ids": "Groupes de batteries associés", "grid_mode": "Mode de mesure réseau", "grid_power_entities": "Capteurs de puissance réseau signés", "grid_phase_power_entities": "Capteurs réseau signés par phase", "grid_import_entities": "Capteurs d’importation réseau", "grid_export_entities": "Capteurs d’exportation réseau", "price_entity": "Capteur du tarif d’achat actuel", "export_price_entity": "Capteur du tarif d’injection dynamique"}, "data_description": {"grid_power_entities": "Puissance totale du raccordement en watts : import positif, injection négative. Utilisez le mode à valeurs signées.", "grid_phase_power_entities": "Puissances individuelles par phase en watts avec les mêmes signes. Alternative au capteur total ; si les deux sont choisis, le capteur total prévaut.", "grid_import_entities": "Puissance actuelle importée en watts. Pour la mesure séparée uniquement ; sélectionnez aussi un capteur d’injection.", "grid_export_entities": "Puissance actuelle injectée en watts. Pour la mesure séparée uniquement ; sélectionnez aussi un capteur d’importation."}},
