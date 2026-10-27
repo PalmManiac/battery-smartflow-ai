@@ -392,6 +392,37 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const german = String(locale || "").toLowerCase().startsWith("de");
     const language = String(locale || "").toLowerCase().split(/[-_]/)[0];
     const energyMappingLabels = {
+      economics_intro: { de: "Was die Zahlen für deinen Akku bedeuten", en: "What these figures mean for your battery", fr: "Ce que ces chiffres signifient pour votre batterie", nl: "Wat deze cijfers voor je accu betekenen" },
+      economics_daily_balance: { de: "Tagesbilanz des Akkus", en: "Battery balance today", fr: "Bilan quotidien de la batterie", nl: "Dagbalans van de accu" },
+      economics_daily_balance_help: { de: "Vermiedene Netzbezugskosten abzüglich der Energie, die zum Laden eingesetzt wurde.", en: "Avoided grid import cost minus the energy used to charge the battery.", fr: "Coût d’achat au réseau évité, moins l’énergie utilisée pour charger la batterie.", nl: "Vermeden netafnamekosten min de energie die is gebruikt om de accu te laden." },
+      economics_value: { de: "Wert", en: "Value", fr: "Valeur", nl: "Waarde" },
+      economics_cost: { de: "Kosten", en: "Cost", fr: "Coût", nl: "Kosten" },
+      economics_daily_formula: { de: "Tagesnutzen = vermiedene Netzbezugskosten − Netzladekosten − PV-Opportunitätskosten.", en: "Daily benefit = avoided grid import cost − grid charging cost − PV opportunity cost.", fr: "Bénéfice quotidien = coût réseau évité − coût de charge réseau − coût d’opportunité PV.", nl: "Dagelijks voordeel = vermeden netafnamekosten − netlaadkosten − PV-opportuniteitskosten." },
+      economics_price_position: { de: "Strompreis im Tageskontext", en: "Electricity price in today's range", fr: "Prix de l’électricité dans la plage du jour", nl: "Stroomprijs binnen het dagbereik" },
+      economics_price_position_help: { de: "Der aktuelle Preis im Vergleich zu Tagesdurchschnitt und den eingestellten Preisschwellen.", en: "The current price compared with today's average and configured price thresholds.", fr: "Le prix actuel comparé à la moyenne du jour et aux seuils configurés.", nl: "De huidige prijs vergeleken met het daggemiddelde en de ingestelde prijsgrenzen." },
+      economics_price_scale: { de: "Skala aus den angezeigten Preisen und Schwellen", en: "Scale based on the displayed prices and thresholds", fr: "Échelle basée sur les prix et seuils affichés", nl: "Schaal op basis van de getoonde prijzen en grenzen" },
+      economics_price_unavailable: { de: "Preiswerte sind derzeit nicht verfügbar.", en: "Price values are currently unavailable.", fr: "Les valeurs de prix ne sont pas disponibles actuellement.", nl: "Prijswaarden zijn momenteel niet beschikbaar." },
+      economics_today_price: { de: "Aktueller Preis", en: "Current price", fr: "Prix actuel", nl: "Huidige prijs" },
+      economics_peak_line: { de: "Preisspitzen-Schwelle", en: "Peak threshold", fr: "Seuil de pointe", nl: "Piekprijsgrens" },
+      economics_valley_line: { de: "Niedertarif-Schwelle", en: "Low-tariff threshold", fr: "Seuil tarif réduit", nl: "Daltariefgrens" },
+      economics_daily_average_line: { de: "Tagesdurchschnitt", en: "Daily average", fr: "Moyenne du jour", nl: "Daggemiddelde" },
+      economics_price_scale_low: { de: "Niedriger", en: "Lower", fr: "Bas", nl: "Lager" },
+      economics_price_scale_high: { de: "Höher", en: "Higher", fr: "Élevé", nl: "Hoger" },
+      economics_what_counts: { de: "Was heute in die Bilanz eingeht", en: "What contributes to today's balance", fr: "Éléments du bilan d’aujourd’hui", nl: "Wat vandaag meetelt in de balans" },
+      economics_avoided_help: { de: "Geschätzter Wert des Netzstroms, den der Akku beim Entladen ersetzt hat.", en: "Estimated value of grid electricity the battery replaced while discharging.", fr: "Valeur estimée de l’électricité réseau remplacée par la batterie en décharge.", nl: "Geschatte waarde van netstroom die de accu tijdens ontladen heeft vervangen." },
+      economics_grid_cost_help: { de: "Kosten der heute erfassten Ladung aus dem Stromnetz.", en: "Cost of battery charging from the grid recorded today.", fr: "Coût de la charge depuis le réseau enregistrée aujourd’hui.", nl: "Kosten van vandaag geregistreerd laden van de accu via het net." },
+      economics_pv_cost_help: { de: "Bewerteter PV-Strom, der in den Akku statt direkt ins Haus oder ins Netz ging.", en: "Value of PV energy sent to the battery instead of directly to the home or grid.", fr: "Valeur de l’énergie PV envoyée vers la batterie plutôt que vers la maison ou le réseau.", nl: "Waarde van PV-energie die naar de accu ging in plaats van direct naar huis of het net." },
+      economics_export_help: { de: "Erlös aus erfasster Einspeisung ins Stromnetz.", en: "Revenue from recorded electricity exported to the grid.", fr: "Revenu de l’électricité enregistrée comme injectée dans le réseau.", nl: "Opbrengst van geregistreerde teruglevering aan het elektriciteitsnet." },
+      economics_self_use_help: { de: "Wert des direkt selbst genutzten PV-Stroms.", en: "Value of PV electricity used directly in the home.", fr: "Valeur de l’électricité PV utilisée directement dans la maison.", nl: "Waarde van PV-stroom die direct in huis is gebruikt." },
+      economics_actual_prices: { de: "Welche Werte erzielt der Akku?", en: "What value does the battery achieve?", fr: "Quelle valeur la batterie apporte-t-elle ?", nl: "Welke waarde levert de accu op?" },
+      economics_charge_value: { de: "Energie beim Laden", en: "Energy charged", fr: "Énergie chargée", nl: "Energie bij het laden" },
+      economics_discharge_value: { de: "Energie beim Entladen", en: "Energy discharged", fr: "Énergie déchargée", nl: "Energie bij het ontladen" },
+      economics_charge_help: { de: "Durchschnittlicher Wert der erfassten Energie, die in den Akku geladen wurde.", en: "Average value of the recorded energy charged into the battery.", fr: "Valeur moyenne de l’énergie enregistrée comme chargée dans la batterie.", nl: "Gemiddelde waarde van geregistreerde energie die in de accu is geladen." },
+      economics_discharge_help: { de: "Durchschnittlicher Wert der Energie, die der Akku abgegeben hat.", en: "Average value of the energy delivered by the battery.", fr: "Valeur moyenne de l’énergie fournie par la batterie.", nl: "Gemiddelde waarde van energie die door de accu is geleverd." },
+      economics_comparison: { de: "Geladener Energiewert im Vergleich zum Entladewert", en: "Charge value compared with discharge value", fr: "Valeur de charge comparée à la valeur de décharge", nl: "Laadwaarde vergeleken met ontlaadwaarde" },
+      economics_comparison_help: { de: "Die Balken vergleichen die durchschnittlichen Euro-Werte je kWh.", en: "The bars compare average euro value per kWh.", fr: "Les barres comparent la valeur moyenne en euros par kWh.", nl: "De balken vergelijken de gemiddelde euro waarde per kWh." },
+      economics_efficiency_help: { de: "Wirtschaftliche Rückgewinnung seit Beginn der Erfassung: abgegebener Energiewert geteilt durch bewertete Ladeenergie. 100 % bedeutet ausgeglichene Werte; über 100 % bedeutet einen höheren erfassten Abgabewert. Das ist kein physikalischer Wirkungsgrad.", en: "Economic recovery since tracking began: value delivered divided by valued charging energy. 100% means equal recorded values; above 100% means higher recorded output value. This is not physical efficiency.", fr: "Récupération économique depuis le début du suivi : valeur fournie divisée par la valeur de l’énergie chargée. 100 % indique des valeurs égales ; au-delà, la valeur fournie est supérieure. Ce n’est pas le rendement physique.", nl: "Economisch herstel sinds het begin van de registratie: geleverde waarde gedeeld door de gewaardeerde laadenergie. 100% betekent gelijke geregistreerde waarden; boven 100% is de geleverde waarde hoger. Dit is geen fysiek rendement." },
+      economics_planning: { de: "Ladeplanung", en: "Charge planning", fr: "Planification de charge", nl: "Laadplanning" },
       energy_scopes: { de: "Sensorzuordnungen", en: "Sensor assignments", fr: "Affectations de capteurs", nl: "Sensortoewijzingen" },
       electrical_topology: { de: "Elektrische Topologie", en: "Electrical topology", fr: "Topologie électrique", nl: "Elektrische topologie" },
       topology_circuits: { de: "1. Stromkreise", en: "1. Circuits", fr: "1. Circuits", nl: "1. Circuits" },
@@ -620,6 +651,73 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `<article class="reading history-card"${history}><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong><small>${this._escape(this._t("show_history"))}</small></article>`;
   }
 
+  _economicsNumber(entity) {
+    if (!entity || ["unknown", "unavailable", ""].includes(String(entity.state).toLowerCase())) return null;
+    const value = Number(entity.state);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  _economicsMetric(entities, title, terms, description, { optional = false, sourceKeys = [] } = {}) {
+    const entity = this._find(entities, terms);
+    const number = this._economicsNumber(entity);
+    if (!entity || number === null) return optional ? "" : `<div class="economics-ledger-row unavailable"><span><strong>${this._escape(title)}</strong><small>${this._escape(description)}</small></span><b>${this._escape(this._t("unavailable"))}</b></div>`;
+    if (optional && number === 0 && !this._configuredPowerSource(sourceKeys)) return "";
+    const history = ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"`;
+    return `<div class="economics-ledger-row history-card"${history}><span><strong>${this._escape(title)}</strong><small>${this._escape(description)}</small></span><b>${this._escape(this._value(entity))}<small>${this._escape(this._t("show_history"))}</small></b></div>`;
+  }
+
+  _economicsBar(entities, title, terms, description, kind, scale, { optional = false, sourceKeys = [] } = {}) {
+    const entity = this._find(entities, terms);
+    const value = this._economicsNumber(entity);
+    if (!entity || value === null) return "";
+    if (optional && value === 0 && !this._configuredPowerSource(sourceKeys)) return "";
+    const width = scale > 0 ? Math.max(3, Math.min(100, Math.abs(value) / scale * 100)) : 0;
+    const history = ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${title} · ${this._t("show_history")}`)}"`;
+    return `<div class="economics-contribution ${kind} history-card"${history}><div class="economics-contribution-copy"><span>${this._escape(title)}</span><strong>${this._escape(this._value(entity))}</strong></div><small>${this._escape(description)}</small><div class="economics-bar-track" aria-hidden="true"><i style="width:${width.toFixed(1)}%"></i></div></div>`;
+  }
+
+  _economicsPriceRuler(entities) {
+    const points = [
+      { key: "economics_today_price", className: "current", terms: [["price_now"], ["current import price"], ["strompreis jetzt"]] },
+      { key: "economics_daily_average_line", className: "average", terms: [["price_daily_average"], ["daily average price"], ["tagesdurchschnittspreis"]] },
+      { key: "economics_peak_line", className: "peak", terms: [["current_peak_threshold"], ["preisspitzen-schwelle"]] },
+      { key: "economics_valley_line", className: "valley", terms: [["current_valley_threshold"], ["niedertarif-schwelle"]] },
+    ].map((point) => ({ ...point, entity: this._find(entities, point.terms) }))
+      .map((point) => ({ ...point, value: this._economicsNumber(point.entity) }));
+    const available = points.filter((point) => point.value !== null);
+    if (!available.length) return `<p class="economics-unavailable">${this._escape(this._t("economics_price_unavailable"))}</p>`;
+    let min = Math.min(...available.map((point) => point.value));
+    let max = Math.max(...available.map((point) => point.value));
+    const span = Math.max(max - min, Math.abs(max) * 0.12, 0.1);
+    min -= span * 0.12;
+    max += span * 0.12;
+    const position = (value) => Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+    const markerMarkup = available.map((point) => `<i class="economics-price-marker ${point.className}" style="left:${position(point.value).toFixed(2)}%" aria-hidden="true"></i>`).join("");
+    const legend = points.map((point) => {
+      const history = point.entity ? ` data-history-entity="${this._escape(point.entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${this._t(point.key)} · ${this._t("show_history")}`)}"` : "";
+      return `<div class="economics-price-legend ${point.className}${point.entity ? " history-card" : ""}"${history}><i aria-hidden="true"></i><span>${this._escape(this._t(point.key))}</span><strong>${this._escape(this._value(point.entity))}</strong></div>`;
+    }).join("");
+    const locale = this._hass?.locale?.language || undefined;
+    const format = (value) => value.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 3 });
+    const ticks = [0, 1, 2, 3, 4].map((step) => `<span>${format(min + ((max - min) * step / 4))}</span>`).join("");
+    return `<div class="economics-price-ruler"><div class="economics-ruler-range"><span>${this._escape(this._t("economics_price_scale_low"))}</span><span>${this._escape(this._t("economics_price_scale_high"))}</span></div><div class="economics-ruler-track" role="img" aria-label="${this._escape(this._t("economics_price_position_help"))}">${[1, 2, 3].map((step) => `<i class="economics-ruler-gridline" style="left:${step * 25}%"></i>`).join("")}${markerMarkup}</div><div class="economics-ruler-ticks">${ticks}</div><div class="economics-price-legend">${legend}</div></div>`;
+  }
+
+  _economicsCompare(entities, chargeTerms, dischargeTerms) {
+    const charge = this._find(entities, chargeTerms);
+    const discharge = this._find(entities, dischargeTerms);
+    const chargeValue = this._economicsNumber(charge);
+    const dischargeValue = this._economicsNumber(discharge);
+    const scale = Math.max(Math.abs(chargeValue || 0), Math.abs(dischargeValue || 0));
+    const row = (label, entity, value, type) => {
+      if (!entity || value === null) return "";
+      const width = scale ? Math.max(3, Math.min(100, Math.abs(value) / scale * 100)) : 0;
+      const history = ` data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${label} · ${this._t("show_history")}`)}"`;
+      return `<div class="economics-compare-row history-card"${history}><div><span>${this._escape(label)}</span><strong>${this._escape(this._value(entity))}</strong></div><i class="${type}" style="width:${width.toFixed(1)}%"></i></div>`;
+    };
+    return `<div class="economics-compare">${row(this._t("economics_charge_value"), charge, chargeValue, "charge")}${row(this._t("economics_discharge_value"), discharge, dischargeValue, "discharge")}</div>`;
+  }
+
   _forecastStatus(entities) {
     const entity = this._find(entities, ["forecast_status", "prognose status"]);
     return entity && !["unknown", "unavailable"].includes(entity.state) ? entity.state : "unavailable";
@@ -764,40 +862,40 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _economicsView(entities) {
+    const chargeTerms = ["economics_average_battery_charge_price", "avg. battery charge price", "ø akku-ladepreis"];
+    const dischargeTerms = ["economics_average_battery_discharge_value", "avg. battery discharge value", "ø wert der batterieentladung"];
+    const contributions = [
+      { key: "avoided_import", terms: ["economics_daily_avoided_grid_import_cost", "avoided grid import cost", "vermiedene netzbezugskosten"], kind: "value", help: "economics_avoided_help" },
+      { key: "grid_charge_cost", terms: ["economics_daily_grid_charge_cost", "grid charging cost", "netzlade-kosten"], kind: "cost", help: "economics_grid_cost_help" },
+      { key: "pv_opportunity_cost", terms: ["economics_daily_pv_opportunity_cost", "pv opportunity cost", "pv-opportunitätskosten"], kind: "cost", help: "economics_pv_cost_help", sourceKeys: ["pv", "native_pv"], optional: true },
+    ];
+    const contributionScale = contributions.reduce((largest, item) => Math.max(largest, Math.abs(this._economicsNumber(this._find(entities, item.terms)) || 0)), 0);
+    const contributionRows = contributions.map((item) => this._economicsBar(entities, this._t(item.key), item.terms, this._t(item.help), item.kind, contributionScale, item)).join("");
+    const dailyRows = [
+      ["avoided_import", ["economics_daily_avoided_grid_import_cost", "avoided grid import cost", "vermiedene netzbezugskosten"], "economics_avoided_help"],
+      ["grid_charge_cost", ["economics_daily_grid_charge_cost", "grid charging cost", "netzlade-kosten"], "economics_grid_cost_help"],
+      ["pv_opportunity_cost", ["economics_daily_pv_opportunity_cost", "pv opportunity cost", "pv-opportunitätskosten"], "economics_pv_cost_help", { optional: true, sourceKeys: ["pv", "native_pv"] }],
+      ["export_revenue", ["economics_daily_export_revenue", "export revenue", "einspeiseerlös"], "economics_export_help", { optional: true, sourceKeys: ["pv", "native_pv"] }],
+      ["self_consumption_value", ["economics_daily_native_pv_self_consumption_value", "native pv self-consumption value", "wert native pv eigenverbrauch"], "economics_self_use_help", { optional: true, sourceKeys: ["native_pv"] }],
+    ].map(([title, terms, help, options = {}]) => this._economicsMetric(entities, this._t(title), terms, this._t(help), options)).join("");
+    const benefitTerms = ["economics_daily_battery_benefit", "battery benefit today", "bilanz heute batterie-nutzen"];
+    const benefit = this._find(entities, benefitTerms);
+    const benefitNumber = this._economicsNumber(benefit);
+    const benefitTone = benefitNumber === null ? "neutral" : benefitNumber > 0 ? "positive" : benefitNumber < 0 ? "negative" : "neutral";
+    const efficiencyTerms = ["economics_total_economic_efficiency_pct", "economic efficiency", "wirtschaftlichkeit"];
+    const efficiency = this._find(entities, efficiencyTerms);
+    const planRows = [
+      this._reading(entities, this._t("planned_charge_need"), [["learned_planning_required_charge_energy_kwh"], ["planned grid top-up"]]),
+      this._optionalReading(entities, this._t("pv_credit"), ["learned_planning_pv_forecast_credit_kwh", "pv forecast credited to the charge plan"], ["pv", "native_pv"]),
+      this._reading(entities, this._t("peak_coverage"), ["learned_planning_coverage_end", "end of planned peak coverage"]),
+    ].join("");
     return `
-      <section class="section"><div class="section-head"><h2>${this._escape(this._t("price_context"))}</h2><small>${this._escape(this._t("daily_costs"))}</small></div>
-        <div class="reading-grid">
-          ${this._reading(entities, this._t("current_price"), [["price_now"], ["current import price"], ["strompreis jetzt"]])}
-          ${this._reading(entities, this._t("daily_average"), [["price_daily_average"], ["daily average price"], ["tagesdurchschnittspreis"]])}
-          ${this._reading(entities, this._t("peak_threshold"), [["current_peak_threshold"], ["preisspitzen-schwelle"]])}
-          ${this._reading(entities, this._t("valley_threshold"), [["current_valley_threshold"], ["niedertarif-schwelle"]])}
-          ${this._reading(entities, this._t("planned_charge_need"), [["learned_planning_required_charge_energy_kwh"], ["planned grid top-up"]])}
-          ${this._optionalReading(entities, this._t("pv_credit"), ["learned_planning_pv_forecast_credit_kwh", "pv forecast credited to the charge plan"], ["pv", "native_pv"])}
-          ${this._reading(entities, this._t("peak_coverage"), ["learned_planning_coverage_end", "end of planned peak coverage"])}
-        </div>
-      </section>
-      <section class="section"><div class="section-head"><h2>${this._escape(this._t("economics_today"))}</h2><small>${this._escape(this._t("daily_costs"))}</small></div>
-        <div class="reading-grid">
-          ${this._reading(entities, this._t("battery_benefit"), ["economics_daily_battery_benefit", "battery benefit today", "bilanz heute batterie-nutzen"])}
-          ${this._reading(entities, this._t("avoided_import"), ["economics_daily_avoided_grid_import_cost", "avoided grid import cost", "vermiedene netzbezugskosten"])}
-          ${this._reading(entities, this._t("grid_charge_cost"), ["economics_daily_grid_charge_cost", "grid charging cost", "netzlade-kosten"])}
-          ${this._optionalReading(entities, this._t("pv_opportunity_cost"), ["economics_daily_pv_opportunity_cost", "pv opportunity cost", "pv-opportunitätskosten"], ["pv", "native_pv"])}
-          ${this._optionalReading(entities, this._t("export_revenue"), ["economics_daily_export_revenue", "export revenue", "einspeiseerlös"], ["pv", "native_pv"])}
-          ${this._optionalReading(entities, this._t("self_consumption_value"), ["economics_daily_native_pv_self_consumption_value", "native pv self-consumption value", "wert native pv eigenverbrauch"], ["native_pv"])}
-        </div>
-      </section>
-      <section class="section"><div class="section-head"><h2>${this._escape(this._t("average_values"))}</h2><small>${this._escape(this._t("ledger_based"))}</small></div>
-        <div class="reading-grid">
-          ${this._reading(entities, this._t("grid_charge_price"), ["economics_average_grid_charge_price", "avg. grid charging price", "ø netzladepreis"])}
-          ${this._optionalReading(entities, this._t("pv_opportunity_value"), ["economics_average_pv_opportunity_value", "avg. pv opportunity value", "ø pv-opportunitätswert"], ["pv", "native_pv"])}
-          ${this._reading(entities, this._t("blended_charge_price"), ["economics_average_battery_charge_price", "avg. battery charge price", "ø akku-ladepreis"])}
-          ${this._optionalReading(entities, this._t("export_price"), ["economics_average_export_price", "avg. export price", "ø einspeisepreis"], ["pv", "native_pv"])}
-          ${this._reading(entities, this._t("discharge_value"), ["economics_average_battery_discharge_value", "avg. battery discharge value", "ø wert der batterieentladung"])}
-          ${this._optionalReading(entities, this._t("native_pv_return"), ["economics_average_native_pv_to_home_return", "avg. pv to home return", "ø wert native pv direkt ins haus"], ["native_pv"])}
-          ${this._reading(entities, this._t("efficiency"), ["economics_total_economic_efficiency_pct", "economic efficiency", "wirtschaftlichkeit"])}
-        </div>
-        <p class="explain">${this._escape(this._t("blended_explain"))}</p>
-      </section>`;
+      <section class="section economics-intro"><div class="section-head"><h2>${this._escape(this._t("economics"))}</h2><small>${this._escape(this._t("ledger_based"))}</small></div><p>${this._escape(this._t("economics_intro"))}</p></section>
+      <section class="section economics-price-section"><div class="section-head"><h2>${this._escape(this._t("economics_price_position"))}</h2><small>${this._escape(this._t("economics_price_scale"))}</small></div><p class="economics-section-help">${this._escape(this._t("economics_price_position_help"))}</p>${this._economicsPriceRuler(entities)}</section>
+      <section class="section economics-balance-section"><div class="section-head"><h2>${this._escape(this._t("economics_daily_balance"))}</h2><small>${this._escape(this._t("daily_costs"))}</small></div><div class="economics-balance-grid"><div class="economics-balance-copy"><p class="economics-section-help">${this._escape(this._t("economics_daily_balance_help"))}</p><div class="economics-benefit ${benefitTone}">${this._reading(entities, this._t("battery_benefit"), benefitTerms)}</div><p class="economics-formula">${this._escape(this._t("economics_daily_formula"))}</p></div><div class="economics-contributions">${contributionRows}</div></div></section>
+      <section class="section"><div class="section-head"><h2>${this._escape(this._t("economics_what_counts"))}</h2><small>${this._escape(this._t("daily_costs"))}</small></div><div class="economics-ledger">${dailyRows}</div></section>
+      <section class="section"><div class="section-head"><h2>${this._escape(this._t("economics_actual_prices"))}</h2><small>${this._escape(this._t("ledger_based"))}</small></div><p class="economics-section-help">${this._escape(this._t("economics_comparison_help"))}</p><div class="economics-average-grid"><article class="economics-average-card charge"><h3>${this._escape(this._t("economics_charge_value"))}</h3><p>${this._escape(this._t("economics_charge_help"))}</p>${this._reading(entities, this._t("blended_charge_price"), chargeTerms)}</article><article class="economics-average-card discharge"><h3>${this._escape(this._t("economics_discharge_value"))}</h3><p>${this._escape(this._t("economics_discharge_help"))}</p>${this._reading(entities, this._t("discharge_value"), dischargeTerms)}</article></div><h3 class="economics-compare-title">${this._escape(this._t("economics_comparison"))}</h3>${this._economicsCompare(entities, chargeTerms, dischargeTerms)}<div class="economics-secondary-values">${this._reading(entities, this._t("grid_charge_price"), ["economics_average_grid_charge_price", "avg. grid charging price", "ø netzladepreis"])}${this._optionalReading(entities, this._t("pv_opportunity_value"), ["economics_average_pv_opportunity_value", "avg. pv opportunity value", "ø pv-opportunitätswert"], ["pv", "native_pv"])}${this._optionalReading(entities, this._t("export_price"), ["economics_average_export_price", "avg. export price", "ø einspeisepreis"], ["pv", "native_pv"])}${this._optionalReading(entities, this._t("native_pv_return"), ["economics_average_native_pv_to_home_return", "avg. pv to home return", "ø wert native pv direkt ins haus"], ["native_pv"])}</div><div class="economics-efficiency"><div>${this._reading(entities, this._t("efficiency"), efficiencyTerms)}<p>${this._escape(this._t("economics_efficiency_help"))}</p></div></div><p class="explain">${this._escape(this._t("blended_explain"))}</p></section>
+      <section class="section"><div class="section-head"><h2>${this._escape(this._t("economics_planning"))}</h2><small>${this._escape(this._t("price_context"))}</small></div><div class="reading-grid economics-planning-grid">${planRows}</div></section>`;
   }
 
   _nativeSystems(entities) {
@@ -2489,6 +2587,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .live-flow-offgrid{margin-top:9px}.live-flow-note{margin:9px 2px 0}
         @media(max-width:620px){.live-flow-map{min-height:310px;aspect-ratio:1.25/1}.live-flow-map>.live-flow-node{width:clamp(76px,22%,96px);min-height:76px;padding:7px}.live-flow-map>.flow-node-house{width:clamp(78px,21%,90px);min-height:78px}.live-flow-map>.live-flow-node strong{font-size:11px}.live-flow-map>.live-flow-node small{font-size:9px}}
         @media(prefers-reduced-motion:reduce){.flow-wire.forward,.flow-wire.reverse{animation:none;stroke-dasharray:3 10;stroke-dashoffset:0}}
+        .topology-form-errors{margin:0 0 12px;padding:10px 13px;border:1px solid #8b4848;border-left:4px solid #ec7777;border-radius:8px;background:#382426;color:#ffdede}.topology-form-errors p{margin:0;line-height:1.45}.topology-form-errors p+p{margin-top:6px}
+        .economics-intro>p,.economics-section-help{margin:0;color:var(--muted);font-size:13px;line-height:1.55}.economics-intro>p{max-width:950px}.economics-price-ruler{padding:22px 24px 18px;border:1px solid #364047;border-radius:12px;background:linear-gradient(130deg,#1d2b32,#202428 65%)}.economics-ruler-range,.economics-ruler-ticks{display:flex;justify-content:space-between;color:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}.economics-ruler-track{position:relative;height:27px;margin:16px 2px 8px;border:1px solid #475158;border-radius:999px;background:linear-gradient(90deg,#5a91a5,#46ad92 48%,#deb94f 75%,#da7859);box-shadow:inset 0 1px 4px #1118}.economics-ruler-gridline{position:absolute;top:-6px;bottom:-6px;width:1px;background:#eef4f566}.economics-price-marker{position:absolute;z-index:1;top:50%;width:3px;height:39px;border:1px solid #f1f5f7;border-radius:2px;background:#202428;box-shadow:0 0 0 2px #1b2024,0 1px 5px #101214;transform:translate(-50%,-50%)}.economics-price-marker.current{width:5px;height:46px;background:#fff}.economics-price-marker.average{border-style:dashed;background:#e8f1ff}.economics-price-marker.peak{background:#ef7777}.economics-price-marker.valley{background:#66d5a0}.economics-ruler-ticks{margin-top:6px}.economics-price-legend{display:grid;grid-template-columns:14px minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 11px;border:1px solid #353d42;border-radius:8px;background:#24292d}.economics-price-ruler>.economics-price-legend{display:none}.economics-price-legend i{width:9px;height:9px;border-radius:50%;background:#d8e4e9}.economics-price-legend.current i{background:#fff;box-shadow:0 0 7px #fff8}.economics-price-legend.average i{background:#a8caff}.economics-price-legend.peak i{background:#ef7777}.economics-price-legend.valley i{background:#66d5a0}.economics-price-legend span{color:#c8d0d4;font-size:12px}.economics-price-legend strong{color:#f3f5f6;font-size:13px;font-variant-numeric:tabular-nums}.economics-ruler-track+.economics-ruler-ticks+.economics-price-legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:15px}.economics-unavailable{margin:0;padding:22px;border:1px dashed #545d63;border-radius:10px;color:var(--muted);text-align:center}.economics-balance-grid{display:grid;grid-template-columns:minmax(250px,.88fr) minmax(0,1.12fr);gap:20px;align-items:center}.economics-balance-copy{display:grid;gap:12px}.economics-benefit{padding:15px;border:1px solid #3a4248;border-radius:11px;background:#22282c}.economics-benefit.positive{border-color:#39845c;background:linear-gradient(135deg,#1f392b,#22282c)}.economics-benefit.negative{border-color:#85504d;background:linear-gradient(135deg,#3a2527,#22282c)}.economics-benefit .reading{min-height:unset;padding:4px;border:0;background:transparent;box-shadow:none}.economics-benefit .reading>span{font-size:13px}.economics-benefit .reading>strong{font-size:clamp(27px,4vw,38px)}.economics-benefit .reading>small{display:none}.economics-formula{margin:0;color:#bdc7cb;font-size:12px;line-height:1.55}.economics-contributions{display:grid;gap:9px}.economics-contribution{padding:11px 13px;border:1px solid #363e44;border-radius:9px;background:#23292d;cursor:pointer}.economics-contribution.value{border-left:3px solid #56cf83}.economics-contribution.cost{border-left:3px solid #e4a75c}.economics-contribution-copy{display:flex;justify-content:space-between;gap:12px;color:#e6e9eb}.economics-contribution-copy span{font-size:13px}.economics-contribution-copy strong{font-size:14px;font-variant-numeric:tabular-nums}.economics-contribution>small{display:block;margin-top:4px;color:var(--muted);font-size:11px;line-height:1.4}.economics-bar-track{height:5px;margin-top:9px;overflow:hidden;border-radius:5px;background:#171a1d}.economics-bar-track i{display:block;height:100%;border-radius:inherit;background:#e4a75c}.economics-contribution.value .economics-bar-track i{background:#56cf83}.economics-ledger{display:grid;gap:8px}.economics-ledger-row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:13px 15px;border:1px solid #343b40;border-radius:9px;background:#22272b}.economics-ledger-row>span{min-width:0}.economics-ledger-row strong,.economics-ledger-row>span>small{display:block}.economics-ledger-row>span>strong{color:#e8ebed;font-size:13px}.economics-ledger-row>span>small{margin-top:4px;color:var(--muted);font-size:11px;line-height:1.4}.economics-ledger-row>b{flex:none;color:#f3f5f6;text-align:right;font-size:14px;font-variant-numeric:tabular-nums}.economics-ledger-row>b small{display:block;margin-top:4px;color:var(--muted);font-size:10px;font-weight:400}.economics-ledger-row.unavailable{opacity:.67}.economics-average-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.economics-average-card{padding:15px;border:1px solid #3b464c;border-radius:11px;background:linear-gradient(135deg,#202d32,#24292d)}.economics-average-card.charge{border-top:3px solid #58a9cf}.economics-average-card.discharge{border-top:3px solid #56cf83}.economics-average-card h3{margin:0 0 7px;font-size:15px}.economics-average-card p{min-height:38px;margin:0 0 10px;color:var(--muted);font-size:11px;line-height:1.45}.economics-average-card .reading{min-height:unset;padding:9px 0 0;border:0;border-top:1px solid #41494e;border-radius:0;background:none;box-shadow:none}.economics-average-card .reading>strong{font-size:22px}.economics-compare-title{margin:19px 0 9px;font-size:13px}.economics-compare{display:grid;gap:9px}.economics-compare-row{padding:10px 12px;border:1px solid #343b40;border-radius:8px;background:#22272b;cursor:pointer}.economics-compare-row>div{display:flex;justify-content:space-between;gap:10px;margin-bottom:8px;color:#dfe3e5;font-size:12px}.economics-compare-row strong{font-variant-numeric:tabular-nums}.economics-compare-row>i{display:block;height:7px;max-width:100%;border-radius:999px;background:#58a9cf}.economics-compare-row>i.discharge{background:#56cf83}.economics-secondary-values{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:9px;margin-top:13px}.economics-secondary-values .reading{min-height:84px}.economics-efficiency{margin-top:13px;padding:15px;border:1px solid #40514a;border-left:3px solid #a58cd6;border-radius:10px;background:#24282c}.economics-efficiency .reading{display:grid;grid-template-columns:minmax(0,1fr) auto;min-height:unset;gap:5px 14px;padding:0;border:0;background:none;box-shadow:none}.economics-efficiency .reading>span{font-weight:650}.economics-efficiency .reading>strong{grid-column:2;grid-row:1/3;font-size:25px}.economics-efficiency .reading>small{grid-column:1}.economics-efficiency>div>p{margin:10px 0 0;color:#bec7cb;font-size:12px;line-height:1.55}.economics-planning-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr))}
+        @media(max-width:760px){.economics-balance-grid{grid-template-columns:minmax(0,1fr)}.economics-price-ruler{padding:17px 13px}.economics-price-legend{gap:6px;padding:8px}.economics-price-legend span{font-size:11px}.economics-price-legend strong{font-size:12px}}
+        @media(max-width:520px){.economics-average-grid{grid-template-columns:minmax(0,1fr)}.economics-ruler-ticks{font-size:9px}.economics-ruler-track{height:23px}.economics-ledger-row{align-items:flex-start;padding:11px;gap:10px}.economics-ledger-row>b{font-size:12px}.economics-benefit .reading>strong{font-size:27px}}
         .topology-form-errors{margin:0 0 12px;padding:10px 13px;border:1px solid #8b4848;border-left:4px solid #ec7777;border-radius:8px;background:#382426;color:#ffdede}.topology-form-errors p{margin:0;line-height:1.45}.topology-form-errors p+p{margin-top:6px}
       </style>
       <main class="shell">
