@@ -273,6 +273,7 @@
       "group_not_found": "De geselecteerde batterijgroep bestaat niet meer."
     },
     "error": {
+      "invalid_energy_scope": "De sensortoewijzing kon niet worden opgeslagen. Controleer de meetmethode van het net en of PV- of prognosebronnen dubbel zijn toegewezen.",
       "invalid_zensdk_ip": "Voer een privé IPv4-adres van het Zendure-apparaat in.",
       "zensdk_ip_unsupported": "Dit Zendure-model ondersteunt geen directe ZenSDK-metingen.",
       "zensdk_ip_clear_conflict": "Voer een adres in of kies automatische detectie, niet allebei."
@@ -287,6 +288,7 @@
           "expert": "Expertmodus",
           "smart_mode": "Zendure Smart Mode",
           "systems_groups": "Systemen en groepen",
+          "energy_scopes": "Sensortoewijzingen",
           "native_zendure": "Native Zendure-test",
           "training": "Regelingstraining",
           "debug": "Debugmodus"
@@ -320,6 +322,14 @@
       "group_edit_select": {"title": "Batterijgroep kiezen", "data": {"group_id": "Groep"}},
       "group_edit": {"title": "Batterijgroep bewerken", "description": "Systemen uit een andere groep worden bij opslaan verplaatst. Verwijderde systemen blijven geconfigureerd en zonder groep.", "data": {"name": "Groepsnaam", "members": "Systemen in groep"}},
       "group_remove": {"title": "Batterijgroep verwijderen", "description": "De systemen blijven geconfigureerd en zonder groep na het verwijderen.", "data": {"group_id": "Groep"}},
+      "energy_scopes": {"title": "Sensortoewijzingen", "description": "Koppel netmetingen, PV-installaties, prognoses en prijsinformatie aan batterijgroepen.", "menu_options": {"energy_scope_create": "Sensortoewijzing maken", "energy_scope_edit_select": "Sensortoewijzing bewerken", "energy_scope_remove_select": "Sensortoewijzing verwijderen"}},
+      "energy_scope_create": {"title": "Sensortoewijzing maken", "description": "Kies groepen en de net- en prijscontext en koppel daarna PV-installaties aan hun prognoses.", "data": {"name": "Naam van de toewijzing", "group_ids": "Toegewezen batterijgroepen", "grid_mode": "Meetmethode van het net", "grid_power_entities": "Gesigneerde netvermogenssensoren", "grid_phase_power_entities": "Gesigneerde netsensoren per fase", "grid_import_entities": "Sensoren voor netafname", "grid_export_entities": "Sensoren voor teruglevering", "price_entity": "Sensor voor actuele inkoopprijs", "export_price_entity": "Sensor voor dynamische terugleverprijs"}},
+      "energy_scope_edit_select": {"title": "Sensortoewijzing kiezen", "data": {"scope_id": "Sensortoewijzing"}},
+      "energy_scope_edit": {"title": "Sensortoewijzing bewerken", "description": "Elke batterijgroep kan aan één sensortoewijzing worden gekoppeld.", "data": {"name": "Naam van de toewijzing", "group_ids": "Toegewezen batterijgroepen", "grid_mode": "Meetmethode van het net", "grid_power_entities": "Gesigneerde netvermogenssensoren", "grid_phase_power_entities": "Gesigneerde netsensoren per fase", "grid_import_entities": "Sensoren voor netafname", "grid_export_entities": "Sensoren voor teruglevering", "price_entity": "Sensor voor actuele inkoopprijs", "export_price_entity": "Sensor voor dynamische terugleverprijs"}},
+      "energy_scope_pv_sources": {"title": "PV- en prognosebronnen", "menu_options": {"energy_scope_edit": "Toewijzing bewerken", "energy_scope_pv_add": "PV-installatie met prognose koppelen", "energy_scope_pv_remove_select": "PV-installatie verwijderen", "energy_scope_save": "Sensortoewijzing opslaan"}},
+      "energy_scope_pv_add": {"title": "PV-installatie toevoegen", "data": {"source_name": "Naam van de PV-installatie", "source_mode": "Meettype", "power_entities": "PV-vermogenssensoren", "installed_power_wp": "Geïnstalleerd PV-vermogen (Wp)", "forecast_entry_ids": "Prognoses voor deze PV-installatie"}},
+      "energy_scope_pv_remove_select": {"title": "PV-installatie verwijderen", "data": {"source_id": "PV-installatie"}},
+      "energy_scope_remove_select": {"title": "Sensortoewijzing verwijderen", "description": "Batterijgroepen en apparaten blijven ongewijzigd.", "data": {"scope_id": "Sensortoewijzing"}},
       "training_start": {
         "title": "Passieve regelingstraining starten",
         "description": "De training observeert alleen het werkelijke gedrag. Er worden geen actieve regelparameters gewijzigd en geen experimentele opdrachten verzonden. Het resultaat blijft een shadow-voorstel.",
