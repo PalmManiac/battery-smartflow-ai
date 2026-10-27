@@ -53,7 +53,7 @@ _SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.49"
+DASHBOARD_VERSION = "1.0.50"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -254,13 +254,14 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
         topology_summary = {
             "circuits": [
                 {
+                    "id": circuit_id,
                     "name": circuit["name"],
                     "phase": circuit["phase"],
                     "max_current_a": circuit["max_current_a"],
                     "max_power_w": circuit["max_power_w"],
                     "upstream": topology["circuits"].get(circuit["parent_circuit_id"], {}).get("name"),
                 }
-                for circuit in topology["circuits"].values()
+                for circuit_id, circuit in topology["circuits"].items()
             ],
             "load_domains": list(topology["load_domains"].values()),
             "connections": [
@@ -268,6 +269,7 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                     "device": device_label(connection["device_id"])["label"],
                     "output_id": connection["output_id"],
                     "kind": connection["kind"],
+                    "circuit_id": connection["circuit_id"],
                     "circuit": topology["circuits"].get(connection["circuit_id"], {}).get("name"),
                     "load_domain": topology["load_domains"].get(connection["load_domain_id"], {}).get("name"),
                 }

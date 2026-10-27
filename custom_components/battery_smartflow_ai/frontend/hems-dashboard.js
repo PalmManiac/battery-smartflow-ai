@@ -163,6 +163,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
         return;
       }
       if (nodeFor("[data-options-close]")) {
+        if (this._topologyDraftHasChanges &&
+            !window.confirm(this._t("topology_discard_confirm"))) return;
         if (this._optionsFlowId) {
           this._hass.callApi("DELETE", `config/config_entries/options/flow/${this._optionsFlowId}`).catch(() => {});
         }
@@ -392,6 +394,31 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const energyMappingLabels = {
       energy_scopes: { de: "Sensorzuordnungen", en: "Sensor assignments", fr: "Affectations de capteurs", nl: "Sensortoewijzingen" },
       electrical_topology: { de: "Elektrische Topologie", en: "Electrical topology", fr: "Topologie électrique", nl: "Elektrische topologie" },
+      topology_circuits: { de: "1. Stromkreise", en: "1. Circuits", fr: "1. Circuits", nl: "1. Circuits" },
+      topology_circuits_help: { de: "Lege die Stromkreise deiner Anlage an und ordne jedem die richtige Phase zu. Trage nur Grenzen ein, die du sicher kennst. Das ist noch keine Gerätesteuerung.", en: "Add the circuits in your installation and assign each one to its phase. Enter only limits you know. This does not control devices.", fr: "Ajoutez les circuits de votre installation et attribuez une phase à chacun. Ne saisissez que les limites connues. Cela ne commande pas les appareils.", nl: "Voeg de circuits van je installatie toe en wijs aan elk circuit een fase toe. Vul alleen bekende limieten in. Dit stuurt nog geen apparaten aan." },
+      topology_domains: { de: "2. Lastbereiche", en: "2. Load domains", fr: "2. Zones de charge", nl: "2. Lastgebieden" },
+      topology_domains_help: { de: "Benenne die Bereiche, die von einem Off-Grid- oder USV-Ausgang versorgt werden. Für solche Ausgänge ist ein Insel-Lastbereich erforderlich.", en: "Name the areas served by off-grid or UPS outputs. These outputs require an off-grid load domain.", fr: "Nommez les zones alimentées par une sortie hors réseau ou UPS. Ces sorties nécessitent une zone hors réseau.", nl: "Geef de gebieden een naam die door off-grid- of UPS-uitgangen worden gevoed. Deze uitgangen vereisen een off-grid-lastgebied." },
+      topology_connections: { de: "3. Geräteausgänge", en: "3. Device outputs", fr: "3. Sorties des appareils", nl: "3. Apparaatuitgangen" },
+      topology_connections_help: { de: "Ordne jedes eingerichtete Zendure-System dem tatsächlichen Netzausgang oder Insel-Ausgang und dem passenden Stromkreis zu.", en: "Map each configured Zendure system's actual grid or off-grid output to the correct circuit.", fr: "Associez la sortie réseau ou hors réseau réelle de chaque système Zendure configuré au circuit correspondant.", nl: "Koppel de werkelijke net- of off-grid-uitgang van elk ingesteld Zendure-systeem aan het juiste circuit." },
+      topology_review: { de: "4. Prüfen und speichern", en: "4. Review and save", fr: "4. Vérifier et enregistrer", nl: "4. Controleren en opslaan" },
+      topology_circuit_add_help: { de: "Lege erst fest, über welchen Stromkreis ein System angeschlossen ist. Trage eine Phase und nur bekannte Grenzen ein. Eine gemeinsame vorgeschaltete Sicherung kannst du später als übergeordneten Stromkreis auswählen.", en: "First describe the circuit a system is connected to. Select its phase and enter only known limits. You can add a shared upstream circuit and link it afterward.", fr: "Décrivez d’abord le circuit auquel le système est raccordé. Choisissez sa phase et saisissez uniquement les limites connues.", nl: "Beschrijf eerst het circuit waarop het systeem is aangesloten. Kies de fase en vul alleen bekende limieten in." },
+      topology_domain_add_help: { de: "Ein Lastbereich benennt, welche Verbraucher an einem Ausgang hängen. Für Off-Grid- und USV-Ausgänge ist ein Insel-Lastbereich erforderlich.", en: "A load domain names the loads served by an output. Off-grid and UPS outputs require an off-grid load domain.", fr: "Une zone de charge décrit les appareils alimentés par une sortie. Les sorties hors réseau/UPS nécessitent une zone dédiée.", nl: "Een lastgebied beschrijft welke verbruikers op een uitgang zijn aangesloten. Off-grid- en UPS-uitgangen vereisen een off-grid-lastgebied." },
+      topology_connection_add_help: { de: "Ordne jedem eingerichteten Zendure-System den tatsächlichen Netzausgang oder Insel-Ausgang und seinen Stromkreis zu. Off-Grid-Ausgänge brauchen zusätzlich einen Insel-Lastbereich.", en: "Map each configured Zendure system's actual grid or off-grid output to its circuit. Off-grid outputs also need an off-grid load domain.", fr: "Associez la sortie réseau ou hors réseau réelle de chaque système Zendure configuré à son circuit. Les sorties hors réseau nécessitent aussi une zone dédiée.", nl: "Koppel de werkelijke net- of off-grid-uitgang van elk ingesteld Zendure-systeem aan het circuit. Off-grid-uitgangen hebben ook een off-grid-lastgebied nodig." },
+      topology_review_help: { de: "Prüfe die Skizze. Erst mit „Topologie speichern“ werden alle Änderungen gemeinsam übernommen. Die Angaben verändern die Regelung in dieser Version nicht.", en: "Review the diagram. Nothing is saved until you choose Save topology. These settings do not change regulation in this version.", fr: "Vérifiez le schéma. Les changements ne sont enregistrés qu’en choisissant Enregistrer. Ils ne modifient pas la régulation dans cette version.", nl: "Controleer het schema. Wijzigingen worden pas opgeslagen wanneer je Opslaan kiest. Deze instellingen veranderen de regeling in deze versie niet." },
+      topology_continue_domains: { de: "Weiter zu Lastbereichen", en: "Continue to load domains", fr: "Continuer vers les zones de charge", nl: "Verder naar lastgebieden" },
+      topology_continue_connections: { de: "Weiter zu Geräteausgängen", en: "Continue to device outputs", fr: "Continuer vers les sorties", nl: "Verder naar apparaatuitgangen" },
+      topology_continue_review: { de: "Zur Übersicht und Prüfung", en: "Review topology", fr: "Vérifier la topologie", nl: "Topologie controleren" },
+      topology_back_circuits: { de: "Zurück zu Stromkreisen", en: "Back to circuits", fr: "Retour aux circuits", nl: "Terug naar circuits" },
+      topology_back_domains: { de: "Zurück zu Lastbereichen", en: "Back to load domains", fr: "Retour aux zones de charge", nl: "Terug naar lastgebieden" },
+      topology_back_connections: { de: "Zurück zu Geräteausgängen", en: "Back to device outputs", fr: "Retour aux sorties", nl: "Terug naar apparaatuitgangen" },
+      topology_save: { de: "Topologie speichern", en: "Save topology", fr: "Enregistrer la topologie", nl: "Topologie opslaan" },
+      topology_add_to_draft: { de: "Zum Entwurf hinzufügen", en: "Add to draft", fr: "Ajouter au brouillon", nl: "Aan concept toevoegen" },
+      topology_apply_draft: { de: "Änderung übernehmen", en: "Apply change", fr: "Appliquer la modification", nl: "Wijziging toepassen" },
+      topology_remove_from_draft: { de: "Aus Entwurf entfernen", en: "Remove from draft", fr: "Supprimer du brouillon", nl: "Uit concept verwijderen" },
+      topology_no_outputs: { de: "Noch kein Geräteausgang zugeordnet", en: "No device output mapped yet", fr: "Aucune sortie associée", nl: "Nog geen apparaatuitgang gekoppeld" },
+      topology_upstream: { de: "Gemeinsame vorgeschaltete Grenze", en: "Shared upstream limit", fr: "Limite amont partagée", nl: "Gedeelde bovenliggende limiet" },
+      topology_step_of: { de: "Schritt", en: "Step", fr: "Étape", nl: "Stap" },
+      topology_discard_confirm: { de: "Die Topologie wurde noch nicht gespeichert. Änderungen wirklich verwerfen?", en: "The topology has not been saved yet. Discard these changes?", fr: "La topologie n’est pas encore enregistrée. Abandonner les modifications ?", nl: "De topologie is nog niet opgeslagen. Wijzigingen verwerpen?" },
       topology_circuit_add: { de: "Stromkreis hinzufügen", en: "Add circuit", fr: "Ajouter un circuit", nl: "Circuit toevoegen" },
       topology_circuit_edit_select: { de: "Stromkreis bearbeiten", en: "Edit circuit", fr: "Modifier un circuit", nl: "Circuit bewerken" },
       topology_circuit_edit: { de: "Stromkreis bearbeiten", en: "Edit circuit", fr: "Modifier un circuit", nl: "Circuit bewerken" },
@@ -917,20 +944,26 @@ class BatterySmartFlowDashboard extends HTMLElement {
       }).join("");
       const scopeEmpty = scopes ? "" : `<p class="muted">${this._escape(this._t("scope_none"))}</p>`;
       const topology = entry.electrical_topology || {};
-      const circuits = (topology.circuits || []).map((circuit) => {
-        const limits = [circuit.max_current_a ? `${circuit.max_current_a} A` : "", circuit.max_power_w ? `${circuit.max_power_w} W` : ""].filter(Boolean).join(" / ") || this._t("topology_no_limit");
-        return `${this._escape(circuit.name)} · ${this._escape(this._t(`topology_phase_${circuit.phase}`))} · ${this._escape(limits)}${circuit.upstream ? ` · ↑ ${this._escape(circuit.upstream)}` : ""}`;
-      }).join("<br>");
-      const domains = (topology.load_domains || []).map((domain) => `${this._escape(domain.name)} · ${this._escape(this._t(`topology_domain_${domain.kind}`))}`).join("<br>");
-      const connections = (topology.connections || []).map((connection) => `${this._escape(connection.device)} · ${this._escape(connection.output_id)} · ${this._escape(this._t(`topology_output_${connection.kind}`))}${connection.circuit ? ` · ${this._escape(connection.circuit)}` : ""}${connection.load_domain ? ` · ${this._escape(connection.load_domain)}` : ""}`).join("<br>");
-      const topologySummary = [
-        circuits ? `<strong>${this._escape(this._t("topology_summary_circuits"))}</strong><br>${circuits}` : "",
-        domains ? `<strong>${this._escape(this._t("topology_summary_domains"))}</strong><br>${domains}` : "",
-        connections ? `<strong>${this._escape(this._t("topology_summary_connections"))}</strong><br>${connections}` : "",
-      ].filter(Boolean).join("<hr>") || this._t("topology_empty");
-      return `<div class="group-summary-entry">${entry.system ? `<small>${this._escape(entry.system)}</small>` : ""}<div class="group-summary-grid">${groups}${ungrouped}${empty}</div><button class="apply" type="button" data-group-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("manage_groups"))}</button><h3>${this._escape(this._t("energy_scopes"))}</h3><div class="group-summary-grid">${scopes}${scopeEmpty}</div><button class="apply" type="button" data-energy-scope-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("energy_scopes"))}</button><h3>${this._escape(this._t("electrical_topology"))}</h3><article class="group-summary-card">${topologySummary}</article><button class="apply" type="button" data-topology-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("electrical_topology"))}</button></div>`;
+      const topologyDiagram = this._topologyDiagram(topology);
+      return `<div class="group-summary-entry">${entry.system ? `<small>${this._escape(entry.system)}</small>` : ""}<div class="group-summary-grid">${groups}${ungrouped}${empty}</div><button class="apply" type="button" data-group-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("manage_groups"))}</button><h3>${this._escape(this._t("energy_scopes"))}</h3><div class="group-summary-grid">${scopes}${scopeEmpty}</div><button class="apply" type="button" data-energy-scope-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("energy_scopes"))}</button><h3>${this._escape(this._t("electrical_topology"))}</h3>${topologyDiagram}<button class="apply" type="button" data-topology-edit data-entry-id="${this._escape(entry.entry_id)}">${this._escape(this._t("electrical_topology"))}</button></div>`;
     }).join("");
     return `<section class="section"><div class="section-head"><h2>${this._escape(this._t("battery_groups"))}</h2></div>${content}</section>`;
+  }
+
+  _topologyDiagram(topology) {
+    const circuits = topology.circuits || [];
+    const connections = topology.connections || [];
+    const paths = circuits.map((circuit) => {
+      const outputs = connections.filter((item) => item.circuit_id === circuit.id).map((item) => {
+        const offGrid = item.kind === "off_grid";
+        return `<article class="topology-output-node ${offGrid ? "offgrid" : "grid"}"><span class="topology-output-icon" aria-hidden="true">${offGrid ? "⌂" : "↔"}</span><div><strong>${this._escape(item.device)}</strong><small>${this._escape(item.output_id)} · ${this._escape(this._t(`topology_output_${item.kind}`))}${item.load_domain ? ` · ${this._escape(item.load_domain)}` : ""}</small></div></article>`;
+      }).join("");
+      const limits = [circuit.max_current_a ? `${circuit.max_current_a} A` : "", circuit.max_power_w ? `${circuit.max_power_w} W` : ""].filter(Boolean).join(" · ") || this._t("topology_no_limit");
+      return `<div class="topology-path"><article class="topology-circuit-node"><div class="topology-node-head"><span class="topology-phase-chip">${this._escape(this._t(`topology_phase_${circuit.phase}`))}</span><strong>${this._escape(circuit.name)}</strong></div><small>${this._escape(limits)}</small>${circuit.upstream ? `<small class="topology-upstream">↑ ${this._escape(this._t("topology_upstream"))}: ${this._escape(circuit.upstream)}</small>` : ""}</article><div class="topology-connector" aria-hidden="true">→</div><div class="topology-output-stack">${outputs || `<div class="topology-empty-output">${this._escape(this._t("topology_no_outputs"))}</div>`}</div></div>`;
+    }).join("");
+    const domains = (topology.load_domains || []).map((domain) => `<span class="topology-domain-chip ${domain.kind === "off_grid" ? "offgrid" : "grid"}">${this._escape(domain.name)} · ${this._escape(this._t(`topology_domain_${domain.kind}`))}</span>`).join("");
+    if (!paths && !domains) return `<article class="group-summary-card topology-empty">${this._escape(this._t("topology_empty"))}</article>`;
+    return `<div class="topology-diagram" aria-label="${this._escape(this._t("electrical_topology"))}">${paths}${domains ? `<div class="topology-domains"><strong>${this._escape(this._t("topology_summary_domains"))}</strong><div>${domains}</div></div>` : ""}</div>`;
   }
 
   _deviceEntities(entities, deviceName, packNumber) {
@@ -1100,6 +1133,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   async _openOptionsFlow(entryId, stepId) {
     try {
+      this._topologyDraftHasChanges = false;
       const flow = await this._hass.callApi("POST", "config/config_entries/options/flow", {
         handler: entryId,
       });
@@ -1252,6 +1286,21 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return descriptions[name]?.[language] || descriptions[name]?.en || "";
   }
 
+  _topologyWizardChrome(stepId) {
+    if (!String(stepId || "").startsWith("topology_")) return "";
+    const stages = ["topology_circuits", "topology_domains", "topology_connections", "topology_review"];
+    const stageId = stages.find((stage) => stepId === stage || stepId.startsWith(stage.slice(0, -1)));
+    if (!stageId) return "";
+    const current = stages.indexOf(stageId) + 1;
+    const progress = stages.map((stage, index) => `<div class="topology-progress-step ${index + 1 < current ? "done" : ""} ${index + 1 === current ? "active" : ""}"><span>${index + 1}</span><small>${this._escape(this._t(stage))}</small></div>`).join("");
+    const helpKey = stepId === "topology_circuits" || stepId.startsWith("topology_circuit_") ? "topology_circuits_help"
+      : stepId === "topology_domains" || stepId.startsWith("topology_domain_") ? "topology_domains_help"
+        : stepId === "topology_connections" || stepId.startsWith("topology_connection_") ? "topology_connections_help"
+          : "topology_review_help";
+    const help = this._t(helpKey);
+    return `<div class="topology-wizard-chrome"><div class="topology-progress" role="progressbar" aria-valuemin="1" aria-valuemax="4" aria-valuenow="${current}" aria-label="${this._escape(this._t("topology_step_of"))} ${current} / 4">${progress}</div><p class="topology-step-help">${this._escape(help)}</p></div>`;
+  }
+
   _renderOptionsFlow(step) {
     if (!step || step.type === "abort" || step.type === "create_entry") {
       const finished = step?.type === "create_entry";
@@ -1259,6 +1308,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         ? step.reason
         : finished ? "settings_saved" : "settings_closed";
       this._optionsFlowId = null;
+      this._topologyDraftHasChanges = false;
       this._scheduleRender();
       this._showNotice(this._t(messageKey));
       return;
@@ -1274,8 +1324,25 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (step.type === "menu") {
       const menuLabel = { general: "general_settings", expert: "expert_settings", smart_mode: "smart_mode_settings", debug: "debug_settings", systems_groups: "systems_groups", group_create: "group_create", group_edit_select: "group_edit_select", group_remove: "group_remove" };
       Object.assign(menuLabel, { energy_scopes: "energy_scopes", energy_scope_create: "energy_scope_create", energy_scope_edit_select: "energy_scope_edit_select", energy_scope_remove_select: "energy_scope_remove_select", energy_scope_edit: "energy_scope_edit", energy_scope_pv_sources: "energy_scope_pv_sources", energy_scope_pv_add: "energy_scope_pv_add", energy_scope_pv_remove_select: "energy_scope_pv_remove_select", energy_scope_save: "energy_scope_save" });
-      Object.assign(menuLabel, { electrical_topology: "electrical_topology", topology_circuit_add: "topology_circuit_add", topology_circuit_edit_select: "topology_circuit_edit_select", topology_circuit_remove: "topology_circuit_remove", topology_domain_add: "topology_domain_add", topology_domain_edit_select: "topology_domain_edit_select", topology_domain_remove: "topology_domain_remove", topology_connection_add: "topology_connection_add", topology_connection_edit_select: "topology_connection_edit_select", topology_connection_remove: "topology_connection_remove" });
-      content = (step.menu_options || []).filter((option) => menuLabel[option]).map((option) => `<button class="apply" type="button" data-options-next="${this._escape(option)}">${this._escape(this._t(menuLabel[option]))}</button>`).join("");
+      Object.assign(menuLabel, {
+        electrical_topology: "electrical_topology", topology_circuits: "topology_circuits", topology_domains: "topology_domains", topology_connections: "topology_connections", topology_review: "topology_review",
+        topology_circuit_add: "topology_circuit_add", topology_circuit_edit_select: "topology_circuit_edit_select", topology_circuit_remove: "topology_circuit_remove",
+        topology_domain_add: "topology_domain_add", topology_domain_edit_select: "topology_domain_edit_select", topology_domain_remove: "topology_domain_remove",
+        topology_connection_add: "topology_connection_add", topology_connection_edit_select: "topology_connection_edit_select", topology_connection_remove: "topology_connection_remove",
+        topology_continue_domains: "topology_continue_domains", topology_continue_connections: "topology_continue_connections", topology_continue_review: "topology_continue_review",
+        topology_back_circuits: "topology_back_circuits", topology_back_domains: "topology_back_domains", topology_back_connections: "topology_back_connections", topology_save: "topology_save",
+      });
+      const buttons = (step.menu_options || []).filter((option) => menuLabel[option]).map((option) => `<button class="apply ${option === "topology_save" ? "topology-save-button" : ""}" type="button" data-options-next="${this._escape(option)}">${this._escape(this._t(menuLabel[option]))}</button>`).join("");
+      let preview = "";
+      if (step.step_id === "topology_review" && step.description_placeholders?.topology_preview) {
+        try {
+          const topology = JSON.parse(step.description_placeholders.topology_preview);
+          preview = `<section class="topology-review-card"><h3>${this._escape(this._t("topology_review"))}</h3>${this._topologyDiagram(topology)}</section>`;
+        } catch {
+          preview = `<p class="muted">${this._escape(this._t("topology_preview_unavailable"))}</p>`;
+        }
+      }
+      content = `${this._topologyWizardChrome(step.step_id)}${preview}<div class="topology-menu-actions">${buttons}</div>`;
     } else if (step.type === "form") {
       const fields = (step.data_schema || []).map((field) => {
         const selector = field.selector || {};
@@ -1327,8 +1394,15 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const number = fieldType === "number";
         return `<label class="option-field"><span>${label}</span><input data-option-field="${name}" data-option-required="${field.required !== false}" type="${number ? "number" : "text"}" value="${this._escape(value)}" ${config.min !== undefined ? `min="${config.min}"` : ""} ${config.max !== undefined ? `max="${config.max}"` : ""} ${config.step !== undefined ? `step="${config.step}"` : ""}></label>`;
       }).join("");
-      content = `${fields}<button class="apply" type="button" data-options-submit>${this._escape(["general", "smart_mode", "expert_cell_voltage_config", "group_create", "group_edit", "group_remove", "topology_circuit_add", "topology_circuit_edit", "topology_circuit_remove", "topology_domain_add", "topology_domain_edit", "topology_domain_remove", "topology_connection_add", "topology_connection_edit", "topology_connection_remove"].includes(step.step_id) ? this._t("options_save") : this._t("options_continue"))}</button>`;
+      const topologyAction = step.step_id.startsWith("topology_")
+        ? step.step_id.endsWith("_add") ? "topology_add_to_draft"
+          : step.step_id.endsWith("_edit") ? "topology_apply_draft"
+            : step.step_id.endsWith("_remove") ? "topology_remove_from_draft" : "options_continue"
+        : ["general", "smart_mode", "expert_cell_voltage_config", "group_create", "group_edit", "group_remove"].includes(step.step_id) ? "options_save" : "options_continue";
+      content = `${this._topologyWizardChrome(step.step_id)}${fields}<button class="apply" type="button" data-options-submit>${this._escape(this._t(topologyAction))}</button>`;
     }
+    const errors = Object.values(step.errors || {}).map((key) => this._t(key)).filter(Boolean);
+    if (errors.length) content = `<div class="topology-form-errors" role="alert">${errors.map((message) => `<p>${this._escape(message)}</p>`).join("")}</div>${content}`;
     this._optionsFlowTitle = title;
     this._optionsStepId = step.step_id;
     this._optionsFlowBody = content;
@@ -1341,6 +1415,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   async _submitOptionsFlow(nextStepId = null) {
+    const submittedStepId = this._optionsStepId || "";
     const data = {};
     if (nextStepId) {
       data.next_step_id = nextStepId;
@@ -1358,11 +1433,15 @@ class BatterySmartFlowDashboard extends HTMLElement {
       Object.assign(data, userInput);
     }
     try {
-      this._renderOptionsFlow(await this._hass.callApi(
+      const step = await this._hass.callApi(
         "POST",
         `config/config_entries/options/flow/${this._optionsFlowId}`,
         data,
-      ));
+      );
+      if (!nextStepId && /^topology_(circuit|domain|connection)_(add|edit|remove)$/.test(submittedStepId)) {
+        this._topologyDraftHasChanges = true;
+      }
+      this._renderOptionsFlow(step);
     } catch (error) {
       this._showNotice(String(error));
     }
@@ -2374,6 +2453,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .pack-card.has-soc::after{opacity:0;background-image:radial-gradient(circle at 17px 16px,rgba(255,255,255,.08) 0 5px,rgba(255,255,255,.82) 5.5px 6.2px,rgba(119,229,236,.58) 6.3px 7px,transparent 7.6px),radial-gradient(circle at 57px 29px,rgba(255,255,255,.06) 0 4px,rgba(255,255,255,.75) 4.5px 5.1px,rgba(160,186,255,.52) 5.2px 5.8px,transparent 6.4px),radial-gradient(circle at 84px 12px,rgba(255,255,255,.05) 0 3px,rgba(255,255,255,.68) 3.5px 4px,rgba(255,180,226,.45) 4.1px 4.7px,transparent 5.3px);background-size:96px 48px;background-repeat:repeat-x;background-position:0 50%;mix-blend-mode:screen;filter:drop-shadow(0 0 2px rgba(255,255,255,.28))}.pack-card.has-soc[data-flow="charge"]::after{opacity:.92;animation:soap-bubbles-right 8s linear infinite}.pack-card.has-soc[data-flow="discharge"]::after{opacity:.92;animation:soap-bubbles-left 8s linear infinite}@keyframes soap-bubbles-right{from{background-position:0 50%}to{background-position:96px 50%}}@keyframes soap-bubbles-left{from{background-position:96px 50%}to{background-position:0 50%}}@media(prefers-reduced-motion:reduce){.pack-card.has-soc[data-flow]::after{animation:none;opacity:.72}}
         .history-card{transition:none}.history-card:hover{box-shadow:0 0 0 1px #16c4df35}.option-help{display:block;margin-top:5px;color:var(--muted);line-height:1.4}
         .scope-editor{border-top:3px solid #16b7d4}.scope-editor .option-field{display:grid;grid-template-columns:minmax(190px,.85fr) minmax(240px,1.5fr);align-items:start;gap:14px;padding:15px;background:#20262b}.scope-editor .option-field>span{font-weight:600;line-height:1.4}.scope-editor .option-help{font-weight:400}.scope-editor .option-field input:not([type=checkbox]),.scope-editor .option-field select{box-sizing:border-box;width:100%;max-width:none;min-height:40px;padding:9px 11px;border:1px solid #52616a;border-radius:7px;background:#131c22;color:#eef5f6;font:inherit}.scope-editor .entity-picker{min-width:0;width:100%;display:grid;gap:8px}.scope-editor details.entity-picker{display:block}.scope-editor .entity-picker summary{cursor:pointer;padding:10px 12px;border:1px solid #3d7888;border-radius:7px;background:#17323d;color:#e4f6fa}.scope-editor .entity-picker[open] summary{margin-bottom:8px}.scope-editor .entity-choices{max-height:230px;overflow:auto;margin-top:8px;border:1px solid #35464e;border-radius:7px;background:#131c22}.scope-editor .entity-choice{display:flex;align-items:center;gap:10px;padding:9px 11px;cursor:pointer;border-bottom:1px solid #2c383e}.scope-editor .entity-choice:last-child{border-bottom:0}.scope-editor .entity-choice:hover{background:#1c3642}.scope-editor .entity-choice[hidden]{display:none}.scope-editor .entity-choice input{flex:none;width:18px;height:18px}.scope-editor .entity-choice span{min-width:0;overflow-wrap:anywhere}.scope-editor .entity-choice small{display:block;color:var(--muted);font-size:11px}.scope-editor .entity-picker select{margin-top:0}.scope-editor .apply[data-options-submit]{margin-top:12px;min-height:44px}@media(max-width:700px){.scope-editor .option-field{grid-template-columns:minmax(0,1fr);gap:9px}.scope-editor .section-head{align-items:flex-start;flex-direction:column}}
+        .topology-wizard-chrome{padding:16px;margin-bottom:14px;border:1px solid #315c6b;border-radius:11px;background:linear-gradient(120deg,#17313b,#20262a 72%)}.topology-progress{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.topology-progress-step{display:flex;align-items:center;gap:8px;min-width:0;color:#aab4b9}.topology-progress-step span{display:grid;place-items:center;flex:none;width:27px;height:27px;border:1px solid #53616a;border-radius:50%;font-size:12px}.topology-progress-step small{font-size:12px;line-height:1.2}.topology-progress-step.active{color:#e6f9fc;font-weight:650}.topology-progress-step.active span,.topology-progress-step.done span{border-color:#16c4df;background:#123a46;color:#b8f5ff;box-shadow:0 0 12px #16c4df44}.topology-progress-step.done{color:#9ed7df}.topology-step-help{margin:13px 0 0;color:#c0d0d5;font-size:13px;line-height:1.5}.topology-menu-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:9px;margin-top:12px}.option-editor .topology-menu-actions .apply{align-self:stretch;min-height:46px;text-align:left}.option-editor .topology-menu-actions .topology-save-button{border-color:#397b51;background:#1d3a29;color:#dcffe6}.topology-review-card{margin:14px 0;padding:15px;border:1px solid #3b535e;border-radius:11px;background:#20272b}.topology-review-card h3{margin:0 0 12px;font-size:15px}.topology-diagram{display:grid;gap:12px}.topology-path{display:grid;grid-template-columns:minmax(150px,.8fr) 32px minmax(220px,1.3fr);align-items:center;gap:10px}.topology-circuit-node,.topology-output-node{min-width:0;padding:12px;border:1px solid #3e5059;border-radius:9px;background:#182a32}.topology-circuit-node{border-left:3px solid #16c4df}.topology-node-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.topology-circuit-node small,.topology-output-node small{display:block;margin-top:6px;color:#b8c4c8;font-size:11px;overflow-wrap:anywhere}.topology-phase-chip,.topology-domain-chip{display:inline-flex;align-items:center;padding:4px 8px;border:1px solid #45616b;border-radius:999px;background:#1a3842;color:#bdf3fa;font-size:10px}.topology-connector{text-align:center;color:#39bcd0;font-size:24px}.topology-output-stack{display:grid;gap:7px}.topology-output-node{display:flex;align-items:center;gap:10px;background:#23292d}.topology-output-node.offgrid{border-left:3px solid #bc91f2}.topology-output-icon{display:grid;place-items:center;flex:none;width:30px;height:30px;border-radius:8px;background:#173d48;color:#77eaff}.topology-output-node.offgrid .topology-output-icon{background:#322644;color:#d8bcff}.topology-output-node strong{overflow-wrap:anywhere}.topology-empty-output,.topology-empty{padding:12px;border:1px dashed #59636a;border-radius:8px;color:#aab3b8}.topology-domains{padding:12px;border-top:1px solid #384248}.topology-domains>div{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}.topology-domain-chip.offgrid{border-color:#644c7a;background:#30233e;color:#e0ccff}.topology-upstream{color:#f4d58b!important}.option-editor[data-render-key] .topology-wizard-chrome{scroll-margin-top:12px}@media(max-width:700px){.topology-progress{grid-template-columns:repeat(2,minmax(0,1fr))}.topology-path{grid-template-columns:minmax(0,1fr)}.topology-connector{transform:rotate(90deg);line-height:1}}
         .pack-card.has-soc::after{display:none}
         .pack-flow{position:absolute;z-index:0;inset:5px;overflow:hidden;border-radius:4px;clip-path:inset(0 calc(100% - var(--soc-level)) 0 0 round 4px);pointer-events:none}.soap-bubble-track{position:absolute;inset:0 auto 0 0;display:flex;width:200%;height:100%;will-change:transform;animation-delay:var(--flow-delay,0s);animation-duration:8s;animation-timing-function:linear;animation-iteration-count:infinite}.pack-card[data-flow="charge"] .soap-bubble-track{animation-name:soap-bubbles-right}.pack-card[data-flow="discharge"] .soap-bubble-track{animation-name:soap-bubbles-left}.soap-bubble-run{position:relative;flex:0 0 50%;height:100%;overflow:hidden}.soap-bubble{position:absolute;bottom:9%;left:var(--bubble-x);width:var(--bubble-size);aspect-ratio:1;border:1px solid rgba(217,251,255,.72);border-radius:50%;background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.38),rgba(151,238,255,.12) 32%,rgba(186,142,255,.14) 67%,rgba(255,255,255,.04));box-shadow:inset -2px -2px 4px rgba(145,204,255,.22),inset 2px 2px 3px rgba(255,255,255,.28),0 0 5px rgba(123,226,255,.32);opacity:.68}.soap-bubble::after{content:"";position:absolute;top:15%;left:23%;width:25%;height:15%;border-radius:50%;background:rgba(255,255,255,.62);filter:blur(.5px)}.soap-bubble[data-bubble="1"]{--bubble-x:7%;--bubble-size:13px;bottom:16%}.soap-bubble[data-bubble="2"]{--bubble-x:21%;--bubble-size:9px;bottom:48%}.soap-bubble[data-bubble="3"]{--bubble-x:38%;--bubble-size:16px;bottom:25%}.soap-bubble[data-bubble="4"]{--bubble-x:55%;--bubble-size:10px;bottom:58%}.soap-bubble[data-bubble="5"]{--bubble-x:72%;--bubble-size:14px;bottom:38%}.soap-bubble[data-bubble="6"]{--bubble-x:89%;--bubble-size:8px;bottom:19%}@keyframes soap-bubbles-right{from{transform:translateX(-50%)}to{transform:translateX(0)}}@keyframes soap-bubbles-left{from{transform:translateX(0)}to{transform:translateX(-50%)}}@media(prefers-reduced-motion:reduce){.soap-bubble-track{animation:none;transform:none;will-change:auto}}
         .live-flow-overview{display:grid;gap:11px}.live-flow-group{min-width:0;padding:13px;border:1px solid #343a40;border-radius:11px;background:#202428}.live-flow-group h3{margin:0 0 9px;color:#c7cbd0;font-size:13px}.live-flow-lanes{display:grid;gap:5px}.live-flow-row{display:grid;grid-template-columns:minmax(100px,.8fr) minmax(100px,1.7fr) minmax(100px,.8fr) minmax(78px,.55fr);gap:12px;align-items:center;padding:8px 5px;border-bottom:1px solid var(--line);border-radius:7px}.live-flow-row:last-child{border-bottom:0}.live-flow-node{min-width:0;display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid #41464b;border-radius:9px;background:#272b2f}.live-flow-node>span{min-width:0}.live-flow-node strong{display:block;overflow-wrap:anywhere;font-size:13px}.live-flow-node small{display:block;margin-top:3px;color:var(--muted);font-size:10px}.live-flow-icon{flex:none;width:27px;height:27px;color:var(--flow-accent,#16c4df);fill:currentColor;filter:drop-shadow(0 0 6px currentColor);opacity:.88}.live-flow-icon g{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7}.live-flow-route{min-width:0;display:grid;gap:5px;color:var(--flow-accent,#16c4df)}.live-flow-route>small:first-child{color:#c3c7ca;font-size:11px;overflow-wrap:anywhere}.live-flow-track{position:relative;display:flex;align-items:center;justify-content:center;height:11px;border-radius:999px;background:#30353a;overflow:hidden}.live-flow-track>i{position:absolute;inset:0 auto 0 0;max-width:100%;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df));box-shadow:0 0 9px color-mix(in srgb,var(--flow-accent,#16c4df) 50%,transparent)}.live-flow-track>span{position:relative;z-index:1;color:#f0f2f3;font-size:15px;line-height:11px;text-shadow:0 1px 4px #111}.live-flow-route.reverse .live-flow-track>i{left:auto;right:0;background:linear-gradient(270deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df))}.live-flow-route.idle .live-flow-track>i,.live-flow-route.unavailable .live-flow-track>i{display:none}.live-flow-route.unavailable .live-flow-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.live-flow-status{color:var(--muted);font-size:10px}.live-flow-value{color:#e7e9eb;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}.live-flow-row[data-flow="pv"],.live-flow-row[data-flow="native-pv"]{--flow-accent:#56cf83}.live-flow-row[data-flow="battery"]{--flow-accent:#f0c34e}.live-flow-row[data-flow="grid"],.live-flow-row[data-flow="grid-import"],.live-flow-row[data-flow="grid-export"]{--flow-accent:#f06b6b}.live-flow-row[data-flow="house"]{--flow-accent:#16c4df}.live-flow-row[data-flow="offgrid"]{--flow-accent:#30c9d4}.live-flow-note{margin:2px 2px 0;color:var(--muted);font-size:11px;line-height:1.45}@media(max-width:620px){.live-flow-row{grid-template-columns:minmax(82px,.9fr) minmax(72px,1.2fr) minmax(82px,.9fr) minmax(64px,.6fr);gap:6px;padding:7px 2px}.live-flow-node{gap:5px;padding:7px 6px}.live-flow-icon{width:21px;height:21px}.live-flow-node strong{font-size:11px}.live-flow-value{font-size:12px}}@media(max-width:390px){.live-flow-row{grid-template-columns:minmax(0,1fr) auto;gap:5px}.live-flow-route{grid-column:1/-1;grid-row:2}.live-flow-row .live-flow-node:nth-of-type(2){grid-column:1;grid-row:3}.live-flow-value{grid-column:2;grid-row:1}.live-flow-node{min-height:42px}.live-flow-node strong{font-size:12px}}
@@ -2403,6 +2483,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .live-flow-offgrid{margin-top:9px}.live-flow-note{margin:9px 2px 0}
         @media(max-width:620px){.live-flow-map{min-height:310px;aspect-ratio:1.25/1}.live-flow-map>.live-flow-node{width:clamp(76px,22%,96px);min-height:76px;padding:7px}.live-flow-map>.flow-node-house{width:clamp(78px,21%,90px);min-height:78px}.live-flow-map>.live-flow-node strong{font-size:11px}.live-flow-map>.live-flow-node small{font-size:9px}}
         @media(prefers-reduced-motion:reduce){.flow-wire.forward,.flow-wire.reverse{animation:none;stroke-dasharray:3 10;stroke-dashoffset:0}}
+        .topology-form-errors{margin:0 0 12px;padding:10px 13px;border:1px solid #8b4848;border-left:4px solid #ec7777;border-radius:8px;background:#382426;color:#ffdede}.topology-form-errors p{margin:0;line-height:1.45}.topology-form-errors p+p{margin-top:6px}
       </style>
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
