@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Mapping
 from typing import Any
 from uuid import uuid4
@@ -1780,22 +1781,15 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         )
 
     def _electrical_topology_config(self):
+        stored = getattr(self, "_draft_electrical_topology", None)
+        if stored is not None:
+            return normalize_electrical_topology(stored)
         return normalize_electrical_topology(
             self.config_entry.options.get(CONF_ELECTRICAL_TOPOLOGY)
         )
 
-    def _electrical_topology_menu(self):
-        config = self._electrical_topology_config()
-        menu = ["topology_circuit_add", "topology_domain_add"]
-        if config["circuits"] and self._group_device_choices():
-            menu.append("topology_connection_add")
-        if config["circuits"]:
-            menu.extend(("topology_circuit_edit_select", "topology_circuit_remove"))
-        if config["load_domains"]:
-            menu.extend(("topology_domain_edit_select", "topology_domain_remove"))
-        if config["connections"]:
-            menu.extend(("topology_connection_edit_select", "topology_connection_remove"))
-        return menu
+    def _set_electrical_topology_draft(self, config):
+        self._draft_electrical_topology = save_electrical_topology(config)
 
     def _save_electrical_topology(self, config):
         options = dict(self.config_entry.options)
@@ -1803,8 +1797,106 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         return self.async_create_entry(title="", data=options)
 
     async def async_step_electrical_topology(self, user_input=None):
-        """Manage physical circuits, load domains and Zendure outputs."""
-        return self.async_show_menu(step_id="electrical_topology", menu_options=self._electrical_topology_menu())
+        """Start a single guided draft and save only at the final step."""
+        self._draft_electrical_topology = self._electrical_topology_config()
+        return await self.async_step_topology_circuits()
+
+    async def async_step_topology_circuits(self, user_input=None):
+        config = self._electrical_topology_config()
+        menu = ["topology_circuit_add"]
+        if config["circuits"]:
+            menu.extend(("topology_circuit_edit_select", "topology_circuit_remove"))
+        menu.append("topology_continue_domains")
+        return self.async_show_menu(step_id="topology_circuits", menu_options=menu)
+
+    async def async_step_topology_domains(self, user_input=None):
+        config = self._electrical_topology_config()
+        menu = ["topology_domain_add"]
+        if config["load_domains"]:
+            menu.extend(("topology_domain_edit_select", "topology_domain_remove"))
+        menu.extend(("topology_back_circuits", "topology_continue_connections"))
+        return self.async_show_menu(step_id="topology_domains", menu_options=menu)
+
+    async def async_step_topology_connections(self, user_input=None):
+        config = self._electrical_topology_config()
+        menu = []
+        if config["circuits"] and self._group_device_choices():
+            menu.append("topology_connection_add")
+        if config["connections"]:
+            menu.extend(("topology_connection_edit_select", "topology_connection_remove"))
+        menu.extend(("topology_back_domains", "topology_continue_review"))
+        return self.async_show_menu(step_id="topology_connections", menu_options=menu)
+
+    async def async_step_topology_review(self, user_input=None):
+        preview = json.dumps(self._topology_preview_payload(), ensure_ascii=False)
+        return self.async_show_menu(
+            step_id="topology_review",
+            menu_options=[
+                "topology_back_circuits",
+                "topology_back_domains",
+                "topology_back_connections",
+                "topology_save",
+            ],
+            description_placeholders={"topology_preview": preview},
+        )
+
+    def _topology_preview_payload(self):
+        config = self._electrical_topology_config()
+        device_ids = tuple(item["device_id"] for item in config["connections"])
+        device_labels = {
+            item["value"]: item["label"]
+            for item in self._group_device_choices(include_members=device_ids)
+        }
+        circuits = [
+            {
+                "id": circuit_id,
+                "name": circuit["name"],
+                "phase": circuit["phase"],
+                "max_current_a": circuit["max_current_a"],
+                "max_power_w": circuit["max_power_w"],
+                "upstream": config["circuits"].get(circuit["parent_circuit_id"], {}).get("name"),
+            }
+            for circuit_id, circuit in config["circuits"].items()
+        ]
+        domains = list(config["load_domains"].values())
+        connections = [
+            {
+                "device": device_labels.get(item["device_id"], "Zendure"),
+                "output_id": item["output_id"],
+                "kind": item["kind"],
+                "circuit_id": item["circuit_id"],
+                "circuit": config["circuits"].get(item["circuit_id"], {}).get("name"),
+                "load_domain": config["load_domains"].get(item["load_domain_id"], {}).get("name"),
+            }
+            for item in config["connections"]
+        ]
+        return {"circuits": circuits, "load_domains": domains, "connections": connections}
+
+    async def async_step_topology_continue_domains(self, user_input=None):
+        return await self.async_step_topology_domains()
+
+    async def async_step_topology_continue_connections(self, user_input=None):
+        return await self.async_step_topology_connections()
+
+    async def async_step_topology_continue_review(self, user_input=None):
+        return await self.async_step_topology_review()
+
+    async def async_step_topology_back_circuits(self, user_input=None):
+        return await self.async_step_topology_circuits()
+
+    async def async_step_topology_back_domains(self, user_input=None):
+        return await self.async_step_topology_domains()
+
+    async def async_step_topology_back_connections(self, user_input=None):
+        return await self.async_step_topology_connections()
+
+    async def async_step_topology_save(self, user_input=None):
+        config = self._electrical_topology_config()
+        try:
+            save_electrical_topology(config)
+        except (TypeError, ValueError):
+            return await self.async_step_topology_review()
+        return self._save_electrical_topology(config)
 
     @staticmethod
     def _topology_select(choices):
@@ -1834,7 +1926,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "parent_circuit_id": user_input.get("parent_circuit_id") or None,
             }
             try:
-                return self._save_electrical_topology(config)
+                self._set_electrical_topology_draft(config)
+                return await self.async_step_topology_circuits()
             except (TypeError, ValueError):
                 return self.async_abort(reason="invalid_electrical_topology")
         parents = [{"value": "", "label": "—"}] + [
@@ -1876,7 +1969,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "parent_circuit_id": user_input.get("parent_circuit_id") or None,
             }
             try:
-                return self._save_electrical_topology(config)
+                self._set_electrical_topology_draft(config)
+                return await self.async_step_topology_circuits()
             except (TypeError, ValueError):
                 return self.async_abort(reason="invalid_electrical_topology")
         parents = [{"value": "", "label": "—"}] + [
@@ -1898,7 +1992,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         config = self._electrical_topology_config()
         if user_input is not None:
             config["load_domains"][uuid4().hex] = {"name": user_input["name"], "kind": user_input["kind"]}
-            return self._save_electrical_topology(config)
+            self._set_electrical_topology_draft(config)
+            return await self.async_step_topology_domains()
         return self.async_show_form(step_id="topology_domain_add", data_schema=vol.Schema({
             vol.Required("name"): str,
             vol.Required("kind"): self._topology_select([
@@ -1926,7 +2021,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             config["load_domains"][domain_id] = {"name": user_input["name"], "kind": user_input["kind"]}
             try:
-                return self._save_electrical_topology(config)
+                self._set_electrical_topology_draft(config)
+                return await self.async_step_topology_domains()
             except (TypeError, ValueError):
                 return self.async_abort(reason="topology_record_in_use")
         return self.async_show_form(step_id="topology_domain_edit", data_schema=vol.Schema({
@@ -1947,7 +2043,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "load_domain_id": user_input.get("load_domain_id") or None,
             })
             try:
-                return self._save_electrical_topology(config)
+                self._set_electrical_topology_draft(config)
+                return await self.async_step_topology_connections()
             except (TypeError, ValueError):
                 return self.async_abort(reason="invalid_electrical_topology")
         circuits = [
@@ -1992,7 +2089,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "load_domain_id": user_input.get("load_domain_id") or None,
             })
             try:
-                return self._save_electrical_topology(config)
+                self._set_electrical_topology_draft(config)
+                return await self.async_step_topology_connections()
             except (TypeError, ValueError):
                 return self.async_abort(reason="invalid_electrical_topology")
         circuits = [
@@ -2022,16 +2120,46 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 item.get("circuit_id") == selected_id or item.get("parent_circuit_id") == selected_id
                 for item in [*config["connections"], *config["circuits"].values()]
             ):
-                return self.async_abort(reason="topology_record_in_use")
+                return self.async_show_form(
+                    step_id=step_id,
+                    data_schema=vol.Schema({
+                        vol.Required("record_id"): self._topology_select(
+                            self._topology_connection_choices(records)
+                            if collection == "connections"
+                            else [
+                                {"value": key, "label": item["name"]}
+                                for key, item in records.items()
+                            ]
+                        )
+                    }),
+                    errors={"base": "topology_record_in_use"},
+                )
             if collection == "load_domains" and any(
                 item.get("load_domain_id") == selected_id for item in config["connections"]
             ):
-                return self.async_abort(reason="topology_record_in_use")
+                return self.async_show_form(
+                    step_id=step_id,
+                    data_schema=vol.Schema({
+                        vol.Required("record_id"): self._topology_select(
+                            [
+                                {"value": key, "label": item["name"]}
+                                for key, item in records.items()
+                            ]
+                        )
+                    }),
+                    errors={"base": "topology_record_in_use"},
+                )
             if collection == "connections":
                 config[collection] = [item for item in records if item["id"] != selected_id]
             else:
                 records.pop(selected_id, None)
-            return self._save_electrical_topology(config)
+            self._set_electrical_topology_draft(config)
+            next_step = {
+                "circuits": self.async_step_topology_circuits,
+                "load_domains": self.async_step_topology_domains,
+                "connections": self.async_step_topology_connections,
+            }[collection]
+            return await next_step()
         if collection == "connections":
             choices = self._topology_connection_choices(records)
         else:
