@@ -435,6 +435,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       topology_phase_l2: { de: "Phase L2", en: "Phase L2", fr: "Phase L2", nl: "Fase L2" },
       topology_phase_l3: { de: "Phase L3", en: "Phase L3", fr: "Phase L3", nl: "Fase L3" },
       topology_phase_unknown: { de: "Phase unbekannt", en: "Phase unknown", fr: "Phase inconnue", nl: "Fase onbekend" },
+      topology_phase_unknown_option: { de: "Unbekannt", en: "Unknown", fr: "Inconnue", nl: "Onbekend" },
       topology_domain_grid: { de: "Netzbereich", en: "Grid domain", fr: "Zone réseau", nl: "Netgebied" },
       topology_domain_off_grid: { de: "Inselbereich", en: "Off-grid domain", fr: "Zone hors réseau", nl: "Off-gridgebied" },
       topology_output_grid: { de: "Netzausgang", en: "Grid output", fr: "Sortie réseau", nl: "Netaansluiting" },
@@ -1361,7 +1362,12 @@ class BatterySmartFlowDashboard extends HTMLElement {
           }
           const options = (config.options || []).map((option) => {
             const optionValue = typeof option === "object" ? option.value : option;
-            const optionLabel = scopeForm && ["grid_mode", "source_mode"].includes(field.name) ? this._selectorText(optionValue) : (typeof option === "object" ? (option.label || option.value) : option);
+            const topologyPhase = step.step_id.startsWith("topology_") && field.name === "phase";
+            const optionLabel = topologyPhase && String(optionValue).toLowerCase() === "unknown"
+              ? this._t("topology_phase_unknown_option")
+              : scopeForm && ["grid_mode", "source_mode"].includes(field.name)
+                ? this._selectorText(optionValue)
+                : (typeof option === "object" ? (option.label || option.value) : option);
             return `<option value="${this._escape(optionValue)}" ${String(optionValue) === String(value) ? "selected" : ""}>${this._escape(optionLabel)}</option>`;
           }).join("");
           const multiple = Boolean(config.multiple);
