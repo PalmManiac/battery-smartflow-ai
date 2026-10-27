@@ -331,6 +331,7 @@
       "energy_scope_create": {
         "title": "Create sensor assignment",
         "description": "Choose the groups and grid/price context. Add one or more PV sources and map each forecast provider to its PV system in the next step.",
+        "data_description": {"grid_power_entities": "Total grid connection power in watts: import positive, export negative. Use with signed measurement mode.", "grid_phase_power_entities": "Individual phase powers in watts with the same sign convention. Alternative to a total sensor; if both are selected, the total sensor takes priority.", "grid_import_entities": "Current grid import power in watts. Use only with split measurement mode and select an export sensor as well.", "grid_export_entities": "Current grid export power in watts. Use only with split measurement mode and select an import sensor as well."},
         "data": {
           "name": "Mapping name",
           "group_ids": "Assigned battery groups",
@@ -350,6 +351,7 @@
       "energy_scope_edit": {
         "title": "Edit sensor assignment",
         "description": "Signed mode sums signed sensor values. Split mode sums all import and export sensors separately. A battery group can belong to only one sensor assignment.",
+        "data_description": {"grid_power_entities": "Total grid connection power in watts: import positive, export negative. Use with signed measurement mode.", "grid_phase_power_entities": "Individual phase powers in watts with the same sign convention. Alternative to a total sensor; if both are selected, the total sensor takes priority.", "grid_import_entities": "Current grid import power in watts. Use only with split measurement mode and select an export sensor as well.", "grid_export_entities": "Current grid export power in watts. Use only with split measurement mode and select an import sensor as well."},
         "data": {
           "name": "Mapping name",
           "group_ids": "Assigned battery groups",

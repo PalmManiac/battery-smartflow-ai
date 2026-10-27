@@ -1577,10 +1577,14 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     selector.EntitySelectorConfig(domain="sensor", multiple=True)
                 ),
                 vol.Optional(
-                    "price_entity", default=current.get("price_entity")
+                    "price_entity",
+                    description={"suggested_value": current["price_entity"]}
+                    if current.get("price_entity") else None,
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
                 vol.Optional(
-                    "export_price_entity", default=current.get("export_price_entity")
+                    "export_price_entity",
+                    description={"suggested_value": current["export_price_entity"]}
+                    if current.get("export_price_entity") else None,
                 ): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
             }
         )
@@ -1639,7 +1643,11 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_energy_scope_edit(self, user_input=None):
         if user_input is not None:
-            self._draft_energy_scope.update(user_input)
+            self._draft_energy_scope.update({
+                **user_input,
+                "price_entity": user_input.get("price_entity") or "",
+                "export_price_entity": user_input.get("export_price_entity") or "",
+            })
             return await self.async_step_energy_scope_pv_sources()
         return self.async_show_form(
             step_id="energy_scope_edit",
