@@ -289,13 +289,16 @@
     "abort": {
       "invalid_group": "The battery group could not be saved. Check its name and system selection.",
       "no_groups": "There are no battery groups to edit or remove.",
-      "group_not_found": "The selected battery group no longer exists."
+      "group_not_found": "The selected battery group no longer exists.",
+      "topology_record_in_use": "This item is still used by a device output or circuit.",
+      "topology_record_missing": "The selected topology item no longer exists."
     },
     "error": {
       "invalid_zensdk_ip": "Enter a private IPv4 address for the Zendure device.",
       "zensdk_ip_unsupported": "This Zendure model does not support direct ZenSDK readings.",
       "zensdk_ip_clear_conflict": "Enter an address or select automatic discovery, not both.",
-      "invalid_energy_scope": "The sensor assignment could not be saved. Check its grid mode and make sure PV and forecast sources are not assigned more than once."
+      "invalid_energy_scope": "The sensor assignment could not be saved. Check its grid mode and make sure PV and forecast sources are not assigned more than once.",
+      "invalid_electrical_topology": "The topology is inconsistent. Check the phase, circuit and load domain."
     },
     "step": {
       "init": {
@@ -308,6 +311,7 @@
           "smart_mode": "Zendure Smart Mode",
           "systems_groups": "Systems & groups",
           "energy_scopes": "Sensor assignments",
+          "electrical_topology": "Electrical topology",
           "native_zendure": "Native Zendure",
           "training": "Regulation training",
           "debug": "Debug mode"
@@ -336,6 +340,13 @@
       "group_edit": {"title": "Edit battery group", "description": "Selecting a system already in another group moves it when you save. Systems removed from this group remain configured and ungrouped.", "data": {"name": "Group name", "members": "Systems in group"}},
       "group_remove": {"title": "Remove battery group", "description": "Removing a group does not remove its systems. They remain configured and ungrouped.", "data": {"group_id": "Group"}},
       "energy_scopes": {"title": "Sensor assignments", "description": "Assign grid measurements, PV systems, forecast sources and price context to battery groups. This configures measurement contexts only; it does not enable productive multi-battery regulation.", "menu_options": {"energy_scope_create": "Create sensor assignment", "energy_scope_edit_select": "Edit sensor assignment", "energy_scope_remove_select": "Remove sensor assignment"}},
+      "electrical_topology": {"title": "Electrical topology", "description": "Describe circuits, shared upstream limits and off-grid load domains. This configuration does not enable device control.", "menu_options": {"topology_circuit_add": "Add circuit", "topology_circuit_remove": "Remove circuit", "topology_domain_add": "Add load domain", "topology_domain_remove": "Remove load domain", "topology_connection_add": "Map device output", "topology_connection_remove": "Remove device output"}},
+      "topology_circuit_add": {"title": "Add circuit", "description": "No current or power limit is assumed. Enter only limits that apply to this circuit.", "data": {"name": "Name", "phase": "Phase", "max_current_a": "Maximum current (A)", "max_power_w": "Maximum power (W)", "parent_circuit_id": "Shared upstream circuit"}},
+      "topology_domain_add": {"title": "Add load domain", "data": {"name": "Load domain name", "kind": "Load domain type"}},
+      "topology_connection_add": {"title": "Map device output", "data": {"device_id": "Zendure system", "output_id": "Output name", "kind": "Output type", "circuit_id": "Circuit", "load_domain_id": "Load domain"}},
+      "topology_circuit_remove": {"title": "Remove circuit", "data": {"record_id": "Circuit"}},
+      "topology_domain_remove": {"title": "Remove load domain", "data": {"record_id": "Load domain"}},
+      "topology_connection_remove": {"title": "Remove device output", "data": {"record_id": "Device output"}},
       "energy_scope_create": {"title": "Create sensor assignment", "description": "Choose groups and grid/price context. In the next step, add PV systems and map each forecast provider to its PV system.", "data": {"name": "Mapping name", "group_ids": "Assigned battery groups", "grid_mode": "Grid measurement mode", "grid_power_entities": "Signed grid power sensors", "grid_phase_power_entities": "Signed per-phase grid sensors", "grid_import_entities": "Grid import sensors", "grid_export_entities": "Grid export sensors", "price_entity": "Current import price sensor", "export_price_entity": "Dynamic export price sensor"}, "data_description": {"grid_power_entities": "Total grid connection power in watts: import positive, export negative. Use with signed measurement mode.", "grid_phase_power_entities": "Individual phase powers in watts with the same sign convention. Alternative to a total sensor; if both are selected, the total sensor takes priority.", "grid_import_entities": "Current grid import power in watts. Use only with split measurement mode and select an export sensor as well.", "grid_export_entities": "Current grid export power in watts. Use only with split measurement mode and select an import sensor as well."}},
       "energy_scope_edit_select": {"title": "Choose sensor assignment", "data": {"scope_id": "Sensor assignment"}},
       "energy_scope_edit": {"title": "Edit sensor assignment", "description": "Signed mode sums signed grid sensor values. Split mode sums all import and export sensors separately. A battery group can belong to only one sensor assignment.", "data": {"name": "Mapping name", "group_ids": "Assigned battery groups", "grid_mode": "Grid measurement mode", "grid_power_entities": "Signed grid power sensors", "grid_phase_power_entities": "Signed per-phase grid sensors", "grid_import_entities": "Grid import sensors", "grid_export_entities": "Grid export sensors", "price_entity": "Current import price sensor", "export_price_entity": "Dynamic export price sensor"}, "data_description": {"grid_power_entities": "Total grid connection power in watts: import positive, export negative. Use with signed measurement mode.", "grid_phase_power_entities": "Individual phase powers in watts with the same sign convention. Alternative to a total sensor; if both are selected, the total sensor takes priority.", "grid_import_entities": "Current grid import power in watts. Use only with split measurement mode and select an export sensor as well.", "grid_export_entities": "Current grid export power in watts. Use only with split measurement mode and select an import sensor as well."}},

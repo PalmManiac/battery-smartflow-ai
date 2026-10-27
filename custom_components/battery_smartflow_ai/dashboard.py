@@ -14,6 +14,7 @@ from homeassistant.helpers import entity_registry as er
 from .const import (
     CONF_BATTERY_AC_POWER_ENTITY,
     CONF_BATTERY_GROUPS,
+    CONF_ELECTRICAL_TOPOLOGY,
     CONF_ENERGY_SCOPES,
     CONF_GRID_EXPORT_ENTITY,
     CONF_GRID_IMPORT_ENTITY,
@@ -34,6 +35,7 @@ from .const import (
     GRID_MODE_SHELLY_PRO_3EM_MODBUS,
     INTEGRATION_VERSION,
 )
+from .electrical_topology import normalize_electrical_topology
 from .energy_scopes import normalize_energy_scope_config
 
 _PANEL_PATH = "battery-smartflow-ai"
@@ -51,7 +53,7 @@ _SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.48"
+DASHBOARD_VERSION = "1.0.49"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -243,6 +245,35 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                     ],
                 }
             )
+        try:
+            topology = normalize_electrical_topology(
+                entry.options.get(CONF_ELECTRICAL_TOPOLOGY)
+            )
+        except (TypeError, ValueError):
+            topology = {"circuits": {}, "load_domains": {}, "connections": []}
+        topology_summary = {
+            "circuits": [
+                {
+                    "name": circuit["name"],
+                    "phase": circuit["phase"],
+                    "max_current_a": circuit["max_current_a"],
+                    "max_power_w": circuit["max_power_w"],
+                    "upstream": topology["circuits"].get(circuit["parent_circuit_id"], {}).get("name"),
+                }
+                for circuit in topology["circuits"].values()
+            ],
+            "load_domains": list(topology["load_domains"].values()),
+            "connections": [
+                {
+                    "device": device_label(connection["device_id"])["label"],
+                    "output_id": connection["output_id"],
+                    "kind": connection["kind"],
+                    "circuit": topology["circuits"].get(connection["circuit_id"], {}).get("name"),
+                    "load_domain": topology["load_domains"].get(connection["load_domain_id"], {}).get("name"),
+                }
+                for connection in topology["connections"]
+            ],
+        }
         battery_groups.append(
             {
                 "entry_id": entry.entry_id,
@@ -250,6 +281,7 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                 "groups": group_summaries,
                 "ungrouped": ungrouped,
                 "energy_scopes": scope_summaries,
+                "electrical_topology": topology_summary,
             }
         )
         training_entries.append(
