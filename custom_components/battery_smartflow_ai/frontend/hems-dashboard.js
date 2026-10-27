@@ -49,6 +49,27 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this.shadowRoot.addEventListener("pointerdown", () => {
       this._pointerActive = true;
     }, true);
+    this.shadowRoot.addEventListener("input", (event) => {
+      const search = event.target.closest?.("[data-entity-search]");
+      if (!search) return;
+      const picker = search.closest(".entity-picker");
+      const query = search.value.trim().toLocaleLowerCase();
+      picker?.querySelectorAll("[data-entity-choice]").forEach((choice) => {
+        choice.hidden = !choice.dataset.entityChoice.toLocaleLowerCase().includes(query);
+      });
+      const select = picker?.querySelector("select[data-option-field]");
+      if (select && query) {
+        const exact = [...select.options].find((option) => option.value.toLocaleLowerCase() === query);
+        if (exact) select.value = exact.value;
+      }
+    });
+    this.shadowRoot.addEventListener("change", (event) => {
+      const picker = event.target.closest?.("[data-option-multi]");
+      if (!picker) return;
+      const chosen = [...picker.querySelectorAll('input[type="checkbox"]:checked')];
+      const summary = picker.querySelector("[data-selection-count]");
+      if (summary) summary.textContent = this._selectionSummary(chosen.map((input) => input.dataset.choiceLabel));
+    });
     this._finishPointer = () => {
       this._pointerActive = false;
       if (this._renderDeferred) this._scheduleRender();
@@ -262,6 +283,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       return;
     }
     if (current.nodeType !== Node.ELEMENT_NODE) return;
+    if (current.matches(".option-editor") && current.getAttribute("data-render-key") === next.getAttribute("data-render-key")) return;
     for (const attribute of [...current.attributes]) {
       if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
     }
@@ -1045,7 +1067,27 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }
   }
 
-  _optionsFieldLabel(name) {
+  _optionsFieldLabel(name, stepId = "") {
+    if (name === "name" && stepId.startsWith("energy_scope")) return this._selectorText("assignmentName");
+    if (stepId.startsWith("energy_scope")) {
+      const language = String(this._hass?.locale?.language || "en").toLowerCase().split(/[-_]/)[0];
+      const labels = {
+        group_ids: {fr: "Groupes associés", nl: "Toegewezen groepen"},
+        grid_mode: {fr: "Mode de mesure réseau", nl: "Meetmethode van het net"},
+        grid_power_entities: {fr: "Capteurs réseau signés", nl: "Netsensoren met teken"},
+        grid_phase_power_entities: {fr: "Capteurs réseau signés par phase", nl: "Netsensoren met teken per fase"},
+        grid_import_entities: {fr: "Capteurs d’importation réseau", nl: "Sensoren voor netafname"},
+        grid_export_entities: {fr: "Capteurs d’injection réseau", nl: "Sensoren voor teruglevering"},
+        price_entity: {fr: "Capteur du prix d’achat", nl: "Sensor voor inkoopprijs"},
+        export_price_entity: {fr: "Capteur du prix d’injection", nl: "Sensor voor terugleverprijs"},
+        source_name: {fr: "Nom de l’installation PV", nl: "Naam van de PV-installatie"},
+        source_mode: {fr: "Type de mesure", nl: "Meettype"},
+        power_entities: {fr: "Capteurs de puissance PV", nl: "PV-vermogenssensoren"},
+        installed_power_wp: {fr: "Puissance installée (Wp)", nl: "Geïnstalleerd vermogen (Wp)"},
+        forecast_entry_ids: {fr: "Prévisions associées", nl: "Gekoppelde prognoses"},
+      };
+      if (labels[name]?.[language]) return labels[name][language];
+    }
     const labels = {
       name: ["Gruppenname", "Group name"],
       members: ["Systeme in der Gruppe", "Systems in group"],
@@ -1071,6 +1113,42 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (labels) return labels[String(this._hass?.locale?.language || "").toLowerCase().startsWith("de") ? 0 : 1];
     const translated = this._t(name);
     return translated === name ? name.replaceAll("_", " ") : translated;
+  }
+
+  _selectorText(key) {
+    const language = String(this._hass?.locale?.language || "en").toLowerCase().split(/[-_]/)[0];
+    const labels = {
+      assignmentName: {de: "Name der Sensorzuordnung", en: "Sensor assignment name", fr: "Nom de l’affectation", nl: "Naam van de sensortoewijzing"},
+      search: {de: "Name oder Entitäts-ID suchen", en: "Search name or entity ID", fr: "Rechercher un nom ou identifiant", nl: "Zoek naam of entiteits-ID"},
+      searchChoices: {de: "Auswahl durchsuchen", en: "Search choices", fr: "Rechercher dans les choix", nl: "Zoek in de keuzes"},
+      choose: {de: "Auswählen", en: "Select", fr: "Sélectionner", nl: "Selecteren"},
+      selected: {de: "ausgewählt", en: "selected", fr: "sélectionné(s)", nl: "geselecteerd"},
+      none: {de: "Keine Netzsensoren", en: "No grid sensors", fr: "Aucun capteur réseau", nl: "Geen netsensoren"},
+      signed: {de: "Vorzeichenbehaftete Sensorwerte", en: "Signed sensor values", fr: "Valeurs signées", nl: "Sensorwaarden met teken"},
+      split: {de: "Getrennte Sensoren für Bezug und Einspeisung", en: "Separate import and export sensors", fr: "Capteurs distincts d’import et d’injection", nl: "Afzonderlijke sensoren voor afname en teruglevering"},
+      aggregate: {de: "Ein Gesamtsensor", en: "One total sensor", fr: "Un capteur total", nl: "Eén totaalsensor"},
+      components: {de: "Getrennte Komponentensensoren", en: "Separate component sensors", fr: "Capteurs de composants distincts", nl: "Afzonderlijke componentsensoren"},
+    };
+    return labels[key]?.[language] || labels[key]?.en || key;
+  }
+
+  _searchableMulti(name, choices, selectedValues) {
+    const known = new Set(choices.map((choice) => String(choice.value)));
+    const allChoices = [...choices, ...selectedValues.filter((value) => !known.has(value)).map((value) => ({value, label: value}))];
+    const rows = allChoices.map(({value, label}) => {
+      const text = `${label} ${value}`;
+      return `<label class="entity-choice" data-entity-choice="${this._escape(text)}"><input type="checkbox" value="${this._escape(value)}" data-choice-label="${this._escape(label)}" ${selectedValues.includes(String(value)) ? "checked" : ""}><span>${this._escape(label)}${name.endsWith("entities") ? `<small>${this._escape(value)}</small>` : ""}</span></label>`;
+    }).join("");
+    const selectedLabels = allChoices.filter((choice) => selectedValues.includes(String(choice.value))).map((choice) => choice.label);
+    const searchLabel = this._selectorText(name.endsWith("entities") ? "search" : "searchChoices");
+    const accessibleLabel = `${searchLabel} · ${this._optionsFieldLabel(name, "energy_scope_create")}`;
+    return `<details class="entity-picker" data-option-multi="${this._escape(name)}"><summary data-selection-count>${this._escape(this._selectionSummary(selectedLabels))}</summary><input type="search" data-entity-search placeholder="${this._escape(searchLabel)}" aria-label="${this._escape(accessibleLabel)}"><div class="entity-choices">${rows}</div></details>`;
+  }
+
+  _selectionSummary(labels) {
+    if (!labels.length) return this._selectorText("choose");
+    const more = labels.length > 2 ? ` +${labels.length - 2}` : "";
+    return `${labels.slice(0, 2).join(", ")}${more}`;
   }
 
   _optionFieldValue(field) {
@@ -1101,10 +1179,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
       this._showNotice(this._t(finished ? "settings_saved" : "settings_closed"));
       return;
     }
+    this._optionsRevision = (this._optionsRevision || 0) + 1;
     const title = step.step_id === "general" ? this._t("general_settings")
       : step.step_id === "smart_mode" ? this._t("smart_mode_settings")
         : step.step_id === "systems_groups" || step.step_id.startsWith("group_") ? this._t("systems_groups")
-          : step.step_id === "energy_scopes" || step.step_id.startsWith("energy_scope") ? this._t("energy_scopes")
+          : step.step_id === "energy_scopes" || step.step_id.startsWith("energy_scope") ? this._t(step.step_id)
           : this._t("expert_settings");
     let content = "";
     if (step.type === "menu") {
@@ -1117,13 +1196,19 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const fieldType = Object.keys(selector)[0];
         const config = selector[fieldType] || {};
         const name = this._escape(field.name);
-        const label = this._escape(this._optionsFieldLabel(field.name));
+        const label = this._escape(this._optionsFieldLabel(field.name, step.step_id));
         const value = this._optionFieldValue(field);
         if (fieldType === "boolean") return `<label class="option-field"><span>${label}${field.name === "native_zendure_always_smart_mode_1" ? `<small>${this._escape(this._t("smart_mode_help"))}</small>` : ""}</span><input type="checkbox" data-option-field="${name}" ${value ? "checked" : ""}></label>`;
         if (fieldType === "select") {
+          const scopeForm = step.step_id.startsWith("energy_scope");
+          if (scopeForm && config.multiple) {
+            const choices = (config.options || []).map((option) => typeof option === "object" ? {value: option.value, label: option.label || option.value} : {value: option, label: option});
+            const selected = Array.isArray(value) ? value.map(String) : [];
+            return `<div class="option-field"><span>${label}</span>${this._searchableMulti(field.name, choices, selected)}</div>`;
+          }
           const options = (config.options || []).map((option) => {
             const optionValue = typeof option === "object" ? option.value : option;
-            const optionLabel = typeof option === "object" ? (option.label || option.value) : option;
+            const optionLabel = scopeForm && ["grid_mode", "source_mode"].includes(field.name) ? this._selectorText(optionValue) : (typeof option === "object" ? (option.label || option.value) : option);
             return `<option value="${this._escape(optionValue)}" ${String(optionValue) === String(value) ? "selected" : ""}>${this._escape(optionLabel)}</option>`;
           }).join("");
           const multiple = Boolean(config.multiple);
@@ -1141,6 +1226,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
           const multiple = Boolean(config.multiple);
           const required = field.required !== false;
           const selectedValues = multiple ? (Array.isArray(value) ? value.map(String) : []) : [String(value)];
+          if (step.step_id.startsWith("energy_scope")) {
+            const choices = entities.map((entityId) => ({value: entityId, label: this._hass.states[entityId]?.attributes?.friendly_name || entityId}));
+            const help = this._gridSensorHelp(field.name);
+            if (multiple) return `<div class="option-field"><span>${label}${help ? `<small class="option-help">${this._escape(help)}</small>` : ""}</span>${this._searchableMulti(field.name, choices, selectedValues)}</div>`;
+            if (value && !entities.includes(String(value))) choices.unshift({value: String(value), label: String(value)});
+            const options = [`<option value="">—</option>`, ...choices.map(({value: id, label: friendly}) => `<option data-entity-choice="${this._escape(`${friendly} ${id}`)}" value="${this._escape(id)}" ${selectedValues.includes(id) ? "selected" : ""}>${this._escape(`${friendly} · ${id}`)}</option>`)].join("");
+            return `<div class="option-field"><span>${label}${help ? `<small class="option-help">${this._escape(help)}</small>` : ""}</span><div class="entity-picker"><input type="search" data-entity-search placeholder="${this._escape(this._selectorText("search"))}" aria-label="${this._escape(`${this._selectorText("search")} · ${this._optionsFieldLabel(field.name, step.step_id)}`)}"><select data-option-field="${name}" data-option-required="${required}" aria-label="${label}">${options}</select></div></div>`;
+          }
           const options = [...(multiple ? [] : [`<option value="">—</option>`]), ...entities.map((entityId) => `<option value="${this._escape(entityId)}" ${selectedValues.includes(entityId) ? "selected" : ""}>${this._escape(this._hass.states[entityId]?.attributes?.friendly_name || entityId)}</option>`)].join("");
           const help = ["energy_scope_create", "energy_scope_edit"].includes(step.step_id) ? this._gridSensorHelp(field.name) : "";
           return `<label class="option-field"><span>${label}${help ? `<small class="option-help">${this._escape(help)}</small>` : ""}</span><select data-option-field="${name}" data-option-required="${required}" ${multiple ? "multiple" : ""}>${options}</select></label>`;
@@ -1151,13 +1244,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
       content = `${fields}<button class="apply" type="button" data-options-submit>${this._escape(["general", "smart_mode", "expert_cell_voltage_config", "group_create", "group_edit", "group_remove"].includes(step.step_id) ? this._t("options_save") : this._t("options_continue"))}</button>`;
     }
     this._optionsFlowTitle = title;
+    this._optionsStepId = step.step_id;
     this._optionsFlowBody = content;
     this._scheduleRender();
   }
 
   _optionsFlowEditor() {
     if (!this._optionsFlowId) return "";
-    return `<section class="section option-editor"><div class="section-head"><h2>${this._escape(this._optionsFlowTitle || this._t("settings_shortcuts"))}</h2><small>${this._escape(this._t("settings_description"))}</small></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section>`;
+    return `<section class="section option-editor ${this._optionsStepId?.startsWith("energy_scope") ? "scope-editor" : ""}" data-render-key="options-${this._optionsRevision || 0}"><div class="section-head"><h2>${this._escape(this._optionsFlowTitle || this._t("settings_shortcuts"))}</h2><small>${this._escape(this._t("settings_description"))}</small></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section>`;
   }
 
   async _submitOptionsFlow(nextStepId = null) {
@@ -1171,6 +1265,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
         userInput[field.dataset.optionField] = field.type === "checkbox" ? field.checked
           : field.multiple ? Array.from(field.selectedOptions, (option) => option.value)
             : field.type === "number" ? Number(field.value) : field.value;
+      });
+      this.shadowRoot.querySelectorAll("[data-option-multi]").forEach((field) => {
+        userInput[field.dataset.optionMulti] = [...field.querySelectorAll('input[type="checkbox"]:checked')].map((input) => input.value);
       });
       Object.assign(data, userInput);
     }
@@ -2190,6 +2287,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .metric-grid .metric{position:relative;isolation:isolate;overflow:hidden}.metric-grid .metric::after{content:"";position:absolute;z-index:0;right:-18px;bottom:-43px;width:52%;aspect-ratio:1;border-radius:50%;background:var(--metric-accent);opacity:.065;filter:blur(1px);box-shadow:0 0 28px var(--metric-accent);pointer-events:none}.metric-grid .metric>span,.metric-grid .metric>strong,.metric-grid .metric>small{position:relative;z-index:2}.metric-grid .metric-icon{position:absolute;z-index:1;right:12px;bottom:7px;width:clamp(52px,27%,78px);height:auto;color:var(--metric-accent);fill:currentColor;opacity:.19;filter:drop-shadow(0 0 8px currentColor) drop-shadow(0 0 17px currentColor);pointer-events:none}.metric-grid .metric-icon g{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7}.metric-grid .metric[data-metric="soc"]{--metric-accent:#16c4df}.metric-grid .metric[data-metric="pv"],.metric-grid .metric[data-metric="native-pv"]{--metric-accent:#56cf83}.metric-grid .metric[data-metric="battery-power"]{--metric-accent:#f0c34e}.metric-grid .metric[data-metric="grid-power"],.metric-grid .metric[data-metric="grid-import"],.metric-grid .metric[data-metric="grid-export"]{--metric-accent:#f06b6b}.metric-grid .metric[data-metric="offgrid"]{--metric-accent:#30c9d4}.metric-grid .metric[data-metric]{border-top-color:var(--metric-accent)}
         .pack-card.has-soc::after{opacity:0;background-image:radial-gradient(circle at 17px 16px,rgba(255,255,255,.08) 0 5px,rgba(255,255,255,.82) 5.5px 6.2px,rgba(119,229,236,.58) 6.3px 7px,transparent 7.6px),radial-gradient(circle at 57px 29px,rgba(255,255,255,.06) 0 4px,rgba(255,255,255,.75) 4.5px 5.1px,rgba(160,186,255,.52) 5.2px 5.8px,transparent 6.4px),radial-gradient(circle at 84px 12px,rgba(255,255,255,.05) 0 3px,rgba(255,255,255,.68) 3.5px 4px,rgba(255,180,226,.45) 4.1px 4.7px,transparent 5.3px);background-size:96px 48px;background-repeat:repeat-x;background-position:0 50%;mix-blend-mode:screen;filter:drop-shadow(0 0 2px rgba(255,255,255,.28))}.pack-card.has-soc[data-flow="charge"]::after{opacity:.92;animation:soap-bubbles-right 8s linear infinite}.pack-card.has-soc[data-flow="discharge"]::after{opacity:.92;animation:soap-bubbles-left 8s linear infinite}@keyframes soap-bubbles-right{from{background-position:0 50%}to{background-position:96px 50%}}@keyframes soap-bubbles-left{from{background-position:96px 50%}to{background-position:0 50%}}@media(prefers-reduced-motion:reduce){.pack-card.has-soc[data-flow]::after{animation:none;opacity:.72}}
         .history-card{transition:none}.history-card:hover{box-shadow:0 0 0 1px #16c4df35}.option-help{display:block;margin-top:5px;color:var(--muted);line-height:1.4}
+        .scope-editor{border-top:3px solid #16b7d4}.scope-editor .option-field{display:grid;grid-template-columns:minmax(190px,.85fr) minmax(240px,1.5fr);align-items:start;gap:14px;padding:15px;background:#20262b}.scope-editor .option-field>span{font-weight:600;line-height:1.4}.scope-editor .option-help{font-weight:400}.scope-editor .option-field input:not([type=checkbox]),.scope-editor .option-field select{box-sizing:border-box;width:100%;max-width:none;min-height:40px;padding:9px 11px;border:1px solid #52616a;border-radius:7px;background:#131c22;color:#eef5f6;font:inherit}.scope-editor .entity-picker{min-width:0;width:100%;display:grid;gap:8px}.scope-editor details.entity-picker{display:block}.scope-editor .entity-picker summary{cursor:pointer;padding:10px 12px;border:1px solid #3d7888;border-radius:7px;background:#17323d;color:#e4f6fa}.scope-editor .entity-picker[open] summary{margin-bottom:8px}.scope-editor .entity-choices{max-height:230px;overflow:auto;margin-top:8px;border:1px solid #35464e;border-radius:7px;background:#131c22}.scope-editor .entity-choice{display:flex;align-items:center;gap:10px;padding:9px 11px;cursor:pointer;border-bottom:1px solid #2c383e}.scope-editor .entity-choice:last-child{border-bottom:0}.scope-editor .entity-choice:hover{background:#1c3642}.scope-editor .entity-choice[hidden]{display:none}.scope-editor .entity-choice input{flex:none;width:18px;height:18px}.scope-editor .entity-choice span{min-width:0;overflow-wrap:anywhere}.scope-editor .entity-choice small{display:block;color:var(--muted);font-size:11px}.scope-editor .entity-picker select{margin-top:0}.scope-editor .apply[data-options-submit]{margin-top:12px;min-height:44px}@media(max-width:700px){.scope-editor .option-field{grid-template-columns:minmax(0,1fr);gap:9px}.scope-editor .section-head{align-items:flex-start;flex-direction:column}}
         .pack-card.has-soc::after{display:none}
         .pack-flow{position:absolute;z-index:0;inset:5px;overflow:hidden;border-radius:4px;clip-path:inset(0 calc(100% - var(--soc-level)) 0 0 round 4px);pointer-events:none}.soap-bubble-track{position:absolute;inset:0 auto 0 0;display:flex;width:200%;height:100%;will-change:transform;animation-delay:var(--flow-delay,0s);animation-duration:8s;animation-timing-function:linear;animation-iteration-count:infinite}.pack-card[data-flow="charge"] .soap-bubble-track{animation-name:soap-bubbles-right}.pack-card[data-flow="discharge"] .soap-bubble-track{animation-name:soap-bubbles-left}.soap-bubble-run{position:relative;flex:0 0 50%;height:100%;overflow:hidden}.soap-bubble{position:absolute;bottom:9%;left:var(--bubble-x);width:var(--bubble-size);aspect-ratio:1;border:1px solid rgba(217,251,255,.72);border-radius:50%;background:radial-gradient(circle at 30% 25%,rgba(255,255,255,.38),rgba(151,238,255,.12) 32%,rgba(186,142,255,.14) 67%,rgba(255,255,255,.04));box-shadow:inset -2px -2px 4px rgba(145,204,255,.22),inset 2px 2px 3px rgba(255,255,255,.28),0 0 5px rgba(123,226,255,.32);opacity:.68}.soap-bubble::after{content:"";position:absolute;top:15%;left:23%;width:25%;height:15%;border-radius:50%;background:rgba(255,255,255,.62);filter:blur(.5px)}.soap-bubble[data-bubble="1"]{--bubble-x:7%;--bubble-size:13px;bottom:16%}.soap-bubble[data-bubble="2"]{--bubble-x:21%;--bubble-size:9px;bottom:48%}.soap-bubble[data-bubble="3"]{--bubble-x:38%;--bubble-size:16px;bottom:25%}.soap-bubble[data-bubble="4"]{--bubble-x:55%;--bubble-size:10px;bottom:58%}.soap-bubble[data-bubble="5"]{--bubble-x:72%;--bubble-size:14px;bottom:38%}.soap-bubble[data-bubble="6"]{--bubble-x:89%;--bubble-size:8px;bottom:19%}@keyframes soap-bubbles-right{from{transform:translateX(-50%)}to{transform:translateX(0)}}@keyframes soap-bubbles-left{from{transform:translateX(0)}to{transform:translateX(-50%)}}@media(prefers-reduced-motion:reduce){.soap-bubble-track{animation:none;transform:none;will-change:auto}}
         .live-flow-overview{display:grid;gap:11px}.live-flow-group{min-width:0;padding:13px;border:1px solid #343a40;border-radius:11px;background:#202428}.live-flow-group h3{margin:0 0 9px;color:#c7cbd0;font-size:13px}.live-flow-lanes{display:grid;gap:5px}.live-flow-row{display:grid;grid-template-columns:minmax(100px,.8fr) minmax(100px,1.7fr) minmax(100px,.8fr) minmax(78px,.55fr);gap:12px;align-items:center;padding:8px 5px;border-bottom:1px solid var(--line);border-radius:7px}.live-flow-row:last-child{border-bottom:0}.live-flow-node{min-width:0;display:flex;align-items:center;gap:9px;padding:8px 10px;border:1px solid #41464b;border-radius:9px;background:#272b2f}.live-flow-node>span{min-width:0}.live-flow-node strong{display:block;overflow-wrap:anywhere;font-size:13px}.live-flow-node small{display:block;margin-top:3px;color:var(--muted);font-size:10px}.live-flow-icon{flex:none;width:27px;height:27px;color:var(--flow-accent,#16c4df);fill:currentColor;filter:drop-shadow(0 0 6px currentColor);opacity:.88}.live-flow-icon g{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7}.live-flow-route{min-width:0;display:grid;gap:5px;color:var(--flow-accent,#16c4df)}.live-flow-route>small:first-child{color:#c3c7ca;font-size:11px;overflow-wrap:anywhere}.live-flow-track{position:relative;display:flex;align-items:center;justify-content:center;height:11px;border-radius:999px;background:#30353a;overflow:hidden}.live-flow-track>i{position:absolute;inset:0 auto 0 0;max-width:100%;border-radius:999px;background:linear-gradient(90deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df));box-shadow:0 0 9px color-mix(in srgb,var(--flow-accent,#16c4df) 50%,transparent)}.live-flow-track>span{position:relative;z-index:1;color:#f0f2f3;font-size:15px;line-height:11px;text-shadow:0 1px 4px #111}.live-flow-route.reverse .live-flow-track>i{left:auto;right:0;background:linear-gradient(270deg,color-mix(in srgb,var(--flow-accent,#16c4df) 60%,transparent),var(--flow-accent,#16c4df))}.live-flow-route.idle .live-flow-track>i,.live-flow-route.unavailable .live-flow-track>i{display:none}.live-flow-route.unavailable .live-flow-track{background:repeating-linear-gradient(135deg,#363b40,#363b40 4px,#25292d 4px,#25292d 8px)}.live-flow-status{color:var(--muted);font-size:10px}.live-flow-value{color:#e7e9eb;text-align:right;font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}.live-flow-row[data-flow="pv"],.live-flow-row[data-flow="native-pv"]{--flow-accent:#56cf83}.live-flow-row[data-flow="battery"]{--flow-accent:#f0c34e}.live-flow-row[data-flow="grid"],.live-flow-row[data-flow="grid-import"],.live-flow-row[data-flow="grid-export"]{--flow-accent:#f06b6b}.live-flow-row[data-flow="house"]{--flow-accent:#16c4df}.live-flow-row[data-flow="offgrid"]{--flow-accent:#30c9d4}.live-flow-note{margin:2px 2px 0;color:var(--muted);font-size:11px;line-height:1.45}@media(max-width:620px){.live-flow-row{grid-template-columns:minmax(82px,.9fr) minmax(72px,1.2fr) minmax(82px,.9fr) minmax(64px,.6fr);gap:6px;padding:7px 2px}.live-flow-node{gap:5px;padding:7px 6px}.live-flow-icon{width:21px;height:21px}.live-flow-node strong{font-size:11px}.live-flow-value{font-size:12px}}@media(max-width:390px){.live-flow-row{grid-template-columns:minmax(0,1fr) auto;gap:5px}.live-flow-route{grid-column:1/-1;grid-row:2}.live-flow-row .live-flow-node:nth-of-type(2){grid-column:1;grid-row:3}.live-flow-value{grid-column:2;grid-row:1}.live-flow-node{min-height:42px}.live-flow-node strong{font-size:12px}}
