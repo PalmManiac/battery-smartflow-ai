@@ -23,7 +23,11 @@ MIN_RESPONSE_EVENTS = 3
 MIN_EVALUATION_CONFIDENCE = 0.35
 MIN_RELATIVE_IMPROVEMENT = 0.03
 MAX_REPLAY_OVERSHOOT_RATE = 0.10
-_GAIN_FACTORS = (0.8, 0.9, 1.0, 1.1, 1.2)
+# Training candidates are deliberately small. The shadow estimate is not a
+# plant-identification model, so large gain changes must never be proposed from
+# a single run.
+_GAIN_FACTORS = (0.95, 1.0, 1.05)
+MIN_COMPATIBLE_SESSIONS_FOR_CANDIDATE = 2
 REVERSAL_THRESHOLD_WATT_SECONDS = 3_000.0
 MAX_REVERSAL_SAMPLE_GAP_SECONDS = 30.0
 MAX_REVERSAL_STRATEGY_PRIORITY_BY_MODE = {
@@ -55,6 +59,13 @@ class ShadowDirectionResult:
     overshoot_rate: float | None
     relative_improvement: float | None
     selected_gain_factor: float | None
+    observed_response_event_count: int
+    command_to_effect_p50_seconds: float | None
+    command_to_effect_p95_seconds: float | None
+    effective_ramp_w_per_second: float | None
+    observed_overshoot_rate: float | None
+    settling_time_p50_seconds: float | None
+    validation_session_count: int
     parameters: dict[str, float | None]
     decision: str
     insufficient_reasons: tuple[str, ...] = ()
@@ -78,6 +89,13 @@ class ShadowDirectionResult:
             "overshoot_rate": self.overshoot_rate,
             "relative_improvement": self.relative_improvement,
             "selected_gain_factor": self.selected_gain_factor,
+            "observed_response_event_count": self.observed_response_event_count,
+            "command_to_effect_p50_seconds": self.command_to_effect_p50_seconds,
+            "command_to_effect_p95_seconds": self.command_to_effect_p95_seconds,
+            "effective_ramp_w_per_second": self.effective_ramp_w_per_second,
+            "observed_overshoot_rate": self.observed_overshoot_rate,
+            "settling_time_p50_seconds": self.settling_time_p50_seconds,
+            "validation_session_count": self.validation_session_count,
             "parameters": dict(self.parameters),
             "decision": self.decision,
             "insufficient_reasons": list(self.insufficient_reasons),
@@ -213,6 +231,143 @@ def _response_events(samples: list[Mapping[str, Any]]) -> int:
     return events
 
 
+def _percentile(values: list[float], fraction: float) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = min(len(ordered) - 1, max(0, math.ceil(fraction * len(ordered)) - 1))
+    return ordered[index]
+
+
+def _observed_response_metrics(
+    samples: list[Mapping[str, Any]], direction: str
+) -> dict[str, float | int | None]:
+    """Measure real command latency, overshoot and settling from the capture."""
+
+    timed: list[tuple[datetime, Mapping[str, Any], float, float, float]] = []
+    for sample in samples:
+        if sample.get("direction") != direction:
+            continue
+        raw_timestamp = sample.get("timestamp")
+        if not isinstance(raw_timestamp, str):
+            continue
+        try:
+            timestamp = datetime.fromisoformat(raw_timestamp)
+        except ValueError:
+            continue
+        if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+            continue
+        requested = _number(
+            sample.get("requested_charge_w")
+            if direction == "charge"
+            else sample.get("requested_discharge_w")
+        )
+        observed = _number(
+            sample.get("observed_charge_w")
+            if direction == "charge"
+            else sample.get("observed_discharge_w")
+        )
+        error = _number(sample.get("grid_error_w"))
+        if requested is None or observed is None or error is None:
+            continue
+        timed.append((timestamp, sample, requested, observed, error))
+    timed.sort(key=lambda item: item[0])
+
+    sample_intervals: list[float] = []
+    effect_delays: list[float] = []
+    effective_ramps: list[float] = []
+    settling_times: list[float] = []
+    event_count = 0
+    overshoot_count = 0
+    for index in range(1, len(timed)):
+        before = timed[index - 1]
+        event = timed[index]
+        if (
+            before[1].get("_training_session_segment")
+            != event[1].get("_training_session_segment")
+            or before[1].get("_training_observation_segment")
+            != event[1].get("_training_observation_segment")
+        ):
+            continue
+        interval = (event[0] - before[0]).total_seconds()
+        if interval <= 0.0 or interval > 60.0:
+            continue
+        sample_intervals.append(interval)
+        requested_delta = event[2] - before[2]
+        if abs(requested_delta) < 20.0:
+            continue
+        event_count += 1
+        direction_sign = 1.0 if requested_delta > 0.0 else -1.0
+        response_threshold = max(15.0, abs(requested_delta) * 0.1)
+        initial_observed = before[3]
+        initial_error = before[4]
+        deadband = max(
+            1.0,
+            _number(event[1].get("baseline_deadband_w")) or 30.0,
+        )
+        event_segment = (
+            event[1].get("_training_session_segment"),
+            event[1].get("_training_observation_segment"),
+        )
+        found_effect = False
+        consecutive_in_band = 0
+        settled_at: float | None = None
+        event_overshot = False
+        for later in timed[index:]:
+            later_segment = (
+                later[1].get("_training_session_segment"),
+                later[1].get("_training_observation_segment"),
+            )
+            elapsed = (later[0] - event[0]).total_seconds()
+            if later_segment != event_segment or elapsed > 180.0:
+                break
+            later_delta = later[2] - event[2]
+            next_command_changed = elapsed > 0.0 and abs(later_delta) >= 20.0
+            observed_change = direction_sign * (later[3] - initial_observed)
+            if (
+                not found_effect
+                and observed_change >= response_threshold
+            ):
+                found_effect = True
+                effect_delays.append(elapsed)
+                effective_ramps.append(observed_change / max(elapsed, 0.1))
+            later_deadband = max(
+                1.0,
+                _number(later[1].get("baseline_deadband_w")) or deadband,
+            )
+            if (
+                initial_error != 0.0
+                and later[4] * initial_error < 0.0
+                and abs(later[4]) > later_deadband
+            ):
+                event_overshot = True
+            if abs(later[4]) <= later_deadband:
+                consecutive_in_band += 1
+                if consecutive_in_band >= 3 and settled_at is None:
+                    settled_at = elapsed
+            else:
+                consecutive_in_band = 0
+            if next_command_changed:
+                break
+        if event_overshot:
+            overshoot_count += 1
+        if settled_at is not None:
+            settling_times.append(settled_at)
+
+    return {
+        "observed_response_event_count": len(effect_delays),
+        "command_to_effect_p50_seconds": median(effect_delays) if effect_delays else None,
+        "command_to_effect_p95_seconds": _percentile(effect_delays, 0.95),
+        "effective_ramp_w_per_second": median(effective_ramps) if effective_ramps else None,
+        "observed_overshoot_rate": (
+            overshoot_count / event_count if event_count else None
+        ),
+        "settling_time_p50_seconds": median(settling_times) if settling_times else None,
+        "median_sample_interval_seconds": median(sample_intervals) if sample_intervals else None,
+        "timed_command_event_count": event_count,
+    }
+
+
 def _direction_score(
     samples: list[Mapping[str, Any]], *, gain_factor: float
 ) -> tuple[float, float] | None:
@@ -272,6 +427,14 @@ def _evaluate_direction(
     events = _response_events(usable)
     valid_ratio = len(usable) / max(1, quality["direction_sample_count"])
     confidence = min(1.0, len(usable) / 120.0) * min(1.0, events / 8.0) * valid_ratio
+    observed_metrics = _observed_response_metrics(usable, direction)
+    validation_session_count = len(
+        {
+            sample.get("_training_session_segment")
+            for sample in usable
+            if sample.get("_training_session_segment") is not None
+        }
+    )
     parameters: dict[str, float | None] = {
         "kp_up": None,
         "kp_down": None,
@@ -311,6 +474,21 @@ def _evaluate_direction(
             overshoot_rate=round(baseline[1], 3) if baseline else None,
             relative_improvement=None,
             selected_gain_factor=None,
+            observed_response_event_count=int(
+                observed_metrics["observed_response_event_count"] or 0
+            ),
+            command_to_effect_p50_seconds=observed_metrics[
+                "command_to_effect_p50_seconds"
+            ],
+            command_to_effect_p95_seconds=observed_metrics[
+                "command_to_effect_p95_seconds"
+            ],
+            effective_ramp_w_per_second=observed_metrics[
+                "effective_ramp_w_per_second"
+            ],
+            observed_overshoot_rate=observed_metrics["observed_overshoot_rate"],
+            settling_time_p50_seconds=observed_metrics["settling_time_p50_seconds"],
+            validation_session_count=validation_session_count,
             parameters=parameters,
             decision="insufficient_data",
             insufficient_reasons=tuple(insufficient_reasons),
@@ -333,7 +511,65 @@ def _evaluate_direction(
         and relative_improvement >= MIN_RELATIVE_IMPROVEMENT
         and candidate[1] <= baseline[1] + MAX_REPLAY_OVERSHOOT_RATE
     ):
-        decision = "proposed"
+        validation_reasons: list[str] = []
+        if validation_session_count < MIN_COMPATIBLE_SESSIONS_FOR_CANDIDATE:
+            validation_reasons.append("multiple_validation_sessions_required")
+
+        # The one-step score can favor stronger gains even when the real
+        # battery is still catching up. Require independently repeated runs
+        # and observed response quality before allowing any gain adjustment.
+        if validation_session_count >= MIN_COMPATIBLE_SESSIONS_FOR_CANDIDATE:
+            segment_samples: dict[Any, list[Mapping[str, Any]]] = {}
+            for item in usable:
+                segment_samples.setdefault(
+                    item.get("_training_session_segment"), []
+                ).append(item)
+            for segment in segment_samples.values():
+                segment_baseline = _direction_score(segment, gain_factor=1.0)
+                segment_candidate = _direction_score(
+                    segment, gain_factor=factor
+                )
+                if (
+                    segment_baseline is None
+                    or segment_candidate is None
+                    or segment_baseline[0] <= 0.0
+                    or (segment_baseline[0] - segment_candidate[0])
+                    / segment_baseline[0]
+                    < MIN_RELATIVE_IMPROVEMENT
+                    or segment_candidate[1]
+                    > segment_baseline[1] + MAX_REPLAY_OVERSHOOT_RATE
+                ):
+                    validation_reasons.append("candidate_not_consistent_across_sessions")
+                    break
+
+        observed_overshoot_rate = observed_metrics["observed_overshoot_rate"]
+        settling_time = observed_metrics["settling_time_p50_seconds"]
+        if (
+            observed_metrics["observed_response_event_count"] < MIN_RESPONSE_EVENTS
+            or observed_overshoot_rate is None
+            or settling_time is None
+        ):
+            validation_reasons.append("dynamic_response_not_validated")
+        elif factor > 1.0:
+            interval = observed_metrics["median_sample_interval_seconds"]
+            effect_p95 = observed_metrics["command_to_effect_p95_seconds"]
+            maximum_effect_delay = max(30.0, 2.0 * float(interval or 0.0))
+            if (
+                observed_overshoot_rate > 0.03
+                or effect_p95 is None
+                or effect_p95 > maximum_effect_delay
+            ):
+                validation_reasons.append("dynamic_response_not_validated")
+        elif observed_overshoot_rate < 0.05:
+            # Reducing gain without measured instability can make regulation
+            # slower without evidence that it improves the real trajectory.
+            validation_reasons.append("dynamic_response_not_validated")
+
+        if validation_reasons:
+            decision = "insufficient_data"
+            insufficient_reasons.extend(dict.fromkeys(validation_reasons))
+        else:
+            decision = "proposed"
         kp_up_values = [
             _number(item.get("baseline_kp_up"))
             for item in usable
@@ -360,12 +596,13 @@ def _evaluate_direction(
             for item in usable
             if _number(item.get("baseline_max_step_down_w")) is not None
         ]
-        parameters = {
-            "kp_up": round(median(kp_up_values) * factor, 4) if kp_up_values else None,
-            "kp_down": round(median(kp_down_values) * factor, 4) if kp_down_values else None,
-            "max_step_up_w": median(up_steps) if up_steps else None,
-            "max_step_down_w": median(down_steps) if down_steps else None,
-        }
+        if decision == "proposed":
+            parameters = {
+                "kp_up": round(median(kp_up_values) * factor, 4) if kp_up_values else None,
+                "kp_down": round(median(kp_down_values) * factor, 4) if kp_down_values else None,
+                "max_step_up_w": median(up_steps) if up_steps else None,
+                "max_step_down_w": median(down_steps) if down_steps else None,
+            }
     return ShadowDirectionResult(
         sample_count=len(usable),
         direction_sample_count=quality["direction_sample_count"],
@@ -388,6 +625,21 @@ def _evaluate_direction(
         overshoot_rate=round(candidate[1], 3),
         relative_improvement=round(relative_improvement, 4),
         selected_gain_factor=factor,
+        observed_response_event_count=int(
+            observed_metrics["observed_response_event_count"] or 0
+        ),
+        command_to_effect_p50_seconds=observed_metrics[
+            "command_to_effect_p50_seconds"
+        ],
+        command_to_effect_p95_seconds=observed_metrics[
+            "command_to_effect_p95_seconds"
+        ],
+        effective_ramp_w_per_second=observed_metrics[
+            "effective_ramp_w_per_second"
+        ],
+        observed_overshoot_rate=observed_metrics["observed_overshoot_rate"],
+        settling_time_p50_seconds=observed_metrics["settling_time_p50_seconds"],
+        validation_session_count=validation_session_count,
         parameters=parameters,
         decision=decision,
     )
@@ -707,7 +959,7 @@ def evaluate_training_sessions(sessions: list[Mapping[str, Any]]) -> dict[str, A
             if proposed
             else RegulationProfileState.SHADOW.value
         ),
-        "method": "bounded_one_step_proportional_counterfactual_v1",
+        "method": "bounded_one_step_proportional_screen_v2",
         "sessions_aggregated": len(compatible_sessions),
         "sessions_available": len(same_device_sessions),
         "sessions_excluded_incompatible": max(
@@ -736,9 +988,17 @@ def evaluate_training_sessions(sessions: list[Mapping[str, Any]]) -> dict[str, A
         },
         "score_unit": "mean_absolute_predicted_grid_error_w",
         "interpretation": (
-            "Screening estimate from recorded errors, commands, readbacks, and "
-            "baseline gains; it does not simulate full device or grid dynamics."
+            "The one-step score remains a screening estimate, not a full device "
+            "or grid simulation. A gain candidate additionally requires two "
+            "compatible runs, consistent per-run screening improvement, and "
+            "measured command delay, settling, and overshoot data."
         ),
+        "candidate_policy": {
+            "minimum_compatible_runs_per_direction": MIN_COMPATIBLE_SESSIONS_FOR_CANDIDATE,
+            "maximum_gain_change_factor": 1.05,
+            "requires_consistent_per_run_improvement": True,
+            "requires_measured_dynamic_response": True,
+        },
         "live_parameters_changed": False,
         "reversal_hysteresis": _reversal_hysteresis_shadow(
             samples,

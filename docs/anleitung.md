@@ -220,6 +220,11 @@ Auswertung erhalten bleiben, sein Vorschlag lässt sich aber nicht übernehmen.
 Der Vergleich bezieht sich auf das **aktive Regelungsprofil** der passenden
 BSFAI-Instanz. Beobachtungen aus mehreren Läufen werden nur zusammengeführt,
 wenn Gerät, Kommunikationsweg, Firmware und Profil dazu passen.
+Ein Kandidat wird erst angeboten, wenn mindestens zwei kompatible Läufe für
+dieselbe Richtung eine übereinstimmende Verbesserung zeigen und die reale
+Befehlsverzögerung, Einregelzeit und Überschwinger ausreichend erfasst wurden.
+Ein einzelner langer Lauf kann deshalb viele Datensätze liefern, aber noch
+keinen übernehmbaren Kandidaten.
 
 #### Status und Ergebniswerte lesen
 
@@ -249,12 +254,21 @@ die Prozentzahl wird aus den ungerundeten internen Werten berechnet.
 * **Konfidenz** fasst Datenmenge, gültige Daten und Reaktionsereignisse
   zusammen. 100 % bedeutet, dass die internen Abdeckungswerte erreicht sind;
   es ist **keine 100-prozentige Erfolgswahrscheinlichkeit**.
-* **Überschwingen** ist der Anteil der Beobachtungen, bei denen die vereinfachte
-  Simulation eine Überkorrektur erwartet. Beurteile ihn gemeinsam mit dem
-  Verbesserungsscore und nicht isoliert.
+* **Gemessene Reaktion** zeigt die gemessene Verzögerung zwischen Befehl und
+  Wirkung, die typische Einregelzeit und den Anteil beobachteter Überschwinger.
+  Diese Werte stammen aus den aufgezeichneten Verläufen.
+* **Überschwingen** im Profilvergleich ist zusätzlich die Schätzung der
+  Ein-Schritt-Simulation. Sie ist nicht mit dem gemessenen Überschwingen
+  gleichzusetzen.
 * **Vorgeschlagener Faktor** skaliert die proportionalen Regelverstärkungen des
-  jeweiligen Richtungsprofils. Zum Beispiel bedeutet **1,2×** etwa 20 % mehr
-  Regelverstärkung – nicht 20 % mehr maximale Lade- oder Entladeleistung.
+  jeweiligen Richtungsprofils. Änderungen sind auf höchstens **5 % je
+  Vorschlag** begrenzt. Der Faktor bedeutet nicht mehr maximale Lade- oder
+  Entladeleistung.
+
+Die Regelung begrenzt außerdem ihre maximalen Leistungssprünge abhängig von der
+Abweichung: nahe am Ziel arbeitet sie mit kleinen Korrekturen; bei größerer
+Abweichung kann sie bis zum Geräteprofil-Schrittlimit korrigieren. Bei
+erkannten schnellen Laständerungen bleibt der schnelle Schutzweg aktiv.
 
 Der Ergebnisstatus **Trainingskandidat aktiv** kann auch einen bereits früher
 übernommenen Vorschlag anzeigen; er bedeutet nicht zwingend, dass der gerade
