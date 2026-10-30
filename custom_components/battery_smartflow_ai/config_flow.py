@@ -485,7 +485,10 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             profile = resolve_zendure_device(selected.candidate.identity) if selected else None
             if selected is None:
                 errors["base"] = "device_not_found"
-            elif selected.candidate.candidate_id != pending:
+            elif (
+                pending is not None
+                and selected.candidate.candidate_id != pending
+            ):
                 errors["base"] = "unexpected_device_selection"
             elif profile is None:
                 errors["base"] = "unsupported_device"
