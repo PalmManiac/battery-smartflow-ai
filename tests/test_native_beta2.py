@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import voluptuous as vol
 from support import bootstrap
@@ -196,6 +197,64 @@ def load_flow_classes():
 
 
 class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_reconfigure_pins_device_selection_to_discovered_system(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        flow._native_bootstrap = await make_bootstrap(
+            product_model="SF800Pro"
+        )
+        device = flow._native_bootstrap.devices[0]
+        device_id = device.candidate.candidate_id
+        flow._native_options = {
+            const.CONF_NATIVE_ZENDURE_APP_TOKEN: "private-test-token",
+            const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: device_id,
+            const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "zensdk",
+        }
+        flow._native_setup_map = reconcile_device_setups(
+            flow._native_bootstrap.devices
+        )
+        flow._native_reconfigure_device_ids = [device_id]
+        flow._native_reconfigure_index = 0
+        flow._migration_entry = SimpleNamespace(data={})
+        flow._user_input = {}
+        flow.async_update_and_abort = Mock(return_value={"type": "abort"})
+
+        form = await flow.async_step_native_device()
+        selected_key = next(
+            key
+            for key in form["data_schema"].schema
+            if key.schema == const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE
+        )
+        self.assertEqual(selected_key.default(), device_id)
+
+        result = await flow.async_step_native_device({
+            const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: device_id,
+            const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "zensdk",
+        })
+
+        self.assertEqual(result, {"type": "abort"})
+        flow.async_update_and_abort.assert_called_once()
+
+    async def test_reconfigure_reports_unsupported_transport_separately(self):
+        flow = load_flow_classes()()
+        flow.hass = SimpleNamespace(config=SimpleNamespace(currency="EUR"))
+        flow._native_bootstrap = await make_bootstrap(
+            product_model="SF800Pro"
+        )
+        device_id = flow._native_bootstrap.devices[0].candidate.candidate_id
+        flow._native_setup_map = reconcile_device_setups(
+            flow._native_bootstrap.devices
+        )
+        flow._native_reconfigure_device_ids = [device_id]
+        flow._native_reconfigure_index = 0
+
+        result = await flow.async_step_native_device({
+            const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: device_id,
+            const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "local_mqtt",
+        })
+
+        self.assertEqual(result["errors"]["base"], "unsupported_transport")
+
     async def test_zensdk_ip_is_validated_and_persisted_per_device(self):
         namespace = load_flow_namespace()
         devices = await make_bootstrap(("device-1", "device-2"))

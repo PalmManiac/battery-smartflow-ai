@@ -483,8 +483,10 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 None,
             )
             profile = resolve_zendure_device(selected.candidate.identity) if selected else None
-            if selected is None or selected.candidate.candidate_id != pending:
+            if selected is None:
                 errors["base"] = "device_not_found"
+            elif selected.candidate.candidate_id != pending:
+                errors["base"] = "unexpected_device_selection"
             elif profile is None:
                 errors["base"] = "unsupported_device"
             else:
@@ -499,7 +501,7 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 elif chosen_transport not in _native_transport_options(
                     selected.candidate.identity
                 ):
-                    errors["base"] = "device_not_found"
+                    errors["base"] = "unsupported_transport"
                 elif (
                     chosen_transport is ZendureTransport.LOCAL_MQTT
                     and not str(user_input.get(
@@ -2859,24 +2861,45 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 is not VerificationLevel.UNSUPPORTED
             )
         ]
+        device_choices = [
+            {
+                "value": item.candidate.candidate_id,
+                "label": native_device_label(
+                    item.candidate.display_name,
+                    item.candidate.identity.product_model,
+                    item.pack_count,
+                ),
+            }
+            for item in devices
+            if item.candidate.supported
+            and (
+                target_device_id is None
+                or item.candidate.candidate_id == target_device_id
+            )
+        ]
+        device_choice_ids = {item["value"] for item in device_choices}
+        selected_device_default = target_device_id
+        if selected_device_default not in device_choice_ids:
+            selected_device_default = options.get(
+                CONF_NATIVE_ZENDURE_SELECTED_DEVICE
+            )
+        if selected_device_default not in device_choice_ids:
+            selected_device_default = (
+                device_choices[0]["value"] if len(device_choices) == 1 else None
+            )
+        selected_device_key = (
+            vol.Required(
+                CONF_NATIVE_ZENDURE_SELECTED_DEVICE,
+                default=selected_device_default,
+            )
+            if selected_device_default is not None
+            else vol.Required(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+        )
         schema = {
-                vol.Required(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
+                selected_device_key:
                     selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                {
-                                    "value": item.candidate.candidate_id,
-                                    "label": native_device_label(
-                                        item.candidate.display_name,
-                                        item.candidate.identity.product_model,
-                                        item.pack_count,
-                                    ),
-                                }
-                                for item in devices
-                                if item.candidate.supported
-                                if target_device_id is None
-                                or item.candidate.candidate_id == target_device_id
-                            ],
+                            options=device_choices,
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),

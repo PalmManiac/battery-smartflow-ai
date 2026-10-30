@@ -28,6 +28,8 @@
       "duplicate_device_id": "Zendure returned duplicate device identities.",
       "incomplete_device": "Zendure returned an incomplete device record.",
       "device_not_found": "The selected device is no longer available.",
+      "unexpected_device_selection": "Select the Zendure system currently shown for setup.",
+      "unsupported_transport": "This communication path is not supported for the selected Zendure system.",
       "local_mqtt_required": "This legacy device requires the Local MQTT broker settings.",
       "legacy_wifi_required": "Enter the Wi-Fi SSID and password before configuring the Legacy device.",
       "legacy_port_required": "Zendure Legacy devices require the local broker on port 1883.",
