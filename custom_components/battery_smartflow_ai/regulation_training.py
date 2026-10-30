@@ -78,6 +78,38 @@ def candidate_gain_parameters(evaluation: Mapping[str, Any]) -> dict[str, float]
         outcome = evaluation.get(direction)
         if not isinstance(outcome, Mapping) or outcome.get("decision") != "proposed":
             continue
+        factor = _finite_number(outcome.get("selected_gain_factor"))
+        validation_sessions = _finite_number(
+            outcome.get("validation_session_count")
+        )
+        observed_events = _finite_number(
+            outcome.get("observed_response_event_count")
+        )
+        effect_p95 = _finite_number(
+            outcome.get("command_to_effect_p95_seconds")
+        )
+        observed_overshoot = _finite_number(
+            outcome.get("observed_overshoot_rate")
+        )
+        settling_time = _finite_number(
+            outcome.get("settling_time_p50_seconds")
+        )
+        if (
+            factor is None
+            or factor == 1.0
+            or not 0.95 <= factor <= 1.05
+            or validation_sessions is None
+            or validation_sessions < 2
+            or observed_events is None
+            or observed_events < 3
+            or observed_overshoot is None
+            or settling_time is None
+            or (factor < 1.0 and observed_overshoot < 0.05)
+            or (factor > 1.0 and effect_p95 is None)
+        ):
+            raise ValueError(
+                "Training candidate lacks repeated dynamic-response validation"
+            )
         proposed = outcome.get("parameters")
         if not isinstance(proposed, Mapping):
             continue

@@ -56,6 +56,7 @@ DEFAULT_CHARGE_MAX_STEP_DOWN = 800.0
 ADAPTIVE_SOFT_LANDING_MAX_ERROR_DEADBANDS = 3.0
 ADAPTIVE_SOFT_LANDING_MIN_FACTOR = 0.5
 ADAPTIVE_FAST_ATTACK_MAX_FACTOR = 1.25
+ADAPTIVE_FINE_STEP_MIN_W = 40.0
 
 DEFAULT_KEEPALIVE_MIN_OUTPUT_W = 60.0
 DEFAULT_DISCHARGE_EXIT_EXPORT_CYCLES = 3
@@ -415,6 +416,38 @@ class RegulationPowerController:
             (ADAPTIVE_FAST_ATTACK_MAX_FACTOR - ADAPTIVE_SOFT_LANDING_MIN_FACTOR)
             * progress
         )
+
+    @staticmethod
+    def _adaptive_step_limit_w(
+        *,
+        max_step_w: float,
+        error_w: float,
+        deadband_w: float,
+        fast_load_change: bool,
+    ) -> float:
+        """Use small steps near target and the full profile limit far away.
+
+        The proportional response already shrinks with the error. This second,
+        independent ceiling prevents a learned or device-specific high gain
+        from turning a small near-zero deviation into a large power jump.
+        """
+
+        max_step = max(0.0, float(max_step_w or 0.0))
+        if max_step <= 0.0 or fast_load_change:
+            return max_step
+
+        deadband = max(1.0, abs(float(deadband_w or 0.0)))
+        error_in_deadbands = abs(float(error_w or 0.0)) / deadband
+        ramp_width = ADAPTIVE_SOFT_LANDING_MAX_ERROR_DEADBANDS - 1.0
+        progress = min(
+            1.0,
+            max(0.0, (error_in_deadbands - 1.0) / ramp_width),
+        )
+        fine_step = min(
+            max_step,
+            max(ADAPTIVE_FINE_STEP_MIN_W, deadband * 1.5),
+        )
+        return fine_step + ((max_step - fine_step) * progress)
         
     def _control_grid_w_for_output(self, grid: GridHistoryState) -> float:
         """Weighted grid value for discharge/output regulation.
@@ -840,6 +873,18 @@ class RegulationPowerController:
 
         error_w = control_grid_w - target_import_w
         adaptive_response_factor = 1.0
+        adaptive_step_limit_up_w = self._adaptive_step_limit_w(
+            max_step_w=float(self.config.discharge_max_step_up),
+            error_w=max(0.0, error_w),
+            deadband_w=output_deadband_w,
+            fast_load_change=bool(grid.fast_load_rise_detected),
+        )
+        adaptive_step_limit_down_w = self._adaptive_step_limit_w(
+            max_step_w=float(self.config.discharge_max_step_down),
+            error_w=min(0.0, error_w),
+            deadband_w=output_deadband_w,
+            fast_load_change=bool(grid.fast_load_drop_detected),
+        )
 
         near_zero_trim_w = 0.0
         near_zero_reason = "none"
@@ -973,11 +1018,15 @@ class RegulationPowerController:
                     adaptive_response_factor,
                     3,
                 ),
+                "adaptive_step_limit_up_w": round(adaptive_step_limit_up_w, 2),
+                "adaptive_step_limit_down_w": round(adaptive_step_limit_down_w, 2),
                 "near_zero_trim_w": round(float(near_zero_trim_w or 0.0), 2),
                 "near_zero_controller_reason": near_zero_reason,
                 **near_zero_metadata,
                 **economic_target_metadata,
             },
+            max_step_up_override_w=adaptive_step_limit_up_w,
+            max_step_down_override_w=adaptive_step_limit_down_w,
             max_output_w=max_output_w,
         )
 
@@ -1027,6 +1076,18 @@ class RegulationPowerController:
             grid_now_w = float(grid.grid_now_w or 0.0)
             error_w = target_import_w - float(control_grid_w)
             adaptive_response_factor = 1.0
+            adaptive_step_limit_up_w = self._adaptive_step_limit_w(
+                max_step_w=float(self.config.charge_max_step_up),
+                error_w=max(0.0, error_w),
+                deadband_w=input_deadband_w,
+                fast_load_change=bool(grid.fast_load_drop_detected),
+            )
+            adaptive_step_limit_down_w = self._adaptive_step_limit_w(
+                max_step_w=float(self.config.charge_max_step_down),
+                error_w=min(0.0, error_w),
+                deadband_w=input_deadband_w,
+                fast_load_change=bool(grid.fast_load_rise_detected),
+            )
 
             if abs(error_w) <= input_deadband_w:
                 raw_target = prev
@@ -1126,9 +1187,12 @@ class RegulationPowerController:
                         adaptive_response_factor,
                         3,
                     ),
+                    "adaptive_step_limit_up_w": round(adaptive_step_limit_up_w, 2),
+                    "adaptive_step_limit_down_w": round(adaptive_step_limit_down_w, 2),
                     "current_grid_limited": bool(current_grid_limited),
                     **economic_target_metadata,
                 },
+                max_step_up_override_w=adaptive_step_limit_up_w,
                 max_step_down_override_w=max_step_down_override_w,
                 max_input_w=max_input_w,
             )
@@ -1269,6 +1333,8 @@ class RegulationPowerController:
         previous_output_w: float,
         reason: str,
         metadata: dict[str, Any],
+        max_step_up_override_w: float | None = None,
+        max_step_down_override_w: float | None = None,
         max_output_w: float,
     ) -> PowerControllerResult:
         prev = max(0.0, float(previous_output_w or 0.0))
@@ -1279,7 +1345,11 @@ class RegulationPowerController:
         profile_limited = profile_limited_target != raw
 
         if profile_limited_target > prev:
-            max_step_up = float(self.config.discharge_max_step_up)
+            max_step_up = (
+                float(max_step_up_override_w)
+                if max_step_up_override_w is not None
+                else float(self.config.discharge_max_step_up)
+            )
 
             # Softer discharge start:
             # When output starts from 0 W / keepalive range, do not jump directly to a
@@ -1294,9 +1364,14 @@ class RegulationPowerController:
             )
             final = prev + allowed_delta
         else:
+            max_step_down = (
+                float(max_step_down_override_w)
+                if max_step_down_override_w is not None
+                else float(self.config.discharge_max_step_down)
+            )
             allowed_delta = -min(
                 prev - profile_limited_target,
-                float(self.config.discharge_max_step_down),
+                max(0.0, max_step_down),
             )
             final = prev + allowed_delta
 
@@ -1326,6 +1401,7 @@ class RegulationPowerController:
         previous_input_w: float,
         reason: str,
         metadata: dict[str, Any],
+        max_step_up_override_w: float | None = None,
         max_step_down_override_w: float | None = None,
         max_input_w: float,
     ) -> PowerControllerResult:
@@ -1337,9 +1413,14 @@ class RegulationPowerController:
         profile_limited = profile_limited_target != raw
 
         if profile_limited_target > prev:
+            max_step_up = (
+                float(max_step_up_override_w)
+                if max_step_up_override_w is not None
+                else float(self.config.charge_max_step_up)
+            )
             allowed_delta = min(
                 profile_limited_target - prev,
-                float(self.config.charge_max_step_up),
+                max(0.0, max_step_up),
             )
             final = prev + allowed_delta
         else:

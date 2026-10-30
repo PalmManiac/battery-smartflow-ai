@@ -2427,11 +2427,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "The active regulation profile changed after this candidate was evaluated"
             )
         parameters = self._candidate_parameters_from_session(session)
+        evaluation = session.get("shadow_evaluation")
+        if not isinstance(evaluation, Mapping):
+            raise ValueError("No validated regulation training evaluation is available")
         options = dict(self.entry.options)
         options[CONF_REGULATION_TRAINING_CANDIDATE] = {
             "key": key,
             "parameters": parameters,
             "trained_at": session.get("completed_at"),
+            "validated_session_count": int(
+                evaluation.get("sessions_aggregated", 0) or 0
+            ),
         }
         self.hass.config_entries.async_update_entry(self.entry, options=options)
         self._training_active_key = key
@@ -2555,6 +2561,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 if isinstance(metrics, dict):
                     metrics["confidence"] = outcome["confidence"]
                     metrics["overshoot_rate"] = outcome["overshoot_rate"]
+                    metrics["command_to_effect_p50_seconds"] = outcome[
+                        "command_to_effect_p50_seconds"
+                    ]
+                    metrics["command_to_effect_p95_seconds"] = outcome[
+                        "command_to_effect_p95_seconds"
+                    ]
+                    metrics["effective_ramp_w_per_second"] = outcome[
+                        "effective_ramp_w_per_second"
+                    ]
+                    metrics["observed_overshoot_rate"] = outcome[
+                        "observed_overshoot_rate"
+                    ]
+                    metrics["settling_time_p50_seconds"] = outcome[
+                        "settling_time_p50_seconds"
+                    ]
         try:
             await self._save_regulation_training_state(
                 self._training_sessions, active_session=None
@@ -2850,6 +2871,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if (
             isinstance(candidate, Mapping)
             and isinstance(candidate.get("parameters"), Mapping)
+            and isinstance(candidate.get("validated_session_count"), (int, float))
+            and candidate.get("validated_session_count", 0) >= 2
         ):
             try:
                 current_key = self._regulation_training_key().as_dict()
@@ -2861,10 +2884,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         for name, value in candidate["parameters"].items()
                         if name in {"CHARGE_KP_UP", "CHARGE_KP_DOWN", "DISCHARGE_KP_UP", "DISCHARGE_KP_DOWN"}
                     }
-                    if parameters and all(
+                    within_safe_gain_envelope = bool(parameters) and all(
                         math.isfinite(value) and 0.1 <= value <= 2.0
-                        for value in parameters.values()
-                    ):
+                        and math.isfinite(float(profile.get(name, 0.0) or 0.0))
+                        and float(profile.get(name, 0.0) or 0.0) > 0.0
+                        and 0.95
+                        <= value / float(profile.get(name, 0.0) or 0.0)
+                        <= 1.05
+                        for name, value in parameters.items()
+                    )
+                    if within_safe_gain_envelope:
                         active_key = current_key
                     else:
                         parameters = {}
@@ -8752,6 +8781,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 ),
                 "regulation_effective_deadband_w": (
                     regulation_power_result.metadata.get("effective_deadband_w")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_adaptive_step_limit_up_w": (
+                    regulation_power_result.metadata.get("adaptive_step_limit_up_w")
+                    if isinstance(regulation_power_result.metadata, dict)
+                    else None
+                ),
+                "regulation_adaptive_step_limit_down_w": (
+                    regulation_power_result.metadata.get("adaptive_step_limit_down_w")
                     if isinstance(regulation_power_result.metadata, dict)
                     else None
                 ),

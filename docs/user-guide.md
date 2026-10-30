@@ -207,8 +207,12 @@ run where possible. Also avoid restarting Home Assistant or reloading the
 integration: a run interrupted that way may retain partial observations for
 analysis, but its candidate cannot be applied. Results are compared with the
 **active regulation profile** for the matching BSFAI entry. Observations from
-multiple runs are combined only when the device, communication path, and
-firmware, and profile are compatible.
+multiple runs are combined only when the device, communication path, firmware,
+and profile are compatible.
+An adjustment is proposed only after at least two compatible runs for the same
+direction show a consistent improvement and actual command delay, settling time,
+and overshoot have been measured adequately. A single long run can therefore
+provide many samples without producing an applicable candidate.
 
 #### Understanding the status and result values
 
@@ -237,12 +241,18 @@ values.
 * **Confidence** combines sample quantity, valid data, and response events.
   100% means the internal coverage values have been reached; it is **not a
   100% probability of success**.
-* **Overshoot** is the share of observations for which the simplified
-  simulation predicts an over-correction. Consider it together with the
-  improvement score rather than in isolation.
+* **Measured response** reports observed delay from command to effect, typical
+  settling time, and the share of observed overshoots.
+* **Overshoot** in the profile comparison is a separate estimate from the
+  one-step simulation. It is not the same as measured overshoot.
 * **Proposed factor** scales the proportional controller gains for that
-  direction. For example, **1.2×** means about 20% more controller gain—not
-  20% more maximum charge or discharge power.
+  direction. Each proposal is limited to a change of at most **5%**. It does
+  not increase maximum charge or discharge power.
+
+The controller also changes its maximum power step with the size of the error:
+it uses small corrections near the target and can use the device profile's full
+step limit for larger deviations. The fast protection path remains active for
+detected rapid load changes.
 
 The result status **Training candidate active** can refer to a candidate
 applied earlier; it does not necessarily mean the run currently in progress is
