@@ -955,6 +955,19 @@
           "emergency_charge": "Notladung"
         }
       },
+      "shadow_allocation_status": {
+        "name": "Schattenverteilung",
+        "state": {
+          "idle": "Kein Leistungsziel",
+          "complete": "Ziel vollständig verteilt",
+          "partial": "Ziel teilweise verteilt",
+          "unavailable": "Kein geeignetes System verfügbar",
+          "incomplete_inventory": "Gerätebestand unvollständig",
+          "selected_system_not_grouped": "System keiner Gruppe zugeordnet",
+          "no_selected_system": "Kein ausgewähltes System",
+          "single_device_group": "Einzelgeräte-Gruppe"
+        }
+      },
       "decision_reason": {
         "name": "Entscheidungsgrund",
         "state": {

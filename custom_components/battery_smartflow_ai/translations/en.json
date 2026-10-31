@@ -1362,6 +1362,19 @@
           "emergency_charge": "Emergency charging"
         }
       },
+      "shadow_allocation_status": {
+        "name": "Shadow allocation",
+        "state": {
+          "idle": "No power target",
+          "complete": "Target fully allocated",
+          "partial": "Target partially allocated",
+          "unavailable": "No eligible system available",
+          "incomplete_inventory": "Device inventory is incomplete",
+          "selected_system_not_grouped": "System is not assigned to a group",
+          "no_selected_system": "No selected system",
+          "single_device_group": "Single-device group"
+        }
+      },
       "decision_reason": {
         "name": "Decision reason",
         "state": {

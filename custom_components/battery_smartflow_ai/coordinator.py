@@ -494,6 +494,155 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 return scope
         return {}
 
+    def _shadow_group_allocation(
+        self,
+        *,
+        strategy_intent: Any,
+        charge_power_w: float,
+        discharge_power_w: float,
+        soc_min: float,
+        soc_max: float,
+    ) -> dict[str, Any]:
+        """Build a per-group proposal from current regulation, without writes."""
+
+        import hashlib
+        from collections.abc import Sequence
+
+        from .const import CONF_ELECTRICAL_TOPOLOGY
+        from .electrical_topology import normalize_electrical_topology
+        from .shadow_allocator import ShadowDevice, allocate_staged_efficiency
+
+        runtime = getattr(self, "native_zendure", None)
+        selected_id = getattr(runtime, "selected_device_id", None)
+        if not selected_id or runtime is None:
+            return {"status": "no_selected_system", "writes_enabled": False}
+
+        group_config = self.entry.options.get(CONF_BATTERY_GROUPS, {})
+        groups = (
+            group_config.get("groups", {})
+            if isinstance(group_config, Mapping)
+            else {}
+        )
+        selected_group_id = None
+        selected_group = None
+        if isinstance(groups, Mapping):
+            for group_id, group in groups.items():
+                members = group.get("members", ()) if isinstance(group, Mapping) else ()
+                if selected_id in members:
+                    selected_group_id = str(group_id)
+                    selected_group = group
+                    break
+        if selected_group_id is None or not isinstance(selected_group, Mapping):
+            return {"status": "selected_system_not_grouped", "writes_enabled": False}
+
+        members = selected_group.get("members", ())
+        if not isinstance(members, Sequence) or isinstance(members, (str, bytes)):
+            members = ()
+        members = tuple(member for member in members if isinstance(member, str))
+        snapshots = runtime.shadow_allocation_snapshots(
+            reserve_soc_pct=soc_min,
+            maximum_soc_pct=soc_max,
+        )
+        snapshot_by_id = {item["device_id"]: item for item in snapshots}
+        raw_topology = self.entry.options.get(CONF_ELECTRICAL_TOPOLOGY)
+        topology_invalid = False
+        try:
+            topology = normalize_electrical_topology(raw_topology)
+        except (TypeError, ValueError):
+            topology = normalize_electrical_topology()
+            topology_invalid = True
+        circuit_by_device: dict[str, list[str]] = {}
+        has_topology_output: set[str] = set()
+        has_grid_output: set[str] = set()
+        for connection in topology["connections"]:
+            device_id = connection["device_id"]
+            has_topology_output.add(device_id)
+            if connection["kind"] == "grid":
+                has_grid_output.add(device_id)
+                circuit_by_device.setdefault(device_id, []).append(
+                    connection["circuit_id"]
+                )
+        devices = tuple(
+            ShadowDevice(
+                device_id=device_id,
+                name=str(snapshot["name"]),
+                available=bool(snapshot["available"]),
+                configured=bool(snapshot["configured"]),
+                supported=bool(snapshot["supported"]),
+                hems_blocked=bool(snapshot["hems_blocked"]),
+                protected=bool(snapshot["protected"]),
+                soc_pct=snapshot["soc_pct"],
+                reserve_soc_pct=float(snapshot["reserve_soc_pct"]),
+                maximum_soc_pct=float(snapshot["maximum_soc_pct"]),
+                capacity_kwh=snapshot["capacity_kwh"],
+                max_charge_w=float(snapshot["max_charge_w"]),
+                max_discharge_w=float(snapshot["max_discharge_w"]),
+                circuit_ids=tuple(circuit_by_device.get(device_id, ())),
+                block_reasons=(
+                    (
+                        ("electrical_topology_invalid",)
+                        if topology_invalid
+                        else ("offgrid_output_outside_grid_objective",)
+                        if device_id in has_topology_output
+                        and device_id not in has_grid_output
+                        else ()
+                    )
+                ),
+            )
+            for device_id in members
+            if (snapshot := snapshot_by_id.get(device_id)) is not None
+        )
+
+        requested_mode = getattr(strategy_intent, "requested_mode", "idle")
+        requested_power = getattr(strategy_intent, "requested_power_w", None)
+        if requested_mode == "output":
+            target = -abs(
+                float(
+                    discharge_power_w
+                    if requested_power is None
+                    else requested_power
+                )
+            )
+        elif requested_mode == "input":
+            target = abs(
+                float(charge_power_w if requested_power is None else requested_power)
+            )
+        else:
+            target = 0.0
+        result = allocate_staged_efficiency(target, devices, topology)
+        result_data = result.as_dict()
+        public_ids = {
+            item["device_id"]: "ZD_DEVICE_"
+            + hashlib.sha256(
+                f"bsfai:DEVICE:{item['device_id']}".encode()
+            ).hexdigest()[:12]
+            for item in snapshots
+        }
+        result_data["group_name"] = str(selected_group.get("name") or "")
+        result_data["group_size"] = len(members)
+        result_data["lead_device_id"] = public_ids.get(result.lead_device_id)
+        for item in result_data["devices"]:
+            item["device_id"] = public_ids.get(item["device_id"])
+        missing_members = set(members).difference(snapshot_by_id)
+        for device_id in sorted(missing_members):
+            public_id = "ZD_DEVICE_" + hashlib.sha256(
+                f"bsfai:DEVICE:{device_id}".encode()
+            ).hexdigest()[:12]
+            result_data["devices"].append(
+                {
+                    "device_id": public_id,
+                    "name": None,
+                    "proposed_power_w": 0.0,
+                    "effective_limit_w": 0.0,
+                    "reasons": ["device_not_discovered"],
+                }
+            )
+        if missing_members:
+            result_data["status"] = "incomplete_inventory"
+        if len(members) < 2 and result_data["status"] == "complete":
+            result_data["status"] = "single_device_group"
+        return result_data
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -9450,6 +9599,17 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     charge_source_allocation.reason
                 ),
             }
+
+            details["shadow_allocation"] = self._shadow_group_allocation(
+                strategy_intent=strategy_intent,
+                charge_power_w=float(in_w or 0.0),
+                discharge_power_w=float(out_w or 0.0),
+                soc_min=float(soc_min),
+                soc_max=float(soc_max),
+            )
+            details["shadow_allocation_status"] = details[
+                "shadow_allocation"
+            ]["status"]
 
             if timing_enabled and cycle_started_monotonic is not None:
                 details.update(

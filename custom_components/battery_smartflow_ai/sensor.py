@@ -101,6 +101,17 @@ SOC_LIMIT_ENUMS = [
     "lower_limit_active",
 ]
 
+SHADOW_ALLOCATION_STATUS_ENUMS = [
+    "idle",
+    "complete",
+    "partial",
+    "unavailable",
+    "incomplete_inventory",
+    "selected_system_not_grouped",
+    "no_selected_system",
+    "single_device_group",
+]
+
 FAULT_LEVEL_ENUMS = ["normal", "warning", "error"]
 
 DEVICE_PROFILE_ENUMS = list(DEVICE_PROFILES.keys())
@@ -857,6 +868,15 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.ENUM,
         options=DECISION_REASON_ENUMS,
         icon="mdi:head-question-outline",
+    ),
+    ZendureSensorEntityDescription(
+        key="shadow_allocation_status",
+        translation_key="shadow_allocation_status",
+        runtime_key="shadow_allocation_status",
+        device_class=SensorDeviceClass.ENUM,
+        options=SHADOW_ALLOCATION_STATUS_ENUMS,
+        icon="mdi:transit-connection-variant",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     ZendureSensorEntityDescription(
         key="charge_strategy",
@@ -2609,6 +2629,9 @@ class ZendureSmartFlowSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self):
+        if self.entity_description.runtime_key == "shadow_allocation_status":
+            details = (self.coordinator.data or {}).get("details") or {}
+            return details.get("shadow_allocation")
         if self.entity_description.runtime_key != "native_zendure_watchdog":
             return getattr(self, "_attr_extra_state_attributes", None)
         return self.coordinator.native_zendure.sensor_data().get(
