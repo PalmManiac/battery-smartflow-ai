@@ -205,22 +205,22 @@ class Dev9ModeScenarios(unittest.TestCase):
             PricePoint(
                 start=NOW + timedelta(minutes=15),
                 end=NOW + timedelta(minutes=30),
-                price=0.36,
+                price=0.30,
             ),
             PricePoint(
                 start=NOW + timedelta(minutes=30),
                 end=NOW + timedelta(minutes=45),
-                price=0.37,
+                price=0.32,
             ),
             PricePoint(
                 start=NOW + timedelta(minutes=45),
                 end=NOW + timedelta(minutes=60),
-                price=0.50,
+                price=0.31,
             ),
             PricePoint(
                 start=NOW + timedelta(minutes=60),
                 end=NOW + timedelta(minutes=75),
-                price=0.49,
+                price=0.33,
             ),
         ]
         engine = DecisionEngine()

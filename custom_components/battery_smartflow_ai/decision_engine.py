@@ -259,6 +259,7 @@ class PeakRule(BaseRule):
             ctx.soc > ctx.soc_min
             and ctx.ai_mode == "automatic"
             and engine._automatic_discharge_context_allows(ctx)
+            and engine._relative_discharge_price_reached(ctx)
         ):
             if (
                 engine._detect_adaptive_peak(ctx)
@@ -316,6 +317,7 @@ class ArbitrageRule(BaseRule):
             and ctx.soc > ctx.soc_min
             and ctx.ai_mode == "automatic"
             and engine._automatic_discharge_context_allows(ctx)
+            and engine._relative_discharge_price_reached(ctx)
             and engine._is_market_discharge_window(ctx)
             and engine._is_effective_discharge_price_reached(ctx)
         ):
@@ -2177,6 +2179,41 @@ class DecisionEngine:
             return False
 
         return float(current_import_price) >= float(effective_threshold)
+
+    def _relative_discharge_price_reached(self, ctx: DecisionContext) -> bool:
+        """Require a price above the remaining market's average to discharge.
+
+        Absolute price thresholds alone can classify every slot as expensive
+        during a sustained high-price period. In that case, discharging at a
+        relative price valley can consume energy that was just added by PV.
+        Compare the live price with the currently available forecast slots so
+        the relative check follows the market window that planning can still
+        act on. Keep the legacy threshold behavior when there is not enough
+        forecast data to make a comparison.
+        """
+
+        current_price = self._current_import_price(ctx)
+        if current_price is None:
+            return False
+
+        price_points = [
+            point
+            for point in self._import_price_points(ctx)
+            if point.end > ctx.now
+        ]
+        comparison_prices = [float(point.price) for point in price_points]
+
+        has_current_slot = any(
+            point.start <= ctx.now < point.end for point in price_points
+        )
+        if not has_current_slot:
+            comparison_prices.append(float(current_price))
+
+        if len(comparison_prices) < 2:
+            return True
+
+        average_price = sum(comparison_prices) / len(comparison_prices)
+        return float(current_price) > average_price
 
     def _is_valley_price_now(self, ctx: DecisionContext) -> bool:
         price_now = self._current_import_price(ctx)
