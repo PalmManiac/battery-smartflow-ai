@@ -941,6 +941,19 @@
           "emergency_charge": "Noodladen"
         }
       },
+      "shadow_allocation_status": {
+        "name": "Schaduwverdeling",
+        "state": {
+          "idle": "Geen vermogensdoel",
+          "complete": "Doel volledig verdeeld",
+          "partial": "Doel gedeeltelijk verdeeld",
+          "unavailable": "Geen geschikt systeem beschikbaar",
+          "incomplete_inventory": "Apparaatinventaris is onvolledig",
+          "selected_system_not_grouped": "Systeem is niet aan een groep toegewezen",
+          "no_selected_system": "Geen systeem geselecteerd",
+          "single_device_group": "Groep met één systeem"
+        }
+      },
       "decision_reason": {
         "name": "Beslissingsreden",
         "state": {

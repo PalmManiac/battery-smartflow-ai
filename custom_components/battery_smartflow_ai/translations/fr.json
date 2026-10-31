@@ -941,6 +941,19 @@
           "emergency_charge": "Charge d’urgence"
         }
       },
+      "shadow_allocation_status": {
+        "name": "Répartition simulée",
+        "state": {
+          "idle": "Aucun objectif de puissance",
+          "complete": "Objectif entièrement réparti",
+          "partial": "Objectif partiellement réparti",
+          "unavailable": "Aucun système admissible disponible",
+          "incomplete_inventory": "Inventaire des appareils incomplet",
+          "selected_system_not_grouped": "Système non affecté à un groupe",
+          "no_selected_system": "Aucun système sélectionné",
+          "single_device_group": "Groupe à un seul système"
+        }
+      },
       "decision_reason": {
         "name": "Raison de décision",
         "state": {

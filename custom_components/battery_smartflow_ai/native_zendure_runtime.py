@@ -857,6 +857,82 @@ class NativeZendureRuntime:
             displayed.append(item)
         return tuple(displayed)
 
+    def shadow_allocation_snapshots(
+        self,
+        *,
+        reserve_soc_pct: float,
+        maximum_soc_pct: float,
+    ) -> tuple[dict[str, Any], ...]:
+        """Return current per-system limits and blockers for Dev5 planning.
+
+        Device IDs are returned only for in-process membership matching. The
+        caller must replace them with the privacy-safe public ID before
+        exposing the resulting proposal in Home Assistant or the portal.
+        """
+
+        overview = self.hardware_overview()
+        snapshots = []
+        for (system_id, device), item in zip(
+            sorted(self._inventory.devices.items()), overview
+        ):
+            transport = self._selected_control_transport(device).transport
+            identity = (
+                _identity_for_transport(device, transport)
+                if transport is not None
+                else None
+            )
+            matrix = resolve_zendure_device(identity) if identity else None
+            capabilities = (
+                matrix.profile.capabilities
+                if matrix is not None and matrix.native_control_approved
+                else None
+            )
+            measurements = item.measurements
+            soc = measurements.get("soc_pct")
+            capacity = measurements.get("capacity_kwh")
+            protected = measurements.get("protection_active")
+            setup_status = self._setup_status(
+                system_id,
+                item.control_state is not DeviceControlState.UNSUPPORTED,
+            )
+            snapshots.append(
+                {
+                    "device_id": system_id,
+                    "name": item.display_name,
+                    "available": bool(item.online),
+                    "configured": setup_status == "configured",
+                    "supported": bool(capabilities),
+                    "hems_blocked": item.control_state
+                    is DeviceControlState.HEMS_BLOCKED,
+                    "protected": bool(
+                        protected is not None
+                        and protected.valid
+                        and protected.value
+                    ),
+                    "soc_pct": soc.value if soc is not None and soc.valid else None,
+                    "reserve_soc_pct": float(reserve_soc_pct),
+                    "maximum_soc_pct": float(maximum_soc_pct),
+                    "capacity_kwh": (
+                        capacity.value
+                        if capacity is not None and capacity.valid
+                        else None
+                    ),
+                    "max_charge_w": (
+                        float(capabilities.max_input_w)
+                        if capabilities is not None
+                        and capabilities.supports_charge
+                        else 0.0
+                    ),
+                    "max_discharge_w": (
+                        float(capabilities.max_output_w)
+                        if capabilities is not None
+                        and capabilities.supports_discharge
+                        else 0.0
+                    ),
+                }
+            )
+        return tuple(snapshots)
+
     def restore_statistics(self, data: Any) -> None:
         """Restore locally accumulated, per-device lifetime statistics."""
 
