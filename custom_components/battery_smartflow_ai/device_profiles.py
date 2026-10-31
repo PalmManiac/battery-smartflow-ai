@@ -603,6 +603,9 @@ SF2400PRO_PROFILE = {
     "KEEPALIVE_MIN_DEFICIT_W": 15.0,
     "KEEPALIVE_MIN_OUTPUT_W": 60.0,
     "SOC_DISCHARGE_RESUME_MARGIN": 3.0,
+    # Gradually restore Autarky output after the SoC-minimum lock is released.
+    # This avoids an immediate full load-coverage step at the resume boundary.
+    "SOC_MIN_DISCHARGE_TAPER_RANGE_PCT": 10.0,
 
     # --- Low-SoC / cell-voltage protection behavior ---
     "LOW_SOC_PROTECTION_STRICT": False,

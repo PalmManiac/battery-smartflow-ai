@@ -7455,6 +7455,66 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_handover_policy=pv_handover_policy,
                 load_coverage_priority=load_coverage_priority,
             )
+
+            # Smooth Autarky discharge after the SoC-minimum resume lock lifts.
+            # Some SolarFlow 2400 Pro installations otherwise jump straight from
+            # zero output to full house-load coverage at the resume boundary.
+            soc_min_discharge_taper_range_pct = max(
+                0.0,
+                float(
+                    profile.get("SOC_MIN_DISCHARGE_TAPER_RANGE_PCT", 0.0)
+                    or 0.0
+                ),
+            )
+            soc_min_discharge_taper_start_pct = (
+                float(soc_min) + max(0.0, float(resume_margin))
+            )
+            soc_min_discharge_taper_end_pct = (
+                soc_min_discharge_taper_start_pct
+                + soc_min_discharge_taper_range_pct
+            )
+            soc_min_discharge_taper_fraction = 1.0
+            if (
+                ai_mode == AI_MODE_SUMMER
+                and soc_min_discharge_taper_range_pct > 0.0
+                and float(soc) < soc_min_discharge_taper_end_pct
+            ):
+                soc_min_discharge_taper_fraction = max(
+                    0.0,
+                    min(
+                        1.0,
+                        (
+                            float(soc)
+                            - soc_min_discharge_taper_start_pct
+                        )
+                        / soc_min_discharge_taper_range_pct,
+                    ),
+                )
+            soc_min_discharge_taper_active = bool(
+                ai_mode == AI_MODE_SUMMER
+                and soc_min_discharge_taper_range_pct > 0.0
+                and float(soc) < soc_min_discharge_taper_end_pct
+            )
+            soc_min_discharge_taper_max_output_w = (
+                float(max_discharge)
+                * soc_min_discharge_taper_fraction
+            )
+            strategy_intent.metadata.update(
+                {
+                    "soc_min_discharge_taper_active": (
+                        soc_min_discharge_taper_active
+                    ),
+                    "soc_min_discharge_taper_start_soc_pct": (
+                        soc_min_discharge_taper_start_pct
+                    ),
+                    "soc_min_discharge_taper_end_soc_pct": (
+                        soc_min_discharge_taper_end_pct
+                    ),
+                    "soc_min_discharge_taper_max_output_w": (
+                        soc_min_discharge_taper_max_output_w
+                    ),
+                }
+            )
             
             strategy_intent.metadata.update(
                 {
@@ -7808,7 +7868,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 previous_input_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
                 max_input_w=float(max_ac_input),
-                max_output_w=float(max_discharge),
+                max_output_w=float(soc_min_discharge_taper_max_output_w),
             )
 
             native_power_observed_at = None
@@ -7847,7 +7907,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     current_grid_safe_cap_w,
                 )
 
-            feedforward_max_output_w = float(max_discharge)
+            feedforward_max_output_w = float(
+                soc_min_discharge_taper_max_output_w
+            )
             requested_discharge_w = float(
                 strategy_intent.requested_power_w or 0.0
             )
@@ -7893,7 +7955,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     None,
                 ),
                 max_input_w=float(max_ac_input),
-                max_output_w=float(max_discharge),
+                max_output_w=float(soc_min_discharge_taper_max_output_w),
             )
             if technical_decision_started is not None:
                 technical_decision_seconds = max(
@@ -8644,6 +8706,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._persist.get("discharge_resume_soc", float(soc_min))
                 ),
                 "soc_discharge_resume_margin": float(resume_margin),
+                "soc_min_discharge_taper_active": (
+                    soc_min_discharge_taper_active
+                ),
+                "soc_min_discharge_taper_start_soc_pct": (
+                    soc_min_discharge_taper_start_pct
+                ),
+                "soc_min_discharge_taper_end_soc_pct": (
+                    soc_min_discharge_taper_end_pct
+                ),
+                "soc_min_discharge_taper_max_output_w": (
+                    soc_min_discharge_taper_max_output_w
+                ),
                 "low_soc_protection_strict": bool(profile.get("LOW_SOC_PROTECTION_STRICT", False)),
                 "low_soc_pv_charge_requires_export": bool(
                     profile.get("LOW_SOC_PV_CHARGE_REQUIRES_EXPORT", False)
@@ -9283,6 +9357,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "effective_keepalive_min_deficit_w": profile.get("KEEPALIVE_MIN_DEFICIT_W"),
                 "effective_keepalive_min_output_w": profile.get("KEEPALIVE_MIN_OUTPUT_W"),
                 "effective_soc_discharge_resume_margin": profile.get("SOC_DISCHARGE_RESUME_MARGIN"),
+                "effective_soc_min_discharge_taper_range_pct": profile.get(
+                    "SOC_MIN_DISCHARGE_TAPER_RANGE_PCT",
+                    0.0,
+                ),
                 "expert_mode_enabled": self._expert_mode_enabled(),
                 "cell_voltage_protection_enabled": self._cell_voltage_protection_enabled(),
                 "configured_lowest_cell_voltage_sensor_count": len(
