@@ -1746,8 +1746,8 @@ _SENSOR_DESCRIPTIONS: tuple[ZendureSensorEntityDescription, ...] = (
 
 
 # V4.4.0: Deep technical diagnostics now live in bounded JSON packages instead
-# of permanent Recorder-facing entities. Keep only the five sparse recording
-# status sensors from the diagnostic category.
+# of permanent Recorder-facing entities. Keep the five sparse recording status
+# sensors and the live shadow-allocation status required by the portal.
 DEBUG_STATUS_SENSOR_KEYS = frozenset(
     {
         "debug_recording_active",
@@ -1763,6 +1763,7 @@ RETIRED_DIAGNOSTIC_SENSOR_KEYS = frozenset(
     for description in _SENSOR_DESCRIPTIONS
     if description.entity_category == EntityCategory.DIAGNOSTIC
     and description.key not in DEBUG_STATUS_SENSOR_KEYS
+    and description.key != "shadow_allocation_status"
 )
 
 SENSORS: tuple[ZendureSensorEntityDescription, ...] = tuple(
