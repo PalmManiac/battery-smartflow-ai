@@ -39,7 +39,7 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "6.0.0-dev5.3"
+INTEGRATION_VERSION = "6.0.0-dev5.4"
 
 # V5 native Zendure discovery is observation-only in the first development
 # build. The App Token is account discovery material and must never be copied
@@ -287,10 +287,10 @@ SETTING_PEAK_FACTOR = "peak_factor"
 # Defaults
 # ==================================================
 UPDATE_INTERVAL = 10  # seconds
-# Keep event-triggered control evaluations aligned with the existing native
-# telemetry cadence; rapid source updates are coalesced rather than causing a
-# command attempt on every measurement.
-GRID_EVENT_REFRESH_MIN_INTERVAL_S = 5.0
+# Align event-triggered control evaluations with the faster ZenSDK telemetry
+# cadence; rapid source updates are coalesced rather than causing a command
+# attempt on every measurement.
+GRID_EVENT_REFRESH_MIN_INTERVAL_S = 3.0
 DIRECT_SHELLY_POLL_INTERVAL_S = 1.0
 # Allow brief local-network or device-response delays without letting a Shelly
 # request hang indefinitely. Poll scheduling remains independent at one second.
