@@ -544,21 +544,22 @@ def _evaluate_direction(
 
         observed_overshoot_rate = observed_metrics["observed_overshoot_rate"]
         settling_time = observed_metrics["settling_time_p50_seconds"]
+        interval = observed_metrics["median_sample_interval_seconds"]
+        effect_p95 = observed_metrics["command_to_effect_p95_seconds"]
         if (
             observed_metrics["observed_response_event_count"] < MIN_RESPONSE_EVENTS
             or observed_overshoot_rate is None
             or settling_time is None
+            or interval is None
+            or effect_p95 is None
+            or effect_p95 > float(interval)
         ):
+            # When the device commonly reacts after the next training sample,
+            # that sample may still reflect an earlier command. Do not propose
+            # a gain change from a replay that cannot attribute the response.
             validation_reasons.append("dynamic_response_not_validated")
         elif factor > 1.0:
-            interval = observed_metrics["median_sample_interval_seconds"]
-            effect_p95 = observed_metrics["command_to_effect_p95_seconds"]
-            maximum_effect_delay = max(30.0, 2.0 * float(interval or 0.0))
-            if (
-                observed_overshoot_rate > 0.03
-                or effect_p95 is None
-                or effect_p95 > maximum_effect_delay
-            ):
+            if observed_overshoot_rate > 0.03:
                 validation_reasons.append("dynamic_response_not_validated")
         elif observed_overshoot_rate < 0.05:
             # Reducing gain without measured instability can make regulation
