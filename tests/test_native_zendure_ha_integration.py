@@ -88,7 +88,7 @@ class NativeZendureHomeAssistantIntegrationTests(unittest.TestCase):
         self.assertIn(
             "await self._async_poll_zensdk(now_monotonic=loop.time())", runtime
         )
-        self.assertIn("ZENSDK_POLL_INTERVAL = 5.0", runtime)
+        self.assertIn("ZENSDK_POLL_INTERVAL = 3.0", runtime)
         self.assertIn("ZENSDK_MAX_RETRY_INTERVAL = 60.0", runtime)
         self.assertIn("use_assigned_client_id=True", runtime)
         self.assertIn("await self._advance_local_handover()", runtime)
