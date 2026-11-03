@@ -1325,15 +1325,34 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _optionsFieldLabel(name, stepId = "") {
-    if (name === "name" && stepId.startsWith("energy_scope")) return this._selectorText("assignmentName");
+    const normalizedName = String(name || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_");
+    if (
+      normalizedName === "name" && stepId.startsWith("energy_scope")
+    ) {
+      return this._selectorText("assignmentName");
+    }
+    if (normalizedName === "control_enabled") {
+      const language = String(this._hass?.locale?.language || "en")
+        .toLowerCase()
+        .split(/[-_]/)[0];
+      const labels = {
+        de: "Gestufte Gruppenregelung aktivieren",
+        en: "Enable staged group regulation",
+        fr: "Activer la régulation groupée par étapes",
+        nl: "Gefaseerde groepsregeling inschakelen",
+      };
+      return labels[language] || labels.en;
+    }
     if (["group_create", "group_edit"].includes(stepId)) {
       const language = String(this._hass?.locale?.language || "en").toLowerCase().split(/[-_]/)[0];
       const labels = {
         name: {de: "Gruppenname", en: "Group name", fr: "Nom du groupe", nl: "Groepsnaam"},
         members: {de: "Systeme in der Gruppe", en: "Systems in group", fr: "Systèmes du groupe", nl: "Systemen in groep"},
-        control_enabled: {de: "Gestufte Gruppenregelung aktivieren", en: "Enable staged group regulation", fr: "Activer la régulation groupée par étapes", nl: "Gefaseerde groepsregeling inschakelen"},
       };
-      if (labels[name]?.[language]) return labels[name][language];
+      if (labels[normalizedName]?.[language]) return labels[normalizedName][language];
     }
     if (stepId.startsWith("topology_")) {
       const language = String(this._hass?.locale?.language || "en").toLowerCase().split(/[-_]/)[0];
