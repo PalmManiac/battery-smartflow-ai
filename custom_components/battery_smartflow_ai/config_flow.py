@@ -2632,6 +2632,15 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     chosen_transport.value
                 )
                 is_active_device = True
+            # Native control is an integration-wide gate. The form is also
+            # shown while configuring non-selected group members, so persist
+            # its submitted value regardless of which device is being set up.
+            options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
+                user_input.get(
+                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                    options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False),
+                )
+            )
             if chosen_transport is ZendureTransport.LOCAL_MQTT:
                 server = str(
                     user_input.get(CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER, "")
@@ -2740,12 +2749,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             )
             options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
             if is_active_device:
-                options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
-                    user_input.get(
-                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
-                        options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False),
-                    )
-                )
                 options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = chosen_transport.value
             self._working_options = options
             migration = self.config_entry.data.get("v5_migration")
