@@ -2296,7 +2296,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Optional("control_enabled", default=False): bool,
+                    vol.Optional("control_enabled", default=False): (
+                        selector.BooleanSelector()
+                    ),
                 }
             ),
         )
@@ -2356,7 +2358,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     "control_enabled", default=current.get("control_enabled", False)
-                ): bool,
+                ): selector.BooleanSelector(),
             }
         )
         return self.async_show_form(
