@@ -2275,6 +2275,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     group_id=uuid4().hex,
                     name=user_input["name"],
                     members=user_input.get("members", []),
+                    control_enabled=user_input.get("control_enabled", False),
                     move_members=True,
                 )
             except (KeyError, TypeError, ValueError):
@@ -2295,6 +2296,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
+                    vol.Optional("control_enabled", default=False): bool,
                 }
             ),
         )
@@ -2332,6 +2334,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     group_id=group_id,
                     name=user_input["name"],
                     members=user_input.get("members", []),
+                    control_enabled=user_input.get("control_enabled", False),
                     move_members=True,
                 )
             except (KeyError, TypeError, ValueError):
@@ -2351,13 +2354,20 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
+                vol.Optional(
+                    "control_enabled", default=current.get("control_enabled", False)
+                ): bool,
             }
         )
         return self.async_show_form(
             step_id="group_edit",
             data_schema=self.add_suggested_values_to_schema(
                 schema,
-                {"name": current["name"], "members": current["members"]},
+                {
+                    "name": current["name"],
+                    "members": current["members"],
+                    "control_enabled": current.get("control_enabled", False),
+                },
             ),
         )
 
