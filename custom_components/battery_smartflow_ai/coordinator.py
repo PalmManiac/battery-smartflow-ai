@@ -1,10 +1,11 @@
 from __future__ import annotations
-import math
 
 import logging
-from functools import partial
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any, Mapping
 
 from homeassistant.config_entries import ConfigEntry
@@ -620,6 +621,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
         result_data["group_name"] = str(selected_group.get("name") or "")
         result_data["group_size"] = len(members)
+        result_data["control_enabled"] = selected_group.get("control_enabled") is True
         result_data["lead_device_id"] = public_ids.get(result.lead_device_id)
         for item in result_data["devices"]:
             item["device_id"] = public_ids.get(item["device_id"])
@@ -642,6 +644,198 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if len(members) < 2 and result_data["status"] == "complete":
             result_data["status"] = "single_device_group"
         return result_data
+
+    def _productive_group_targets(
+        self,
+        command: DeviceCommand,
+        runtime: Any,
+        *,
+        strategy_intent: Any | None = None,
+    ) -> tuple[str, dict[str, DeviceCommand]] | tuple[str, None] | None:
+        """Build safe per-device commands for an explicitly enabled group.
+
+        ``None`` means the selected system should keep using the established
+        single-device command path. A reason with no targets means an opted-in
+        group is paused because its shared scope, topology, or members are not
+        safe to control as a unit.
+        """
+
+        from collections.abc import Sequence
+
+        from .battery_groups import reconcile_group_config
+        from .const import CONF_ELECTRICAL_TOPOLOGY
+        from .electrical_topology import normalize_electrical_topology
+        from .shadow_allocator import ShadowDevice, allocate_staged_efficiency
+
+        selected_id = getattr(runtime, "selected_device_id", None)
+        if not isinstance(selected_id, str) or not selected_id:
+            return None
+        try:
+            group_config = reconcile_group_config(
+                self.entry.options.get(CONF_BATTERY_GROUPS)
+            )
+        except (TypeError, ValueError):
+            previous_members = self._persist.get("group_control_members", ())
+            previous_members = (
+                list(previous_members)
+                if isinstance(previous_members, Sequence)
+                and not isinstance(previous_members, (str, bytes))
+                else []
+            )
+            self._persist["group_control_members"] = list(
+                dict.fromkeys([*previous_members, selected_id])
+            )
+            return ("group_configuration_invalid", None)
+        selected_group_id = None
+        selected_group = None
+        for group_id, group in group_config["groups"].items():
+            if selected_id in group["members"]:
+                selected_group_id = group_id
+                selected_group = group
+                break
+        if not isinstance(selected_group, Mapping) or not selected_group.get(
+            "control_enabled", False
+        ):
+            return None
+        members = selected_group.get("members", ())
+        if not isinstance(members, Sequence) or isinstance(members, (str, bytes)):
+            return ("group_members_invalid", None)
+        members = tuple(member for member in members if isinstance(member, str))
+        if len(members) < 2:
+            return None
+        self._persist["group_control_members"] = list(members)
+
+        scope = self._selected_energy_scope(self.entry)
+        if (
+            not scope
+            or selected_group_id not in scope.get("group_ids", ())
+            or scope.get("grid_mode") not in {ENERGY_GRID_MODE_SIGNED, ENERGY_GRID_MODE_SPLIT}
+        ):
+            return ("group_energy_scope_invalid", None)
+        try:
+            topology = normalize_electrical_topology(
+                self.entry.options.get(CONF_ELECTRICAL_TOPOLOGY)
+            )
+        except (TypeError, ValueError):
+            return ("group_electrical_topology_invalid", None)
+
+        circuits_by_device: dict[str, list[str]] = {}
+        for connection in topology["connections"]:
+            if connection["kind"] == "grid":
+                circuits_by_device.setdefault(connection["device_id"], []).append(
+                    connection["circuit_id"]
+                )
+        if any(not circuits_by_device.get(device_id) for device_id in members):
+            return ("group_electrical_topology_incomplete", None)
+
+        snapshots = runtime.shadow_allocation_snapshots(
+            reserve_soc_pct=self._get_setting(SETTING_SOC_MIN, DEFAULT_SOC_MIN),
+            maximum_soc_pct=self._get_setting(SETTING_SOC_MAX, DEFAULT_SOC_MAX),
+        )
+        snapshot_by_id = {item["device_id"]: item for item in snapshots}
+        if any(device_id not in snapshot_by_id for device_id in members):
+            return ("group_member_unavailable", None)
+
+        # A missing, offline, unsupported, unconfigured, HEMS-blocked, or
+        # protected member may still hold its previous output. Pause the whole
+        # group; never compensate by increasing the other devices blindly.
+        for device_id in members:
+            snapshot = snapshot_by_id[device_id]
+            if not snapshot["available"]:
+                return ("group_member_offline", None)
+            if not snapshot["configured"]:
+                return ("group_member_setup_incomplete", None)
+            if not snapshot["supported"]:
+                return ("group_member_unsupported", None)
+            if snapshot["hems_blocked"]:
+                return ("group_member_hems_blocked", None)
+            if snapshot["protected"]:
+                return ("group_member_protected", None)
+
+        devices = tuple(
+            ShadowDevice(
+                device_id=device_id,
+                name=str(snapshot_by_id[device_id]["name"]),
+                available=True,
+                configured=True,
+                supported=True,
+                hems_blocked=False,
+                protected=False,
+                soc_pct=snapshot_by_id[device_id]["soc_pct"],
+                reserve_soc_pct=float(snapshot_by_id[device_id]["reserve_soc_pct"]),
+                maximum_soc_pct=float(snapshot_by_id[device_id]["maximum_soc_pct"]),
+                capacity_kwh=snapshot_by_id[device_id]["capacity_kwh"],
+                max_charge_w=float(snapshot_by_id[device_id]["max_charge_w"]),
+                max_discharge_w=float(snapshot_by_id[device_id]["max_discharge_w"]),
+                circuit_ids=tuple(circuits_by_device[device_id]),
+            )
+            for device_id in members
+        )
+        charge_w = max(0.0, float(command.input_limit_w or 0.0))
+        discharge_w = max(0.0, float(command.output_limit_w or 0.0))
+        if charge_w and discharge_w:
+            return ("group_command_direction_invalid", None)
+        target_w = charge_w if charge_w > 0 else -discharge_w
+        requested_power = getattr(strategy_intent, "requested_power_w", None)
+        requested_mode = str(
+            getattr(strategy_intent, "requested_mode", "") or ""
+        ).lower()
+        requested_power_value = _to_float(requested_power, None)
+        if (
+            target_w > 0
+            and requested_mode == "input"
+            and requested_power_value is not None
+        ):
+            target_w = abs(requested_power_value)
+        elif (
+            target_w < 0
+            and requested_mode == "output"
+            and requested_power_value is not None
+        ):
+            target_w = -abs(requested_power_value)
+        allocation = allocate_staged_efficiency(target_w, devices, topology)
+        if allocation.status not in {"complete", "partial", "idle"}:
+            return (f"group_allocation_{allocation.status}", None)
+
+        targets: dict[str, DeviceCommand] = {}
+        for allocation_item in allocation.devices:
+            device_id = allocation_item["device_id"]
+            if device_id not in members:
+                continue
+            power_w = float(allocation_item["proposed_power_w"])
+            if allocation.direction == "charge":
+                mode = "input"
+                input_w, output_w = power_w, 0.0
+            elif allocation.direction == "discharge":
+                mode = "output"
+                input_w, output_w = 0.0, power_w
+            else:
+                mode = command.ac_mode
+                input_w = output_w = 0.0
+            targets[device_id] = replace(
+                command,
+                ac_mode=mode,
+                input_limit_w=input_w,
+                output_limit_w=output_w,
+                should_write_mode=True,
+                should_write_input=True,
+                should_write_output=True,
+                metadata={**command.metadata, "group_allocation": True},
+            )
+        for device_id in members:
+            targets.setdefault(
+                device_id,
+                replace(
+                    command,
+                    input_limit_w=0.0,
+                    output_limit_w=0.0,
+                    should_write_mode=True,
+                    should_write_input=True,
+                    should_write_output=True,
+                    metadata={**command.metadata, "group_allocation": True},
+                ),
+            )
+        return ("group_control_active", targets)
 
     def __init__(
         self,
@@ -3259,19 +3453,174 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self._persist["command_execution_error"] = result.error
 
+    async def _async_stop_group_members(
+        self,
+        runtime: Any,
+        members: Sequence[str],
+    ) -> None:
+        """Best-effort stop for every group member that can still be reached."""
+
+        stop = DeviceCommand(
+            ac_mode="output",
+            input_limit_w=0.0,
+            output_limit_w=0.0,
+            reason="group_control_pause",
+            should_write_mode=True,
+            should_write_input=True,
+            should_write_output=True,
+            metadata={"command_path": "group_safe_stop"},
+        )
+        for device_id in members:
+            await runtime.async_execute_device_command(stop, device_id=device_id)
+        self._persist["group_control_last_targets"] = {}
+
     async def _execute_device_command(
         self,
         command: DeviceCommand,
         *,
         force_power: bool = True,
         power_before_mode: bool = False,
+        strategy_intent: Any | None = None,
     ) -> CommandExecutionResult:
         """Execute one neutral command through the configured backend."""
 
         try:
             native_runtime = getattr(self, "native_zendure", None)
             if native_runtime is not None and native_runtime.control_enabled:
-                result = await native_runtime.async_execute_device_command(command)
+                group_plan = self._productive_group_targets(
+                    command,
+                    native_runtime,
+                    strategy_intent=strategy_intent,
+                )
+                if group_plan is None:
+                    previous_members = self._persist.get("group_control_members", ())
+                    selected_id = getattr(native_runtime, "selected_device_id", None)
+                    if isinstance(previous_members, Sequence) and not isinstance(
+                        previous_members, (str, bytes)
+                    ):
+                        secondary_members = [
+                            device_id for device_id in previous_members
+                            if device_id != selected_id
+                        ]
+                        if secondary_members:
+                            await self._async_stop_group_members(
+                                native_runtime, secondary_members
+                            )
+                    self._persist["group_control_members"] = []
+                    result = await native_runtime.async_execute_device_command(command)
+                elif group_plan[1] is None:
+                    await self._async_stop_group_members(
+                        native_runtime,
+                        self._persist.get("group_control_members", ()),
+                    )
+                    result = CommandExecutionResult(
+                        status=CommandExecutionStatus.SKIPPED,
+                        reason=group_plan[0],
+                    )
+                    self._persist["group_control_status"] = group_plan[0]
+                else:
+                    status, target_commands = group_plan
+                    previous = self._persist.get("group_control_last_targets", {})
+                    previous = previous if isinstance(previous, Mapping) else {}
+                    direction = (
+                        "charge"
+                        if any(item.input_limit_w > 0 for item in target_commands.values())
+                        else "discharge"
+                        if any(item.output_limit_w > 0 for item in target_commands.values())
+                        else "idle"
+                    )
+                    signed_targets = {
+                        device_id: (
+                            float(item.input_limit_w)
+                            if item.input_limit_w > 0
+                            else -float(item.output_limit_w)
+                            if item.output_limit_w > 0
+                            else 0.0
+                        )
+                        for device_id, item in target_commands.items()
+                    }
+                    ordered_ids = list(target_commands)
+                    target_order = {
+                        device_id: index for index, device_id in enumerate(ordered_ids)
+                    }
+                    # Reduce or unwind existing output before increasing any
+                    # member, keeping transient group power within the new goal.
+                    ordered_ids.sort(
+                        key=lambda device_id: (
+                            0
+                            if (
+                                isinstance(previous.get(device_id), Mapping)
+                                and (
+                                    previous[device_id].get("direction") != direction
+                                    or abs(signed_targets[device_id])
+                                    < abs(float(previous[device_id].get("power_w", 0.0)))
+                                )
+                            )
+                            else 1,
+                            target_order[device_id],
+                        )
+                    )
+                    results: list[tuple[str, CommandExecutionResult]] = []
+                    failed_member = None
+                    for device_id in ordered_ids:
+                        member_result = await native_runtime.async_execute_device_command(
+                            target_commands[device_id], device_id=device_id
+                        )
+                        results.append((device_id, member_result))
+                        if member_result.status is CommandExecutionStatus.FAILED or (
+                            member_result.status is CommandExecutionStatus.SKIPPED
+                            and member_result.reason != "native_setpoints_unchanged"
+                        ):
+                            failed_member = (device_id, member_result)
+                            break
+                    if failed_member is not None:
+                        failed_id, failed_result = failed_member
+                        await self._async_stop_group_members(
+                            native_runtime, list(target_commands)
+                        )
+                        result = CommandExecutionResult(
+                            status=failed_result.status,
+                            reason=(
+                                f"group_member_command_failed:{failed_id}:"
+                                f"{failed_result.reason}"
+                            ),
+                            error=failed_result.error,
+                        )
+                        self._persist["group_control_status"] = result.reason
+                    else:
+                        self._persist["group_control_members"] = list(target_commands)
+                        self._persist["group_control_last_targets"] = {
+                            device_id: {
+                                "direction": direction,
+                                "power_w": signed_targets[device_id],
+                            }
+                            for device_id in target_commands
+                        }
+                        applied = any(
+                            member_result.status is CommandExecutionStatus.APPLIED
+                            for _, member_result in results
+                        )
+                        result = CommandExecutionResult(
+                            status=(
+                                CommandExecutionStatus.APPLIED
+                                if applied
+                                else CommandExecutionStatus.SKIPPED
+                            ),
+                            reason=status,
+                            mode_written=any(
+                                member_result.mode_written
+                                for _, member_result in results
+                            ),
+                            input_written=any(
+                                member_result.input_written
+                                for _, member_result in results
+                            ),
+                            output_written=any(
+                                member_result.output_written
+                                for _, member_result in results
+                            ),
+                        )
+                        self._persist["group_control_status"] = status
                 self._persist.update(
                     confirmed_command_state_updates(command, result)
                 )
@@ -8182,6 +8531,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     execution_result = await self._execute_device_command(
                         regulation_device_command,
                         force_power=True,
+                        strategy_intent=strategy_intent,
                     )
                 except DeviceBackendExecutionError as err:
                     # A rejected write does not invalidate measurements already

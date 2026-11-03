@@ -430,8 +430,9 @@
       },
       "group_create": {
         "title": "Create battery group",
-        "description": "Choose a name and optionally add configured systems. Selecting a system already in another group moves it when you save.",
-        "data": {"name": "Group name", "members": "Systems in group"}
+        "description": "Choose a name and optionally add configured systems. Group regulation stays off unless you explicitly enable it. Selecting a system already in another group moves it when you save.",
+        "data": {"name": "Group name", "members": "Systems in group", "control_enabled": "Enable staged group regulation"},
+        "data_description": {"control_enabled": "Enables productive regulation for this group only when the integration control switch is on and its energy scope, electrical topology, devices and safety checks are valid."}
       },
       "group_edit_select": {
         "title": "Choose battery group",
@@ -440,7 +441,8 @@
       "group_edit": {
         "title": "Edit battery group",
         "description": "Selecting a system already in another group moves it when you save. Systems removed from this group remain configured and ungrouped.",
-        "data": {"name": "Group name", "members": "Systems in group"}
+        "data": {"name": "Group name", "members": "Systems in group", "control_enabled": "Enable staged group regulation"},
+        "data_description": {"control_enabled": "Enables productive regulation for this group only when the integration control switch is on and its energy scope, electrical topology, devices and safety checks are valid."}
       },
       "group_remove": {
         "title": "Remove battery group",

@@ -1,7 +1,7 @@
 """Persistent configuration contract for V6 battery groups.
 
-Groups describe ownership only.  They do not enable device control or imply
-that members share an electrical circuit or energy measurement scope.
+Groups describe ownership.  Productive group control requires a separate
+explicit opt-in and a valid energy scope and electrical topology.
 """
 
 from __future__ import annotations
@@ -89,7 +89,11 @@ def reconcile_group_config(value: Any = None) -> dict[str, Any]:
         if duplicates:
             raise ValueError("A device may belong to only one battery group")
         claimed_devices.update(members)
-        groups[raw_group_id.strip()] = {"name": name, "members": members}
+        groups[raw_group_id.strip()] = {
+            "name": name,
+            "members": members,
+            "control_enabled": raw_group.get("control_enabled") is True,
+        }
 
     return {"version": GROUPS_SCHEMA_VERSION, "groups": groups}
 
@@ -100,6 +104,7 @@ def save_group(
     group_id: str,
     name: str,
     members: Sequence[str],
+    control_enabled: bool | None = None,
     move_members: bool = False,
 ) -> dict[str, Any]:
     """Add or update one group without changing any other membership."""
@@ -127,7 +132,17 @@ def save_group(
                 **existing,
                 "members": sorted(set(existing["members"]) - moved),
             }
-    groups[normalized_id] = {"name": normalized_name, "members": normalized_members}
+    existing = groups.get(normalized_id, {})
+    enabled = (
+        control_enabled
+        if control_enabled is not None
+        else existing.get("control_enabled") is True
+    )
+    groups[normalized_id] = {
+        "name": normalized_name,
+        "members": normalized_members,
+        "control_enabled": enabled is True,
+    }
     return result
 
 
