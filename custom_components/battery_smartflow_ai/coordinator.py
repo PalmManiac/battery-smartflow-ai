@@ -5674,6 +5674,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 and grid_import_raw is not None
                 and grid_export_raw is not None
             )
+            grid_power_w = (
+                float(grid_import_raw) - float(grid_export_raw)
+                if grid_sensor_valid
+                else None
+            )
             grid_sensor_gap_seconds = self._grid_sensor_gap_grace.observe(
                 now=self._clock.monotonic(),
                 valid=grid_sensor_valid,
@@ -8579,11 +8584,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 "native_pv_sensor_valid": native_pv_sensor_valid,
                 "deficit": float(grid_import),
                 "surplus": float(grid_export),
-                "grid_power_w": (
-                    self._shelly_grid_power_w
-                    if self.entities.grid_mode in GRID_MODE_DIRECT_SHELLY
-                    else None
-                ),
+                "grid_power_w": grid_power_w,
                 "grid_phase_a_power_w": self._shelly_phase_power_w["a"],
                 "grid_phase_b_power_w": self._shelly_phase_power_w["b"],
                 "grid_phase_c_power_w": self._shelly_phase_power_w["c"],
@@ -9763,11 +9764,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 **self._debug_status_data(),
                 **self._training_status_data(),
                 "details": details,
-                "grid_power_w": (
-                    self._shelly_grid_power_w
-                    if self.entities.grid_mode in GRID_MODE_DIRECT_SHELLY
-                    else None
-                ),
+                "grid_power_w": grid_power_w,
                 "grid_phase_a_power_w": self._shelly_phase_power_w["a"],
                 "grid_phase_b_power_w": self._shelly_phase_power_w["b"],
                 "grid_phase_c_power_w": self._shelly_phase_power_w["c"],
