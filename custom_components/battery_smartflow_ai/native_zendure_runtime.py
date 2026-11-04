@@ -216,8 +216,10 @@ class NativeZendureRuntime:
         self._first_write_result: NativeWriteVerification | None = None
         self._write_lock = asyncio.Lock()
         self._write_sequence = 0
+        self._smart_mode_standby_tasks: dict[str, asyncio.Task[None]] = {}
+        self._smart_mode_standby_generations: dict[str, int] = {}
+        # Retained as a selected-device compatibility view for diagnostics.
         self._smart_mode_standby_task: asyncio.Task[None] | None = None
-        self._smart_mode_standby_generation = 0
         self._command_verification = NativeCommandVerificationManager()
         self._transport_metrics = NativeTransportMetrics()
         self._zensdk_command_adapter: ZendureZenSdkCommandAdapter | None = None
@@ -1349,16 +1351,19 @@ class NativeZendureRuntime:
         if not standby_confirmation and _requests_active_direction(command):
             # A new target cancels a pending persistent-standby write before it
             # can wait behind the serialized transport lock.
-            self._cancel_smart_mode_standby()
+            self._cancel_smart_mode_standby(target_device_id)
 
         if not self._control_enabled:
             return self._remember_command_result(_command_result(
                 CommandExecutionStatus.SKIPPED, "native_control_disabled"
             ))
-        standby_request_generation = self._smart_mode_standby_generation
+        standby_request_generation = self._smart_mode_standby_generations.get(
+            target_device_id, 0
+        )
         async with self._write_lock:
             if standby_confirmation and (
-                standby_generation != self._smart_mode_standby_generation
+                standby_generation
+                != self._smart_mode_standby_generations.get(target_device_id, 0)
             ):
                 return self._remember_command_result(_command_result(
                     CommandExecutionStatus.SKIPPED,
@@ -1531,17 +1536,16 @@ class NativeZendureRuntime:
                 ))
             if (
                 not standby_confirmation
-                and target_device_id == self._selected_device
                 and self._should_delay_smart_mode_standby(
                     source_device,
                     control_transport,
                     final_command,
                 )
                 and standby_request_generation
-                == self._smart_mode_standby_generation
+                == self._smart_mode_standby_generations.get(target_device_id, 0)
             ):
                 self._schedule_smart_mode_standby(
-                    device_id=self._selected_device,
+                    device_id=target_device_id,
                     transport=control_transport,
                     command=final_command,
                     stop_requested_at=stop_requested_at,
@@ -1579,13 +1583,25 @@ class NativeZendureRuntime:
             ))
         )
 
-    def _cancel_smart_mode_standby(self) -> None:
-        """Invalidate and cancel a pending persistent-standby write."""
+    def _cancel_smart_mode_standby(self, device_id: str | None = None) -> None:
+        """Invalidate pending persistent-standby writes per device."""
 
-        self._smart_mode_standby_generation += 1
-        task, self._smart_mode_standby_task = self._smart_mode_standby_task, None
-        if task is not None and task is not asyncio.current_task():
-            task.cancel()
+        device_ids = (
+            tuple(self._smart_mode_standby_tasks)
+            if device_id is None
+            else (device_id,)
+        )
+        for target_id in device_ids:
+            self._smart_mode_standby_generations[target_id] = (
+                self._smart_mode_standby_generations.get(target_id, 0) + 1
+            )
+            task = self._smart_mode_standby_tasks.pop(target_id, None)
+            if task is not None and task is not asyncio.current_task():
+                task.cancel()
+        if device_id is None or device_id == self._selected_device:
+            self._smart_mode_standby_task = self._smart_mode_standby_tasks.get(
+                self._selected_device or ""
+            )
 
     def _schedule_smart_mode_standby(
         self,
@@ -1597,9 +1613,9 @@ class NativeZendureRuntime:
     ) -> None:
         """Start tracking one explicit zero-power stop for sustained standby."""
 
-        self._cancel_smart_mode_standby()
-        generation = self._smart_mode_standby_generation
-        self._smart_mode_standby_task = asyncio.create_task(
+        self._cancel_smart_mode_standby(device_id)
+        generation = self._smart_mode_standby_generations[device_id]
+        task = asyncio.create_task(
             self._async_apply_smart_mode_standby_after_idle(
                 generation=generation,
                 device_id=device_id,
@@ -1608,6 +1624,9 @@ class NativeZendureRuntime:
                 stop_requested_at=stop_requested_at,
             )
         )
+        self._smart_mode_standby_tasks[device_id] = task
+        if device_id == self._selected_device:
+            self._smart_mode_standby_task = task
 
     async def _async_apply_smart_mode_standby_after_idle(
         self,
@@ -1629,12 +1648,11 @@ class NativeZendureRuntime:
         try:
             while True:
                 await asyncio.sleep(SMART_MODE_STANDBY_POLL_INTERVAL_SECONDS)
-                if generation != self._smart_mode_standby_generation:
+                if generation != self._smart_mode_standby_generations.get(device_id, 0):
                     return
                 if (
                     self._status != STATUS_OBSERVING
                     or not self._control_enabled
-                    or self._selected_device != device_id
                 ):
                     return
                 device = self._inventory.devices.get(device_id)
@@ -1684,7 +1702,9 @@ class NativeZendureRuntime:
                         SMART_MODE_STANDBY_GENERATION_METADATA_KEY: generation,
                     },
                 )
-                await self.async_execute_device_command(confirmed_command)
+                await self.async_execute_device_command(
+                    confirmed_command, device_id=device_id
+                )
                 return
         except asyncio.CancelledError:
             raise
@@ -1694,7 +1714,12 @@ class NativeZendureRuntime:
                 _safe_reason(error),
             )
         finally:
-            if self._smart_mode_standby_task is task:
+            if self._smart_mode_standby_tasks.get(device_id) is task:
+                self._smart_mode_standby_tasks.pop(device_id, None)
+            if (
+                device_id == self._selected_device
+                and self._smart_mode_standby_task is task
+            ):
                 self._smart_mode_standby_task = None
 
     def selected_offgrid_mode(self) -> str | None:
