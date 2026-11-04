@@ -321,6 +321,19 @@ NATIVE_MAIN_SENSORS = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     NativeHardwareSensorDescription(
+        key="zensdk_success_source",
+        translation_key="native_hardware_zensdk_success_source",
+        source="zensdk_success_source", device_class=SensorDeviceClass.ENUM,
+        options=["not_used", "fixed_ip", "device_list_ip", "mdns", "unknown"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
+        key="zensdk_ip_address",
+        translation_key="native_hardware_zensdk_ip_address",
+        source="zensdk_ip_address",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    NativeHardwareSensorDescription(
         key="control_state", translation_key="native_hardware_control_state",
         source="control_state", device_class=SensorDeviceClass.ENUM,
         options=["observation", "eligible", "enabled", "active", "hems_blocked",
@@ -2475,6 +2488,8 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             return item.profile_key is not None
         if description.source == "last_message":
             return item.last_message_at is not None
+        if description.source == "zensdk_ip_address":
+            return item.zensdk_ip_address is not None
         return True
 
     @property
@@ -2529,6 +2544,10 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             return "online" if item.online else "offline"
         if source == "transport":
             return item.selected_transport.value
+        if source == "zensdk_success_source":
+            return item.zensdk_success_source
+        if source == "zensdk_ip_address":
+            return item.zensdk_ip_address
         if source == "control_state":
             return item.control_state.value
         if source == "hems":

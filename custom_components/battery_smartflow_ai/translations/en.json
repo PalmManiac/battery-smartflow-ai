@@ -899,7 +899,7 @@
       "native_hardware_profile": {
         "name": "Device profile"
       },
-      "native_hardware_transport": {
+      "native_hardware_zensdk_success_source": {"name": "Last successful ZenSDK route", "state": {"not_used": "Not used", "fixed_ip": "Fixed IP address", "device_list_ip": "IP from Zendure device list", "mdns": "mDNS hostname", "unknown": "No successful connection yet"}}, "native_hardware_zensdk_ip_address": {"name": "Fixed ZenSDK IP address"}, "native_hardware_transport": {
         "name": "Communication path",
         "state": {
           "home_assistant": "Home Assistant / Z-HA",
