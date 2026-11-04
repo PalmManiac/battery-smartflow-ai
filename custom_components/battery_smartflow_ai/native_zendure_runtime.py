@@ -208,6 +208,7 @@ class NativeZendureRuntime:
         self._zensdk_failures: dict[str, int] = {}
         self._zensdk_last_result: dict[str, str] = {}
         self._zensdk_last_success: dict[str, datetime] = {}
+        self._zensdk_last_success_source: dict[str, str] = {}
         self._zensdk_last_attempt_at: dict[str, datetime] = {}
         self._zensdk_next_poll: dict[str, float] = {}
         self._zensdk_poll_delay: dict[str, float] = {}
@@ -660,6 +661,7 @@ class NativeZendureRuntime:
                 else None
             )
             displayed_transport = active_control_transport or selected_control_transport
+            zensdk_source, zensdk_ip = self._zensdk_connection_details(system_id)
             systems.append(
                 {
                     "id": item.public_id,
@@ -689,6 +691,8 @@ class NativeZendureRuntime:
                         if displayed_transport is not None
                         else None
                     ),
+                    "zensdk_success_source": zensdk_source,
+                    "zensdk_ip_address": zensdk_ip,
                     "observed_transport": (
                         state.observed_transport.value if state is not None else None
                     ),
@@ -736,6 +740,8 @@ class NativeZendureRuntime:
                     "online": False,
                     "status": "offline",
                     "transport": record.get("transport") or "unknown",
+                    "zensdk_success_source": "unknown",
+                    "zensdk_ip_address": record.get("zensdk_ip"),
                     "observed_transport": None,
                     "packs": [],
                 }
@@ -779,6 +785,8 @@ class NativeZendureRuntime:
             "online",
             "status",
             "transport",
+            "zensdk_success_source",
+            "zensdk_ip_address",
             "observed_transport",
         )
         return {
@@ -854,10 +862,41 @@ class NativeZendureRuntime:
             selected_transport = self._selected_control_transport(device).transport
             if selected_transport is not None:
                 item = replace(item, selected_transport=selected_transport)
+            connection_source, ip_address = self._zensdk_connection_details(
+                system_id
+            )
+            item = replace(
+                item,
+                zensdk_success_source=connection_source,
+                zensdk_ip_address=ip_address,
+            )
             if system_id == self._selected_device:
                 item = with_control_state(item, self._hardware_control_state())
             displayed.append(item)
         return tuple(displayed)
+
+    def _zensdk_connection_details(
+        self, system_id: str
+    ) -> tuple[str, str | None]:
+        """Return the last successful ZenSDK route and any explicitly pinned IP."""
+
+        device = self._inventory.devices.get(system_id)
+        selected_transport = (
+            self._selected_control_transport(device).transport
+            if device is not None
+            else None
+        )
+        if selected_transport is not ZendureTransport.ZENSDK:
+            return "not_used", None
+
+        configured_ip = self._zensdk_address_overrides.get(system_id)
+        source = self._zensdk_last_success_source.get(system_id)
+        route = {
+            "configured_ip": "fixed_ip",
+            "device_list_ip": "device_list_ip",
+            "derived_local_hostname": "mdns",
+        }.get(source, "unknown")
+        return route, configured_ip
 
     def shadow_allocation_snapshots(
         self,
@@ -2078,6 +2117,10 @@ class NativeZendureRuntime:
                     "http_status": attempt.http_status,
                 }
             )
+            if attempt.result == "success":
+                self._zensdk_last_success_source[
+                    attempt.device_candidate_id
+                ] = attempt.address_source
         if len(self._zensdk_attempt_history) > ZENSDK_DEBUG_ATTEMPT_LIMIT:
             del self._zensdk_attempt_history[:-ZENSDK_DEBUG_ATTEMPT_LIMIT]
         successful: dict[str, datetime] = {}

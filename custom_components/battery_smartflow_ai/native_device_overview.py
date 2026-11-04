@@ -195,6 +195,8 @@ class MainSystemOverview:
     last_message_at: datetime | None
     packs: tuple[PackOverview, ...]
     migration_bound: bool = False
+    zensdk_success_source: str = "unknown"
+    zensdk_ip_address: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
