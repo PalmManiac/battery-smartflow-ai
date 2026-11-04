@@ -356,6 +356,11 @@ SEASON_COUNTER_MAX = 100
 SEASON_WINTER_EVALUATION_START_HOUR = 10.0
 SEASON_WINTER_EVALUATION_END_HOUR = 16.0
 
+GROUP_LEAD_MINIMUM_RUNTIME_SECONDS = 600.0
+GROUP_LEAD_SOC_HYSTERESIS_PCT = 10.0
+GROUP_LEAD_IDLE_RESET_SECONDS = 60.0
+GROUP_HANDOVER_POWER_TOLERANCE_W = 50.0
+
 
 def _to_float(v: Any, default: float | None = None) -> float | None:
     try:
@@ -610,7 +615,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         else:
             target = 0.0
-        result = allocate_staged_efficiency(target, devices, topology)
+        lead_state = self._persist.get("group_control_lead_state")
+        preferred_lead = (
+            lead_state.get("device_id")
+            if isinstance(lead_state, Mapping)
+            and lead_state.get("group_id") == selected_group_id
+            and target != 0.0
+            else None
+        )
+        result = allocate_staged_efficiency(
+            target,
+            devices,
+            topology,
+            preferred_lead_device_id=preferred_lead,
+        )
         result_data = result.as_dict()
         public_ids = {
             item["device_id"]: "ZD_DEVICE_"
@@ -644,6 +662,91 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if len(members) < 2 and result_data["status"] == "complete":
             result_data["status"] = "single_device_group"
         return result_data
+
+    def _stable_group_lead_device_id(
+        self,
+        *,
+        group_id: str,
+        target_w: float,
+        natural_allocation: Any,
+        snapshots_by_id: Mapping[str, Mapping[str, Any]],
+    ) -> str | None:
+        """Keep the current lead until a meaningful, sustained advantage appears."""
+
+        natural_lead = natural_allocation.lead_device_id
+        if abs(target_w) <= 0.5 or not natural_lead:
+            return None
+
+        eligible_ids = {
+            str(item.get("device_id"))
+            for item in natural_allocation.devices
+            if _to_float(item.get("effective_limit_w"), 0.0) > 0.0
+        }
+        if natural_lead not in eligible_ids:
+            return None
+
+        now = self._clock.utc_now()
+        previous = self._persist.get("group_control_lead_state")
+        previous = previous if isinstance(previous, Mapping) else {}
+        current_lead = previous.get("device_id")
+        current_group = previous.get("group_id")
+        last_active_at = dt_util.parse_datetime(
+            str(previous.get("last_active_at") or "")
+        )
+        if last_active_at is not None:
+            last_active_at = dt_util.as_utc(last_active_at)
+
+        retain_current = bool(
+            current_group == group_id
+            and isinstance(current_lead, str)
+            and current_lead in eligible_ids
+            and last_active_at is not None
+            and (now - last_active_at).total_seconds()
+            <= GROUP_LEAD_IDLE_RESET_SECONDS
+        )
+        selected_lead = natural_lead
+        if retain_current and current_lead != natural_lead:
+            current_soc = _to_float(
+                snapshots_by_id.get(current_lead, {}).get("soc_pct")
+            )
+            candidate_soc = _to_float(
+                snapshots_by_id.get(natural_lead, {}).get("soc_pct")
+            )
+            advantage = None
+            if current_soc is not None and candidate_soc is not None:
+                advantage = (
+                    candidate_soc - current_soc
+                    if target_w < 0
+                    else current_soc - candidate_soc
+                )
+            selected_at = dt_util.parse_datetime(
+                str(previous.get("selected_at") or "")
+            )
+            selected_at = dt_util.as_utc(selected_at) if selected_at else None
+            held_seconds = (
+                (now - selected_at).total_seconds()
+                if selected_at is not None
+                else 0.0
+            )
+            if (
+                advantage is None
+                or advantage < GROUP_LEAD_SOC_HYSTERESIS_PCT
+                or held_seconds < GROUP_LEAD_MINIMUM_RUNTIME_SECONDS
+            ):
+                selected_lead = current_lead
+
+        selected_at = previous.get("selected_at")
+        if selected_lead != current_lead or current_group != group_id:
+            selected_at = now.isoformat()
+        elif not selected_at:
+            selected_at = now.isoformat()
+        self._persist["group_control_lead_state"] = {
+            "group_id": group_id,
+            "device_id": selected_lead,
+            "selected_at": selected_at,
+            "last_active_at": now.isoformat(),
+        }
+        return selected_lead
 
     def _productive_group_targets(
         self,
@@ -793,7 +896,19 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and requested_power_value is not None
         ):
             target_w = -abs(requested_power_value)
-        allocation = allocate_staged_efficiency(target_w, devices, topology)
+        natural_allocation = allocate_staged_efficiency(target_w, devices, topology)
+        preferred_lead = self._stable_group_lead_device_id(
+            group_id=selected_group_id,
+            target_w=target_w,
+            natural_allocation=natural_allocation,
+            snapshots_by_id=snapshot_by_id,
+        )
+        allocation = allocate_staged_efficiency(
+            target_w,
+            devices,
+            topology,
+            preferred_lead_device_id=preferred_lead,
+        )
         if allocation.status not in {"complete", "partial", "idle"}:
             return (f"group_allocation_{allocation.status}", None)
 
@@ -3473,6 +3588,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         for device_id in members:
             await runtime.async_execute_device_command(stop, device_id=device_id)
         self._persist["group_control_last_targets"] = {}
+        self._persist.pop("group_control_handover_pending", None)
 
     async def _execute_device_command(
         self,
@@ -3493,6 +3609,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     strategy_intent=strategy_intent,
                 )
                 if group_plan is None:
+                    self._persist.pop("group_control_handover_pending", None)
                     previous_members = self._persist.get("group_control_members", ())
                     selected_id = getattr(native_runtime, "selected_device_id", None)
                     if isinstance(previous_members, Sequence) and not isinstance(
@@ -3522,6 +3639,24 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     status, target_commands = group_plan
                     previous = self._persist.get("group_control_last_targets", {})
                     previous = previous if isinstance(previous, Mapping) else {}
+                    lead_state = self._persist.get("group_control_lead_state")
+                    active_group_id = (
+                        lead_state.get("group_id")
+                        if isinstance(lead_state, Mapping)
+                        else None
+                    )
+                    pending_handover = self._persist.get(
+                        "group_control_handover_pending"
+                    )
+                    pending_handover = (
+                        pending_handover
+                        if isinstance(pending_handover, Mapping)
+                        and pending_handover.get("group_id")
+                        == active_group_id
+                        else None
+                    )
+                    if pending_handover is None:
+                        self._persist.pop("group_control_handover_pending", None)
                     direction = (
                         "charge"
                         if any(item.input_limit_w > 0 for item in target_commands.values())
@@ -3539,6 +3674,196 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                         for device_id, item in target_commands.items()
                     }
+                    device_states = native_runtime.fresh_device_state_map()
+
+                    def measured_flow(device_id: str) -> tuple[str | None, float, Any]:
+                        state = device_states.get(device_id)
+                        if state is None:
+                            return None, 0.0, None
+                        charge = state.charge_power_w
+                        discharge = state.discharge_power_w
+                        charge_w = (
+                            max(0.0, float(charge.value))
+                            if charge.valid and charge.value is not None
+                            else 0.0
+                        )
+                        discharge_w = (
+                            max(0.0, float(discharge.value))
+                            if discharge.valid and discharge.value is not None
+                            else 0.0
+                        )
+                        if charge_w >= discharge_w and charge_w > 0.5:
+                            return "charge", charge_w, charge.observed_at
+                        if discharge_w > 0.5:
+                            return "discharge", discharge_w, discharge.observed_at
+                        observed_at = max(
+                            (
+                                value.observed_at
+                                for value in (charge, discharge)
+                                if value.valid and value.observed_at is not None
+                            ),
+                            default=None,
+                        )
+                        return None, 0.0, observed_at
+
+                    handover_ids: set[str] = set()
+                    waiting_for_handover = False
+                    if pending_handover is not None:
+                        pending_devices = pending_handover.get("devices", {})
+                        if isinstance(pending_devices, Mapping):
+                            for device_id, pending_item in pending_devices.items():
+                                if not isinstance(pending_item, Mapping):
+                                    waiting_for_handover = True
+                                    continue
+                                handover_ids.add(str(device_id))
+                                observed_direction, observed_w, observed_at = (
+                                    measured_flow(str(device_id))
+                                )
+                                requested_at = dt_util.parse_datetime(
+                                    str(pending_item.get("requested_at") or "")
+                                )
+                                if requested_at is not None:
+                                    requested_at = dt_util.as_utc(requested_at)
+                                if (
+                                    observed_direction is not None
+                                    or observed_at is None
+                                    or requested_at is None
+                                    or dt_util.as_utc(observed_at) <= requested_at
+                                    or observed_w > GROUP_HANDOVER_POWER_TOLERANCE_W
+                                ):
+                                    waiting_for_handover = True
+                        else:
+                            waiting_for_handover = True
+                        if not waiting_for_handover:
+                            self._persist.pop("group_control_handover_pending", None)
+                            for device_id in handover_ids:
+                                previous = {
+                                    **previous,
+                                    device_id: {"direction": "idle", "power_w": 0.0},
+                                }
+
+                    if pending_handover is None:
+                        reductions: set[str] = set()
+                        increases: set[str] = set()
+                        for device_id, target_value in signed_targets.items():
+                            old_item = previous.get(device_id)
+                            old_value = (
+                                float(old_item.get("power_w", 0.0))
+                                if isinstance(old_item, Mapping)
+                                else 0.0
+                            )
+                            if isinstance(old_item, Mapping) and (
+                                (old_value * target_value < -0.5)
+                                or abs(target_value) + 0.5 < abs(old_value)
+                            ):
+                                reductions.add(device_id)
+                            if (
+                                abs(target_value) > abs(old_value) + 0.5
+                                or old_value * target_value < -0.5
+                            ):
+                                increases.add(device_id)
+                            observed_direction, observed_w, _ = measured_flow(device_id)
+                            target_direction = (
+                                "charge" if target_value > 0.5
+                                else "discharge" if target_value < -0.5
+                                else None
+                            )
+                            target_magnitude = abs(target_value)
+                            if observed_direction is not None and (
+                                observed_direction != target_direction
+                                or observed_w > target_magnitude
+                                + GROUP_HANDOVER_POWER_TOLERANCE_W
+                            ):
+                                reductions.add(device_id)
+
+                        if reductions and increases:
+                            handover_ids = reductions
+                            self._persist["group_control_handover_pending"] = {
+                                "group_id": active_group_id,
+                                "devices": {
+                                    device_id: {
+                                        "requested_at": dt_util.as_utc(
+                                            self._clock.utc_now()
+                                        ).isoformat()
+                                    }
+                                    for device_id in reductions
+                                },
+                            }
+                            waiting_for_handover = True
+
+                    if waiting_for_handover:
+                        stop = DeviceCommand(
+                            ac_mode="output",
+                            input_limit_w=0.0,
+                            output_limit_w=0.0,
+                            reason="group_control_handover_wait",
+                            should_write_mode=True,
+                            should_write_input=True,
+                            should_write_output=True,
+                            metadata={"command_path": "group_safe_handover"},
+                        )
+                        stop_results = []
+                        for device_id in sorted(handover_ids):
+                            stop_results.append((
+                                device_id,
+                                await native_runtime.async_execute_device_command(
+                                    stop, device_id=device_id
+                                ),
+                            ))
+                        failed_stop = next((
+                            (device_id, item) for device_id, item in stop_results
+                            if item.status is CommandExecutionStatus.FAILED
+                            or (
+                                item.status is CommandExecutionStatus.SKIPPED
+                                and item.reason != "native_setpoints_unchanged"
+                            )
+                        ), None)
+                        if failed_stop is not None:
+                            self._persist.pop("group_control_handover_pending", None)
+                            await self._async_stop_group_members(
+                                native_runtime, list(target_commands)
+                            )
+                            failed_id, failed_result = failed_stop
+                            result = CommandExecutionResult(
+                                status=failed_result.status,
+                                reason=(
+                                    f"group_handover_stop_failed:{failed_id}:"
+                                    f"{failed_result.reason}"
+                                ),
+                                error=failed_result.error,
+                            )
+                            self._persist["group_control_status"] = result.reason
+                        else:
+                            current_pending = self._persist.get(
+                                "group_control_handover_pending", {}
+                            )
+                            pending_devices = (
+                                current_pending.get("devices", {})
+                                if isinstance(current_pending, Mapping)
+                                else {}
+                            )
+                            if isinstance(pending_devices, Mapping):
+                                for device_id, member_result in stop_results:
+                                    if member_result.status is CommandExecutionStatus.APPLIED:
+                                        item = pending_devices.get(device_id)
+                                        if isinstance(item, Mapping):
+                                            item["requested_at"] = dt_util.as_utc(
+                                                self._clock.utc_now()
+                                            ).isoformat()
+                            self._persist["group_control_status"] = (
+                                "group_control_handover_waiting_for_zero"
+                            )
+                            result = CommandExecutionResult(
+                                status=CommandExecutionStatus.SKIPPED,
+                                reason="group_control_handover_waiting_for_zero",
+                            )
+
+                    if waiting_for_handover:
+                        self._persist.update(
+                            confirmed_command_state_updates(command, result)
+                        )
+                        self._store_command_execution_result(result)
+                        return result
                     ordered_ids = list(target_commands)
                     target_order = {
                         device_id: index for index, device_id in enumerate(ordered_ids)

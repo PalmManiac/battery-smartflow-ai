@@ -61,6 +61,8 @@ def allocate_staged_efficiency(
     target_power_w: float,
     devices: Sequence[ShadowDevice],
     topology: Mapping[str, Any] | None = None,
+    *,
+    preferred_lead_device_id: str | None = None,
 ) -> ShadowAllocation:
     """Allocate one signed group target in stages without issuing commands.
 
@@ -138,9 +140,19 @@ def allocate_staged_efficiency(
         )
 
     if direction == "discharge":
-        candidates.sort(key=lambda item: _discharge_priority(item[0]))
+        candidates.sort(
+            key=lambda item: (
+                item[0].device_id != preferred_lead_device_id,
+                _discharge_priority(item[0]),
+            )
+        )
     elif direction == "charge":
-        candidates.sort(key=lambda item: _charge_priority(item[0]))
+        candidates.sort(
+            key=lambda item: (
+                item[0].device_id != preferred_lead_device_id,
+                _charge_priority(item[0]),
+            )
+        )
     else:
         candidates = []
 
