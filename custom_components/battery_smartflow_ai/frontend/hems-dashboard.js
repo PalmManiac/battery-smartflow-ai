@@ -134,25 +134,26 @@ class BatterySmartFlowDashboard extends HTMLElement {
         } else if (setting === "debug-stop") {
           this._callTraining("stop_debug_recording", dashboardSetting, { entry_id: entryId });
         } else {
-          if (["general", "expert", "smart_mode"].includes(setting)) {
-            this._optionsReturnFocus = dashboardSetting;
-          }
+          this._optionsReturnFocus = dashboardSetting;
           this._openOptionsFlow(entryId, setting);
         }
         return;
       }
       const groupEdit = nodeFor("[data-group-edit]");
       if (groupEdit) {
+        this._optionsReturnFocus = groupEdit;
         this._openOptionsFlow(groupEdit.dataset.entryId, "systems_groups");
         return;
       }
       const energyScopeEdit = nodeFor("[data-energy-scope-edit]");
       if (energyScopeEdit) {
+        this._optionsReturnFocus = energyScopeEdit;
         this._openOptionsFlow(energyScopeEdit.dataset.entryId, "energy_scopes");
         return;
       }
       const topologyEdit = nodeFor("[data-topology-edit]");
       if (topologyEdit) {
+        this._optionsReturnFocus = topologyEdit;
         this._openOptionsFlow(topologyEdit.dataset.entryId, "electrical_topology");
         return;
       }
@@ -248,12 +249,12 @@ class BatterySmartFlowDashboard extends HTMLElement {
       if (fromChart && fromChart !== toChart) this._hideHistoryTooltip(fromChart);
     });
     this.shadowRoot.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && this._isSettingsDialogOpen()) {
+      if (event.key === "Escape" && this._isOptionsDialogOpen()) {
         event.preventDefault();
         this._closeOptionsFlow();
         return;
       }
-      if (event.key === "Tab" && this._isSettingsDialogOpen()) {
+      if (event.key === "Tab" && this._isOptionsDialogOpen()) {
         const dialog = this.shadowRoot.querySelector(".options-modal");
         const focusable = [...(dialog?.querySelectorAll(
           'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -1547,7 +1548,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const messageKey = step?.type === "abort" && step.reason && this._t(step.reason) !== step.reason
         ? step.reason
         : finished ? "settings_saved" : "settings_closed";
-      this._restoreOptionsFocus = this._isSettingsDialogOpen();
+      this._restoreOptionsFocus = this._isOptionsDialogOpen();
       this._optionsFlowId = null;
       this._topologyDraftHasChanges = false;
       this._scheduleRender();
@@ -1652,23 +1653,31 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._optionsFlowTitle = title;
     this._optionsStepId = step.step_id;
     this._optionsFlowBody = content;
-    this._focusOptionsDialog = this._isSettingsDialogOpen();
+    this._focusOptionsDialog = this._isOptionsDialogOpen();
     this._scheduleRender();
   }
 
   _optionsFlowEditor() {
     if (!this._optionsFlowId) return "";
-    if (this._isSettingsDialogOpen()) {
+    if (this._isOptionsDialogOpen()) {
       const title = this._optionsFlowTitle || this._t("settings_shortcuts");
-      return `<div class="options-modal-backdrop" data-options-modal-backdrop role="presentation"><section class="options-modal" role="dialog" aria-modal="true" aria-labelledby="options-modal-title"><div class="options-modal-header"><div><h2 id="options-modal-title">${this._escape(title)}</h2><small>${this._escape(this._t("settings_description"))}</small></div><button class="options-modal-close" type="button" data-options-close aria-label="${this._escape(this._t("options_cancel"))}">×</button></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply options-modal-cancel" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section></div>`;
+      const stepId = String(this._optionsStepId || "");
+      const topology = stepId === "electrical_topology" || stepId.startsWith("topology_");
+      const wide = stepId.startsWith("energy_scope") || topology;
+      const sizeClass = wide ? ` options-modal-wide${topology ? " options-modal-topology" : " options-modal-sensors"}` : "";
+      return `<div class="options-modal-backdrop" data-options-modal-backdrop role="presentation"><section class="options-modal${sizeClass}" role="dialog" aria-modal="true" aria-labelledby="options-modal-title"><div class="options-modal-header"><div><h2 id="options-modal-title">${this._escape(title)}</h2><small>${this._escape(this._t("settings_description"))}</small></div><button class="options-modal-close" type="button" data-options-close aria-label="${this._escape(this._t("options_cancel"))}">×</button></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply options-modal-cancel" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section></div>`;
     }
     return `<section class="section option-editor ${this._optionsStepId?.startsWith("energy_scope") ? "scope-editor" : ""}" data-render-key="options-${this._optionsRevision || 0}"><div class="section-head"><h2>${this._escape(this._optionsFlowTitle || this._t("settings_shortcuts"))}</h2><small>${this._escape(this._t("settings_description"))}</small></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section>`;
   }
 
-  _isSettingsDialogOpen() {
-    return Boolean(this._optionsFlowId && [
-      "general", "expert", "expert_cell_voltage", "expert_cell_voltage_config", "smart_mode",
-    ].includes(this._optionsStepId));
+  _isOptionsDialogOpen() {
+    const stepId = String(this._optionsStepId || "");
+    return Boolean(this._optionsFlowId && (
+      ["general", "expert", "expert_cell_voltage", "expert_cell_voltage_config", "smart_mode", "systems_groups", "electrical_topology", "energy_scopes"].includes(stepId)
+      || stepId.startsWith("group_")
+      || stepId.startsWith("topology_")
+      || stepId.startsWith("energy_scope")
+    ));
   }
 
   _closeOptionsFlow() {
@@ -2775,7 +2784,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         @media(max-width:760px){.economics-balance-grid{grid-template-columns:minmax(0,1fr)}.economics-price-ruler{padding:17px 13px}.economics-price-legend{gap:6px;padding:8px}.economics-price-legend span{font-size:11px}.economics-price-legend strong{font-size:12px}}
         @media(max-width:520px){.economics-average-grid{grid-template-columns:minmax(0,1fr)}.economics-ruler-ticks{font-size:9px}.economics-ruler-track{height:23px}.economics-ledger-row{align-items:flex-start;padding:11px;gap:10px}.economics-ledger-row>b{font-size:12px}.economics-benefit .reading>strong{font-size:27px}}
         .topology-form-errors{margin:0 0 12px;padding:10px 13px;border:1px solid #8b4848;border-left:4px solid #ec7777;border-radius:8px;background:#382426;color:#ffdede}.topology-form-errors p{margin:0;line-height:1.45}.topology-form-errors p+p{margin-top:6px}
-        .options-modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:clamp(12px,4vw,36px);overflow:auto;background:rgba(5,8,10,.76);backdrop-filter:blur(5px)}.options-modal{width:min(100%,720px);max-height:min(88vh,860px);overflow:auto;padding:22px;border:1px solid #3c6877;border-top:3px solid #35bddc;border-radius:14px;background:#1b1e21;color:#e7e9eb;box-shadow:0 24px 80px #000a;animation:settings-dialog-enter .18s ease-out}.options-modal-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #343a40}.options-modal-header h2{margin:0;font-size:19px}.options-modal-header small{display:block;margin-top:6px;color:var(--muted);line-height:1.45}.options-modal-close{flex:none;width:38px;height:38px;border:1px solid #4b535a;border-radius:8px;background:#25292d;color:#eef0f1;font-size:25px;line-height:1;cursor:pointer}.options-modal-close:hover{border-color:var(--cyan);background:#183847}.options-modal-cancel{margin-top:12px}@keyframes settings-dialog-enter{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}@media(max-width:520px){.options-modal-backdrop{place-items:end center;padding:0}.options-modal{width:100%;max-height:92vh;padding:18px 16px calc(18px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0}.options-modal .options-field input:not([type=checkbox]),.options-modal .options-field select{max-width:65%}}@media(prefers-reduced-motion:reduce){.options-modal{animation:none}}
+        .options-modal-backdrop{position:fixed;z-index:1000;inset:0;display:grid;place-items:center;padding:clamp(12px,4vw,36px);overflow:auto;background:rgba(5,8,10,.76);backdrop-filter:blur(5px)}.options-modal{display:flex;flex-direction:column;width:min(100%,720px);max-height:min(90vh,900px);overflow:hidden;padding:22px;border:1px solid #3c6877;border-top:3px solid #35bddc;border-radius:14px;background:#1b1e21;color:#e7e9eb;box-shadow:0 24px 80px #000a;animation:settings-dialog-enter .18s ease-out}.options-modal-wide{width:min(100%,1080px)}.options-modal-topology{width:min(100%,1160px)}.options-modal .option-editor-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:0 4px 4px 0}.options-modal-header{flex:none;display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #343a40}.options-modal-header h2{margin:0;font-size:19px}.options-modal-header small{display:block;margin-top:6px;color:var(--muted);line-height:1.45}.options-modal-close{flex:none;width:38px;height:38px;border:1px solid #4b535a;border-radius:8px;background:#25292d;color:#eef0f1;font-size:25px;line-height:1;cursor:pointer}.options-modal-close:hover{border-color:var(--cyan);background:#183847}.options-modal-cancel{flex:none;margin-top:12px}@keyframes settings-dialog-enter{from{opacity:0;transform:translateY(8px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}@media(max-width:520px){.options-modal-backdrop{place-items:end center;padding:0}.options-modal{width:100%;max-height:92vh;padding:18px 16px calc(18px + env(safe-area-inset-bottom));border-radius:16px 16px 0 0}.options-modal .options-field input:not([type=checkbox]),.options-modal .options-field select{max-width:65%}}@media(prefers-reduced-motion:reduce){.options-modal{animation:none}}
       </style>
       <main class="shell">
         <header><div><p class="sub">${this._escape(this._t("subtitle"))}</p><small class="versionline">${this._escape(this._t("version"))} ${this._escape(this._panel?.config?.integration_version || "—")} · ${this._escape(this._t("dashboard_version"))} ${this._escape(this._panel?.config?.dashboard_version || "—")}</small><a class="home-link" href="/" data-home>← ${this._escape(this._t("home_assistant"))}</a></div><div class="badge">● ${this._escape(this._t("live"))} ${this._escape(updated)}</div></header>
