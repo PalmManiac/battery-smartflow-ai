@@ -401,6 +401,14 @@ ZENDURE_DEVICE_MATRIX: Mapping[str, ZendureDeviceMatrixEntry] = MappingProxyType
                 smart_mode_standby_value=0,
             ),
             _entry(
+                "SF4000MixPro",
+                "SolarFlow 4000 Mix Pro",
+                "SolarFlow 4000 MIX Pro",
+                "solarFlow4000MixPro",
+                "SF4000MixPro",
+                zensdk_verified=True,
+            ),
+            _entry(
                 "SF2400Pro",
                 "SolarFlow 2400 Pro",
                 "solarFlow2400Pro",
