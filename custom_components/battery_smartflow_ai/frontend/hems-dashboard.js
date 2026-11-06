@@ -1184,13 +1184,17 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (!prefix) return [];
     const packPattern = /(battery|batterie|akku)[ -]?pack\s*0*([1-9]\d*)/i;
     return entities.filter((entity) => {
-      const name = this._searchText(`${entity.entity_id} ${this._label(entity)}`);
+      const label = this._searchText(this._label(entity));
+      const entityId = this._searchText(entity.entity_id);
+      const name = `${entityId} ${label}`;
       const hasDeviceName = name === prefix ||
         name.startsWith(`${prefix} `) ||
         name.includes(` ${prefix} `) ||
         name.endsWith(` ${prefix}`);
       if (!hasDeviceName) return false;
-      const packMatch = name.match(packPattern);
+      // The friendly name reflects the actual pack; legacy entity IDs can
+      // retain an old pack number after a pack is replaced or renumbered.
+      const packMatch = label.match(packPattern) || entityId.match(packPattern);
       return packNumber
         ? Boolean(packMatch && Number(packMatch[2]) === packNumber)
         : !packMatch;
