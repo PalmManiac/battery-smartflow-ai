@@ -648,7 +648,17 @@ class NativeZendureRuntime:
         for system_id, item in zip(sorted(self._inventory.devices), overview):
             state = self._states.get(system_id)
             device = self._inventory.devices.get(system_id)
-            last_data = item.last_message_at
+            telemetry_timestamps = [
+                timestamp
+                for timestamp in (
+                    item.last_message_at,
+                    *(pack.last_message_at for pack in item.packs),
+                )
+                if timestamp is not None
+            ]
+            # The portal health card reports the oldest telemetry age. Include
+            # pack-only reports when the main-system timestamp is unavailable.
+            last_data = min(telemetry_timestamps) if telemetry_timestamps else None
             configured_transport = self._device_configured_transport(system_id)
             selected_control_transport = (
                 self._selected_control_transport(device).transport

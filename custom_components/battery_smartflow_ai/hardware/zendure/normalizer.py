@@ -297,6 +297,7 @@ class _PackAccumulator:
     values: dict[str, _Observed]
     serial_number: str | None = None
     last_message_at: datetime | None = None
+    position: int | None = None
 
 
 class ZendureCloudNormalizer:
@@ -558,7 +559,11 @@ class ZendureCloudNormalizer:
         packs = tuple(
             self._pack_snapshot(system_id, pack_id, accumulator, current, online)
             for pack_id, accumulator in sorted(
-                self._pack_values[system_id].items()
+                self._pack_values[system_id].items(),
+                key=lambda item: (
+                    item[1].position is None,
+                    item[1].position if item[1].position is not None else 0,
+                ),
             )
             if visible_pack_ids is None or pack_id in visible_pack_ids
         )
@@ -710,6 +715,18 @@ class ZendureCloudNormalizer:
             for pack_id in tuple(self._pack_values[system_id]):
                 if pack_id not in membership:
                     del self._pack_values[system_id][pack_id]
+            # The array order is the device's pack numbering. Only apply it
+            # when the complete membership snapshot has been accepted; sparse
+            # or still-unconfirmed reports must not renumber the visible packs.
+            if (
+                len(set(pack_ids)) == len(pack_ids)
+                and (expected_count is None or len(pack_ids) == expected_count)
+                and frozenset(pack_ids) == membership
+            ):
+                for position, pack_id in enumerate(pack_ids, start=1):
+                    self._pack_values[system_id].setdefault(
+                        pack_id, _PackAccumulator({})
+                    ).position = position
         for raw_pack in raw_packs:
             if not isinstance(raw_pack, Mapping):
                 continue
