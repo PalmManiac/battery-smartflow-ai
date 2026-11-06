@@ -234,12 +234,13 @@ def build_native_device_overview(
             sparse_legacy=sparse_legacy,
         )
         packs = []
-        state_packs = {item.pack_id: item for item in state.packs} if state else {}
-        for pack_id, pack_identity in sorted(inventory.packs.items()):
-            if pack_identity.parent_system_id != system_id:
-                continue
-            observed = state_packs.get(pack_id)
-            if observed is None:
+        for observed in state.packs if state else ():
+            pack_id = observed.pack_id
+            pack_identity = inventory.packs.get(pack_id)
+            if (
+                pack_identity is None
+                or pack_identity.parent_system_id != system_id
+            ):
                 continue
             observed_pack_type = (
                 observed.pack_type.value

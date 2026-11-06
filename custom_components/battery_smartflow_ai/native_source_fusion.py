@@ -395,9 +395,29 @@ class NativeSourceFusion:
             source: {pack.pack_id: pack for pack in state.packs}
             for source, state in states.items()
         }
-        pack_ids = sorted(
-            {pack_id for packs in by_source.values() for pack_id in packs}
+        # Preserve the device's packData order from the freshest available
+        # source. Pack IDs are opaque identities and sorting them does not
+        # preserve Zendure's Battery Pack N numbering.
+        source_rank = {source: index for index, source in enumerate(_TRANSPORTS)}
+        ordered_sources = sorted(
+            states,
+            key=lambda source: (
+                -max(
+                    (
+                        pack.last_message_at.timestamp()
+                        for pack in states[source].packs
+                        if pack.last_message_at is not None
+                    ),
+                    default=float("-inf"),
+                ),
+                source_rank.get(source, len(source_rank)),
+            ),
         )
+        pack_ids = list(dict.fromkeys(
+            pack.pack_id
+            for source in ordered_sources
+            for pack in states[source].packs
+        ))
         if membership is not None:
             pack_ids = [pack_id for pack_id in pack_ids if pack_id in membership]
         result = []
