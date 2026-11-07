@@ -2276,6 +2276,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     name=user_input["name"],
                     members=user_input.get("members", []),
                     control_enabled=user_input.get("control_enabled", False),
+                    balancing_policy=user_input.get("balancing_policy"),
+                    soc_delta_pct=user_input.get("soc_delta_pct"),
                     move_members=True,
                 )
             except (KeyError, TypeError, ValueError):
@@ -2298,6 +2300,22 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     ),
                     vol.Optional("control_enabled", default=False): (
                         selector.BooleanSelector()
+                    ),
+                    vol.Optional("balancing_policy", default="energy_weighted"):
+                        selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=[
+                                    "energy_weighted",
+                                    "soc_delta",
+                                ],
+                                translation_key="balancing_policy",
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
+                    vol.Optional("soc_delta_pct", default=10): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=1, max=50, step=1, mode=selector.NumberSelectorMode.BOX
+                        )
                     ),
                 }
             ),
@@ -2337,6 +2355,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     name=user_input["name"],
                     members=user_input.get("members", []),
                     control_enabled=user_input.get("control_enabled", False),
+                    balancing_policy=user_input.get("balancing_policy"),
+                    soc_delta_pct=user_input.get("soc_delta_pct"),
                     move_members=True,
                 )
             except (KeyError, TypeError, ValueError):
@@ -2359,6 +2379,26 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     "control_enabled", default=current.get("control_enabled", False)
                 ): selector.BooleanSelector(),
+                vol.Optional(
+                    "balancing_policy",
+                    default=current.get("balancing_policy", "energy_weighted"),
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=[
+                            "energy_weighted",
+                            "soc_delta",
+                        ],
+                        translation_key="balancing_policy",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    "soc_delta_pct", default=current.get("soc_delta_pct", 10)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=50, step=1, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
             }
         )
         return self.async_show_form(
@@ -2369,6 +2409,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     "name": current["name"],
                     "members": current["members"],
                     "control_enabled": current.get("control_enabled", False),
+                    "balancing_policy": current.get("balancing_policy", "energy_weighted"),
+                    "soc_delta_pct": current.get("soc_delta_pct", 10),
                 },
             ),
         )

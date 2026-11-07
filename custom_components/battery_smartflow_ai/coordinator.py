@@ -628,6 +628,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             devices,
             topology,
             preferred_lead_device_id=preferred_lead,
+            balancing_policy=selected_group.get("balancing_policy", "energy_weighted"),
         )
         result_data = result.as_dict()
         public_ids = {
@@ -640,6 +641,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         result_data["group_name"] = str(selected_group.get("name") or "")
         result_data["group_size"] = len(members)
         result_data["control_enabled"] = selected_group.get("control_enabled") is True
+        result_data["balancing_policy"] = selected_group.get(
+            "balancing_policy", "energy_weighted"
+        )
+        result_data["soc_delta_pct"] = selected_group.get("soc_delta_pct", 10)
         result_data["lead_device_id"] = public_ids.get(result.lead_device_id)
         for item in result_data["devices"]:
             item["device_id"] = public_ids.get(item["device_id"])
@@ -670,6 +675,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         target_w: float,
         natural_allocation: Any,
         snapshots_by_id: Mapping[str, Mapping[str, Any]],
+        soc_delta_pct: float = GROUP_LEAD_SOC_HYSTERESIS_PCT,
     ) -> str | None:
         """Keep the current lead until a meaningful, sustained advantage appears."""
 
@@ -730,7 +736,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
             if (
                 advantage is None
-                or advantage < GROUP_LEAD_SOC_HYSTERESIS_PCT
+                or advantage < soc_delta_pct
                 or held_seconds < GROUP_LEAD_MINIMUM_RUNTIME_SECONDS
             ):
                 selected_lead = current_lead
@@ -896,18 +902,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and requested_power_value is not None
         ):
             target_w = -abs(requested_power_value)
-        natural_allocation = allocate_staged_efficiency(target_w, devices, topology)
+        balancing_policy = selected_group.get("balancing_policy", "energy_weighted")
+        soc_delta_pct = float(selected_group.get("soc_delta_pct", 10))
+        natural_allocation = allocate_staged_efficiency(
+            target_w,
+            devices,
+            topology,
+            balancing_policy=balancing_policy,
+        )
         preferred_lead = self._stable_group_lead_device_id(
             group_id=selected_group_id,
             target_w=target_w,
             natural_allocation=natural_allocation,
             snapshots_by_id=snapshot_by_id,
+            soc_delta_pct=soc_delta_pct,
         )
         allocation = allocate_staged_efficiency(
             target_w,
             devices,
             topology,
             preferred_lead_device_id=preferred_lead,
+            balancing_policy=balancing_policy,
         )
         if allocation.status not in {"complete", "partial", "idle"}:
             return (f"group_allocation_{allocation.status}", None)

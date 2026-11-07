@@ -9,6 +9,8 @@ from typing import Any
 
 NOMINAL_PHASE_VOLTAGE = 230.0
 PREFERRED_LIMIT_FRACTION = 0.75
+BALANCING_POLICY_ENERGY_WEIGHTED = "energy_weighted"
+BALANCING_POLICY_SOC_DELTA = "soc_delta"
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +65,7 @@ def allocate_staged_efficiency(
     topology: Mapping[str, Any] | None = None,
     *,
     preferred_lead_device_id: str | None = None,
+    balancing_policy: str = BALANCING_POLICY_ENERGY_WEIGHTED,
 ) -> ShadowAllocation:
     """Allocate one signed group target in stages without issuing commands.
 
@@ -139,18 +142,35 @@ def allocate_staged_efficiency(
             (device, maximum, maximum * PREFERRED_LIMIT_FRACTION, reasons)
         )
 
+    policy = (
+        balancing_policy
+        if isinstance(balancing_policy, str)
+        and balancing_policy
+        in {BALANCING_POLICY_ENERGY_WEIGHTED, BALANCING_POLICY_SOC_DELTA}
+        else BALANCING_POLICY_ENERGY_WEIGHTED
+    )
     if direction == "discharge":
+        priority = (
+            _soc_delta_discharge_priority
+            if policy == BALANCING_POLICY_SOC_DELTA
+            else _discharge_priority
+        )
         candidates.sort(
             key=lambda item: (
                 item[0].device_id != preferred_lead_device_id,
-                _discharge_priority(item[0]),
+                priority(item[0]),
             )
         )
     elif direction == "charge":
+        priority = (
+            _soc_delta_charge_priority
+            if policy == BALANCING_POLICY_SOC_DELTA
+            else _charge_priority
+        )
         candidates.sort(
             key=lambda item: (
                 item[0].device_id != preferred_lead_device_id,
-                _charge_priority(item[0]),
+                priority(item[0]),
             )
         )
     else:
@@ -240,6 +260,16 @@ def _discharge_priority(device: ShadowDevice) -> tuple[float, float, str]:
     soc = _optional_finite(device.soc_pct) or 0.0
     capacity = _optional_finite(device.capacity_kwh) or 0.0
     return (-(capacity * soc), -soc, device.device_id)
+
+
+def _soc_delta_discharge_priority(device: ShadowDevice) -> tuple[float, str]:
+    soc = _optional_finite(device.soc_pct) or 0.0
+    return (-soc, device.device_id)
+
+
+def _soc_delta_charge_priority(device: ShadowDevice) -> tuple[float, str]:
+    soc = _optional_finite(device.soc_pct)
+    return (soc if soc is not None else 101.0, device.device_id)
 
 
 def _charge_priority(device: ShadowDevice) -> tuple[float, float, str]:

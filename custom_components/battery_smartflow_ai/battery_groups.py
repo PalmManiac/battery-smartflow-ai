@@ -10,12 +10,41 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 GROUPS_SCHEMA_VERSION = 1
+BALANCING_POLICY_ENERGY_WEIGHTED = "energy_weighted"
+BALANCING_POLICY_SOC_DELTA = "soc_delta"
+BALANCING_POLICIES = frozenset(
+    {BALANCING_POLICY_ENERGY_WEIGHTED, BALANCING_POLICY_SOC_DELTA}
+)
+DEFAULT_BALANCING_POLICY = BALANCING_POLICY_ENERGY_WEIGHTED
+DEFAULT_SOC_DELTA_PCT = 10
+MIN_SOC_DELTA_PCT = 1
+MAX_SOC_DELTA_PCT = 50
 
 
 def empty_group_config() -> dict[str, Any]:
     """Return an empty, versioned group configuration."""
 
     return {"version": GROUPS_SCHEMA_VERSION, "groups": {}}
+
+
+def _normalize_balancing_policy(value: Any) -> str:
+    return (
+        value
+        if isinstance(value, str) and value in BALANCING_POLICIES
+        else DEFAULT_BALANCING_POLICY
+    )
+
+
+def _normalize_soc_delta_pct(value: Any) -> int:
+    if isinstance(value, bool):
+        return DEFAULT_SOC_DELTA_PCT
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_SOC_DELTA_PCT
+    if not numeric == numeric or numeric in (float("inf"), float("-inf")):
+        return DEFAULT_SOC_DELTA_PCT
+    return max(MIN_SOC_DELTA_PCT, min(MAX_SOC_DELTA_PCT, round(numeric)))
 
 
 def migrate_single_device_group(
@@ -93,6 +122,12 @@ def reconcile_group_config(value: Any = None) -> dict[str, Any]:
             "name": name,
             "members": members,
             "control_enabled": raw_group.get("control_enabled") is True,
+            "balancing_policy": _normalize_balancing_policy(
+                raw_group.get("balancing_policy")
+            ),
+            "soc_delta_pct": _normalize_soc_delta_pct(
+                raw_group.get("soc_delta_pct")
+            ),
         }
 
     return {"version": GROUPS_SCHEMA_VERSION, "groups": groups}
@@ -105,6 +140,8 @@ def save_group(
     name: str,
     members: Sequence[str],
     control_enabled: bool | None = None,
+    balancing_policy: str | None = None,
+    soc_delta_pct: int | float | None = None,
     move_members: bool = False,
 ) -> dict[str, Any]:
     """Add or update one group without changing any other membership."""
@@ -138,10 +175,22 @@ def save_group(
         if control_enabled is not None
         else existing.get("control_enabled") is True
     )
+    policy = _normalize_balancing_policy(
+        balancing_policy
+        if balancing_policy is not None
+        else existing.get("balancing_policy")
+    )
+    delta_pct = _normalize_soc_delta_pct(
+        soc_delta_pct
+        if soc_delta_pct is not None
+        else existing.get("soc_delta_pct")
+    )
     groups[normalized_id] = {
         "name": normalized_name,
         "members": normalized_members,
         "control_enabled": enabled is True,
+        "balancing_policy": policy,
+        "soc_delta_pct": delta_pct,
     }
     return result
 
