@@ -431,7 +431,7 @@
       "group_create": {
         "title": "Create battery group",
         "description": "Choose a name and optionally add configured systems. Group regulation stays off unless you explicitly enable it. Selecting a system already in another group moves it when you save.",
-        "data": {"name": "Group name", "members": "Systems in group", "control_enabled": "Enable staged group regulation"},
+        "data": {"name": "Group name", "members": "Systems in group", "control_enabled": "Enable staged group regulation", "balancing_policy": "Balancing strategy", "soc_delta_pct": "SoC difference before switching (%)"},
         "data_description": {"control_enabled": "Enables productive regulation for this group only when the integration control switch is on and its energy scope, electrical topology, devices and safety checks are valid."}
       },
       "group_edit_select": {
@@ -441,7 +441,7 @@
       "group_edit": {
         "title": "Edit battery group",
         "description": "Selecting a system already in another group moves it when you save. Systems removed from this group remain configured and ungrouped.",
-        "data": {"name": "Group name", "members": "Systems in group", "control_enabled": "Enable staged group regulation"},
+        "data": {"name": "Group name", "members": "Systems in group", "control_enabled": "Enable staged group regulation", "balancing_policy": "Balancing strategy", "soc_delta_pct": "SoC difference before switching (%)"},
         "data_description": {"control_enabled": "Enables productive regulation for this group only when the integration control switch is on and its energy scope, electrical topology, devices and safety checks are valid."}
       },
       "group_remove": {
@@ -625,7 +625,8 @@
         "aggregate": "One aggregate sensor",
         "components": "Separate component sensors"
       }
-    }
+    },
+    "balancing_policy": {"options": {"energy_weighted": "Energy weighted", "soc_delta": "By SoC difference"}}
   },
   "entity": {
     "select": {
