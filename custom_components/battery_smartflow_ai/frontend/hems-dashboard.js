@@ -1236,10 +1236,18 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _detailRows(entities, limit = 5, systemName = "", packNumber = null) {
     const preferred = /(soc|ladezustand|power|leistung|temperatur|temperature|status|transport|firmware|kapazität|capacity)/i;
-    const ordered = [...entities].sort((a, b) => {
+    const heater = entities.find((entity) =>
+      /(?:battery[ -]?heating|batterieheizung)/i.test(
+        `${entity.entity_id} ${this._label(entity)}`,
+      ),
+    );
+    const ordered = [...entities].filter((entity) => entity !== heater).sort((a, b) => {
       return Number(preferred.test(this._label(b))) - Number(preferred.test(this._label(a)));
     });
-    return ordered.slice(0, limit).map((entity) =>
+    const visible = heater
+      ? [heater, ...ordered.slice(0, Math.max(0, limit - 1))]
+      : ordered.slice(0, limit);
+    return visible.map((entity) =>
       `<div class="detail-row"><span>${this._escape(this._detailLabel(entity, systemName, packNumber))}</span><strong>${this._escape(this._value(entity))}</strong></div>`
     ).join("");
   }
