@@ -196,6 +196,10 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                         "members": [device_label(member) for member in members if isinstance(member, str)],
                         "balancing_policy": group.get("balancing_policy", "energy_weighted"),
                         "soc_delta_pct": group.get("soc_delta_pct", 10),
+                        "objective": group.get("objective", "near_zero"),
+                        "peak_import_limit_w": group.get("peak_import_limit_w", 3000),
+                        "ups_charge_target_soc_pct": group.get("ups_charge_target_soc_pct", 80),
+                        "ups_reserve_soc_pct": group.get("ups_reserve_soc_pct", 20),
                     }
                 )
         ungrouped = []

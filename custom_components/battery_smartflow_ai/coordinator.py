@@ -514,7 +514,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         import hashlib
         from collections.abc import Sequence
 
-        from .const import CONF_ELECTRICAL_TOPOLOGY
+        from .battery_groups import (
+            GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE,
+            resolve_group_objective_target,
+            resolve_ups_price_target,
+        )
+        from .const import (
+            CONF_ELECTRICAL_TOPOLOGY,
+            SETTING_VERY_CHEAP_PRICE,
+        )
         from .electrical_topology import normalize_electrical_topology
         from .shadow_allocator import ShadowDevice, allocate_staged_efficiency
 
@@ -541,13 +549,43 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if selected_group_id is None or not isinstance(selected_group, Mapping):
             return {"status": "selected_system_not_grouped", "writes_enabled": False}
 
+        objective = selected_group.get("objective", "near_zero")
+        scope = self._selected_energy_scope(self.entry)
+        active_scope_groups = [
+            group_id
+            for group_id, group in groups.items()
+            if group.get("control_enabled") is True
+            and group_id in scope.get("group_ids", ())
+        ]
+        if len(active_scope_groups) > 1:
+            return {
+                "status": "group_energy_scope_conflict",
+                "writes_enabled": False,
+                "objective": objective,
+            }
+        effective_reserve_soc = soc_min
+        effective_maximum_soc = soc_max
+        if objective == GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE:
+            effective_reserve_soc = max(
+                soc_min, float(selected_group.get("ups_reserve_soc_pct", 20))
+            )
+            effective_maximum_soc = min(
+                soc_max,
+                float(selected_group.get("ups_charge_target_soc_pct", 80)),
+            )
+            if effective_reserve_soc >= effective_maximum_soc:
+                return {
+                    "status": "ups_soc_bounds_invalid",
+                    "writes_enabled": False,
+                    "objective": objective,
+                }
         members = selected_group.get("members", ())
         if not isinstance(members, Sequence) or isinstance(members, (str, bytes)):
             members = ()
         members = tuple(member for member in members if isinstance(member, str))
         snapshots = runtime.shadow_allocation_snapshots(
-            reserve_soc_pct=soc_min,
-            maximum_soc_pct=soc_max,
+            reserve_soc_pct=effective_reserve_soc,
+            maximum_soc_pct=effective_maximum_soc,
         )
         snapshot_by_id = {item["device_id"]: item for item in snapshots}
         raw_topology = self.entry.options.get(CONF_ELECTRICAL_TOPOLOGY)
@@ -558,6 +596,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             topology = normalize_electrical_topology()
             topology_invalid = True
         circuit_by_device: dict[str, list[str]] = {}
+        offgrid_circuit_by_device: dict[str, list[str]] = {}
+        offgrid_domains_by_device: dict[str, set[str]] = {}
         has_topology_output: set[str] = set()
         has_grid_output: set[str] = set()
         for connection in topology["connections"]:
@@ -567,6 +607,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 has_grid_output.add(device_id)
                 circuit_by_device.setdefault(device_id, []).append(
                     connection["circuit_id"]
+                )
+            elif connection["kind"] == "off_grid":
+                offgrid_circuit_by_device.setdefault(device_id, []).append(
+                    connection["circuit_id"]
+                )
+                offgrid_domains_by_device.setdefault(device_id, set()).add(
+                    connection["load_domain_id"]
                 )
         devices = tuple(
             ShadowDevice(
@@ -615,6 +662,115 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         else:
             target = 0.0
+        if objective == GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE:
+            if any(device_id not in has_grid_output for device_id in members):
+                return {
+                    "status": "electrical_topology_incomplete",
+                    "writes_enabled": False,
+                    "objective": objective,
+                }
+            if any(not offgrid_circuit_by_device.get(device_id) for device_id in members):
+                return {
+                    "status": "ups_offgrid_topology_incomplete",
+                    "writes_enabled": False,
+                    "objective": objective,
+                }
+            group_domains = set().union(
+                *(offgrid_domains_by_device.get(device_id, set()) for device_id in members)
+            )
+            for other_id, other_group in groups.items():
+                if other_id == selected_group_id or other_group.get("control_enabled") is not True:
+                    continue
+                other_domains = set().union(
+                    *(
+                        offgrid_domains_by_device.get(device_id, set())
+                        for device_id in other_group.get("members", ())
+                    )
+                )
+                if group_domains.intersection(other_domains):
+                    return {
+                        "status": "group_ups_load_domain_conflict",
+                        "writes_enabled": False,
+                        "objective": objective,
+                    }
+            market_price = self._get_import_market_price(self._clock.utc_now())
+            cheap_price = _to_float(
+                self.runtime_settings.get(SETTING_VERY_CHEAP_PRICE), None
+            )
+            expensive_price = _to_float(
+                self._get_setting(SETTING_VERY_EXPENSIVE_THRESHOLD, 0.3), None
+            )
+            if (
+                selected_group_id not in scope.get("group_ids", ())
+                or not scope.get("price_entity")
+                or not market_price.valid
+                or market_price.current_price is None
+                or cheap_price is None
+                or expensive_price is None
+            ):
+                return {
+                    "status": "ups_price_unavailable",
+                    "writes_enabled": False,
+                    "objective": objective,
+                }
+            offgrid_loads = None
+            if float(market_price.current_price) >= expensive_price:
+                native_states = runtime.fresh_device_state_map()
+                offgrid_loads = []
+                for device_id in members:
+                    state = native_states.get(device_id)
+                    measured = getattr(state, "offgrid_power_w", None) if state else None
+                    value = _to_float(
+                        measured.value if measured is not None and measured.valid else None,
+                        None,
+                    )
+                    if value is None:
+                        return {
+                            "status": "ups_offgrid_load_unavailable",
+                            "writes_enabled": False,
+                            "objective": objective,
+                        }
+                    offgrid_loads.append(value)
+            target = resolve_ups_price_target(
+                float(market_price.current_price),
+                cheap_price,
+                expensive_price,
+                max_charge_w=sum(
+                    float(snapshot_by_id[device_id]["max_charge_w"])
+                    for device_id in members
+                    if device_id in snapshot_by_id
+                ),
+                offgrid_loads_w=offgrid_loads,
+            )
+            if target is None:
+                return {
+                    "status": "ups_target_unavailable",
+                    "writes_enabled": False,
+                    "objective": objective,
+                }
+            if target < 0:
+                devices = tuple(
+                    replace(
+                        device,
+                        circuit_ids=tuple(offgrid_circuit_by_device.get(device.device_id, ())),
+                    )
+                    for device in devices
+                )
+        else:
+            grid_import_w, grid_export_w = self._get_grid()
+            target = resolve_group_objective_target(
+                objective,
+                target,
+                grid_import_w=grid_import_w,
+                grid_export_w=grid_export_w,
+                peak_import_limit_w=selected_group.get("peak_import_limit_w", 3000),
+            )
+            if target is None:
+                return {
+                    "status": "objective_measurement_unavailable",
+                    "writes_enabled": False,
+                    "objective": objective,
+                }
         lead_state = self._persist.get("group_control_lead_state")
         preferred_lead = (
             lead_state.get("device_id")
@@ -645,6 +801,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "balancing_policy", "energy_weighted"
         )
         result_data["soc_delta_pct"] = selected_group.get("soc_delta_pct", 10)
+        result_data["ups_charge_target_soc_pct"] = selected_group.get(
+            "ups_charge_target_soc_pct", 80
+        )
+        result_data["ups_reserve_soc_pct"] = selected_group.get(
+            "ups_reserve_soc_pct", 20
+        )
+        result_data["objective"] = objective
+        result_data["peak_import_limit_w"] = selected_group.get(
+            "peak_import_limit_w", 3000
+        )
         result_data["lead_device_id"] = public_ids.get(result.lead_device_id)
         for item in result_data["devices"]:
             item["device_id"] = public_ids.get(item["device_id"])
@@ -771,8 +937,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         from collections.abc import Sequence
 
-        from .battery_groups import reconcile_group_config
-        from .const import CONF_ELECTRICAL_TOPOLOGY
+        from .battery_groups import (
+            GROUP_OBJECTIVE_NEAR_ZERO,
+            GROUP_OBJECTIVE_PEAK_SHAVING,
+            GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE,
+            reconcile_group_config,
+            resolve_group_objective_target,
+            resolve_ups_price_target,
+        )
+        from .const import CONF_ELECTRICAL_TOPOLOGY, SETTING_VERY_CHEAP_PRICE
         from .electrical_topology import normalize_electrical_topology
         from .shadow_allocator import ShadowDevice, allocate_staged_efficiency
 
@@ -810,7 +983,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if not isinstance(members, Sequence) or isinstance(members, (str, bytes)):
             return ("group_members_invalid", None)
         members = tuple(member for member in members if isinstance(member, str))
-        if len(members) < 2:
+        objective = selected_group.get("objective", GROUP_OBJECTIVE_NEAR_ZERO)
+        if len(members) < 2 and objective == GROUP_OBJECTIVE_NEAR_ZERO:
             return None
         self._persist["group_control_members"] = list(members)
 
@@ -821,6 +995,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             or scope.get("grid_mode") not in {ENERGY_GRID_MODE_SIGNED, ENERGY_GRID_MODE_SPLIT}
         ):
             return ("group_energy_scope_invalid", None)
+        active_scope_groups = [
+            group_id
+            for group_id, group in group_config["groups"].items()
+            if group.get("control_enabled") is True
+            and group_id in scope.get("group_ids", ())
+        ]
+        if len(active_scope_groups) > 1:
+            return ("group_energy_scope_conflict", None)
         try:
             topology = normalize_electrical_topology(
                 self.entry.options.get(CONF_ELECTRICAL_TOPOLOGY)
@@ -828,18 +1010,63 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except (TypeError, ValueError):
             return ("group_electrical_topology_invalid", None)
 
-        circuits_by_device: dict[str, list[str]] = {}
+        grid_circuits_by_device: dict[str, list[str]] = {}
+        offgrid_circuits_by_device: dict[str, list[str]] = {}
+        offgrid_domains_by_device: dict[str, set[str]] = {}
         for connection in topology["connections"]:
             if connection["kind"] == "grid":
-                circuits_by_device.setdefault(connection["device_id"], []).append(
+                grid_circuits_by_device.setdefault(connection["device_id"], []).append(
                     connection["circuit_id"]
                 )
-        if any(not circuits_by_device.get(device_id) for device_id in members):
+            elif connection["kind"] == "off_grid":
+                offgrid_circuits_by_device.setdefault(connection["device_id"], []).append(
+                    connection["circuit_id"]
+                )
+                offgrid_domains_by_device.setdefault(connection["device_id"], set()).add(
+                    connection["load_domain_id"]
+                )
+        if any(not grid_circuits_by_device.get(device_id) for device_id in members):
             return ("group_electrical_topology_incomplete", None)
 
+        if objective == GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE:
+            if any(not offgrid_circuits_by_device.get(device_id) for device_id in members):
+                return ("group_ups_offgrid_topology_incomplete", None)
+            group_domains = set().union(
+                *(offgrid_domains_by_device.get(device_id, set()) for device_id in members)
+            )
+            for other_id, other_group in group_config["groups"].items():
+                if other_id == selected_group_id or not other_group.get("control_enabled"):
+                    continue
+                other_members = set(other_group.get("members", ()))
+                other_domains = set().union(
+                    *(
+                        offgrid_domains_by_device.get(device_id, set())
+                        for device_id in other_members
+                    )
+                ) if other_members else set()
+                if group_domains.intersection(other_domains):
+                    return ("group_ups_load_domain_conflict", None)
+
+        base_reserve_soc = float(
+            self._get_setting(SETTING_SOC_MIN, DEFAULT_SOC_MIN)
+        )
+        base_maximum_soc = float(
+            self._get_setting(SETTING_SOC_MAX, DEFAULT_SOC_MAX)
+        )
+        if objective == GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE:
+            base_reserve_soc = max(
+                base_reserve_soc,
+                float(selected_group.get("ups_reserve_soc_pct", 20)),
+            )
+            base_maximum_soc = min(
+                base_maximum_soc,
+                float(selected_group.get("ups_charge_target_soc_pct", 80)),
+            )
+            if base_reserve_soc >= base_maximum_soc:
+                return ("group_ups_soc_bounds_invalid", None)
         snapshots = runtime.shadow_allocation_snapshots(
-            reserve_soc_pct=self._get_setting(SETTING_SOC_MIN, DEFAULT_SOC_MIN),
-            maximum_soc_pct=self._get_setting(SETTING_SOC_MAX, DEFAULT_SOC_MAX),
+            reserve_soc_pct=base_reserve_soc,
+            maximum_soc_pct=base_maximum_soc,
         )
         snapshot_by_id = {item["device_id"]: item for item in snapshots}
         if any(device_id not in snapshot_by_id for device_id in members):
@@ -861,25 +1088,6 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if snapshot["protected"]:
                 return ("group_member_protected", None)
 
-        devices = tuple(
-            ShadowDevice(
-                device_id=device_id,
-                name=str(snapshot_by_id[device_id]["name"]),
-                available=True,
-                configured=True,
-                supported=True,
-                hems_blocked=False,
-                protected=False,
-                soc_pct=snapshot_by_id[device_id]["soc_pct"],
-                reserve_soc_pct=float(snapshot_by_id[device_id]["reserve_soc_pct"]),
-                maximum_soc_pct=float(snapshot_by_id[device_id]["maximum_soc_pct"]),
-                capacity_kwh=snapshot_by_id[device_id]["capacity_kwh"],
-                max_charge_w=float(snapshot_by_id[device_id]["max_charge_w"]),
-                max_discharge_w=float(snapshot_by_id[device_id]["max_discharge_w"]),
-                circuit_ids=tuple(circuits_by_device[device_id]),
-            )
-            for device_id in members
-        )
         charge_w = max(0.0, float(command.input_limit_w or 0.0))
         discharge_w = max(0.0, float(command.output_limit_w or 0.0))
         if charge_w and discharge_w:
@@ -902,6 +1110,96 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             and requested_power_value is not None
         ):
             target_w = -abs(requested_power_value)
+        if objective == GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE:
+            if not scope.get("price_entity"):
+                return ("group_ups_price_unavailable", None)
+            market_price = self._get_import_market_price(self._clock.utc_now())
+            if not market_price.valid or market_price.current_price is None:
+                return ("group_ups_price_unavailable", None)
+            cheap_price = _to_float(
+                self.runtime_settings.get(SETTING_VERY_CHEAP_PRICE), None
+            )
+            expensive_price = _to_float(
+                self._get_setting(SETTING_VERY_EXPENSIVE_THRESHOLD, 0.3), None
+            )
+            if (
+                cheap_price is None
+                or expensive_price is None
+                or not math.isfinite(cheap_price)
+                or not math.isfinite(expensive_price)
+                or cheap_price >= expensive_price
+            ):
+                return ("group_ups_price_thresholds_invalid", None)
+            current_price = float(market_price.current_price)
+            offgrid_loads = None
+            if current_price >= expensive_price:
+                native_states = runtime.fresh_device_state_map()
+                offgrid_loads = []
+                for device_id in members:
+                    native_state = native_states.get(device_id)
+                    measured_load = (
+                        getattr(native_state, "offgrid_power_w", None)
+                        if native_state is not None
+                        else None
+                    )
+                    if measured_load is None or not measured_load.valid:
+                        return ("group_ups_offgrid_load_unavailable", None)
+                    load_w = _to_float(measured_load.value, None)
+                    if load_w is None or not math.isfinite(load_w):
+                        return ("group_ups_offgrid_load_unavailable", None)
+                    offgrid_loads.append(load_w)
+            target_w = resolve_ups_price_target(
+                current_price,
+                cheap_price,
+                expensive_price,
+                max_charge_w=sum(
+                    float(snapshot_by_id[device_id]["max_charge_w"])
+                    for device_id in members
+                ),
+                offgrid_loads_w=offgrid_loads,
+            )
+            if target_w is None:
+                return ("group_ups_target_unavailable", None)
+        else:
+            grid_import_w, grid_export_w = self._get_grid()
+            target_w = resolve_group_objective_target(
+                objective,
+                target_w,
+                grid_import_w=grid_import_w,
+                grid_export_w=grid_export_w,
+                peak_import_limit_w=selected_group.get("peak_import_limit_w", 3000),
+            )
+            if target_w is None:
+                reason = (
+                    "group_peak_shaving_grid_unavailable"
+                    if objective == GROUP_OBJECTIVE_PEAK_SHAVING
+                    else "group_pv_storage_grid_unavailable"
+                )
+                return (reason, None)
+        device_circuits = (
+            offgrid_circuits_by_device
+            if objective == GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE and target_w < 0
+            else grid_circuits_by_device
+        )
+        devices = tuple(
+            ShadowDevice(
+                device_id=device_id,
+                name=str(snapshot_by_id[device_id]["name"]),
+                available=True,
+                configured=True,
+                supported=True,
+                hems_blocked=False,
+                protected=False,
+                soc_pct=snapshot_by_id[device_id]["soc_pct"],
+                reserve_soc_pct=float(snapshot_by_id[device_id]["reserve_soc_pct"]),
+                maximum_soc_pct=float(snapshot_by_id[device_id]["maximum_soc_pct"]),
+                capacity_kwh=snapshot_by_id[device_id]["capacity_kwh"],
+                max_charge_w=float(snapshot_by_id[device_id]["max_charge_w"]),
+                max_discharge_w=float(snapshot_by_id[device_id]["max_discharge_w"]),
+                circuit_ids=tuple(device_circuits[device_id]),
+            )
+            for device_id in members
+        )
         balancing_policy = selected_group.get("balancing_policy", "energy_weighted")
         soc_delta_pct = float(selected_group.get("soc_delta_pct", 10))
         natural_allocation = allocate_staged_efficiency(
@@ -950,7 +1248,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 should_write_mode=True,
                 should_write_input=True,
                 should_write_output=True,
-                metadata={**command.metadata, "group_allocation": True},
+                metadata={
+                    **command.metadata,
+                    "group_allocation": True,
+                    "group_objective": objective,
+                    "group_target_w": target_w,
+                },
             )
         for device_id in members:
             targets.setdefault(
@@ -962,7 +1265,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     should_write_mode=True,
                     should_write_input=True,
                     should_write_output=True,
-                    metadata={**command.metadata, "group_allocation": True},
+                    metadata={
+                        **command.metadata,
+                        "group_allocation": True,
+                        "group_objective": objective,
+                        "group_target_w": target_w,
+                    },
                 ),
             )
         return ("group_control_active", targets)
