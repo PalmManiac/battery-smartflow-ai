@@ -11,6 +11,11 @@ from homeassistant import config_entries
 from homeassistant.helpers import selector
 
 from .battery_groups import (
+    DEFAULT_GROUP_OBJECTIVE,
+    DEFAULT_PEAK_IMPORT_LIMIT_W,
+    DEFAULT_UPS_CHARGE_TARGET_SOC_PCT,
+    DEFAULT_UPS_RESERVE_SOC_PCT,
+    GROUP_OBJECTIVES,
     migrate_single_device_group,
     remove_group,
     save_group,
@@ -2275,6 +2280,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     control_enabled=user_input.get("control_enabled", False),
                     balancing_policy=user_input.get("balancing_policy"),
                     soc_delta_pct=user_input.get("soc_delta_pct"),
+                    objective=user_input.get("objective"),
+                    peak_import_limit_w=user_input.get("peak_import_limit_w"),
+                    ups_charge_target_soc_pct=user_input.get("ups_charge_target_soc_pct"),
+                    ups_reserve_soc_pct=user_input.get("ups_reserve_soc_pct"),
                     move_members=True,
                 )
             except (KeyError, TypeError, ValueError):
@@ -2312,6 +2321,42 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional("soc_delta_pct", default=10): selector.NumberSelector(
                         selector.NumberSelectorConfig(
                             min=1, max=50, step=1, mode=selector.NumberSelectorMode.BOX
+                        )
+                    ),
+                    vol.Optional("objective", default=DEFAULT_GROUP_OBJECTIVE):
+                        selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=sorted(GROUP_OBJECTIVES),
+                                translation_key="group_objective",
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
+                        ),
+                    vol.Optional(
+                        "peak_import_limit_w", default=DEFAULT_PEAK_IMPORT_LIMIT_W
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0, max=100000, step=100,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="W",
+                        )
+                    ),
+                    vol.Optional(
+                        "ups_charge_target_soc_pct",
+                        default=DEFAULT_UPS_CHARGE_TARGET_SOC_PCT,
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=5, max=100, step=1,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="%",
+                        )
+                    ),
+                    vol.Optional(
+                        "ups_reserve_soc_pct", default=DEFAULT_UPS_RESERVE_SOC_PCT
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=0, max=95, step=1,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="%",
                         )
                     ),
                 }
@@ -2354,6 +2399,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     control_enabled=user_input.get("control_enabled", False),
                     balancing_policy=user_input.get("balancing_policy"),
                     soc_delta_pct=user_input.get("soc_delta_pct"),
+                    objective=user_input.get("objective"),
+                    peak_import_limit_w=user_input.get("peak_import_limit_w"),
+                    ups_charge_target_soc_pct=user_input.get("ups_charge_target_soc_pct"),
+                    ups_reserve_soc_pct=user_input.get("ups_reserve_soc_pct"),
                     move_members=True,
                 )
             except (KeyError, TypeError, ValueError):
@@ -2394,6 +2443,47 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=1, max=50, step=1, mode=selector.NumberSelectorMode.BOX
+                    )
+                ),
+                vol.Optional(
+                    "objective", default=current.get("objective", DEFAULT_GROUP_OBJECTIVE)
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=sorted(GROUP_OBJECTIVES),
+                        translation_key="group_objective",
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    "peak_import_limit_w",
+                    default=current.get("peak_import_limit_w", DEFAULT_PEAK_IMPORT_LIMIT_W),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=100000, step=100,
+                        mode=selector.NumberSelectorMode.BOX,
+                        unit_of_measurement="W",
+                    )
+                ),
+                vol.Optional(
+                    "ups_charge_target_soc_pct",
+                    default=current.get(
+                        "ups_charge_target_soc_pct", DEFAULT_UPS_CHARGE_TARGET_SOC_PCT
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=100, step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                        unit_of_measurement="%",
+                    )
+                ),
+                vol.Optional(
+                    "ups_reserve_soc_pct",
+                    default=current.get("ups_reserve_soc_pct", DEFAULT_UPS_RESERVE_SOC_PCT),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=95, step=1,
+                        mode=selector.NumberSelectorMode.BOX,
+                        unit_of_measurement="%",
                     )
                 ),
             }
