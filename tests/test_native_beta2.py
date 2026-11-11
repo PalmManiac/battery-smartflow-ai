@@ -421,6 +421,8 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         entry = SimpleNamespace(data={const.CONF_SOC_ENTITY: "sensor.old"}, options={const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: True})
         keys = {key.schema for key in flow._base_schema(entry).schema}
         self.assertNotIn(const.CONF_SOC_ENTITY, keys)
+        self.assertIn(const.CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY, keys)
+        self.assertIn(const.CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY, keys)
         self.assertEqual(entry.data[const.CONF_SOC_ENTITY], "sensor.old")
 
     def test_new_setup_has_no_legacy_entity_selection_route(self):
@@ -447,6 +449,7 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
                 const.CONF_OUTPUT_LIMIT_ENTITY: "number.old_output",
                 const.CONF_NATIVE_PV_ENTITY: "sensor.old_native_pv",
                 const.CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY: "sensor.old_charge",
+                const.CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY: "sensor.old_discharge",
                 const.CONF_OFFGRID_MODE_ENTITY: "select.old_offgrid",
                 const.CONF_PV_ENTITY: "sensor.pv",
                 const.CONF_GRID_MODE: const.GRID_MODE_SINGLE,
@@ -481,7 +484,14 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(const.CONF_INPUT_LIMIT_ENTITY, result["data"])
         self.assertNotIn(const.CONF_OUTPUT_LIMIT_ENTITY, result["data"])
         self.assertNotIn(const.CONF_NATIVE_PV_ENTITY, result["data"])
-        self.assertNotIn(const.CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY, result["data"])
+        self.assertEqual(
+            result["data"][const.CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY],
+            "sensor.old_charge",
+        )
+        self.assertEqual(
+            result["data"][const.CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY],
+            "sensor.old_discharge",
+        )
         self.assertNotIn(const.CONF_OFFGRID_MODE_ENTITY, result["data"])
         self.assertNotIn(const.CONF_BATTERY_AC_POWER_ENTITY, result["options"])
         self.assertEqual(result["data"][const.CONF_PV_ENTITY], "sensor.pv")

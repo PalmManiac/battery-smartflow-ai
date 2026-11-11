@@ -207,13 +207,12 @@ OPTIONAL_ENTITY_KEYS = (
 
 # These belonged to the V5 single-device/Z-HA control model. Native V6 obtains
 # battery state and sends commands through its per-system device adapter.
+# Additional-battery signals remain external inputs shared across both paths.
 LEGACY_BATTERY_ENTITY_KEYS = (
     CONF_SOC_ENTITY,
     CONF_SOC_LIMIT_ENTITY,
     CONF_PACK_CAPACITY_KWH,
     CONF_BATTERY_AC_POWER_ENTITY,
-    CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
-    CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
     CONF_NATIVE_PV_ENTITY,
     CONF_AC_MODE_ENTITY,
     CONF_INPUT_LIMIT_ENTITY,
@@ -1295,8 +1294,6 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_DEVICE_PROFILE, CONF_SOC_ENTITY, CONF_SOC_LIMIT_ENTITY,
                 CONF_PACK_CAPACITY_KWH, CONF_NATIVE_PV_ENTITY,
                 CONF_BATTERY_AC_POWER_ENTITY,
-                CONF_ADDITIONAL_BATTERY_CHARGE_ENTITY,
-                CONF_ADDITIONAL_BATTERY_DISCHARGE_ENTITY,
                 CONF_AC_MODE_ENTITY,
                 CONF_INPUT_LIMIT_ENTITY, CONF_OUTPUT_LIMIT_ENTITY,
                 CONF_OFFGRID_POWER_ENTITY, CONF_OFFGRID_MODE_ENTITY,
