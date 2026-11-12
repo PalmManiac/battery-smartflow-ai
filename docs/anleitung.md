@@ -1193,64 +1193,40 @@ Typische Folgen vertauschter Sensoren:
 
 ---
 
-## 4.5 Zusatzakku-Erkennung
+## 4.5 Laden oder Entladen mit einem externen Leistungssensor sperren
 
-Battery SmartFlow AI kann optional ein weiteres Akkusystem beobachten.
+Zwei optionale Leistungssensoren können das Laden oder Entladen durch Battery
+SmartFlow AI sperren, solange ein anderes Gerät aktiv ist. Das funktioniert mit
+einer Zusatzbatterie, einer Wallbox oder einer anderen Last, deren Leistung bei
+der Batteriesteuerung berücksichtigt werden soll.
 
-Dafür gibt es zwei optionale Sensoren:
+### Entladen sperren, wenn aktiv
 
-* Zusatzakku Ladeleistung
-* Zusatzakku Entladeleistung
+Wähle einen Sensor, der eine positive Leistung meldet, während das externe
+Gerät Strom aufnimmt. Sobald der Wert positiv ist, sperrt Battery SmartFlow AI
+die Entladung.
 
-Diese Funktion ist wichtig, wenn mehrere Batteriesysteme im Haus vorhanden sind, die aber noch nicht koordiniert gemeinsam gesteuert werden.
-
----
-
-### Zusatzakku lädt
-
-Wenn ein anderer Akku gerade lädt, kann Battery SmartFlow AI die eigene Entladung blockieren.
-
-Grund:
-
-> Ein Akku soll nicht indirekt den anderen Akku laden.
-
-Beispiel:
+Beispiele sind eine ladende Zusatzbatterie oder eine Wallbox, die nicht aus dem
+Hausspeicher versorgt werden soll.
 
 ```text
-Zusatzakku lädt mit 500 W
-Battery SmartFlow AI würde eigentlich entladen
-→ Entladung wird blockiert
+Wallbox meldet 10.000 W Ladeleistung
+Battery SmartFlow AI würde sonst entladen
+→ Entladung wird gesperrt
 ```
 
----
+### Laden sperren, wenn aktiv
 
-### Zusatzakku entlädt
+Wähle einen Sensor, der die positive Entladeleistung des externen Geräts
+meldet. Meldet der Sensor mehr als 50 W, sperrt Battery SmartFlow AI das Laden.
 
-Wenn ein anderer Akku gerade entlädt, kann Battery SmartFlow AI das eigene Laden blockieren.
-
-Grund:
-
-> Die Entladung des anderen Akkus darf nicht fälschlich als PV-Überschuss interpretiert werden.
-
-Beispiel:
+So wird zum Beispiel verhindert, dass die Entladung einer Zusatzbatterie als
+PV-Überschuss erscheint und einen unerwünschten Ladezyklus auslöst.
 
 ```text
-Zusatzakku entlädt mit 400 W
-Netzsensor zeigt dadurch scheinbar weniger Bezug
-Battery SmartFlow AI könnte sonst PV-Laden starten
-→ Laden wird blockiert
+Zusatzbatterie meldet 400 W Entladeleistung
+→ Laden wird gesperrt
 ```
-
----
-
-### Ziel der Zusatzakku-Erkennung
-
-Die Funktion verhindert:
-
-* Akku-zu-Akku-Laden
-* falsche PV-Überschusserkennung
-* unnötige Lade-/Entladezyklen
-* Konflikte zwischen getrennten Batteriesystemen
 
 > [!NOTE]
 > Eine echte koordinierte Multi-Battery-Steuerung ist damit noch nicht gemeint.
@@ -2076,7 +2052,7 @@ Beispiele:
 * Hauslast decken
 * AC-Ladebindung aktiv
 * Preisbasierte Entladung
-* Zusatzakku lädt: Entladung blockiert
+* Externe Ladung erkannt: Entladung gesperrt
 * Inselsteckdose aktiv: Last beobachtet
 * Zellspannungs-Schutz aktiv
 
