@@ -1164,64 +1164,38 @@ Typical consequences of swapped sensors:
 
 ---
 
-## 4.5 Additional battery detection
+## 4.5 Blocking charge or discharge with an external power sensor
 
-Battery SmartFlow AI can optionally monitor another battery system.
+Two optional power sensors can prevent Battery SmartFlow AI from charging or
+discharging while another device is active. This works with a second battery,
+an EV charger, or another load whose power should affect battery control.
 
-There are two optional sensors for this:
+### Block discharge while active
 
-* Additional battery charging power
-* Additional battery discharging power
+Select a sensor that reports positive power while the external device is
+charging. When the value is positive, Battery SmartFlow AI blocks discharge.
 
-This function is important if there are several battery systems in the house, but they are not yet controlled in a coordinated manner.
-
----
-
-### Additional battery is charging
-
-If another battery is currently charging, Battery SmartFlow AI can block its own discharging.
-
-Reason:
-
-> One battery should not indirectly charge the other battery.
-
-Example:
+Examples include a second battery that is charging or an EV charger that should
+not draw energy from the home battery.
 
 ```text
-Additional battery is charging at 500 W
+EV charger reports 10,000 W
 Battery SmartFlow AI would otherwise discharge
 → Discharging is blocked
 ```
 
----
+### Block charging while active
 
-### Additional battery is discharging
+Select a sensor that reports the external device's positive discharge power.
+When the sensor reports more than 50 W, Battery SmartFlow AI blocks charging.
 
-If another battery is discharging, Battery SmartFlow AI can block its own charging.
-
-Reason:
-
-> The discharging of the other battery must not be incorrectly interpreted as a PV surplus.
-
-Example:
+For example, this prevents a discharging second battery from looking like PV
+surplus and starting an unwanted charge cycle.
 
 ```text
-Additional battery is discharging at 400 W
-Netzsensor zeigt dadurch scheinbar weniger Bezug
-Battery SmartFlow AI might otherwise start PV charging
-→ Laden wird blockiert
+Second battery reports 400 W discharge
+→ Charging is blocked
 ```
-
----
-
-### Aim of additional battery detection
-
-The function prevents:
-
-* battery-to-battery charging
-* incorrect PV excess detection
-* unnecessary charge/discharge cycles
-* Conflicts between separate battery systems
 
 > [!NOTE]
 > This does not mean real coordinated multi-battery control.
@@ -2043,7 +2017,7 @@ Examples:
 * household load coverage
 * AC charge commitment active
 * Price-based discharging
-* Additional battery charging: discharging blocked
+* External charging detected: discharge blocked
 * Island socket active: load observed
 * cell-voltage protection active
 

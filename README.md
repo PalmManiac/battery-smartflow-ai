@@ -480,21 +480,13 @@ Note: The exact behavior above device or national limits depends on Zendure firm
 
 ---
 
-# 🔋 Additional battery detection
+# 🔋 External power sensors for charge/discharge blocking
 
-Battery SmartFlow AI can optionally monitor another battery system.
-
-Supported optional sensors:
-
-* Additional battery charge power
-* Additional battery discharge power
-
-This helps avoid unwanted battery-to-battery behavior:
-
-* if another battery is charging, BSFAI can block discharge
-* if another battery is discharging, BSFAI can block charging
-
-This prevents false PV surplus detection and unwanted energy transfer between battery systems.
+Two optional power sensors can block discharge or charging while an external
+device is active. Use them for another battery, an EV charger, or another load.
+A positive charging-power reading blocks discharge; a discharging-power reading
+above 50 W blocks charging. For example, this can stop the home battery from
+supplying an EV charger. See the user guide for configuration details.
 
 ---
 
@@ -1092,21 +1084,14 @@ Hinweis: Das genaue Verhalten oberhalb geräte- oder länderspezifischer Grenzen
 
 ---
 
-# 🔋 Zusatzakku-Erkennung
+# 🔋 Externe Leistungssensoren zum Sperren von Laden und Entladen
 
-Battery SmartFlow AI kann optional ein weiteres Akkusystem beobachten.
-
-Optionale Sensoren:
-
-* Zusatzakku Ladeleistung
-* Zusatzakku Entladeleistung
-
-Damit wird unerwünschtes Akku-zu-Akku-Verhalten vermieden:
-
-* wenn ein anderer Akku lädt, kann BSFAI die Entladung blockieren
-* wenn ein anderer Akku entlädt, kann BSFAI das Laden blockieren
-
-Dadurch werden falsche PV-Überschusserkennung und ungewollte Energieverschiebung zwischen Akkusystemen vermieden.
+Zwei optionale Leistungssensoren können das Entladen oder Laden sperren,
+solange ein externes Gerät aktiv ist. Verwende sie für eine Zusatzbatterie,
+eine Wallbox oder eine andere Last. Positive Ladeleistung sperrt die Entladung;
+Entladeleistung über 50 W sperrt das Laden. So lässt sich zum Beispiel
+verhindern, dass der Hausspeicher eine Wallbox versorgt. Die Anleitung erklärt
+die Einrichtung im Detail.
 
 ---
 
