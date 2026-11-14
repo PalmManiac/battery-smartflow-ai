@@ -355,7 +355,7 @@ def _update_native_zensdk_ip(
 class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Config flow for Battery SmartFlow AI."""
 
-    VERSION = 6
+    VERSION = 7
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         return await self.async_step_native_login(user_input)

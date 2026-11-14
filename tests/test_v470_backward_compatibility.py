@@ -98,9 +98,16 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
                     (entry.entry_id, ("sensor", "number", "select"))
                 ]
 
+                # HA can retry overlapping setup during a multi-entry restart.
+                # A second call for the same entry must not forward platforms
+                # again or replace its coordinator.
+                assert await integration.async_setup_entry(hass, entry)
+                assert len(FakeCoordinator.instances) == 1
+                assert len(hass.config_entries.forwarded) == 1
+
                 assert await integration.async_migrate_entry(hass, entry)
                 update = hass.config_entries.updates[-1][1]
-                assert update["version"] == 6
+                assert update["version"] == 7
                 assert update["data"] == {
                     "soc_entity": "sensor.existing_soc",
                     "custom": "keep",
@@ -119,6 +126,7 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
                     "soc_min": 12.0,
                     "profile_overrides": {"TARGET_IMPORT_W": 75.0},
                     "battery_groups": {"version": 1, "groups": {}},
+                    "energy_scopes": {"version": 1, "scopes": {}},
                 }
 
                 current = SimpleNamespace(
@@ -135,10 +143,11 @@ class ConfigEntryUpgradeCompatibilityTests(unittest.TestCase):
                 assert await integration.async_migrate_entry(hass, current)
                 assert len(hass.config_entries.updates) == update_count + 1
                 current_update = hass.config_entries.updates[-1][1]
-                assert current_update["version"] == 6
+                assert current_update["version"] == 7
                 assert current_update["options"] == {
                     "soc_min": 10.0,
                     "battery_groups": {"version": 1, "groups": {}},
+                    "energy_scopes": {"version": 1, "scopes": {}},
                 }
 
                 assert await integration.async_unload_entry(hass, entry)

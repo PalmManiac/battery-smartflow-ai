@@ -1348,10 +1348,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             pv_entities=scoped_pv_entities,
             native_pv=entry.data.get(CONF_NATIVE_PV_ENTITY),
             pv_forecast_today=(
-                None if selected_scope else entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY)
+                entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY)
+                if selected_scope and not raw_forecast_entries
+                else None
+                if selected_scope
+                else entry.data.get(CONF_PV_FORECAST_TODAY_ENTITY)
             ),
             pv_forecast_tomorrow=(
-                None if selected_scope else entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY)
+                entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY)
+                if selected_scope and not raw_forecast_entries
+                else None
+                if selected_scope
+                else entry.data.get(CONF_PV_FORECAST_TOMORROW_ENTITY)
             ),
             pv_forecast_config_entries=tuple(
                 str(value)

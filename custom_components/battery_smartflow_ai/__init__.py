@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from .battery_groups import migrate_single_device_group
 from .const import (
     CONF_BATTERY_GROUPS,
+    CONF_ENERGY_SCOPES,
     CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1,
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
@@ -213,6 +215,46 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up one entry once, even when HA retries overlapping startup work."""
+
+    locks = hass.data.setdefault(f"{DOMAIN}_setup_locks", {})
+    lock = locks.setdefault(entry.entry_id, asyncio.Lock())
+    async with lock:
+        if entry.entry_id in hass.data.get(DOMAIN, {}):
+            _LOGGER.debug("Config entry %s is already initialized", entry.entry_id)
+            return True
+        try:
+            return await _async_setup_entry_once(hass, entry)
+        except BaseException:
+            coordinator = hass.data.get(DOMAIN, {}).pop(entry.entry_id, None)
+            try:
+                await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+            except Exception:  # pragma: no cover - cleanup after partial HA setup
+                _LOGGER.debug(
+                    "Could not unload partially set up platforms", exc_info=True
+                )
+            if coordinator is not None:
+                native = getattr(coordinator, "native_zendure", None)
+                stop = getattr(native, "async_stop", None)
+                if callable(stop):
+                    try:
+                        await stop()
+                    except Exception:  # pragma: no cover - cleanup is best effort
+                        _LOGGER.debug(
+                            "Could not stop partial native runtime", exc_info=True
+                        )
+                shutdown = getattr(coordinator, "async_shutdown", None)
+                if callable(shutdown):
+                    try:
+                        await shutdown()
+                    except Exception:  # pragma: no cover - cleanup is best effort
+                        _LOGGER.debug(
+                            "Could not shut down partial coordinator", exc_info=True
+                        )
+            raise
+
+
+async def _async_setup_entry_once(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     migration_notification_id = f"{DOMAIN}_native_v6_migration_{entry.entry_id}"
@@ -397,9 +439,39 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         new_options[CONF_BATTERY_GROUPS] = migrate_single_device_group(
             new_options.get(CONF_BATTERY_GROUPS),
             setup_map=new_options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
-            selected_device_id=new_options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
+            selected_device_id=(
+                new_options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+                or new_data.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+            ),
         )
         new_version = 6
+
+    if new_version == 6:
+        from .v6_migration import migrate_legacy_energy_scope
+
+        new_options[CONF_BATTERY_GROUPS] = migrate_single_device_group(
+            new_options.get(CONF_BATTERY_GROUPS),
+            setup_map=new_options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+            selected_device_id=(
+                new_options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+                or new_data.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+            ),
+        )
+        try:
+            new_options[CONF_ENERGY_SCOPES] = migrate_legacy_energy_scope(
+                options=new_options,
+                data=new_data,
+            )
+        except (TypeError, ValueError):
+            # Keep the original V5 sources authoritative if an incomplete or
+            # conflicting legacy mapping cannot be represented safely.
+            _LOGGER.warning(
+                "Could not migrate legacy energy settings for entry %s; "
+                "preserving them for reconfiguration",
+                entry.entry_id,
+                exc_info=True,
+            )
+        new_version = 7
 
     if (
         new_version != entry.version

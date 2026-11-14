@@ -171,7 +171,6 @@ def migrate_single_device_group(
     result = reconcile_group_config(value)
     if (
         result["groups"]
-        or (isinstance(value, Mapping) and value.get("version") is not None)
         or not isinstance(selected_device_id, str)
     ):
         return result
