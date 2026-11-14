@@ -1813,6 +1813,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         menu = ["topology_circuit_add"]
         if config["circuits"]:
             menu.extend(("topology_circuit_edit_select", "topology_circuit_remove"))
+        if getattr(self, "_group_wizard_draft", None) is not None:
+            menu.append("group_wizard_back_strategy")
         menu.append("topology_continue_domains")
         return self.async_show_menu(step_id="topology_circuits", menu_options=menu)
 
@@ -1903,7 +1905,185 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             save_electrical_topology(config)
         except (TypeError, ValueError):
             return await self.async_step_topology_review()
+        if getattr(self, "_group_wizard_draft", None) is not None:
+            self._group_wizard_topology = save_electrical_topology(config)
+            return await self.async_step_group_wizard_sensors()
         return self._save_electrical_topology(config)
+
+    async def async_step_group_wizard_sensors(self, user_input=None):
+        """Collect the group's measurement context before the one final save."""
+        existing_scopes = self._energy_scope_config()["scopes"]
+        existing = next(
+            (item for item in existing_scopes.items() if self._group_wizard_id in item[1].get("group_ids", [])),
+            None,
+        )
+        self._group_wizard_scope_id = existing[0] if existing else uuid4().hex
+        current_scope = existing[1] if existing else {}
+        if user_input is not None:
+            self._group_wizard_scope_draft = {
+                "name": user_input["scope_name"],
+                "group_ids": list(dict.fromkeys([
+                    *current_scope.get("group_ids", []),
+                    self._group_wizard_id,
+                ])),
+                "grid_mode": user_input["grid_mode"],
+                "grid_power_entities": user_input.get("grid_power_entities", []),
+                "grid_phase_power_entities": user_input.get("grid_phase_power_entities", []),
+                "grid_import_entities": user_input.get("grid_import_entities", []),
+                "grid_export_entities": user_input.get("grid_export_entities", []),
+                "price_entity": user_input.get("price_entity") or "",
+                "export_price_entity": user_input.get("export_price_entity") or "",
+                "pv_sources": current_scope.get("pv_sources", []),
+            }
+            return await self.async_step_group_wizard_pv_sources()
+        return self.async_show_form(
+            step_id="group_wizard_sensors",
+            data_schema=self._group_wizard_sensor_schema(current_scope),
+        )
+
+    def _group_wizard_sensor_schema(self, current=None):
+        current = current or {}
+        return vol.Schema({
+            vol.Required("scope_name", default=current.get("name", self._group_wizard_draft["name"])): str,
+            vol.Required("grid_mode", default=current.get("grid_mode", ENERGY_GRID_MODE_NONE)): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=[ENERGY_GRID_MODE_NONE, ENERGY_GRID_MODE_SIGNED, ENERGY_GRID_MODE_SPLIT], translation_key="energy_scope_grid_mode", mode=selector.SelectSelectorMode.DROPDOWN)
+            ),
+            vol.Optional("grid_power_entities", default=current.get("grid_power_entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", multiple=True)),
+            vol.Optional("grid_phase_power_entities", default=current.get("grid_phase_power_entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", multiple=True)),
+            vol.Optional("grid_import_entities", default=current.get("grid_import_entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", multiple=True)),
+            vol.Optional("grid_export_entities", default=current.get("grid_export_entities", [])): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", multiple=True)),
+            vol.Optional("price_entity", description={"suggested_value": current["price_entity"]} if current.get("price_entity") else None): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            vol.Optional("export_price_entity", description={"suggested_value": current["export_price_entity"]} if current.get("export_price_entity") else None): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        })
+
+    async def async_step_group_wizard_review(self, user_input=None):
+        """Show the completed group and topology before committing the draft."""
+        preview = json.dumps(self._topology_preview_payload(), ensure_ascii=False)
+        choices = {
+            item["value"]: item["label"]
+            for item in self._group_device_choices(
+                include_members=self._group_wizard_draft.get("members", [])
+            )
+        }
+        return self.async_show_menu(
+            step_id="group_wizard_review",
+            menu_options=["group_wizard_back_sensors", "group_wizard_save"],
+            description_placeholders={
+                "group_name": self._group_wizard_draft["name"],
+                "member_count": str(len(self._group_wizard_draft.get("members", []))),
+                "members": json.dumps([choices.get(device_id, "Zendure") for device_id in self._group_wizard_draft.get("members", [])], ensure_ascii=False),
+                "objective": str(self._group_wizard_draft.get("objective", DEFAULT_GROUP_OBJECTIVE)),
+                "scope_name": self._group_wizard_scope_draft["name"],
+                "grid_mode": self._group_wizard_scope_draft["grid_mode"],
+                "grid_sensors": json.dumps(
+                    [
+                        *self._group_wizard_scope_draft.get("grid_power_entities", []),
+                        *self._group_wizard_scope_draft.get("grid_phase_power_entities", []),
+                        *self._group_wizard_scope_draft.get("grid_import_entities", []),
+                        *self._group_wizard_scope_draft.get("grid_export_entities", []),
+                    ],
+                    ensure_ascii=False,
+                ),
+                "pv_sources": json.dumps(
+                    [source.get("name", "") for source in self._group_wizard_scope_draft.get("pv_sources", [])],
+                    ensure_ascii=False,
+                ),
+                "topology_preview": preview,
+            },
+        )
+
+    async def async_step_group_wizard_pv_sources(self, user_input=None):
+        """Optionally add PV sensors and forecast providers to this scope."""
+        menu_options = ["group_wizard_continue_review", "group_wizard_pv_add"]
+        if self._group_wizard_scope_draft.get("pv_sources"):
+            menu_options.append("group_wizard_pv_remove_select")
+        return self.async_show_menu(step_id="group_wizard_pv_sources", menu_options=menu_options)
+
+    async def async_step_group_wizard_pv_add(self, user_input=None):
+        if user_input is not None:
+            self._group_wizard_scope_draft.setdefault("pv_sources", []).append({
+                "id": uuid4().hex,
+                "name": user_input["source_name"],
+                "mode": user_input["source_mode"],
+                "power_entities": user_input.get("power_entities", []),
+                "forecast_entry_ids": user_input.get("forecast_entry_ids", []),
+                "installed_power_wp": user_input.get("installed_power_wp"),
+            })
+            return await self.async_step_group_wizard_pv_sources()
+        try:
+            forecast_options = await async_energy_forecast_sources(self.hass)
+        except Exception:
+            forecast_options = []
+        return self.async_show_form(step_id="group_wizard_pv_add", data_schema=vol.Schema({
+            vol.Required("source_name"): str,
+            vol.Required("source_mode", default=PV_SOURCE_AGGREGATE): selector.SelectSelector(
+                selector.SelectSelectorConfig(options=[PV_SOURCE_AGGREGATE, PV_SOURCE_COMPONENTS], translation_key="energy_scope_pv_mode", mode=selector.SelectSelectorMode.DROPDOWN)
+            ),
+            vol.Optional("power_entities", default=[]): selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", multiple=True)),
+            vol.Optional("installed_power_wp"): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=100000, step=10, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="Wp")),
+            vol.Optional("forecast_entry_ids", default=[]): selector.SelectSelector(selector.SelectSelectorConfig(options=forecast_options, multiple=True, mode=selector.SelectSelectorMode.DROPDOWN)),
+        }))
+
+    async def async_step_group_wizard_pv_remove_select(self, user_input=None):
+        sources = self._group_wizard_scope_draft.get("pv_sources", [])
+        if user_input is not None:
+            source_id = str(user_input["source_id"])
+            self._group_wizard_scope_draft["pv_sources"] = [item for item in sources if item["id"] != source_id]
+            return await self.async_step_group_wizard_pv_sources()
+        choices = [{"value": item["id"], "label": item["name"]} for item in sources]
+        return self.async_show_form(step_id="group_wizard_pv_remove_select", data_schema=vol.Schema({
+            vol.Required("source_id"): selector.SelectSelector(selector.SelectSelectorConfig(options=choices, mode=selector.SelectSelectorMode.DROPDOWN))
+        }))
+
+    async def async_step_group_wizard_continue_review(self, user_input=None):
+        return await self.async_step_group_wizard_review()
+
+    async def async_step_group_wizard_back_sensors(self, user_input=None):
+        return self.async_show_form(
+            step_id="group_wizard_sensors",
+            data_schema=self._group_wizard_sensor_schema(self._group_wizard_scope_draft),
+        )
+
+    async def async_step_group_wizard_back_strategy(self, user_input=None):
+        return await self.async_step_group_wizard_strategy()
+
+    async def async_step_group_wizard_save(self, user_input=None):
+        draft = self._group_wizard_draft
+        try:
+            groups = save_group(
+                self._group_config(),
+                group_id=self._group_wizard_id,
+                name=draft["name"],
+                members=draft.get("members", []),
+                control_enabled=draft.get("control_enabled", False),
+                balancing_policy=draft.get("balancing_policy"),
+                soc_delta_pct=draft.get("soc_delta_pct"),
+                objective=draft.get("objective"),
+                peak_import_limit_w=draft.get("peak_import_limit_w"),
+                ups_charge_target_soc_pct=draft.get("ups_charge_target_soc_pct"),
+                ups_reserve_soc_pct=draft.get("ups_reserve_soc_pct"),
+                move_members=True,
+            )
+            scopes = save_energy_scope(
+                self._energy_scope_config(),
+                scope_id=self._group_wizard_scope_id,
+                scope=self._group_wizard_scope_draft,
+            )
+            topology = save_electrical_topology(self._group_wizard_topology)
+        except (KeyError, TypeError, ValueError):
+            return self.async_show_form(
+                step_id="group_wizard_sensors",
+                data_schema=self._group_wizard_sensor_schema(self._group_wizard_scope_draft),
+                errors={"base": "invalid_energy_scope"},
+            )
+        options = dict(self.config_entry.options)
+        options[CONF_BATTERY_GROUPS] = groups
+        options[CONF_ENERGY_SCOPES] = scopes
+        options[CONF_ELECTRICAL_TOPOLOGY] = topology
+        self._group_wizard_draft = None
+        self._group_wizard_scope_draft = None
+        self._group_wizard_topology = None
+        return self.async_create_entry(title="", data=options)
 
     @staticmethod
     def _topology_select(choices):
@@ -2268,100 +2448,67 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         ]
 
     async def async_step_group_create(self, user_input=None):
-        """Create one named group; all chosen memberships are explicit."""
-
+        """Collect the group identity and systems before its strategy step."""
         if user_input is not None:
-            try:
-                groups = save_group(
-                    self._group_config(),
-                    group_id=uuid4().hex,
-                    name=user_input["name"],
-                    members=user_input.get("members", []),
-                    control_enabled=user_input.get("control_enabled", False),
-                    balancing_policy=user_input.get("balancing_policy"),
-                    soc_delta_pct=user_input.get("soc_delta_pct"),
-                    objective=user_input.get("objective"),
-                    peak_import_limit_w=user_input.get("peak_import_limit_w"),
-                    ups_charge_target_soc_pct=user_input.get("ups_charge_target_soc_pct"),
-                    ups_reserve_soc_pct=user_input.get("ups_reserve_soc_pct"),
-                    move_members=True,
-                )
-            except (KeyError, TypeError, ValueError):
-                return self.async_abort(reason="invalid_group")
-            options = dict(self.config_entry.options)
-            options[CONF_BATTERY_GROUPS] = groups
-            return self.async_create_entry(title="", data=options)
-
+            if getattr(self, "_group_wizard_draft", None) is None:
+                self._group_wizard_id = uuid4().hex
+                self._group_wizard_draft = dict(user_input)
+            else:
+                self._group_wizard_draft.update(user_input)
+            return await self.async_step_group_wizard_strategy()
         return self.async_show_form(
             step_id="group_create",
             data_schema=vol.Schema(
                 {
-                    vol.Required("name"): str,
-                    vol.Optional("members", default=[]): selector.SelectSelector(
+                    vol.Required("name", default=getattr(self, "_group_wizard_draft", {}).get("name", "")): str,
+                    vol.Optional("members", default=getattr(self, "_group_wizard_draft", {}).get("members", [])): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=self._group_device_choices(),
                             multiple=True,
                             mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Optional("control_enabled", default=False): (
-                        selector.BooleanSelector()
+                }
+            ),
+        )
+
+    async def async_step_group_wizard_strategy(self, user_input=None):
+        """Collect how the selected systems should cooperate."""
+        if user_input is not None:
+            self._group_wizard_draft.update(user_input)
+            self._draft_electrical_topology = self._electrical_topology_config()
+            return await self.async_step_topology_circuits()
+        return self.async_show_form(
+            step_id="group_wizard_strategy",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("control_enabled", default=self._group_wizard_draft.get("control_enabled", False)): selector.BooleanSelector(),
+                    vol.Optional("balancing_policy", default=self._group_wizard_draft.get("balancing_policy", "energy_weighted")): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=["energy_weighted", "soc_delta"], translation_key="balancing_policy", mode=selector.SelectSelectorMode.DROPDOWN)
                     ),
-                    vol.Optional("balancing_policy", default="energy_weighted"):
-                        selector.SelectSelector(
-                            selector.SelectSelectorConfig(
-                                options=[
-                                    "energy_weighted",
-                                    "soc_delta",
-                                ],
-                                translation_key="balancing_policy",
-                                mode=selector.SelectSelectorMode.DROPDOWN,
-                            )
-                        ),
-                    vol.Optional("soc_delta_pct", default=10): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=1, max=50, step=1, mode=selector.NumberSelectorMode.BOX
-                        )
+                    vol.Optional("soc_delta_pct", default=self._group_wizard_draft.get("soc_delta_pct", 10)): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=1, max=50, step=1, mode=selector.NumberSelectorMode.BOX)
                     ),
-                    vol.Optional("objective", default=DEFAULT_GROUP_OBJECTIVE):
-                        selector.SelectSelector(
-                            selector.SelectSelectorConfig(
-                                options=sorted(GROUP_OBJECTIVES),
-                                translation_key="group_objective",
-                                mode=selector.SelectSelectorMode.DROPDOWN,
-                            )
-                        ),
-                    vol.Optional(
-                        "peak_import_limit_w", default=DEFAULT_PEAK_IMPORT_LIMIT_W
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=0, max=100000, step=100,
-                            mode=selector.NumberSelectorMode.BOX,
-                            unit_of_measurement="W",
-                        )
+                    vol.Optional("objective", default=self._group_wizard_draft.get("objective", DEFAULT_GROUP_OBJECTIVE)): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=sorted(GROUP_OBJECTIVES), translation_key="group_objective", mode=selector.SelectSelectorMode.DROPDOWN)
                     ),
-                    vol.Optional(
-                        "ups_charge_target_soc_pct",
-                        default=DEFAULT_UPS_CHARGE_TARGET_SOC_PCT,
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5, max=100, step=1,
-                            mode=selector.NumberSelectorMode.BOX,
-                            unit_of_measurement="%",
-                        )
+                    vol.Optional("peak_import_limit_w", default=self._group_wizard_draft.get("peak_import_limit_w", DEFAULT_PEAK_IMPORT_LIMIT_W)): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=0, max=100000, step=100, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="W")
                     ),
-                    vol.Optional(
-                        "ups_reserve_soc_pct", default=DEFAULT_UPS_RESERVE_SOC_PCT
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=0, max=95, step=1,
-                            mode=selector.NumberSelectorMode.BOX,
-                            unit_of_measurement="%",
-                        )
+                    vol.Optional("ups_charge_target_soc_pct", default=self._group_wizard_draft.get("ups_charge_target_soc_pct", DEFAULT_UPS_CHARGE_TARGET_SOC_PCT)): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=5, max=100, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="%")
+                    ),
+                    vol.Optional("ups_reserve_soc_pct", default=self._group_wizard_draft.get("ups_reserve_soc_pct", DEFAULT_UPS_RESERVE_SOC_PCT)): selector.NumberSelector(
+                        selector.NumberSelectorConfig(min=0, max=95, step=1, mode=selector.NumberSelectorMode.BOX, unit_of_measurement="%")
                     ),
                 }
             ),
         )
+
+    async def async_step_group_wizard_back_systems(self, user_input=None):
+        if getattr(self, "_active_group_id", None):
+            return await self.async_step_group_edit()
+        return await self.async_step_group_create()
 
     async def async_step_group_edit_select(self, user_input=None):
         """Select a saved group to rename or move configured devices."""
@@ -2390,26 +2537,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         if current is None:
             return self.async_abort(reason="group_not_found")
         if user_input is not None:
-            try:
-                groups = save_group(
-                    groups,
-                    group_id=group_id,
-                    name=user_input["name"],
-                    members=user_input.get("members", []),
-                    control_enabled=user_input.get("control_enabled", False),
-                    balancing_policy=user_input.get("balancing_policy"),
-                    soc_delta_pct=user_input.get("soc_delta_pct"),
-                    objective=user_input.get("objective"),
-                    peak_import_limit_w=user_input.get("peak_import_limit_w"),
-                    ups_charge_target_soc_pct=user_input.get("ups_charge_target_soc_pct"),
-                    ups_reserve_soc_pct=user_input.get("ups_reserve_soc_pct"),
-                    move_members=True,
-                )
-            except (KeyError, TypeError, ValueError):
-                return self.async_abort(reason="invalid_group")
-            options = dict(self.config_entry.options)
-            options[CONF_BATTERY_GROUPS] = groups
-            return self.async_create_entry(title="", data=options)
+            self._group_wizard_id = group_id
+            self._group_wizard_draft = {**current, **user_input}
+            self._draft_electrical_topology = self._electrical_topology_config()
+            return await self.async_step_group_wizard_strategy()
         schema = vol.Schema(
             {
                 vol.Required("name"): str,
@@ -2422,70 +2553,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Optional(
-                    "control_enabled", default=current.get("control_enabled", False)
-                ): selector.BooleanSelector(),
-                vol.Optional(
-                    "balancing_policy",
-                    default=current.get("balancing_policy", "energy_weighted"),
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=[
-                            "energy_weighted",
-                            "soc_delta",
-                        ],
-                        translation_key="balancing_policy",
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(
-                    "soc_delta_pct", default=current.get("soc_delta_pct", 10)
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=1, max=50, step=1, mode=selector.NumberSelectorMode.BOX
-                    )
-                ),
-                vol.Optional(
-                    "objective", default=current.get("objective", DEFAULT_GROUP_OBJECTIVE)
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=sorted(GROUP_OBJECTIVES),
-                        translation_key="group_objective",
-                        mode=selector.SelectSelectorMode.DROPDOWN,
-                    )
-                ),
-                vol.Optional(
-                    "peak_import_limit_w",
-                    default=current.get("peak_import_limit_w", DEFAULT_PEAK_IMPORT_LIMIT_W),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=100000, step=100,
-                        mode=selector.NumberSelectorMode.BOX,
-                        unit_of_measurement="W",
-                    )
-                ),
-                vol.Optional(
-                    "ups_charge_target_soc_pct",
-                    default=current.get(
-                        "ups_charge_target_soc_pct", DEFAULT_UPS_CHARGE_TARGET_SOC_PCT
-                    ),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=5, max=100, step=1,
-                        mode=selector.NumberSelectorMode.BOX,
-                        unit_of_measurement="%",
-                    )
-                ),
-                vol.Optional(
-                    "ups_reserve_soc_pct",
-                    default=current.get("ups_reserve_soc_pct", DEFAULT_UPS_RESERVE_SOC_PCT),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0, max=95, step=1,
-                        mode=selector.NumberSelectorMode.BOX,
-                        unit_of_measurement="%",
-                    )
-                ),
             }
         )
         return self.async_show_form(
@@ -2495,9 +2562,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 {
                     "name": current["name"],
                     "members": current["members"],
-                    "control_enabled": current.get("control_enabled", False),
-                    "balancing_policy": current.get("balancing_policy", "energy_weighted"),
-                    "soc_delta_pct": current.get("soc_delta_pct", 10),
                 },
             ),
         )
