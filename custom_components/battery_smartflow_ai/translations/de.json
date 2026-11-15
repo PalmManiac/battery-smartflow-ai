@@ -300,7 +300,7 @@
       },
       "dashboard": {
         "title": "HEMS-Dashboard",
-        "description": "Aktiviere ein eigenes Battery-SmartFlow-AI-Seitenpanel mit Anlagenübersicht und Live-Status. Das Panel ist standardmäßig ausgeschaltet.",
+        "description": "Aktiviere ein eigenes Battery-SmartFlow-AI-Seitenpanel mit Anlagenübersicht und Live-Status. Bei Neuinstallationen ist es standardmäßig eingeschaltet.",
         "data": {"hems_dashboard_enabled": "HEMS-Dashboard in der Seitenleiste anzeigen"}
       },
       "smart_mode": {
