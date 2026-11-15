@@ -321,7 +321,7 @@
       },
       "dashboard": {
         "title": "HEMS dashboard",
-        "description": "Enable a dedicated Battery SmartFlow AI sidebar panel with a system overview and live status. The panel is off by default.",
+        "description": "Enable a dedicated Battery SmartFlow AI sidebar panel with a system overview and live status. It is enabled by default for new installations.",
         "data": {
           "hems_dashboard_enabled": "Show the HEMS dashboard in the sidebar"
         }

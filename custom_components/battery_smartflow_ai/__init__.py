@@ -6,6 +6,7 @@ import logging
 from .battery_groups import migrate_single_device_group
 from .const import (
     CONF_BATTERY_GROUPS,
+    CONF_ELECTRICAL_TOPOLOGY,
     CONF_ENERGY_SCOPES,
     CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1,
     CONF_NATIVE_ZENDURE_APP_TOKEN,
@@ -391,6 +392,126 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         await async_update_dashboard_panel(hass)
     return unload_ok
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: ConfigEntry, device_entry
+) -> bool:
+    """Allow removal of Zendure devices no longer present in discovery.
+
+    A missing device can be temporarily offline, so deletion is offered only
+    after the native runtime no longer reports its public device ID. Pack
+    devices can be removed first; then their parent system can be removed.
+    """
+
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is None:
+        return False
+    native = getattr(coordinator, "native_zendure", None)
+    if native is None:
+        return False
+
+    identifier = next(
+        (
+            value
+            for domain, value in device_entry.identifiers
+            if domain == DOMAIN and isinstance(value, str)
+        ),
+        None,
+    )
+    if identifier is None:
+        return False
+
+    # Home Assistant treats systems with battery-pack child devices as
+    # composite devices. Require those stale children to be removed first so
+    # a failed parent deletion cannot partially purge the BSFAI configuration.
+    from homeassistant.helpers import device_registry as dr
+
+    registry = dr.async_get(hass)
+    if any(
+        child.via_device_id == device_entry.id
+        for child in dr.async_entries_for_config_entry(registry, entry.entry_id)
+    ):
+        return False
+
+    pack_prefix = "native_zendure_pack_"
+    system_prefix = "native_zendure_"
+    if identifier.startswith(pack_prefix):
+        public_id = identifier[len(pack_prefix):]
+        if any(
+            pack.public_id == public_id
+            for system in native.hardware_overview()
+            for pack in system.packs
+        ):
+            return False
+        return True
+
+    if not identifier.startswith(system_prefix):
+        return False
+    public_id = identifier[len(system_prefix):]
+    if any(system.public_id == public_id for system in native.hardware_overview()):
+        return False
+
+    system_id = native.setup_id_for_public_id(public_id)
+    if system_id is None:
+        return False
+
+    options = dict(entry.options)
+    setup_map = options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS, {})
+    if isinstance(setup_map, dict):
+        setup_map = dict(setup_map)
+        records = setup_map.get("devices", {})
+        if isinstance(records, dict):
+            records = dict(records)
+            records.pop(system_id, None)
+            setup_map["devices"] = records
+        options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = setup_map
+
+    if options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE) == system_id:
+        options.pop(CONF_NATIVE_ZENDURE_SELECTED_DEVICE, None)
+
+    group_config = options.get(CONF_BATTERY_GROUPS, {})
+    if isinstance(group_config, dict):
+        group_config = dict(group_config)
+        groups = group_config.get("groups", {})
+        if isinstance(groups, dict):
+            groups = dict(groups)
+            for group_id, group in tuple(groups.items()):
+                if not isinstance(group, dict):
+                    continue
+                updated_group = dict(group)
+                members = group.get("members", [])
+                if not isinstance(members, list):
+                    members = []
+                updated_group["members"] = [
+                    member
+                    for member in members
+                    if member != system_id
+                ]
+                groups[group_id] = updated_group
+            group_config["groups"] = groups
+        options[CONF_BATTERY_GROUPS] = group_config
+
+    topology = options.get(CONF_ELECTRICAL_TOPOLOGY, {})
+    if isinstance(topology, dict):
+        topology = dict(topology)
+        connections = topology.get("connections", [])
+        if not isinstance(connections, list):
+            connections = []
+        topology["connections"] = [
+            connection
+            for connection in connections
+            if not isinstance(connection, dict)
+            or connection.get("device_id") != system_id
+        ]
+        options[CONF_ELECTRICAL_TOPOLOGY] = topology
+
+    hass.config_entries.async_update_entry(entry, options=options)
+    native.remove_device_setup(system_id)
+    from .dashboard import async_update_dashboard_panel
+
+    await async_update_dashboard_panel(hass)
+    return True
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

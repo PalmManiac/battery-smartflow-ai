@@ -885,6 +885,23 @@ class NativeZendureRuntime:
             displayed.append(item)
         return tuple(displayed)
 
+    def setup_id_for_public_id(self, public_id: str) -> str | None:
+        """Resolve a known setup record from its privacy-safe HA device ID."""
+
+        for system_id in self._device_setups:
+            if _public_id("DEVICE", system_id) == public_id:
+                return system_id
+        return None
+
+    def remove_device_setup(self, system_id: str) -> None:
+        """Forget a system explicitly removed from Home Assistant."""
+
+        self._device_setups.pop(system_id, None)
+        self._zensdk_address_overrides.pop(system_id, None)
+        if self._selected_device == system_id:
+            self._selected_device = None
+        self._notify()
+
     def _zensdk_connection_details(
         self, system_id: str
     ) -> tuple[str, str | None]:

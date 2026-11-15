@@ -839,10 +839,15 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
             if not errors:
+                options = dict(getattr(self, "_native_options", {}))
+                # The portal is the primary guided configuration surface for
+                # new V6 installations. Existing entries keep their explicit
+                # preference when they are reconfigured.
+                options.setdefault(CONF_HEMS_DASHBOARD_ENABLED, True)
                 return self.async_create_entry(
                     title="Battery SmartFlow AI",
                     data=self._user_input,
-                    options=getattr(self, "_native_options", {}),
+                    options=options,
                 )
 
         return self.async_show_form(
