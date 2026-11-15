@@ -44,6 +44,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._chartError = "";
     this._chartRequestKey = "";
     this._chartRequestSerial = 0;
+    this._optionsFlowLoading = false;
+    this._optionsRequestSerial = 0;
     this._pointerActive = false;
     this._renderDeferred = false;
     this.shadowRoot.addEventListener("pointerdown", () => {
@@ -479,6 +481,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const locale = this._hass && this._hass.locale ? this._hass.locale.language : "";
     const german = String(locale || "").toLowerCase().startsWith("de");
     const language = String(locale || "").toLowerCase().split(/[-_]/)[0];
+    if (key === "options_loading") {
+      return language === "de" ? "Gruppeneinrichtung wird geladen …" : "Loading group setup …";
+    }
     const energyMappingLabels = {
       economics_intro: { de: "Was die Zahlen für deinen Akku bedeuten", en: "What these figures mean for your battery", fr: "Ce que ces chiffres signifient pour votre batterie", nl: "Wat deze cijfers voor je accu betekenen" },
       economics_daily_balance: { de: "Tagesbilanz des Akkus", en: "Battery balance today", fr: "Bilan quotidien de la batterie", nl: "Dagbalans van de accu" },
@@ -1368,19 +1373,52 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   async _openOptionsFlow(entryId, stepId) {
+    const requestSerial = ++this._optionsRequestSerial;
+    let flow = null;
     try {
       this._topologyDraftHasChanges = false;
       this._groupWizardActive = ["group_create", "group_edit_select", "group_edit"].includes(stepId);
-      const flow = await this._hass.callApi("POST", "config/config_entries/options/flow", {
+      this._optionsFlowId = null;
+      this._optionsStepId = null;
+      this._optionsFlowBody = "";
+      this._optionsFlowTitle = this._t(
+        this._groupWizardActive ? "systems_groups"
+          : stepId.startsWith("topology_") || stepId === "electrical_topology" ? "electrical_topology"
+            : stepId.startsWith("energy_scope") || stepId === "energy_scopes" ? "energy_scopes"
+              : "settings_shortcuts",
+      );
+      this._optionsFlowLoading = true;
+      this._scheduleRender();
+      flow = await this._hass.callApi("POST", "config/config_entries/options/flow", {
         handler: entryId,
       });
-      this._optionsFlowId = flow.flow_id;
+      if (requestSerial !== this._optionsRequestSerial) {
+        this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
+        return;
+      }
       const step = await this._hass.callApi("POST", `config/config_entries/options/flow/${flow.flow_id}`, {
         next_step_id: stepId,
       });
+      if (requestSerial !== this._optionsRequestSerial) {
+        this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
+        return;
+      }
+      this._optionsFlowId = flow.flow_id;
+      this._optionsFlowLoading = false;
       this._scrollOptionsIntoView = true;
       this._renderOptionsFlow(step);
     } catch (error) {
+      if (flow?.flow_id) {
+        this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
+      }
+      if (requestSerial !== this._optionsRequestSerial) return;
+      this._optionsFlowId = null;
+      this._optionsFlowLoading = false;
+      this._optionsStepId = null;
+      this._optionsFlowTitle = "";
+      this._optionsFlowBody = "";
+      this._groupWizardActive = false;
+      this._scheduleRender();
       this._showNotice(String(error));
     }
   }
@@ -1741,19 +1779,24 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _optionsFlowEditor() {
-    if (!this._optionsFlowId) return "";
-    if (this._isOptionsDialogOpen()) {
+    if (!this._optionsFlowId && !this._optionsFlowLoading) return "";
+    if (this._optionsFlowLoading || this._isOptionsDialogOpen()) {
       const title = this._optionsFlowTitle || this._t("settings_shortcuts");
       const stepId = String(this._optionsStepId || "");
       const topology = stepId === "electrical_topology" || stepId.startsWith("topology_");
-      const wide = stepId.startsWith("energy_scope") || stepId.startsWith("group_wizard") || topology;
+      const wide = this._optionsFlowLoading || stepId.startsWith("energy_scope") || stepId.startsWith("group_wizard") || topology;
       const sizeClass = wide ? ` options-modal-wide${topology ? " options-modal-topology" : " options-modal-sensors"}` : "";
-      return `<div class="options-modal-backdrop" data-options-modal-backdrop role="presentation"><section class="options-modal${sizeClass}" role="dialog" aria-modal="true" aria-labelledby="options-modal-title"><div class="options-modal-header"><div><h2 id="options-modal-title">${this._escape(title)}</h2><small>${this._escape(this._t("settings_description"))}</small></div><button class="options-modal-close" type="button" data-options-close aria-label="${this._escape(this._t("options_cancel"))}">×</button></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply options-modal-cancel" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section></div>`;
+      const body = this._optionsFlowLoading
+        ? `<div class="options-loading" role="status" aria-live="polite" aria-busy="true" style="display:flex;align-items:center;justify-content:center;gap:12px;min-height:150px"><progress></progress><p>${this._escape(this._t("options_loading"))}</p></div>`
+        : this._optionsFlowBody || "";
+      const cancel = this._optionsFlowLoading ? "" : `<button class="apply options-modal-cancel" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button>`;
+      return `<div class="options-modal-backdrop" data-options-modal-backdrop role="presentation"><section class="options-modal${sizeClass}" role="dialog" aria-modal="true" aria-labelledby="options-modal-title"><div class="options-modal-header"><div><h2 id="options-modal-title">${this._escape(title)}</h2><small>${this._escape(this._t("settings_description"))}</small></div><button class="options-modal-close" type="button" data-options-close aria-label="${this._escape(this._t("options_cancel"))}">×</button></div><div class="option-editor-body">${body}</div>${cancel}</section></div>`;
     }
     return `<section class="section option-editor ${this._optionsStepId?.startsWith("energy_scope") ? "scope-editor" : ""}" data-render-key="options-${this._optionsRevision || 0}"><div class="section-head"><h2>${this._escape(this._optionsFlowTitle || this._t("settings_shortcuts"))}</h2><small>${this._escape(this._t("settings_description"))}</small></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section>`;
   }
 
   _isOptionsDialogOpen() {
+    if (this._optionsFlowLoading) return true;
     const stepId = String(this._optionsStepId || "");
     return Boolean(this._optionsFlowId && (
       ["general", "expert", "expert_cell_voltage", "expert_cell_voltage_config", "smart_mode", "systems_groups", "electrical_topology", "energy_scopes"].includes(stepId)
@@ -1764,13 +1807,16 @@ class BatterySmartFlowDashboard extends HTMLElement {
   }
 
   _closeOptionsFlow() {
+    this._optionsRequestSerial = (this._optionsRequestSerial || 0) + 1;
     if (this._optionsFlowId) {
       this._hass.callApi("DELETE", `config/config_entries/options/flow/${this._optionsFlowId}`).catch(() => {});
     }
     this._optionsFlowId = null;
+    this._optionsFlowLoading = false;
     this._groupWizardActive = false;
     this._optionsFlowBody = "";
     this._optionsStepId = null;
+    this._optionsFlowTitle = "";
     this._restoreOptionsFocus = true;
     this._topologyDraftHasChanges = false;
     this._scheduleRender();
