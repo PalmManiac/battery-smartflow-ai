@@ -290,9 +290,6 @@
           "dashboard": "Tableau de bord HEMS",
           "expert": "Mode expert",
           "smart_mode": "Mode Smart Zendure",
-          "systems_groups": "Systèmes et groupes",
-          "energy_scopes": "Affectations de capteurs",
-          "electrical_topology": "Topologie électrique",
           "native_zendure": "Test Zendure natif",
           "training": "Entraînement de régulation",
           "debug": "Mode débogage"

@@ -309,9 +309,6 @@
           "expert": "Expert mode",
           "dashboard": "HEMS dashboard",
           "smart_mode": "Zendure Smart Mode",
-          "systems_groups": "Systems & groups",
-          "energy_scopes": "Sensor assignments",
-          "electrical_topology": "Electrical topology",
           "training": "Regulation training",
           "debug": "Debug mode"
         }
