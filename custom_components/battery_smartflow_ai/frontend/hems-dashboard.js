@@ -629,6 +629,27 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return value ? value[german ? 0 : 1] : key;
   }
 
+  _formatOptionsFlowError(error) {
+    if (typeof error === "string") return error;
+    if (error instanceof Error) {
+      const details = Object.fromEntries(Object.entries(error));
+      details.name = details.name || error.name;
+      details.message = details.message || error.message;
+      try {
+        return JSON.stringify(details, null, 2);
+      } catch (_serializationError) {
+        return `${error.name}: ${error.message}`;
+      }
+    }
+    try {
+      const details = JSON.stringify(error, null, 2);
+      if (details) return details;
+    } catch (_serializationError) {
+      // Fall back to a readable string for circular or otherwise unusual objects.
+    }
+    return String(error);
+  }
+
   _value(entity) {
     if (!entity || ["unknown", "unavailable"].includes(entity.state)) {
       return "—";
@@ -1410,7 +1431,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       this._optionsFlowId = flow?.flow_id || null;
       this._optionsFlowLoading = false;
       this._optionsStepId = this._optionsOpeningStepId || stepId;
-      this._optionsFlowError = String(error);
+      this._optionsFlowError = this._formatOptionsFlowError(error);
       this._optionsOpeningStepId = null;
       this._optionsFlowBody = "";
       this._groupWizardActive = ["group_create", "group_edit_select", "group_edit"].includes(stepId);
