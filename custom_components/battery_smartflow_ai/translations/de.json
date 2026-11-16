@@ -290,9 +290,6 @@
           "expert": "Expertenmodus",
           "dashboard": "HEMS-Dashboard",
           "smart_mode": "Zendure-SmartMode",
-          "systems_groups": "Systeme & Gruppen",
-          "energy_scopes": "Sensorzuordnungen",
-          "electrical_topology": "Elektrische Topologie",
           "native_zendure": "Natives Zendure",
           "training": "Regelungstraining",
           "debug": "Debug-Modus"
