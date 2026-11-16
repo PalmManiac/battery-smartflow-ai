@@ -2623,6 +2623,17 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         """Configure the optional standalone HEMS dashboard."""
 
         if user_input is not None:
+            if "_portal_action" in user_input:
+                portal_steps = {
+                    "systems_groups": self.async_step_systems_groups,
+                    "group_create": self.async_step_group_create,
+                    "group_edit_select": self.async_step_group_edit_select,
+                    "group_remove": self.async_step_group_remove,
+                }
+                portal_step = user_input.get("_portal_action")
+                if portal_step not in portal_steps:
+                    return self.async_abort(reason="invalid_portal_action")
+                return await portal_steps[portal_step]()
             options = dict(self.config_entry.options)
             options[CONF_HEMS_DASHBOARD_ENABLED] = bool(
                 user_input.get(CONF_HEMS_DASHBOARD_ENABLED, False)

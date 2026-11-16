@@ -1412,11 +1412,14 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
         return;
       }
-      const step = await this._hass.callApi(
-        "POST",
-        `config/config_entries/options/flow/${flow.flow_id}`,
-        { next_step_id: stepId },
-      );
+      const flowUrl = `config/config_entries/options/flow/${flow.flow_id}`;
+      let step;
+      if (["systems_groups", "group_create", "group_edit_select", "group_remove"].includes(stepId)) {
+        await this._hass.callApi("POST", flowUrl, { next_step_id: "dashboard" });
+        step = await this._hass.callApi("POST", flowUrl, { _portal_action: stepId });
+      } else {
+        step = await this._hass.callApi("POST", flowUrl, { next_step_id: stepId });
+      }
       if (requestSerial !== this._optionsRequestSerial) {
         this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
         return;
