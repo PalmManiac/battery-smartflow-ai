@@ -2652,7 +2652,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             )
                         ),
                     ): selector.BooleanSelector(),
-                }
+                },
+                # The portal passes a private dispatch key through this gateway.
+                extra=vol.ALLOW_EXTRA,
             ),
         )
 
