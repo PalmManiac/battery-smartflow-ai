@@ -1363,9 +1363,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
   async _openOptionsFlow(entryId, stepId) {
     const requestSerial = ++this._optionsRequestSerial;
     let flow = null;
-    const parentStepId = ["group_create", "group_edit_select", "group_remove"].includes(stepId)
-      ? "systems_groups"
-      : null;
     try {
       this._topologyDraftHasChanges = false;
       this._groupWizardActive = ["group_create", "group_edit_select", "group_edit"].includes(stepId);
@@ -1387,32 +1384,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
         return;
       }
-      let step;
-      if (parentStepId) {
-        const parentStep = await this._hass.callApi(
-          "POST",
-          `config/config_entries/options/flow/${flow.flow_id}`,
-          { next_step_id: parentStepId },
-        );
-        if (requestSerial !== this._optionsRequestSerial) {
-          this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
-          return;
-        }
-        if (parentStep.type !== "menu" || !parentStep.menu_options?.includes(stepId)) {
-          throw new Error(`Options flow did not expose ${stepId} from ${parentStepId}`);
-        }
-        step = await this._hass.callApi(
-          "POST",
-          `config/config_entries/options/flow/${flow.flow_id}`,
-          { next_step_id: stepId },
-        );
-      } else {
-        step = await this._hass.callApi(
-          "POST",
-          `config/config_entries/options/flow/${flow.flow_id}`,
-          { next_step_id: stepId },
-        );
-      }
+      const step = await this._hass.callApi(
+        "POST",
+        `config/config_entries/options/flow/${flow.flow_id}`,
+        { next_step_id: stepId },
+      );
       if (requestSerial !== this._optionsRequestSerial) {
         this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`).catch(() => {});
         return;
