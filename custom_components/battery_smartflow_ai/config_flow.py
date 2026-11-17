@@ -2419,8 +2419,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 suffix = record.get("serial_suffix")
                 if suffix:
                     name = f"{name} · SN {suffix}"
-                if record.get("online") is False:
-                    name = f"{name} (offline)"
+                # This persisted flag is a setup snapshot and may lag behind
+                # the live native inventory. Device choice must not show a
+                # configured, reachable system as offline based on stale data.
                 choices[device_id] = name
         groups = self._group_config()
         for group in groups["groups"].values():
