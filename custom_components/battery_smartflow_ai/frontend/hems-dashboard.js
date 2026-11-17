@@ -318,6 +318,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }
     if (current.nodeType !== Node.ELEMENT_NODE) return;
     if (current.matches(".option-editor") && current.getAttribute("data-render-key") === next.getAttribute("data-render-key")) return;
+    if (current.matches(".options-modal .option-editor-body")
+      && current.getAttribute("data-render-key") === next.getAttribute("data-render-key")) return;
     const keepMultiPickerOpen = current.localName === "details"
       && current.hasAttribute("open")
       && current.hasAttribute("data-option-multi");
@@ -1832,8 +1834,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
         : this._optionsFlowError
           ? `<div class="topology-form-errors" role="alert"><p>${this._escape(this._t("options_open_failed"))}</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0 0;font:inherit">${this._escape(this._optionsFlowError)}</pre></div>`
           : this._optionsFlowBody || "";
+      const bodyKey = `${this._optionsRevision || 0}-${this._optionsFlowLoading ? "loading" : this._optionsFlowError ? "error" : stepId}`;
       const cancel = this._optionsFlowLoading ? "" : `<button class="apply options-modal-cancel" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button>`;
-      return `<div class="options-modal-backdrop" data-options-modal-backdrop role="presentation"><section class="options-modal${sizeClass}" role="dialog" aria-modal="true" aria-labelledby="options-modal-title"><div class="options-modal-header"><div><h2 id="options-modal-title">${this._escape(title)}</h2><small>${this._escape(this._t("settings_description"))}</small></div><button class="options-modal-close" type="button" data-options-close aria-label="${this._escape(this._t("options_cancel"))}">×</button></div><div class="option-editor-body">${body}</div>${cancel}</section></div>`;
+      return `<div class="options-modal-backdrop" data-options-modal-backdrop role="presentation"><section class="options-modal${sizeClass}" role="dialog" aria-modal="true" aria-labelledby="options-modal-title"><div class="options-modal-header"><div><h2 id="options-modal-title">${this._escape(title)}</h2><small>${this._escape(this._t("settings_description"))}</small></div><button class="options-modal-close" type="button" data-options-close aria-label="${this._escape(this._t("options_cancel"))}">×</button></div><div class="option-editor-body" data-render-key="options-modal-body-${this._escape(bodyKey)}">${body}</div>${cancel}</section></div>`;
     }
     return `<section class="section option-editor ${this._optionsStepId?.startsWith("energy_scope") ? "scope-editor" : ""}" data-render-key="options-${this._optionsRevision || 0}"><div class="section-head"><h2>${this._escape(this._optionsFlowTitle || this._t("settings_shortcuts"))}</h2><small>${this._escape(this._t("settings_description"))}</small></div><div class="option-editor-body">${this._optionsFlowBody || ""}</div><button class="apply" type="button" data-options-close>${this._escape(this._t("options_cancel"))}</button></section>`;
   }
