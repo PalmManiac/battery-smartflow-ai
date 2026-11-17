@@ -15,7 +15,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const active = this.shadowRoot && this.shadowRoot.activeElement;
-    if (active && active.matches("input, select")) return;
+    if (active && (
+      active.matches("input, select")
+      || active.closest?.("[data-option-multi]")
+    )) return;
     this._scheduleRender();
   }
 
@@ -315,6 +318,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
     }
     if (current.nodeType !== Node.ELEMENT_NODE) return;
     if (current.matches(".option-editor") && current.getAttribute("data-render-key") === next.getAttribute("data-render-key")) return;
+    const keepMultiPickerOpen = current.localName === "details"
+      && current.hasAttribute("open")
+      && current.hasAttribute("data-option-multi");
     for (const attribute of [...current.attributes]) {
       if (!next.hasAttribute(attribute.name)) current.removeAttribute(attribute.name);
     }
@@ -323,6 +329,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         current.setAttribute(attribute.name, attribute.value);
       }
     }
+    if (keepMultiPickerOpen) current.setAttribute("open", "");
     if (current instanceof HTMLInputElement && current.type === "checkbox") {
       current.checked = next.checked;
     } else if (current instanceof HTMLInputElement && document.activeElement !== current) {
@@ -1711,6 +1718,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const sensorList = sensors.length ? sensors.map((sensor) => this._escape(sensor)).join(" · ") : this._escape(this._t("scope_no_grid"));
         const pvList = pvSources.length ? pvSources.map((source) => this._escape(source)).join(" · ") : this._escape(this._t("scope_no_pv"));
         preview = `<section class="topology-review-card group-wizard-review"><h3>${this._escape(this._t("group_wizard_review"))}</h3><div class="group-review-summary"><strong>${this._escape(name)}</strong><span>${this._escape(count)} ${this._escape(this._t("group_wizard_system_count"))}</span></div><div class="group-review-members">${memberCards || `<p class="muted">${this._escape(this._t("no_group_members"))}</p>`}</div><div class="group-review-strategy">${this._escape(this._t("group_objective"))}: ${this._escape(this._t(`group_objective_${step.description_placeholders?.objective || "near_zero"}`))} · ${this._escape(this._t("energy_scopes"))}: ${this._escape(step.description_placeholders?.scope_name || "")}</div><div class="group-review-sensors"><strong>${this._escape(this._t("grid_mode"))}: ${this._escape(this._selectorText(step.description_placeholders?.grid_mode || "none"))}</strong><small>${sensorList}</small><small>${pvList}</small></div>`;
+        if (step.description_placeholders?.objective === "ups_price_arbitrage") {
+          preview += `<p class="group-review-strategy">${this._escape(this._t("ups_charge_target_soc_pct"))}: ${this._escape(step.description_placeholders.ups_charge_target_soc_pct)} % · ${this._escape(this._t("ups_reserve_soc_pct"))}: ${this._escape(step.description_placeholders.ups_reserve_soc_pct)} %</p>`;
+        }
         try { preview += this._topologyDiagram(JSON.parse(step.description_placeholders?.topology_preview || "{}")); } catch { preview += `<p class="muted">${this._escape(this._t("topology_preview_unavailable"))}</p>`; }
         preview += `</section>`;
       }

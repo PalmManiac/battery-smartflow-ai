@@ -1975,6 +1975,17 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 "member_count": str(len(self._group_wizard_draft.get("members", []))),
                 "members": json.dumps([choices.get(device_id, "Zendure") for device_id in self._group_wizard_draft.get("members", [])], ensure_ascii=False),
                 "objective": str(self._group_wizard_draft.get("objective", DEFAULT_GROUP_OBJECTIVE)),
+                "ups_charge_target_soc_pct": str(
+                    self._group_wizard_draft.get(
+                        "ups_charge_target_soc_pct",
+                        DEFAULT_UPS_CHARGE_TARGET_SOC_PCT,
+                    )
+                ),
+                "ups_reserve_soc_pct": str(
+                    self._group_wizard_draft.get(
+                        "ups_reserve_soc_pct", DEFAULT_UPS_RESERVE_SOC_PCT
+                    )
+                ),
                 "scope_name": self._group_wizard_scope_draft["name"],
                 "grid_mode": self._group_wizard_scope_draft["grid_mode"],
                 "grid_sensors": json.dumps(
@@ -2478,6 +2489,17 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         """Collect how the selected systems should cooperate."""
         if user_input is not None:
             self._group_wizard_draft.update(user_input)
+            # Optional selector fields can be omitted by some Home Assistant
+            # form clients. Keep the existing value (or the normal default for
+            # a new group) in the wizard draft so later topology/sensor steps
+            # cannot silently reset the UPS targets.
+            for key, default in (
+                ("peak_import_limit_w", DEFAULT_PEAK_IMPORT_LIMIT_W),
+                ("ups_charge_target_soc_pct", DEFAULT_UPS_CHARGE_TARGET_SOC_PCT),
+                ("ups_reserve_soc_pct", DEFAULT_UPS_RESERVE_SOC_PCT),
+            ):
+                if self._group_wizard_draft.get(key) is None:
+                    self._group_wizard_draft[key] = default
             self._draft_electrical_topology = self._electrical_topology_config()
             return await self.async_step_topology_circuits()
         return self.async_show_form(
