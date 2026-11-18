@@ -14,6 +14,7 @@ const METRIC_ICONS = Object.freeze({
 class BatterySmartFlowDashboard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
+    this._loadPortalTranslations();
     const active = this.shadowRoot && this.shadowRoot.activeElement;
     if (active && (
       active.matches("input, select")
@@ -53,6 +54,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
     this._optionsOpeningStepId = null;
     this._pointerActive = false;
     this._renderDeferred = false;
+    this._portalTranslationLanguage = null;
+    this._portalTranslations = null;
     this.shadowRoot.addEventListener("pointerdown", () => {
       this._pointerActive = true;
     }, true);
@@ -476,10 +479,31 @@ class BatterySmartFlowDashboard extends HTMLElement {
       .trim();
   }
 
+  _loadPortalTranslations() {
+    const language = String(this._hass?.locale?.language || "en")
+      .toLowerCase()
+      .split(/[-_]/)[0];
+    if (language === this._portalTranslationLanguage) return;
+    this._portalTranslationLanguage = language;
+    this._portalTranslations = null;
+    const safeLanguage = /^[a-z]{2,3}$/.test(language) ? language : "en";
+    const version = encodeURIComponent(this._panel?.config?.dashboard_version || "1.0.66");
+    fetch(`/battery_smartflow_ai/translations/${safeLanguage}.json?v=${version}`)
+      .then((response) => response.ok ? response.json() : {})
+      .then((translations) => {
+        if (this._portalTranslationLanguage !== language) return;
+        this._portalTranslations = translations;
+        this._scheduleRender();
+      })
+      .catch(() => {});
+  }
+
   _t(key) {
     const locale = this._hass && this._hass.locale ? this._hass.locale.language : "";
     const german = String(locale || "").toLowerCase().startsWith("de");
     const language = String(locale || "").toLowerCase().split(/[-_]/)[0];
+    const portalTranslation = this._portalTranslations?.[key];
+    if (typeof portalTranslation === "string") return portalTranslation;
     if (key === "options_loading") {
       return language === "de" ? "Gruppeneinrichtung wird geladen …" : "Loading group setup …";
     }
@@ -1464,6 +1488,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
     if (normalizedName === "scope_name") {
       return this._t("scope_name");
     }
+    const localizedField = this._portalTranslations?.[`option_${normalizedName}`]
+      || this._portalTranslations?.[normalizedName];
+    if (typeof localizedField === "string") return localizedField;
     if (normalizedName === "control_enabled") {
       const language = String(this._hass?.locale?.language || "en")
         .toLowerCase()
