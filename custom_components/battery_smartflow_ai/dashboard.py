@@ -53,7 +53,7 @@ _SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.65"
+DASHBOARD_VERSION = "1.0.66"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -452,6 +452,14 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                         str(frontend_dir / "hems-dashboard.js"),
                         cache_headers=True,
                     ),
+                    *[
+                        StaticPathConfig(
+                            f"/battery_smartflow_ai/translations/{language}.json",
+                            str(frontend_dir / "translations" / f"{language}.json"),
+                            cache_headers=True,
+                        )
+                        for language in ("de", "en", "fr", "nl")
+                    ],
                     StaticPathConfig(
                         _SF2400AC_IMAGE_URL,
                         str(frontend_dir / "images" / "sf2400ac.png"),
