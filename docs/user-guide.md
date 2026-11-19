@@ -149,6 +149,33 @@ The group overview shows its target, proposed power allocation and electrical co
 
 ![Group overview in German showing one SolarFlow with three battery packs](images/v6-group-overview.png)
 
+### Choosing a group objective
+
+The objective sets the total power the group should charge or discharge. The balancing strategy then determines which eligible system takes the lead.
+
+| Objective | Effect and example |
+| --- | --- |
+| Self-consumption / near 0 W | Uses the charge or discharge target from the current BSFAI strategy. If the strategy requests 500 W of discharge for household consumption, the group allocates 500 W in total. Price strategy and SoC limits still apply. |
+| Peak shaving | **Maximum grid import** sets the desired import limit at the meter. With 3,800 W import and a 3,000 W limit, the group requests 800 W of discharge. At or below the limit it suppresses discharge. Scheduled charging can still proceed. |
+| PV surplus storage | Suppresses a discharge target. If the strategy requests 1,000 W of charging and the meter reports 600 W of export, the charge target is 600 W. With zero measured export, an existing charge plan can still apply. |
+| UPS price arbitrage | At or below the cheap price threshold, the group charges from the grid up to the **UPS charge target SoC**. Between thresholds the target is 0 W. At or above the expensive threshold, discharge follows the measured load on the assigned off-grid outputs. The **UPS reserve SoC** protects the remaining charge. |
+
+### How the systems share the load
+
+**Energy weighted** gives discharge priority to the system holding more energy and charge priority to the one with more free capacity. For a new lead selection, consider an 8 kWh system at 50% and a 4 kWh system at 75%. They hold 4 kWh and 3 kWh respectively, so the larger system has discharge priority. **By SoC difference** gives discharge priority to the higher percentage and charge priority to the lower percentage. In this example the smaller system has discharge priority. The **SoC switch threshold** is in percentage points. A threshold of 10 prevents a lead change for a difference of just two points.
+
+Allocation is staged. Suppose two devices can each discharge at 800 W and their circuits allow the combined output. The first pass allocates up to 75% of each effective device limit, or 600 W each. Once both preferred ranges are used, the remaining demand is allocated up to each device limit.
+
+| Group discharge target | Lead device | Second device |
+| ---: | ---: | ---: |
+| 500 W | 500 W | 0 W |
+| 801 W | 600 W | 201 W |
+| 1,400 W | 800 W | 600 W |
+| 1,600 W | 800 W | 800 W |
+
+These figures are proposed targets. Device limits, SoC limits and shared circuit limits can restrict the allocation. Compare the group target with the proposed total in the preview to see how much could be assigned.
+
+
 ## V5.1.0: the BSFAI Portal
 
 V5.1.0 adds an optional standalone HEMS-style dashboard. It brings current

@@ -157,6 +157,33 @@ Zurück in **Systeme & Gruppen** siehst du das Gruppenziel, die vorgeschlagene L
 
 ![Portalübersicht einer Gruppe mit einem SolarFlow und drei Akku-Packs](images/v6-group-overview.png)
 
+### Welches Gruppenziel passt zur Anlage?
+
+Das Gruppenziel bestimmt, wie viele Watt die Gruppe insgesamt laden oder entladen soll. Die Balancing-Strategie entscheidet anschließend, welches geeignete System zuerst Leistung übernimmt.
+
+| Gruppenziel | Wirkung und Beispiel |
+| --- | --- |
+| Eigenverbrauch / nahe 0 W | Übernimmt das Lade- oder Entladeziel der laufenden BSFAI-Strategie. Fordert diese 500 W Entladung für den Hausverbrauch an, verteilt die Gruppe insgesamt 500 W. Preisstrategie und SoC-Grenzen gelten weiterhin. |
+| Lastspitzen kappen | **Maximaler Netzbezug** ist die gewünschte Bezugsgrenze am Zähler. Bei 3.800 W Bezug und 3.000 W Grenze fordert die Gruppe 800 W Entladung an. Unterhalb oder auf der Grenze entfällt die Entladeanforderung. Eine geplante Ladung bleibt möglich. |
+| PV-Überschuss speichern | Unterdrückt ein Entladeziel. Fordert die Strategie 1.000 W Ladung an und misst der Zähler 600 W Einspeisung, beträgt das Ladeziel 600 W. Ohne gemessene Einspeisung kann eine bereits geplante Ladung bestehen bleiben. |
+| USV-Preis-Arbitrage | Bei oder unter der günstigen Preisschwelle lädt die Gruppe aus dem Netz bis zum **USV-Ladeziel**. Zwischen den Schwellen beträgt das Ziel 0 W. Ab der teuren Schwelle richtet sich die Entladung nach der gemessenen Last an den zugeordneten Insel-Ausgängen. Die **USV-Reserve** schützt den verbleibenden Ladezustand. |
+
+### Welches System übernimmt die Last?
+
+**Energiegewichtet** bevorzugt beim Entladen das System mit mehr gespeicherter Energie und beim Laden das mit mehr freier Kapazität. Beispiel bei neuer Auswahl: Ein Speicher mit 8 kWh bei 50 % enthält 4 kWh, einer mit 4 kWh bei 75 % enthält 3 kWh. Zum Entladen hat der größere Vorrang. **Nach SoC-Abstand** bevorzugt dagegen beim Entladen den höheren und beim Laden den niedrigeren Prozentwert. Im selben Beispiel hätte der kleinere Speicher beim Entladen Vorrang. Der **SoC-Abstand zum Wechsel** ist in Prozentpunkten angegeben. Ein eingestellter Abstand von 10 verhindert, dass die Führung schon wegen eines Unterschieds von zwei Prozentpunkten wechselt.
+
+Die Verteilung erfolgt stufenweise. Angenommen, zwei Geräte dürfen jeweils 800 W entladen und der gemeinsame Stromkreis lässt die Gesamtleistung zu. Im ersten Durchgang nutzt die Gruppe je Gerät bis zu 75 % seines wirksamen Limits, hier also 600 W. Erst wenn dieser Bereich bei beiden ausgeschöpft ist, nutzt sie den Rest bis zum jeweiligen Maximum.
+
+| Entladeziel der Gruppe | Führendes Gerät | Zweites Gerät |
+| ---: | ---: | ---: |
+| 500 W | 500 W | 0 W |
+| 801 W | 600 W | 201 W |
+| 1.400 W | 800 W | 600 W |
+| 1.600 W | 800 W | 800 W |
+
+Das sind vorgeschlagene Sollwerte. Geräte-, SoC- und gemeinsame Stromkreisgrenzen können die Verteilung einschränken. In der Vorschau lässt sich am Unterschied zwischen **Gruppenziel** und **Vorgeschlagen** ablesen, wie viel Leistung zugeteilt werden konnte.
+
+
 ## V5.1.0: Das BSFAI-Portal
 
 V5.1.0 ergänzt ein optionales, eigenständiges Dashboard im Stil eines HEMS-
