@@ -2,7 +2,7 @@
 
 **Sprache:** Deutsch | [English](user-guide.md)
 
-> Neu in V6: [Batteriegruppen im Portal einrichten](#batteriegruppen-in-v6).
+> [Batteriegruppen im Portal einrichten](#batteriegruppen).
 
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
 
@@ -10,8 +10,8 @@
 
 ## Inhaltsverzeichnis
 
-* [V5-Schnellstart: Zendure direkt verbinden](#v5-schnellstart-zendure-direkt-verbinden)
-* [V5.1.0: Das BSFAI-Portal](#v510-das-bsfai-portal)
+* [Schnellstart: Zendure direkt verbinden](#schnellstart-zendure-direkt-verbinden)
+* [Das BSFAI-Portal](#das-bsfai-portal)
 * [Community-Erweiterung: SmartFlow Preisampel](#community-erweiterung-smartflow-preisampel)
 * [Regelungstraining](#regelungstraining)
 * [Kapitel 1 – Was macht Battery SmartFlow AI?](#kapitel-1--was-macht-battery-smartflow-ai)
@@ -30,9 +30,9 @@
 
 ---
 
-# V5-Schnellstart: Zendure direkt verbinden
+# Schnellstart: Zendure direkt verbinden
 
-V5 kann ein Zendure-System selbst erkennen, seine Messwerte als Home-Assistant-
+BSFAI kann ein Zendure-System selbst erkennen, seine Messwerte als Home-Assistant-
 Geräte und -Entitäten bereitstellen und es – nach erfolgreicher Einrichtung –
 ohne Z-HA steuern. Für diesen Weg ist **Z-HA nicht erforderlich**. Der bisherige
 Weg über vorhandene HA-Entitäten bleibt als Alternative erhalten. Aktuell wird
@@ -46,20 +46,20 @@ zugehörige Geräte.
 > gleichzeitige Regler für dasselbe Gerät.
 
 1. **Installieren und neu starten.** Installiere die aktuelle stabile
-   V5-Version über HACS und starte Home Assistant neu.
+   Version über HACS und starte Home Assistant neu.
 2. **Verbindungsweg wählen.** Unter *Einstellungen → Geräte & Dienste →
    Integration hinzufügen → Battery SmartFlow AI* wähle **Zendure direkt
    verbinden**. **Vorhandene HA-Entitäten verwenden** ist der alternative Weg
    für bereits angelegte Sensoren und Regler, etwa über Z-HA.
 
-   ![V5: Zendure direkt verbinden oder vorhandene HA-Entitäten verwenden](images/v5_setup_01_connection_choice.png)
+   ![Zendure direkt verbinden oder vorhandene HA-Entitäten verwenden](images/v5_setup_01_connection_choice.png)
 
 3. **Mit der Zendure-App verbinden.** Gib den App-Token ein. Der Token wird als
    Geheimnis gespeichert und nicht als lesbarer Sensor oder Diagnosewert
    ausgegeben. Verwende hier den App-Token, nicht das Passwort deines
    MQTT-Brokers.
 
-   ![V5: geschützte Eingabe des Zendure-App-Tokens](images/v5_setup_02_app_token.png)
+   ![geschützte Eingabe des Zendure-App-Tokens](images/v5_setup_02_app_token.png)
 
 4. **Gerät und Kommunikationsweg bestätigen.** Wähle das richtige Hauptgerät,
    insbesondere wenn mehrere gleiche Modelle gefunden werden. Seriennummer
@@ -83,7 +83,7 @@ zugehörige Geräte.
    sie ist nur für eine notwendige Neueinrichtung gedacht. Cloud benötigt keinen
    lokalen Broker, ist aber von der Internetverbindung abhängig.
 5. **Übrige Anlagenangaben ergänzen.** Wähle deine Netzleistungsmessung sowie
-   optionale Preis- und PV-Prognosequellen. V5 erkennt beim direkten Weg
+   optionale Preis- und PV-Prognosequellen. BSFAI erkennt beim direkten Weg
    Geräteprofil, verfügbare Hardware-Sensoren, Akku-Packs und deren Kapazität
    aus den Gerätedaten. Diese Werte müssen nicht mehr als Z-HA-Entitäten oder
    manuelle Pack-Anzahl eingetragen werden. Ein zuverlässiger Netzsensor ist
@@ -93,14 +93,14 @@ zugehörige Geräte.
    Hauptgerät und die erkannten Packs. Die Bereichszuordnung kann übersprungen
    und später geändert werden.
 
-   ![V5: erkannte Geräte benennen und Bereichen zuordnen](images/v5_setup_03_assign_devices.png)
+   ![erkannte Geräte benennen und Bereichen zuordnen](images/v5_setup_03_assign_devices.png)
 
 7. **Datenempfang prüfen.** Unter *Einstellungen → Geräte & Dienste → Battery
    SmartFlow AI* sollten Hauptgerät und Packs erscheinen. Prüfe, ob SoC und
    Leistungswerte aktuell werden und welcher Kommunikationsweg in der Diagnose
    steht. Die Zahl der Geräte und Entitäten ist modell- und datenabhängig.
 
-   ![V5: Steuerung, Wirtschaft, Hauptgerät und zwei Akku-Packs nach der Einrichtung](images/v5_setup_04_device_overview.png)
+   ![Steuerung, Wirtschaft, Hauptgerät und zwei Akku-Packs nach der Einrichtung](images/v5_setup_04_device_overview.png)
 
 ### Vor dem ersten Regeltest
 
@@ -133,7 +133,7 @@ zeitlich begrenzte BSFAI-Debug-Aufzeichnung hilfreich sein; prüfe beide Dateien
 vor dem Teilen auf persönliche Daten. Schalte die native Steuerung nicht
 parallel zu einer aktiven Z-HA-Regelung ein.
 
-## Batteriegruppen in V6
+## Batteriegruppen
 
 Öffne **Systeme & Gruppen → Gruppe anlegen** im Portal. Halte die Namen deiner eingerichteten Systeme, ihre Stromkreiszuordnung und die Entitäten deiner Stromzähler bereit. Mit **Gruppe bearbeiten** öffnest du denselben Assistenten mit den gespeicherten Werten.
 
@@ -184,9 +184,9 @@ Die Verteilung erfolgt stufenweise. Angenommen, zwei Geräte dürfen jeweils 800
 Das sind vorgeschlagene Sollwerte. Geräte-, SoC- und gemeinsame Stromkreisgrenzen können die Verteilung einschränken. In der Vorschau lässt sich am Unterschied zwischen **Gruppenziel** und **Vorgeschlagen** ablesen, wie viel Leistung zugeteilt werden konnte.
 
 
-## V5.1.0: Das BSFAI-Portal
+## Das BSFAI-Portal
 
-V5.1.0 ergänzt ein optionales, eigenständiges Dashboard im Stil eines HEMS-
+BSFAI bietet ein optionales, eigenständiges Dashboard im Stil eines HEMS-
 Portals. Es fasst aktuelle Home-Assistant-Werte und vorhandene BSFAI-Funktionen
 in einer eigenen Oberfläche zusammen. Das Portal aktiviert keine zusätzliche
 Regelung und spricht die Zendure-Hardware nicht direkt an: Steuerelemente
@@ -202,7 +202,7 @@ Die Übersicht zeigt Live-Werte, Systemzustand und erkannte SolarFlow-Geräte
 mit zugehörigen Akku-Packs. Der SoC wird als farbiger Füllstand dargestellt;
 Details zu System und Akku-Pack lassen sich gezielt öffnen.
 
-![BSFAI-Portal V5.1.0: Energieübersicht, Systemzustand und Hardware-Topologie](images/v510_portal_overview.png)
+![BSFAI-Portal Energieübersicht, Systemzustand und Hardware-Topologie](images/v510_portal_overview.png)
 
 ### Energie und Prognose
 
@@ -212,7 +212,7 @@ Home-Assistant-Energieprognose-Integration bezogen, nicht fest von Solcast.
 Klickbare Messwerte öffnen ihre Verlaufsdiagramme mit Zeiträumen von Stunde
 bis Monat, sofern Home Assistant dafür Verlauf gespeichert hat.
 
-![BSFAI-Portal V5.1.0: Momentanleistung, Energieflüsse und Solarprognose](images/v510_portal_energy_forecast.png)
+![BSFAI-Portal Momentanleistung, Energieflüsse und Solarprognose](images/v510_portal_energy_forecast.png)
 
 ### Wirtschaftlichkeit
 
@@ -221,7 +221,7 @@ Erlöse, Batterienutzen und gewichtete Durchschnittswerte. Die Sensoren bleiben
 auch einzeln in Home Assistant verfügbar; das Portal stellt sie übersichtlich
 zusammen und bietet für passende Messwerte den direkten Zugang zum Verlauf.
 
-![BSFAI-Portal V5.1.0: Preisplanung und Wirtschaftlichkeit](images/v510_portal_economics.png)
+![BSFAI-Portal Preisplanung und Wirtschaftlichkeit](images/v510_portal_economics.png)
 
 ### Steuerung
 
@@ -230,7 +230,7 @@ Zahlen-Entitäten bedienen. Änderungen werden über Home Assistant gespeichert;
 die Anzeige nennt weiterhin die verfügbaren Hardware-SoC-Grenzen zur
 Information.
 
-![BSFAI-Portal V5.1.0: Betriebsart, Einstellungen und Hardware-SoC-Grenzen](images/v510_portal_controls.png)
+![BSFAI-Portal Betriebsart, Einstellungen und Hardware-SoC-Grenzen](images/v510_portal_controls.png)
 
 ### Regelungstraining
 
@@ -393,26 +393,9 @@ Kartenanleitung im
 [Repository des Autors](https://github.com/spikesch/smartflow-preisampel).
 Melde Probleme mit der Erweiterung dort und nicht als Fehler von BSFAI.
 
-## Upgrade von V4.7.4 auf V5
+## Bestehende Installation aktualisieren
 
-Erstelle vor dem Update ein Home-Assistant-Backup. Ein bestehender V4-Eintrag
-bleibt beim Versionswechsel zunächst auf dem bisherigen Entitäten-Weg; die
-native Steuerung wird **nicht automatisch** eingeschaltet. Das Upgrade ist
-damit absichtlich reversibel:
-
-1. Aktualisiere BSFAI und starte Home Assistant neu.
-2. Prüfe zuerst, ob der bisherige Entitäten-Weg weiterläuft.
-3. Wenn du auf die direkte Verbindung umsteigen möchtest, öffne
-   **Konfigurieren → Natives Zendure**, hinterlege den App-Token und bestätige
-   Hauptgerät sowie Kommunikationsweg.
-4. Prüfe erst den laufenden Datenempfang und deaktiviere anschließend die
-   parallele Z-HA-Regelung, bevor du den ersten Regeltest machst.
-
-Ein Upgrade ist nicht dasselbe wie die oben gezeigte Neuinstallation. Lösche
-Z-HA nicht vorschnell: Die Umstellung kann zunächst parallel vorbereitet und
-erst nach bestätigtem Datenempfang als Steuerweg übernommen werden.
-
----
+Erstelle vor dem Update ein Home-Assistant-Backup. Kontrolliere nach dem Neustart den Datenempfang und die Steuerfreigabe für jedes eingerichtete System.
 
 # Kapitel 1 – Was macht Battery SmartFlow AI?
 
@@ -449,7 +432,7 @@ Das Ziel ist ein ausgewogenes Zusammenspiel aus:
 
 > [!TIP]
 > Das beste Ergebnis ist nicht immer jeder einzelne Messwert exakt bei `0 W`.
-> V4.3.0 regelt nahe am wirtschaftlichen Zielpunkt; je nach Geräteprofil und
+> BSFAI regelt nahe am wirtschaftlichen Zielpunkt; je nach Geräteprofil und
 > Einspeisevergütung kann dieser leicht auf der Bezugs- oder Einspeiseseite liegen.
 
 ---
@@ -488,15 +471,15 @@ Beispiele:
 * Soll ein Befehl erneut geschrieben werden oder kann er übersprungen werden?
 * Wie stark darf die Leistung pro Regelzyklus steigen oder fallen?
 
-Diese Trennung bildet in V4.3.0 den verbindlichen Regelpfad für alle Installationen.
+Diese Trennung bildet den verbindlichen Regelpfad für alle Installationen.
 
 ---
 
-## ✨ Wichtigste Neuerungen in V4.3.0
+## ✨ Regelfunktionen im Überblick
 
 Battery SmartFlow AI hat sich seit den frühen Versionen deutlich weiterentwickelt.
 
-Wichtige Neuerungen gegenüber V4.2.8:
+Die Automatik bietet folgende Funktionen:
 
 * 🧠 einheitliche, saisonunabhängige Automatik
 * ☀️ eigener Autarkiemodus statt des bisherigen Sommermodus
@@ -523,11 +506,11 @@ Battery SmartFlow AI soll nicht möglichst viel schalten, sondern:
 
 Damit Battery SmartFlow AI korrekt und stabil arbeiten kann, müssen bestimmte Einstellungen zwingend beachtet werden.
 
-Voraussetzung ist Home Assistant Core 2026.8.0 oder neuer.
+Voraussetzung ist Eine kompatible Home-Assistant-Core-Version (siehe [HACS-Mindestanforderung](../hacs.json)).
 
 Die Integration übernimmt die Steuerung des ausgewählten Zendure-Systems.
 Parallele oder widersprüchliche Steuerungen führen zu Instabilität. Z-HA ist
-beim direkten V5-Weg **keine Voraussetzung**.
+beim direkten Verbindungsweg **keine Voraussetzung**.
 
 > [!IMPORTANT]
 > Wenn das System nicht wie erwartet arbeitet, sollten zuerst die Voraussetzungen in diesem Kapitel geprüft werden.
@@ -739,11 +722,11 @@ Nach der Installation wird Battery SmartFlow AI über Home Assistant eingerichte
 Einstellungen → Geräte & Dienste → Integration hinzufügen → Battery SmartFlow AI
 ```
 
-Die bebilderte **native V5-Ersteinrichtung** steht im
-[V5-Schnellstart](#v5-schnellstart-zendure-direkt-verbinden). Die Abschnitte 4.1
+Die bebilderte **native Ersteinrichtung** steht im
+[Schnellstart](#schnellstart-zendure-direkt-verbinden). Die Abschnitte 4.1
 bis 4.6 unten erläutern vor allem die alternative Konfiguration über
 **vorhandene HA-Entitäten**. Deren ältere Screenshots zeigen nicht den nativen
-V5-Einrichtungsdialog.
+Einrichtungsdialog.
 
 Ein Beispiel für einen älteren Integrationseintrag:
 
@@ -1625,9 +1608,9 @@ erzeugen.
 
 ---
 
-## 5.7 Einheitlicher V4.3-Regelpfad
+## 5.7 Einheitlicher Regelpfad
 
-Seit V4.3.0 ist die technische Regelkette für alle Installationen verbindlich:
+Für BSFAI ist die technische Regelkette für alle Installationen verbindlich:
 
 ```text
 AutomaticStrategy-Kontext
@@ -1804,8 +1787,7 @@ Besonders hilfreich sind:
 * geplanter Ladestart, Deadline und benötigte Nachladeenergie
 * die fünf sparsamen Statuswerte der Debug-Aufzeichnung
 
-Tiefe Strategie-, Ladebindungs-, Off-Grid- und Regelungsdetails werden seit
-V4.4 bewusst nicht mehr als dauerhaft aktive Diagnoseentitäten angelegt. Bei
+Tiefe Strategie-, Ladebindungs-, Off-Grid- und Regelungsdetails werden nicht als dauerhaft aktive Diagnoseentitäten angelegt. Bei
 Bedarf erfasst eine zeitlich begrenzte Debug-Aufzeichnung diese Informationen in
 einem JSON-Paket. Dadurch bleibt die normale Geräteansicht verständlich und der
 Home-Assistant-Recorder wird nicht mit technischen Detailwerten belastet.
@@ -1818,9 +1800,9 @@ Dieses Kapitel erklärt die wichtigsten Sensoren und Bedienelemente.
 
 ---
 
-## Orientierung in der Geräteansicht ab V4.6.0
+## Orientierung in der Geräteansicht
 
-![Geräteübersicht ab V4.6.0](images/v460_device_overview.png)
+![Geräteübersicht](images/v460_device_overview.png)
 
 Battery SmartFlow AI teilt die Entitäten auf zwei übersichtliche Geräte auf. Es
 handelt sich trotzdem um **eine Integration und eine gemeinsame Steuerung**:
@@ -2217,7 +2199,7 @@ Zeigt die Länge des geplanten Ladefensters.
 
 Historientage, Datenabdeckung, erwarteter Verbrauch, verfügbare Akkuenergie,
 Reserve, Prognose-Zuschlag und Blockierungsgrund werden intern weiterhin für die
-Planung berechnet. Sie werden seit V4.4 aber nicht mehr als dauerhafte
+Planung berechnet. Sie werden nicht als dauerhafte
 Diagnosesensoren angelegt. Diese Details stehen bei einer gezielten
 Debug-Aufzeichnung im JSON-Paket zur Verfügung.
 
@@ -2301,7 +2283,7 @@ Beispiele:
 Die wichtigsten Preis- und Schutzregler befinden sich im Gerätebereich
 **Steuerung**:
 
-![Preis- und Schutzregler ab V4.6.0](images/v460_price_controls.png)
+![Preis- und Schutzregler](images/v460_price_controls.png)
 
 Die Prozentwerte sind bewusst als verständliche Auf- und Abschläge dargestellt:
 
@@ -2417,7 +2399,7 @@ Untere Schutzgrenze.
 
 ## Anzahl Akku-Packs
 
-Beim direkten V5-Weg wird die Pack-Anzahl aus den Gerätedaten ermittelt und
+Beim direkten Verbindungsweg wird die Pack-Anzahl aus den Gerätedaten ermittelt und
 nicht als manuelle Konfigurationsangabe abgefragt. Der Wert dient zusammen mit
 der erkannten Kapazität der Planung. Beim Entitäten-Weg können ältere
 Konfigurationswerte weiterhin relevant sein.
@@ -2459,7 +2441,7 @@ Im manuellen Modus kann gewählt werden:
 
 # 6.7 Debug-Status
 
-V4.4 führt eine zeitlich begrenzte interne Debug-Aufzeichnung ein. Damit der
+BSFAI bietet eine zeitlich begrenzte interne Debug-Aufzeichnung. Damit der
 Home-Assistant-Recorder im Normalbetrieb nicht mit umfangreichen
 Diagnoseattributen belastet wird, erscheinen in der Geräteansicht nur wenige
 sparsame Statusentitäten:
@@ -2492,7 +2474,7 @@ das ausgewählte Geräteprofil verwaltet. Bereits gespeicherte Profilanpassungen
 älterer Versionen bleiben aus Kompatibilitätsgründen erhalten, werden aber nicht
 mehr im Einstellungsdialog angeboten.
 
-Der V5-Einstellungsdialog enthält vier Bereiche:
+Der Einstellungsdialog enthält vier Bereiche:
 
 ![Älterer Einstellungsdialog mit Debug-Modus](images/config_07_settings_menu.png)
 
@@ -2503,8 +2485,8 @@ Der V5-Einstellungsdialog enthält vier Bereiche:
   als verdeckter Platzhalter
 * **Debug-Modus** – zeitlich begrenzte Aufzeichnung nur für Fehlersuche und Support
 
-Der Screenshot zeigt noch die ältere V4-Menüansicht. Die Erstkonfiguration
-des App-Tokens erfolgt beim direkten V5-Weg bereits im Einrichtungsdialog.
+Der Screenshot zeigt noch die ältere Menüansicht. Die Erstkonfiguration
+des App-Tokens erfolgt beim direkten Verbindungsweg bereits im Einrichtungsdialog.
 
 ---
 
@@ -2524,7 +2506,7 @@ Im Expertenmodus können erweiterte Funktionen aktiviert werden:
 * lernbasierte Ladefenster-Planung
 * Zellspannungs-Schutz
 
-Die einheitliche Leistungsregelung ist in V4.3.0 für alle Installationen
+Die einheitliche Leistungsregelung ist für alle Installationen
 verbindlich aktiv und keine einstellbare Expertenoption.
 
 ---
@@ -3011,7 +2993,7 @@ und werden nicht durch diese Exportgewichtung verändert.
 ## Ladepreis-Zwischenspeicher
 
 SoC-Werte werden häufig langsamer aktualisiert als Leistungs- und Netzsensoren.
-Deshalb sammelt V4.3.0 während realer Ladung zeitlich begrenzt gewichtete
+Deshalb sammelt BSFAI während realer Ladung zeitlich begrenzt gewichtete
 Nachweise zu PV-/Netzanteil und Preis. Ein nachlaufender SoC-Anstieg kann diese
 Kostenbasis noch übernehmen, auch wenn INPUT bereits beendet wurde. Bei
 Entladung oder am Mindest-SoC wird der Zwischenspeicher verworfen; veraltete
@@ -3093,7 +3075,7 @@ Typische Optimierungen:
 
 Die Mix-Profile berücksichtigen ihre jeweiligen AC-/Off-Grid-Grenzen. Ein
 erkanntes Profil sagt aber noch nichts über aktuelle Messwerte aus. Beim
-Entitäten-Weg müssen die Quellentitäten Daten liefern; beim direkten V5-Weg
+Entitäten-Weg müssen die Quellentitäten Daten liefern; beim direkten Verbindungsweg
 muss der ausgewählte Kommunikationsweg aktuelle Gerätedaten liefern.
 
 Bei einer Support-Anfrage zu diesen Modellen sollten deshalb zuerst geprüft
@@ -3102,7 +3084,7 @@ werden:
 * genaue Modellbezeichnung
 * installierte Firmware-Version
 * ob die Z-HA-Entitäten beim Entitäten-Weg tatsächlich neue Werte liefern
-* ob beim direkten V5-Weg aktuelle native Zendure-Nachrichten eintreffen
+* ob beim direkten Verbindungsweg aktuelle native Zendure-Nachrichten eintreffen
 * ob SoC, Batterieleistung, AC-Modus sowie Lade- und Entladegrenze verfügbar sind
 
 Eine angelegte MQTT-Entität allein ist noch kein Nachweis für aktuelle Daten;
@@ -3199,7 +3181,7 @@ Maßnahmen:
 
 ## 9.5 Netzbezug oder Einspeisung bleibt oberhalb des Zielbereichs
 
-Kurze Abweichungen bei Lastwechseln sind normal. V4.3.0 regelt im stabilen
+Kurze Abweichungen bei Lastwechseln sind normal. BSFAI regelt im stabilen
 Betrieb jedoch deutlich näher am jeweiligen Zielwert als frühere Versionen.
 
 Der genaue Zielpunkt hängt vom Geräteprofil und von der Wirtschaftlichkeit ab:
@@ -3315,7 +3297,7 @@ bleiben maßgeblich.
 
 Prüfe zuerst, welcher Einrichtungsweg aktiv ist. Beim Entitäten-Weg müssen die
 Z-HA- oder anderen Quellentitäten aktuelle SoC- und Leistungswerte liefern.
-Beim direkten V5-Weg prüfe Kommunikationsweg, letzten Datenempfang und native
+Beim direkten Verbindungsweg prüfe Kommunikationsweg, letzten Datenempfang und native
 Zendure-Nachrichten. Notiere Modell und Firmware-Version für den Support.
 Ein Geräteprofil ersetzt keine fehlenden Messwerte.
 
@@ -3439,7 +3421,7 @@ Empfohlen:
 ## 10.5 Stabilität vor Aggressivität
 
 Eine stabile Regelung ist wichtiger als ein einzelner exakt ausgeregelter
-0-W-Messwert. Im eingeschwungenen Betrieb sollte V4.3.0 dennoch nur eine kleine
+0-W-Messwert. Im eingeschwungenen Betrieb sollte BSFAI dennoch nur eine kleine
 Abweichung vom wirtschaftlich gewählten Zielpunkt zeigen.
 
 Bei nervösem Verhalten:
@@ -3587,7 +3569,7 @@ Home-Assistant-Oberfläche. Ein Geräteprofil kann sie intern überschreiben.
 
 # Anhang 2 – Wichtige Diagnosewerte für Support
 
-Seit V4.4 sollte bei einem reproduzierbaren Problem bevorzugt eine zeitlich
+Bei der Diagnose sollte bei einem reproduzierbaren Problem bevorzugt eine zeitlich
 begrenzte Debug-Aufzeichnung erstellt und das daraus erzeugte JSON-Paket
 bereitgestellt werden. Dadurch müssen die folgenden Werte nicht mehr einzeln
 als Screenshots oder Sensorattribute zusammengesucht werden.
@@ -3687,7 +3669,7 @@ Zusätzlich hilfreich:
 * ob Zusatzakku-Sensoren konfiguriert sind
 
 > [!NOTE]
-> Die technische Detailtiefe liegt seit V4.4 bewusst im JSON-Paket. Zusätzliche
+> Die technische Detailtiefe liegt im JSON-Paket. Zusätzliche
 > dauerhaft aktive Diagnoseentitäten oder große Recorder-Attribute sollen nicht
 > allein für eine mögliche spätere Supportanfrage aktiviert werden.
 
@@ -3714,8 +3696,7 @@ Die wichtigste Idee bleibt:
 
 > Erst verstehen, dann entscheiden, dann technisch sauber regeln.
 
-Mit V4.3.0 wurde diese technische Grundlage zu einem einheitlichen Gesamtsystem
-weiterentwickelt:
+Die Regelung umfasst folgende Funktionen:
 
 * saisonunabhängige Automatik mit klarer Verantwortung
 * priorisierte Strategieauswahl und persistente AC-Ladebindung

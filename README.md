@@ -27,7 +27,7 @@ Battery SmartFlow AI ist ein privates Freizeitprojekt. Wenn dir die Integration 
 
 **Intelligent, economic and stable control for Zendure SolarFlow systems in Home Assistant**
 
-V6 can coordinate multiple configured Zendure systems in a battery group. Use **Systems & Groups** in the portal to choose the members, control objective, circuits and sensors. [Group setup guide](docs/user-guide.md#battery-groups-in-v6)
+V6 can coordinate multiple configured Zendure systems in a battery group. Use **Systems & Groups** in the portal to choose the members, control objective, circuits and sensors. [Group setup guide](docs/user-guide.md#battery-groups)
 
 ---
 
@@ -48,8 +48,8 @@ device-specific validation.
 See the [measurement method and limitations](docs/architecture/native-transport-metrics-v5.0.0.md#controlled-sf2400ac-baseline).
 
 V5 is now the **current stable release**. Start with the illustrated
-[V5 quick start](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
-or the [German guide](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
+[quick start](docs/user-guide.md#quick-start-connect-zendure-directly)
+or the [German guide](docs/anleitung.md#schnellstart-zendure-direkt-verbinden).
 
 ## V5.1.0 adds the BSFAI HEMS Portal
 
@@ -62,8 +62,8 @@ not a second hardware controller.
 
 ![Battery SmartFlow AI Portal V5.1.0 overview](docs/images/v510_portal_overview.png)
 
-See the [English portal guide](docs/user-guide.md#v510-the-bsfai-portal) or the
-[German portal guide](docs/anleitung.md#v510-das-bsfai-portal).
+See the [English portal guide](docs/user-guide.md#the-bsfai-portal) or the
+[German portal guide](docs/anleitung.md#das-bsfai-portal).
 
 ## Community project: SmartFlow Preisampel
 
@@ -206,7 +206,7 @@ normally **Cloud**. ZenSDK, Local MQTT and Cloud MQTT are distinct paths.
 Local MQTT is for a device deliberately connected to your own local broker and
 may require device provisioning. Check that fresh SoC and power data arrive
 before relying on control. The detailed decision guide is part of the
-[V5 quick start](docs/user-guide.md#v5-quick-start-connect-zendure-directly).
+[quick start](docs/user-guide.md#quick-start-connect-zendure-directly).
 
 **Existing HA entities:** Use sensors and controls supplied by another
 integration, such as Z-HA. Verify that they update. If Z-HA is used, set its
@@ -307,7 +307,7 @@ Zendure** to replace an app token or review the main device and communication
 path. A stored token remains masked.
 
 Home Assistant then offers to name and assign the detected devices. See the
-[illustrated V5 setup](docs/user-guide.md#v5-quick-start-connect-zendure-directly).
+[illustrated V5 setup](docs/user-guide.md#quick-start-connect-zendure-directly).
 
 ---
 
@@ -627,7 +627,7 @@ For detailed setup, screenshots, examples, FAQ and troubleshooting, see:
 
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
 
-Mit V6 können mehrere eingerichtete Zendure-Systeme gemeinsam regeln. Im Portal unter **Systeme & Gruppen** wählst du Mitglieder, Regelziel, Stromkreise und Sensoren. [Gruppen einrichten](docs/anleitung.md#batteriegruppen-in-v6)
+Mit V6 können mehrere eingerichtete Zendure-Systeme gemeinsam regeln. Im Portal unter **Systeme & Gruppen** wählst du Mitglieder, Regelziel, Stromkreise und Sensoren. [Gruppen einrichten](docs/anleitung.md#batteriegruppen)
 
 ---
 
@@ -649,8 +649,8 @@ Messaufbau und Grenzen stehen in der
 [technischen Messnotiz](docs/architecture/native-transport-metrics-v5.0.0.md#controlled-sf2400ac-baseline).
 
 V5 ist jetzt die **aktuelle stabile Version**. Der bebilderte
-[V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
-und der [englische User Guide](docs/user-guide.md#v5-quick-start-connect-zendure-directly)
+[Schnellstart](docs/anleitung.md#schnellstart-zendure-direkt-verbinden)
+und der [englische User Guide](docs/user-guide.md#quick-start-connect-zendure-directly)
 führen durch die neue Ersteinrichtung.
 
 ## V5.1.0 bringt das BSFAI-HEMS-Portal
@@ -664,8 +664,8 @@ Home-Assistant-Entitäten und -Dienste und ist kein zweiter Hardware-Regler.
 
 ![Übersicht des Battery SmartFlow AI Portals V5.1.0](docs/images/v510_portal_overview.png)
 
-Mehr dazu in der [deutschen Portal-Anleitung](docs/anleitung.md#v510-das-bsfai-portal)
-oder im [englischen User Guide](docs/user-guide.md#v510-the-bsfai-portal).
+Mehr dazu in der [deutschen Portal-Anleitung](docs/anleitung.md#das-bsfai-portal)
+oder im [englischen User Guide](docs/user-guide.md#the-bsfai-portal).
 
 ## Community-Erweiterung: SmartFlow Preisampel
 
@@ -799,7 +799,7 @@ MQTT sind unterschiedliche Wege. Lokales MQTT ist für Geräte gedacht, die
 bewusst mit dem eigenen lokalen Broker verbunden werden, und kann eine
 Geräteeinrichtung erfordern. Prüfe vor dem Regelbetrieb, ob SoC und Leistung
 aktuell eintreffen. Die ausführliche Einordnung steht im
-[V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
+[Schnellstart](docs/anleitung.md#schnellstart-zendure-direkt-verbinden).
 
 **Vorhandene HA-Entitäten verwenden:** Sensoren und Regler kommen von einer
 anderen Integration, zum Beispiel Z-HA. Prüfe ihre Aktualisierung. Falls
@@ -903,7 +903,7 @@ erneut geöffnet werden, etwa um App-Token, Hauptgerät oder Kommunikationsweg
 zu prüfen oder zu ändern. Ein gespeicherter Token bleibt dabei verdeckt.
 
 Anschließend bietet Home Assistant das Benennen und Zuordnen der erkannten
-Geräte an. Siehe den [bebilderten V5-Schnellstart](docs/anleitung.md#v5-schnellstart-zendure-direkt-verbinden).
+Geräte an. Siehe den [bebilderten Schnellstart](docs/anleitung.md#schnellstart-zendure-direkt-verbinden).
 
 ---
 

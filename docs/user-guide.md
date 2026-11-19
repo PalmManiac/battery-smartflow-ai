@@ -2,7 +2,7 @@
 
 **Language:** [Deutsch](anleitung.md) | English
 
-> New in V6: [Set up battery groups in the portal](#battery-groups-in-v6).
+> [Set up battery groups in the portal](#battery-groups).
 
 **Intelligent, economical and stable control for Zendure SolarFlow systems in Home Assistant**
 
@@ -10,8 +10,8 @@
 
 ## Table of Contents
 
-* [V5 quick start: connect Zendure directly](#v5-quick-start-connect-zendure-directly)
-* [V5.1.0: the BSFAI Portal](#v510-the-bsfai-portal)
+* [Quick start: connect Zendure directly](#quick-start-connect-zendure-directly)
+* [The BSFAI Portal](#the-bsfai-portal)
 * [Community extension: SmartFlow Preisampel](#community-extension-smartflow-preisampel)
 * [Regulation training](#regulation-training)
 * [Chapter 1 – What does Battery SmartFlow AI do?](#chapter-1--what-does-battery-smartflow-ai-do)
@@ -30,9 +30,9 @@
 
 ---
 
-# V5 quick start: connect Zendure directly
+# Quick start: connect Zendure directly
 
-V5 can discover a Zendure system, expose its measurements as Home Assistant
+BSFAI can discover a Zendure system, expose its measurements as Home Assistant
 devices and entities, and control it without Z-HA once setup succeeds. **Z-HA is
 not required** for this path. The existing-HA-entities path remains available
 as an alternative. One main system is currently selected for control; detected
@@ -43,20 +43,20 @@ battery packs appear as related devices.
 > models and communication paths may need additional setup. Never run two
 > integrations or app automations as simultaneous controllers of one device.
 
-1. **Install and restart.** Install the current stable V5 release through HACS
+1. **Install and restart.** Install the current stable release through HACS
    and restart Home Assistant.
 2. **Choose a connection path.** Go to *Settings → Devices & services → Add
    integration → Battery SmartFlow AI* and choose **Connect Zendure directly**.
    **Use existing HA entities** is the alternative for existing sensors and
    controls, for example from Z-HA.
 
-   ![V5: choose direct Zendure or existing Home Assistant entities](images/v5_setup_01_connection_choice.png)
+   ![choose direct Zendure or existing Home Assistant entities](images/v5_setup_01_connection_choice.png)
 
 3. **Sign in with the Zendure app token.** Enter the app token. It is stored as
    a secret, not exposed as a readable sensor or diagnostic value. This is the
    app token, not your MQTT broker password.
 
-   ![V5: protected Zendure app-token entry](images/v5_setup_02_app_token.png)
+   ![protected Zendure app-token entry](images/v5_setup_02_app_token.png)
 
 4. **Confirm the device and communication path.** Select the correct main
    device, especially if you have several identical models. Use the serial
@@ -79,7 +79,7 @@ battery packs appear as related devices.
    required. Cloud needs no local broker, but depends on internet access.
 5. **Complete the remaining system settings.** Select your grid-power source
    and optional electricity-price and solar-forecast sources. On the direct
-   path, V5 obtains the device profile, available hardware sensors, battery
+   path, BSFAI obtains the device profile, available hardware sensors, battery
    packs and capacity from device data when available. You do not have to
    select Z-HA entities or enter a manual pack count for these values. A
    reliable grid sensor remains important for accurate power regulation.
@@ -87,14 +87,14 @@ battery packs appear as related devices.
    the control device, economics device, main Zendure device and detected
    packs. Area assignment can be skipped and changed later.
 
-   ![V5: name discovered devices and assign areas](images/v5_setup_03_assign_devices.png)
+   ![name discovered devices and assign areas](images/v5_setup_03_assign_devices.png)
 
 7. **Check incoming data.** Under *Settings → Devices & services → Battery
    SmartFlow AI*, the main device and packs should appear. Check that SoC and
    power readings update and inspect the communication path in diagnostics.
    Device and entity counts vary by model and available data.
 
-   ![V5: control, economics, main device and two battery packs after setup](images/v5_setup_04_device_overview.png)
+   ![control, economics, main device and two battery packs after setup](images/v5_setup_04_device_overview.png)
 
 ### Before the first control test
 
@@ -125,7 +125,7 @@ initial-sync JSON* and a time-limited BSFAI debug recording can help with
 support; review both files for personal information before sharing them. Do
 not enable native control alongside active Z-HA regulation.
 
-## Battery groups in V6
+## Battery groups
 
 Open **Systems & Groups → Create group** in the portal. Have the names of your configured systems, their circuit assignments and your meter entity IDs to hand. **Edit group** opens the same wizard with the saved values.
 
@@ -176,9 +176,9 @@ Allocation is staged. Suppose two devices can each discharge at 800 W and their 
 These figures are proposed targets. Device limits, SoC limits and shared circuit limits can restrict the allocation. Compare the group target with the proposed total in the preview to see how much could be assigned.
 
 
-## V5.1.0: the BSFAI Portal
+## The BSFAI Portal
 
-V5.1.0 adds an optional standalone HEMS-style dashboard. It brings current
+BSFAI provides an optional standalone HEMS-style dashboard. It brings current
 Home Assistant readings and existing BSFAI features together in a dedicated
 interface. The portal does not add another control loop or communicate with
 Zendure hardware directly: its controls continue to use the existing Home
@@ -194,7 +194,7 @@ The overview shows live readings, system health, and discovered SolarFlow
 devices with their battery packs. State of charge appears as a colored fill;
 open the details for a system or battery pack when you need more telemetry.
 
-![BSFAI Portal 5.1.0: energy overview, system health, and hardware topology](images/v510_portal_overview.png)
+![BSFAI Portal: energy overview, system health, and hardware topology](images/v510_portal_overview.png)
 
 ### Energy and forecast
 
@@ -204,7 +204,7 @@ integration, rather than being hard-coded to Solcast. Clickable readings open
 their history charts for hour-to-month ranges when Home Assistant has recorded
 history for the sensor.
 
-![BSFAI Portal 5.1.0: live power, energy flows, and solar forecast](images/v510_portal_energy_forecast.png)
+![BSFAI Portal: live power, energy flows, and solar forecast](images/v510_portal_energy_forecast.png)
 
 ### Economics
 
@@ -213,7 +213,7 @@ revenue, battery benefit, and weighted averages. The sensors remain available
 individually in Home Assistant; the portal organizes them into a concise view
 and offers direct history navigation for supported readings.
 
-![BSFAI Portal 5.1.0: price planning and economics](images/v510_portal_economics.png)
+![BSFAI Portal: price planning and economics](images/v510_portal_economics.png)
 
 ### Controls
 
@@ -221,7 +221,7 @@ The **Controls** view operates existing BSFAI select and number entities.
 Changes are saved through Home Assistant. Hardware SoC limits are shown for
 reference and are not writable from this portal.
 
-![BSFAI Portal 5.1.0: operating mode, settings, and hardware SoC limits](images/v510_portal_controls.png)
+![BSFAI Portal: operating mode, settings, and hardware SoC limits](images/v510_portal_controls.png)
 
 ### Regulation training
 
@@ -371,24 +371,9 @@ follow the full installation and card instructions in the author's
 [repository](https://github.com/spikesch/smartflow-preisampel). Report
 problems with the extension there, not as BSFAI bugs.
 
-## Upgrade from V4.7.4 to V5
+## Updating an existing installation
 
-Create a Home Assistant backup before updating. An existing V4 entry initially
-retains its existing-entities path; native control is **not enabled
-automatically**. The upgrade is deliberately reversible:
-
-1. Update BSFAI and restart Home Assistant.
-2. First confirm that the existing-entities path still works.
-3. To move to the direct connection, open **Configure → Native Zendure**, enter
-   the app token and confirm the main device and communication path.
-4. First verify incoming data, then disable parallel Z-HA regulation before the
-   first control test.
-
-An upgrade is different from the new installation shown above. Do not delete
-Z-HA prematurely: prepare the migration in parallel and only hand over control
-after data reception has been confirmed.
-
----
+Create a Home Assistant backup before updating. After restarting, check incoming measurements and control permissions for each configured system.
 
 # Chapter 1 – What does Battery SmartFlow AI do?
 
@@ -425,7 +410,7 @@ The goal is a balanced interaction of:
 
 > [!TIP]
 > The best result is not always every single measurement exactly at `0 W`.
-> V4.3.0 regulates close to the economic target point; depending on the device profile and
+> BSFAI regulates close to the economic target point; depending on the device profile and
 > feed-in tariff, this may be slightly on either the grid-import or grid-export side.
 
 ---
@@ -464,15 +449,15 @@ Examples:
 * Should a command be rewritten or can it be skipped?
 * How much may power increase or decrease per control cycle?
 
-This separation forms the binding control path for all installations in V4.3.0.
+This separation forms the binding control path for all installations.
 
 ---
 
-## ✨ Most important new features in V4.3.0
+## ✨ Control features at a glance
 
 Battery SmartFlow AI has evolved significantly since the early versions.
 
-Important innovations compared to V4.2.8:
+The controller provides the following features:
 
 * 🧠 unified, season-independent automatic control
 * ☀️ own self-sufficiency mode instead of the previous summer mode
@@ -497,12 +482,12 @@ Battery SmartFlow AI is not intended to switch as much as possible, but rather:
 
 # Chapter 2 – Mandatory Requirements
 
-Home Assistant Core 2026.8.0 or newer is required.
+A compatible Home Assistant Core release (see the [HACS minimum requirement](../hacs.json)) is required.
 
 In order for Battery SmartFlow AI to work correctly and stably, certain settings must be observed.
 
 The integration controls the selected Zendure system. Parallel or conflicting
-controllers lead to instability. **Z-HA is not a prerequisite** for V5's direct
+controllers lead to instability. **Z-HA is not a prerequisite** for the direct
 connection path.
 
 > [!IMPORTANT]
@@ -714,10 +699,10 @@ After installation, Battery SmartFlow AI is set up via Home Assistant:
 Settings → Devices & services → Add integration → Battery SmartFlow AI
 ```
 
-The illustrated **native V5 first-time setup** is in the
-[V5 quick start](#v5-quick-start-connect-zendure-directly). Sections 4.1 through
+The illustrated **native first-time setup** is in the
+[Quick start](#quick-start-connect-zendure-directly). Sections 4.1 through
 4.6 below primarily describe the alternative **existing HA entities** path.
-Their older screenshots do not show the native V5 setup dialog.
+Their older screenshots do not show the native setup dialog.
 
 An example of an older integration entry:
 
@@ -1591,9 +1576,9 @@ generate.
 
 ---
 
-## 5.7 Unified V4.3 control path
+## 5.7 Unified control path
 
-Since V4.3.0, the following technical control chain is mandatory for all installations:
+The following technical control chain is mandatory for all installations:
 
 ```text
 AutomaticStrategy context
@@ -1771,8 +1756,7 @@ The following are particularly helpful:
 * the five lightweight debug-recording status values
 
 Deep strategy, charge-commitment, off-grid and regulation details have
-deliberately not been created as permanently active diagnostic entities since
-V4.4. When needed, a time-limited debug recording captures this information in
+deliberately not been created as permanently active diagnostic entities. When needed, a time-limited debug recording captures this information in
 a JSON package. This keeps the normal device view understandable and avoids
 filling Home Assistant Recorder with technical detail values.
 
@@ -1784,9 +1768,9 @@ This chapter explains the most important sensors and controls.
 
 ---
 
-## Finding your way around the device view from V4.6.0
+## Finding your way around the device view
 
-![Device overview from V4.6.0](images/v460_device_overview.png)
+![Device overview](images/v460_device_overview.png)
 
 Battery SmartFlow AI splits its entities between two clearly arranged devices.
 They are still part of **one integration and one shared control system**:
@@ -2182,7 +2166,7 @@ Shows the length of the planned charging window.
 
 History days, data coverage, expected consumption, available battery energy,
 reserve margin, forecast adjustment and blocking reason are still calculated
-internally. Since V4.4, however, they are no longer created as permanent
+internally. They are not created as permanent
 diagnostic sensors. These details are available in the JSON package from a
 targeted debug recording.
 
@@ -2266,7 +2250,7 @@ Examples:
 The main price and protection controls are available in the **Control** section
 of the device:
 
-![Price and protection controls from V4.6.0](images/v460_price_controls.png)
+![Price and protection controls](images/v460_price_controls.png)
 
 The percentages are deliberately shown as easy-to-understand markups and
 discounts:
@@ -2383,7 +2367,7 @@ Lower protection limit.
 
 ## Number of battery packs
 
-On the direct V5 path, the pack count comes from device data rather than a
+On the direct path, the pack count comes from device data rather than a
 manual configuration field. It contributes to planning together with detected
 capacity. Older configuration values may still matter on the existing-entities
 path.
@@ -2425,7 +2409,7 @@ In manual mode you can choose:
 
 # 6.7 Debug status
 
-V4.4 introduces a time-limited internal debug recording. To avoid burdening the
+BSFAI provides a time-limited internal debug recording. To avoid burdening the
 Home Assistant Recorder with extensive diagnostic attributes during normal
 operation, only a small number of lightweight status entities appear in the
 device view:
@@ -2453,7 +2437,7 @@ operation. Device-specific regulation values are managed by the selected
 profile. Older saved profile overrides remain for compatibility but are not
 presented in the normal settings dialog.
 
-V5 offers four options areas:
+BSFAI offers four options areas:
 
 ![Older settings menu with debug mode](images/config_07_settings_menu.png)
 
@@ -2464,7 +2448,7 @@ V5 offers four options areas:
   placeholder
 * **Debug mode** – time-limited recording for troubleshooting and support
 
-The screenshot above shows the older V4 menu. On the direct V5 path, the app
+The screenshot above shows the older menu. On the direct path, the app
 token is already part of the first-time setup flow.
 
 ---
@@ -2485,7 +2469,7 @@ Advanced functions can be activated in expert mode:
 * Learning-based charging window planning
 * cell-voltage protection
 
-The uniform power control is in V4.3.0 for all installations
+The uniform power control is for all installations
 mandatory active and no adjustable expert option.
 
 ---
@@ -2963,7 +2947,7 @@ and are not changed by this export weighting.
 ## Charging-price cache
 
 SoC values are often updated more slowly than power and grid sensors.
-That's why V4.3.0 collects weighted data for a limited time during real charging
+That's why BSFAI collects weighted data for a limited time during real charging
 Evidence of PV/grid share and price. A lagging SoC increase can do this
 Apply the cost basis even if INPUT has already been terminated. At
 discharging or at the minimum SoC the cache is discarded; outdated
@@ -3045,7 +3029,7 @@ Typical optimizations:
 
 The Mix profiles account for their respective AC and off-grid limits. A
 recognized profile does not prove that measurements are current. The
-existing-entities path requires fresh source entities; the direct V5 path
+existing-entities path requires fresh source entities; the direct path
 requires fresh device data on the selected communication path.
 
 For support with these models, first check:
@@ -3053,7 +3037,7 @@ For support with these models, first check:
 * exact model name
 * installed firmware version
 * whether Z-HA entities on the existing-entities path receive new values
-* whether native Zendure messages arrive on the direct V5 path
+* whether native Zendure messages arrive on the direct path
 * whether SoC, battery power, AC mode and charge and discharge limit are available
 
 A created MQTT entity alone is not proof of current data. Fresh values and a
@@ -3150,7 +3134,7 @@ Measures:
 
 ## 9.5 Grid import or grid export remains above the target range
 
-Short deviations during load changes are normal. V4.3.0 regulates in stable
+Short deviations during load changes are normal. BSFAI regulates in stable
 However, operation is significantly closer to the respective target value than previous versions.
 
 The exact target point depends on the device profile and economic viability:
@@ -3266,7 +3250,7 @@ effect.
 
 First identify the active setup path. On the existing-entities path, Z-HA or
 other source entities must provide fresh SoC and power readings. On the direct
-V5 path, check the communication path, last data reception and native Zendure
+connection path, check the communication path, last data reception and native Zendure
 message count. Note the model and firmware version for support. A device
 profile cannot replace missing measurements.
 
@@ -3389,7 +3373,7 @@ Recommended:
 ## 10.5 Stability over aggressiveness
 
 A stable control is more important than a single, precisely controlled one
-0W reading. In steady-state operation, V4.3.0 should still only have a small
+0W reading. In steady-state operation, BSFAI should still only have a small
 Show deviation from the economically chosen target point.
 
 If you behave nervously:
@@ -3537,7 +3521,7 @@ UI. A device profile may override them internally.
 
 # Appendix 2 – Important Diagnostic Values for Support
 
-Since V4.4, if there is a reproducible problem, it should preferably be timed
+If there is a reproducible problem, it should preferably be timed
 limited debug recording is created and the JSON package generated from it
 be provided. This means that the following values no longer have to be entered individually
 can be collected as screenshots or sensor attributes.
@@ -3637,7 +3621,7 @@ Additionally helpful:
 * whether additional battery sensors are configured
 
 > [!NOTE]
-> Since V4.4, the technical level of detail has deliberately been in the JSON package. Additional
+> The technical level of detail has deliberately been in the JSON package. Additional
 > permanently active diagnostic entities or large recorder attributes should not
 > only be activated for a possible later support request.
 
@@ -3663,7 +3647,7 @@ The most important idea remains:
 
 > First understand, then decide, then regulate technically.
 
-V4.3.0 developed this technical foundation into a unified overall system:
+The controller combines the following functions:
 
 * season-independent automatic control with clear responsibilities
 * prioritized strategy selection and persistent AC charge commitments
