@@ -27,7 +27,7 @@ Battery SmartFlow AI ist ein privates Freizeitprojekt. Wenn dir die Integration 
 
 **Intelligent, economic and stable control for Zendure SolarFlow systems in Home Assistant**
 
-*Note: Currently, only a single battery system is supported. Support for coordinated multi-battery systems is planned for a later major version.*
+V6 can coordinate multiple configured Zendure systems in a battery group. Use **Systems & Groups** in the portal to choose the members, control objective, circuits and sensors. [Group setup guide](docs/user-guide.md#battery-groups-in-v6)
 
 ---
 
@@ -627,7 +627,7 @@ For detailed setup, screenshots, examples, FAQ and troubleshooting, see:
 
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
 
-*Achtung: Aktuell wird nur ein einzelnes Batteriesystem unterstützt. Die koordinierte Unterstützung mehrerer Batteriesysteme ist für eine spätere Hauptversion geplant.*
+Mit V6 können mehrere eingerichtete Zendure-Systeme gemeinsam regeln. Im Portal unter **Systeme & Gruppen** wählst du Mitglieder, Regelziel, Stromkreise und Sensoren. [Gruppen einrichten](docs/anleitung.md#batteriegruppen-in-v6)
 
 ---
 

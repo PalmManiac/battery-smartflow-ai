@@ -2,9 +2,7 @@
 
 **Sprache:** Deutsch | [English](user-guide.md)
 
-> V5-Ersteinrichtung: Stand 5.0.0 (September 2026). Die ausführlichen
-> Funktionskapitel enthalten weiterhin Hinweise für Installationen mit
-> vorhandenen Home-Assistant-Entitäten.
+> Neu in V6: [Batteriegruppen im Portal einrichten](#batteriegruppen-in-v6).
 
 **Intelligente, wirtschaftliche und stabile Steuerung für Zendure SolarFlow Systeme in Home Assistant**
 
@@ -134,6 +132,20 @@ Datenempfang. Für Support können das *Zendure-Initial-Sync-JSON* und eine
 zeitlich begrenzte BSFAI-Debug-Aufzeichnung hilfreich sein; prüfe beide Dateien
 vor dem Teilen auf persönliche Daten. Schalte die native Steuerung nicht
 parallel zu einer aktiven Z-HA-Regelung ein.
+
+## Batteriegruppen in V6
+
+Öffne **Systeme & Gruppen → Gruppe anlegen** im Portal. Halte die Namen deiner eingerichteten Systeme, ihre Stromkreiszuordnung und die Entitäten deiner Stromzähler bereit. Mit **Gruppe bearbeiten** öffnest du denselben Assistenten mit den gespeicherten Werten.
+
+1. **Systeme auswählen.** Gib der Gruppe einen Namen und wähle ihre Mitglieder. Bei gleichen Modellen helfen die letzten vier Stellen der Seriennummer.
+2. **Zusammenarbeit festlegen.** Wähle das Gruppenziel, etwa **Eigenverbrauch / nahe 0 W**, und die Balancing-Strategie. Lasse die gestufte Gruppenregelung für eine erste Vorschau ausgeschaltet. Aktiviere sie, wenn die Gruppe die Leistung tatsächlich verteilen soll und die Systeme zur Steuerung eingerichtet sind.
+3. **Elektrische Topologie.** Lege Stromkreise mit Phase und bekannten Grenzen an. Ordne jedem Geräteausgang seinen Stromkreis und Lastbereich zu. Unterscheide Hausnetz und Insel-Ausgang.
+4. **Sensoren zuordnen.** Wähle die Messart passend zum Zähler. Bei vorzeichenbehafteter Leistung bedeutet ein positiver Wert Netzbezug und ein negativer Wert Einspeisung. Bei getrennter Messung ordnest du je einen Sensor für Bezug und Einspeisung zu. Über die Suche findest du Sensoren nach Namen oder Entitäts-ID.
+5. **Prüfen und einrichten.** Kontrolliere Mitglieder, Ziel, Topologie und Sensoren in der Vorschau und speichere die Gruppe.
+
+Zurück in **Systeme & Gruppen** siehst du das Gruppenziel, die vorgeschlagene Leistungsverteilung und die elektrischen Verbindungen. **Nur Vorschau** kennzeichnet die berechnete Verteilung bei ausgeschalteter Gruppenregelung.
+
+![Portalübersicht einer Gruppe mit einem SolarFlow und drei Akku-Packs](images/v6-group-overview.png)
 
 ## V5.1.0: Das BSFAI-Portal
 

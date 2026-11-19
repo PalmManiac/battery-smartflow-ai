@@ -2,9 +2,7 @@
 
 **Language:** [Deutsch](anleitung.md) | English
 
-> V5 first-time setup: current as of 5.0.0 (September 2026). The detailed
-> feature chapters also retain information for installations using existing
-> Home Assistant entities.
+> New in V6: [Set up battery groups in the portal](#battery-groups-in-v6).
 
 **Intelligent, economical and stable control for Zendure SolarFlow systems in Home Assistant**
 
@@ -126,6 +124,20 @@ selected device, communication path and actual data reception. The *Zendure
 initial-sync JSON* and a time-limited BSFAI debug recording can help with
 support; review both files for personal information before sharing them. Do
 not enable native control alongside active Z-HA regulation.
+
+## Battery groups in V6
+
+Open **Systems & Groups → Create group** in the portal. Have the names of your configured systems, their circuit assignments and your meter entity IDs to hand. **Edit group** opens the same wizard with the saved values.
+
+1. **Select systems.** Name the group and select its members. Use the last four serial digits to distinguish identical models.
+2. **Choose how the systems work together.** Select the group objective, such as self-consumption near 0 W, and the balancing strategy. Leave staged group regulation off to preview the allocation. Enable it when the systems are configured for control and you want the group to apply its targets.
+3. **Electrical topology.** Add circuits with their phases and known limits. Map each device output to its circuit and load domain, distinguishing grid and off-grid outputs.
+4. **Assign sensors.** Match the measurement type to your meter. For signed power, positive means grid import and negative means export. For split measurement, select separate import and export sensors. Search by friendly name or entity ID.
+5. **Review and save.** Check the members, objective, topology and sensor assignments before saving.
+
+The group overview shows its target, proposed power allocation and electrical connections. **Preview only** identifies the calculated distribution while group regulation is disabled.
+
+![Group overview in German showing one SolarFlow with three battery packs](images/v6-group-overview.png)
 
 ## V5.1.0: the BSFAI Portal
 
