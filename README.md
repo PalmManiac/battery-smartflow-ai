@@ -23,7 +23,7 @@ Battery SmartFlow AI ist ein privates Freizeitprojekt. Wenn dir die Integration 
 
 ---
 
-<img src="docs/images/infografik.png" width="900">
+<img src="docs/images/infografik.png" alt="Solar generation and household consumption coordinated with a group of battery systems, dynamic electricity prices, and the power grid" width="900">
 
 **Intelligent, economic and stable control for Zendure SolarFlow systems in Home Assistant**
 
