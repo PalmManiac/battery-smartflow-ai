@@ -13,7 +13,7 @@
 4. Starte Home Assistant neu und öffne **Einstellungen → Geräte & Dienste →
    Integration hinzufügen → Battery SmartFlow AI**.
 5. Wähle **Zendure direkt verbinden** oder **Vorhandene HA-Entitäten verwenden**.
-   Der [bebilderte V5-Schnellstart](anleitung.md#v5-schnellstart-zendure-direkt-verbinden)
+   Der [bebilderte Schnellstart](anleitung.md#schnellstart-zendure-direkt-verbinden)
    erklärt den direkten Weg.
 
 Bei einem Upgrade von V4: Erstelle vorher ein Home-Assistant-Backup. Betreibe
