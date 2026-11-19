@@ -129,9 +129,19 @@ not enable native control alongside active Z-HA regulation.
 
 Open **Systems & Groups → Create group** in the portal. Have the names of your configured systems, their circuit assignments and your meter entity IDs to hand. **Edit group** opens the same wizard with the saved values.
 
+![Portal navigation with the Systems & Groups tab](images/v6-group-navigation.png)
+
+![Choose an existing group to edit](images/v6-group-edit.png)
+
 1. **Select systems.** Name the group and select its members. Use the last four serial digits to distinguish identical models.
+   ![Group name and member selection with serial suffix](images/v6-group-members.png)
+
 2. **Choose how the systems work together.** Select the group objective, such as self-consumption near 0 W, and the balancing strategy. Leave staged group regulation off to preview the allocation. Enable it when the systems are configured for control and you want the group to apply its targets.
+   ![Configure group regulation, balancing and objective](images/v6-group-strategy.png)
+
 3. **Electrical topology.** Add circuits with their phases and known limits. Map each device output to its circuit and load domain, distinguishing grid and off-grid outputs.
+   ![Assign a device output to its circuit and load domain](images/v6-group-output.png)
+
 4. **Assign sensors.** Match the measurement type to your meter. For signed power, positive means grid import and negative means export. For split measurement, select separate import and export sensors. Search by friendly name or entity ID.
 5. **Review and save.** Check the members, objective, topology and sensor assignments before saving.
 

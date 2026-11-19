@@ -137,9 +137,19 @@ parallel zu einer aktiven Z-HA-Regelung ein.
 
 Öffne **Systeme & Gruppen → Gruppe anlegen** im Portal. Halte die Namen deiner eingerichteten Systeme, ihre Stromkreiszuordnung und die Entitäten deiner Stromzähler bereit. Mit **Gruppe bearbeiten** öffnest du denselben Assistenten mit den gespeicherten Werten.
 
+![Portalnavigation mit dem Reiter Systeme & Gruppen](images/v6-group-navigation.png)
+
+![Gruppe zum Bearbeiten auswählen](images/v6-group-edit.png)
+
 1. **Systeme auswählen.** Gib der Gruppe einen Namen und wähle ihre Mitglieder. Bei gleichen Modellen helfen die letzten vier Stellen der Seriennummer.
+   ![Gruppenname und zugeordnete Systeme mit Seriennummer](images/v6-group-members.png)
+
 2. **Zusammenarbeit festlegen.** Wähle das Gruppenziel, etwa **Eigenverbrauch / nahe 0 W**, und die Balancing-Strategie. Lasse die gestufte Gruppenregelung für eine erste Vorschau ausgeschaltet. Aktiviere sie, wenn die Gruppe die Leistung tatsächlich verteilen soll und die Systeme zur Steuerung eingerichtet sind.
+   ![Gruppenregelung, Balancing und Gruppenziel einstellen](images/v6-group-strategy.png)
+
 3. **Elektrische Topologie.** Lege Stromkreise mit Phase und bekannten Grenzen an. Ordne jedem Geräteausgang seinen Stromkreis und Lastbereich zu. Unterscheide Hausnetz und Insel-Ausgang.
+   ![Geräteausgang mit Stromkreis und Lastbereich verbinden](images/v6-group-output.png)
+
 4. **Sensoren zuordnen.** Wähle die Messart passend zum Zähler. Bei vorzeichenbehafteter Leistung bedeutet ein positiver Wert Netzbezug und ein negativer Wert Einspeisung. Bei getrennter Messung ordnest du je einen Sensor für Bezug und Einspeisung zu. Über die Suche findest du Sensoren nach Namen oder Entitäts-ID.
 5. **Prüfen und einrichten.** Kontrolliere Mitglieder, Ziel, Topologie und Sensoren in der Vorschau und speichere die Gruppe.
 
