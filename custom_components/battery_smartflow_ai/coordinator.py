@@ -4047,7 +4047,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                     waiting_for_handover = True
                                     continue
                                 handover_ids.add(str(device_id))
-                                observed_direction, observed_w, observed_at = (
+                                _, observed_w, observed_at = (
                                     measured_flow(str(device_id))
                                 )
                                 requested_at = dt_util.parse_datetime(
@@ -4055,9 +4055,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 )
                                 if requested_at is not None:
                                     requested_at = dt_util.as_utc(requested_at)
+                                # The handover threshold is measured in watts.
+                                # A detectable direction below that threshold
+                                # is already within the safe zero tolerance.
                                 if (
-                                    observed_direction is not None
-                                    or observed_at is None
+                                    observed_at is None
                                     or requested_at is None
                                     or dt_util.as_utc(observed_at) <= requested_at
                                     or observed_w > GROUP_HANDOVER_POWER_TOLERANCE_W
