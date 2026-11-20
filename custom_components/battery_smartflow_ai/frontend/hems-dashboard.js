@@ -608,6 +608,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
       energy_scope_save: { de: "Sensorzuordnung speichern", en: "Save sensor assignment", fr: "Enregistrer l’affectation de capteurs", nl: "Sensortoewijzing opslaan" },
       scope_id: { de: "Sensorzuordnung", en: "Sensor assignment", fr: "Affectation de capteurs", nl: "Sensortoewijzing" },
       scope_none: { de: "Noch keine Sensorzuordnungen konfiguriert.", en: "No sensor assignments configured yet.", fr: "Aucune affectation de capteurs n’est encore configurée.", nl: "Er zijn nog geen sensortoewijzingen ingesteld." },
+      battery_soc_average: { de: "SoC-Mittel", en: "Average SoC", fr: "SoC moyen", nl: "Gemiddelde SoC" },
+      battery_flow_partial: { de: "Teilleistung aus {available} von {total} Systemen", en: "Partial battery power from {available} of {total} systems", fr: "Puissance batterie partielle : {available} systèmes sur {total}", nl: "Gedeeltelijk batterijvermogen van {available} van {total} systemen" },
+      battery_soc_partial: { de: "SoC-Mittel aus {available} von {total} Systemen", en: "Average SoC from {available} of {total} systems", fr: "SoC moyen calculé sur {available} systèmes sur {total}", nl: "Gemiddelde SoC van {available} van {total} systemen" },
     };
     if (energyMappingLabels[key]) {
       return energyMappingLabels[key][language] || energyMappingLabels[key].en;
@@ -2671,26 +2674,61 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const nativeBatteryLane = () => {
         if (!nativeBatterySources.length) return null;
         let totalWatts = 0;
-        let complete = true;
+        let availableSystems = 0;
         for (const pair of nativeBatterySources) {
+          const onlineEntity = resolve(pair.online_entity, null);
+          if (String(onlineEntity?.state || "").toLowerCase() === "offline") continue;
           const chargeEntity = resolve(pair.charge_entity, null);
           const dischargeEntity = resolve(pair.discharge_entity, null);
           const chargeWatts = this._powerWatts(chargeEntity);
           const dischargeWatts = this._powerWatts(dischargeEntity);
+          let hasReading = false;
           if (chargeWatts !== null && dischargeWatts !== null) {
             totalWatts += dischargeWatts - chargeWatts;
+            hasReading = true;
           } else if (chargeWatts !== null && chargeWatts > 1 && (dischargeWatts === null || dischargeWatts <= 1)) {
             // A live positive reading identifies the active direction; Zendure reports charge and discharge separately.
             totalWatts -= chargeWatts;
+            hasReading = true;
           } else if (dischargeWatts !== null && dischargeWatts > 1 && (chargeWatts === null || chargeWatts <= 1)) {
             totalWatts += dischargeWatts;
-          } else {
-            complete = false;
-            break;
+            hasReading = true;
           }
+          if (hasReading) availableSystems += 1;
         }
-        return complete
-          ? { ...batterySpec, entity: null, watts: totalWatts, native: true }
+        return availableSystems > 0
+          ? {
+              ...batterySpec,
+              entity: null,
+              watts: totalWatts,
+              native: true,
+              partial: availableSystems < nativeBatterySources.length,
+              availableSystems,
+              totalSystems: nativeBatterySources.length,
+            }
+          : null;
+      };
+      const nativeBatterySocSummary = () => {
+        if (!nativeBatterySources.length) return null;
+        let totalSoc = 0;
+        let availableSystems = 0;
+        for (const pair of nativeBatterySources) {
+          const onlineEntity = resolve(pair.online_entity, null);
+          if (String(onlineEntity?.state || "").toLowerCase() === "offline") continue;
+          const socEntity = resolve(pair.soc_entity, null);
+          const rawSoc = String(socEntity?.state || "").trim();
+          const soc = rawSoc ? Number(rawSoc) : Number.NaN;
+          if (!Number.isFinite(soc) || soc < 0 || soc > 100) continue;
+          totalSoc += soc;
+          availableSystems += 1;
+        }
+        return availableSystems > 0
+          ? {
+              value: totalSoc / availableSystems,
+              partial: availableSystems < nativeBatterySources.length,
+              availableSystems,
+              totalSystems: nativeBatterySources.length,
+            }
           : null;
       };
       // Native Zendure charge/discharge telemetry is the authoritative battery
@@ -2739,11 +2777,6 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const value = wattsFor(lane);
         return value === null || (lane.nonNegative && value < -1) ? 0 : Math.abs(value);
       }));
-      const socEntity = (source.soc && this._hass?.states?.[source.soc])
-        || (allowFallback ? this._findBatterySoc(entities, null) : null);
-      const socText = socEntity && !["unknown", "unavailable"].includes(socEntity.state)
-        ? this._value(socEntity)
-        : "";
       const pvLane = lanes.find((lane) => lane.kind === "pv") || lanes.find((lane) => lane.kind === "native-pv");
       const nativePvLane = lanes.find((lane) => lane.kind === "native-pv");
       const batteryWatts = batteryLane ? wattsFor(batteryLane) : null;
@@ -2751,6 +2784,16 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const houseLane = lanes.find((lane) => lane.kind === "house");
       const houseWatts = houseLane ? wattsFor(houseLane) : null;
       const pvWatts = pvLane ? wattsFor(pvLane) : null;
+      const nativeSocSummary = nativeBatterySocSummary();
+      const configuredSocEntity = (source.soc && this._hass?.states?.[source.soc])
+        || (allowFallback ? this._findBatterySoc(entities, null) : null);
+      const useNativeSoc = nativeSocSummary !== null;
+      const socText = useNativeSoc
+        ? `${nativeSocSummary.value.toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 1 })} %`
+        : configuredSocEntity && !["unknown", "unavailable"].includes(configuredSocEntity.state)
+          ? this._value(configuredSocEntity)
+          : "";
+      const socLabel = useNativeSoc ? this._t("battery_soc_average") : this._t("battery");
       const amount = (watts) => watts === null
         ? this._t("flow_unavailable")
         : `${Math.abs(watts).toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 1 })} W`;
@@ -2781,8 +2824,26 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const batteryDetail = nodeDetail(
         batteryWatts,
         "battery",
-        socText ? `${this._t("battery")}: ${socText}` : "",
+        socText ? `${socLabel}: ${socText}` : "",
       );
+      const batteryWarnings = [];
+      if (batteryLane?.partial) {
+        batteryWarnings.push(
+          this._t("battery_flow_partial")
+            .replace("{available}", String(batteryLane.availableSystems))
+            .replace("{total}", String(batteryLane.totalSystems)),
+        );
+      }
+      if (nativeSocSummary?.partial) {
+        batteryWarnings.push(
+          this._t("battery_soc_partial")
+            .replace("{available}", String(nativeSocSummary.availableSystems))
+            .replace("{total}", String(nativeSocSummary.totalSystems)),
+        );
+      }
+      const batteryWarning = batteryWarnings.length
+        ? `<p class="live-flow-partial-note">${this._escape(batteryWarnings.join(" · "))}</p>`
+        : "";
       const gridDetail = nodeDetail(gridWatts, "grid");
       const houseDetail = houseLane ? nodeDetail(houseWatts, "house") : this._t("flow_unavailable");
       const wires = [
@@ -2796,7 +2857,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         ? `<div class="live-flow-offgrid">${this._liveFlowBranch(offgridLane, maxWatts, socText, "full")}</div>`
         : "";
       const groupKey = this._escape(source.entry_id || source.name || "system");
-      return `<section class="live-flow-group" data-render-key="flow-group:${groupKey}"><h3>${this._escape(source.name || this._t("system"))}</h3>${map}${offgrid}</section>`;
+      return `<section class="live-flow-group" data-render-key="flow-group:${groupKey}"><h3>${this._escape(source.name || this._t("system"))}</h3>${map}${batteryWarning}${offgrid}</section>`;
     }).filter(Boolean);
     return groups.length
       ? `<div class="live-flow-overview">${groups.join("")}<p class="live-flow-note">${this._escape(this._t("energy_flow_hint"))}</p></div>`
@@ -2982,7 +3043,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         .live-flow-map .live-flow-icon{width:clamp(20px,3vw,31px);height:clamp(20px,3vw,31px);margin-bottom:1px}
         .flow-node-pv{left:16%;top:18%;--flow-accent:#56cf83}.flow-node-grid{left:50%;top:18%;--flow-accent:#f06b6b}.flow-node-battery{left:84%;top:18%;--flow-accent:#f0c34e}.flow-node-house{left:50%;top:56%;--flow-accent:#16c4df}
         .live-flow-map>.flow-node-house{width:clamp(82px,16%,112px);min-height:82px}
-        .live-flow-offgrid{margin-top:9px}.live-flow-note{margin:9px 2px 0}
+        .live-flow-offgrid{margin-top:9px}.live-flow-partial-note{margin:6px 2px 0;color:#e6c66c;font-size:11px}.live-flow-note{margin:9px 2px 0}
         @media(max-width:620px){.live-flow-map{min-height:310px;aspect-ratio:1.25/1}.live-flow-map>.live-flow-node{width:clamp(76px,22%,96px);min-height:76px;padding:7px}.live-flow-map>.flow-node-house{width:clamp(78px,21%,90px);min-height:78px}.live-flow-map>.live-flow-node strong{font-size:11px}.live-flow-map>.live-flow-node small{font-size:9px}}
         @media(prefers-reduced-motion:reduce){.flow-wire.forward,.flow-wire.reverse{animation:none;stroke-dasharray:3 10;stroke-dashoffset:0}}
         .topology-form-errors{margin:0 0 12px;padding:10px 13px;border:1px solid #8b4848;border-left:4px solid #ec7777;border-radius:8px;background:#382426;color:#ffdede}.topology-form-errors p{margin:0;line-height:1.45}.topology-form-errors p+p{margin-top:6px}

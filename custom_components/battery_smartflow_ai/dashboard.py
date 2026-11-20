@@ -422,6 +422,8 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                 for suffix, field in (
                     ("_charge_power_w", "charge_entity"),
                     ("_discharge_power_w", "discharge_entity"),
+                    ("_soc_pct", "soc_entity"),
+                    ("_online", "online_entity"),
                 ):
                     if registry_entry.unique_id.endswith(suffix):
                         public_id = registry_entry.unique_id[
