@@ -315,6 +315,7 @@
   "group_wizard_system_count": "systèmes sélectionnés",
   "group_wizard_save": "Configurer le groupe",
   "group_wizard_back_systems": "Retour à la sélection des systèmes",
+  "group_wizard_back_strategy": "Retour au fonctionnement commun",
   "group_wizard_back_sensors": "Retour aux capteurs",
   "group_wizard_continue_review": "Continuer vers la vérification",
   "group_wizard_pv_add": "Ajouter une installation PV et une prévision",

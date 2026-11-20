@@ -315,6 +315,7 @@
   "group_wizard_system_count": "systems selected",
   "group_wizard_save": "Set up group",
   "group_wizard_back_systems": "Back to system selection",
+  "group_wizard_back_strategy": "Back to cooperation",
   "group_wizard_back_sensors": "Back to sensors",
   "group_wizard_continue_review": "Continue to review",
   "group_wizard_pv_add": "Add PV system and forecast",
