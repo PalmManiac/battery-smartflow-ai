@@ -53,7 +53,7 @@ _SF800PLUS_IMAGE_URL = "/battery_smartflow_ai/images/sf800plus.png"
 _PANEL_NAME = "battery-smartflow-ai-hems-dashboard"
 _STATIC_PATH_KEY = f"{DOMAIN}_dashboard_static_registered"
 _STATIC_PATH_LOCK_KEY = f"{DOMAIN}_dashboard_static_registration_lock"
-DASHBOARD_VERSION = "1.0.66"
+DASHBOARD_VERSION = "1.0.67"
 
 _SYSTEM_SIGNAL_SENSOR_KEYS = (
     "native_zendure_status",
@@ -516,6 +516,15 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
             )
             hass.data[_STATIC_PATH_KEY] = True
 
+    system_signal_entity_keys = {
+        registry_entry.entity_id.lower(): key
+        for registry_entry in entity_registry.entities.values()
+        if registry_entry.platform == DOMAIN
+        and registry_entry.domain == "sensor"
+        for key in _SYSTEM_SIGNAL_SENSOR_KEYS
+        if registry_entry.unique_id.endswith(f"_{key}")
+    }
+
     await panel_custom.async_register_panel(
         hass,
         frontend_url_path=_PANEL_PATH,
@@ -532,16 +541,8 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
             "sensor_entities": sensor_entities,
             "training_entries": training_entries,
             "battery_groups": battery_groups,
-            "system_signal_entity_ids": [
-                registry_entry.entity_id
-                for registry_entry in entity_registry.entities.values()
-                if registry_entry.platform == DOMAIN
-                and registry_entry.domain == "sensor"
-                and any(
-                    registry_entry.unique_id.endswith(f"_{key}")
-                    for key in _SYSTEM_SIGNAL_SENSOR_KEYS
-                )
-            ],
+            "system_signal_entity_ids": list(system_signal_entity_keys),
+            "system_signal_entity_keys": system_signal_entity_keys,
         },
         require_admin=False,
         handle_safe_area=True,

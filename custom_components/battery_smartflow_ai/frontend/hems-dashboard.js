@@ -416,8 +416,20 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return label.replace(/[\s·:–—-]+$/, "") || original;
   }
 
-  _localizedSystemSignalState(entity) {
+  _systemSignalSensorKey(entity) {
     const entityId = String(entity?.entity_id || "").toLowerCase();
+    const configuredKey = this._panel?.config?.system_signal_entity_keys?.[entityId];
+    if (configuredKey) return String(configuredKey);
+    return [
+      "native_zendure_status",
+      "native_zendure_control",
+      "native_zendure_watchdog",
+      "forecast_status",
+      "shadow_allocation_status",
+    ].find((key) => entityId.endsWith(`_${key}`) || entityId.endsWith(`.${key}`)) || "";
+  }
+
+  _localizedSystemSignalState(entity) {
     const state = String(entity?.state || "").toLowerCase();
     const language = String(this._hass?.locale?.language || "en")
       .toLowerCase()
@@ -453,6 +465,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
         observing: {de: "Beobachtung aktiv", en: "Observation active", fr: "Observation active", nl: "Observatie actief"},
         error: {de: "Fehler", en: "Error", fr: "Erreur", nl: "Fout"},
       },
+      native_zendure_watchdog: {
+        online: {de: "Erreichbar", en: "Online", fr: "En ligne", nl: "Online"},
+        degraded: {de: "Verbindung instabil", en: "Connection unstable", fr: "Connexion instable", nl: "Verbinding instabiel"},
+        offline: {de: "Nicht erreichbar", en: "Offline", fr: "Inaccessible", nl: "Niet bereikbaar"},
+        not_supported: {de: "Direktprüfung nicht verfügbar", en: "Direct check unavailable", fr: "Vérification directe indisponible", nl: "Directe controle niet beschikbaar"},
+        unknown: {de: "Unbekannt", en: "Unknown", fr: "Inconnu", nl: "Onbekend"},
+      },
     };
     const commonStates = {
       unknown: {de: "Unbekannt", en: "Unknown", fr: "Inconnu", nl: "Onbekend"},
@@ -465,9 +484,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
       enabled: {de: "Aktiviert", en: "Enabled", fr: "Activé", nl: "Ingeschakeld"},
       disabled: {de: "Deaktiviert", en: "Disabled", fr: "Désactivé", nl: "Uitgeschakeld"},
     };
-    const translationKey = Object.keys(translations).find((key) =>
-      entityId.endsWith(`_${key}`) || entityId.endsWith(`.${key}`)
-    );
+    const sensorKey = this._systemSignalSensorKey(entity);
+    const translationKey = translations[sensorKey]
+      ? sensorKey
+      : Object.keys(translations).find((key) =>
+          String(entity?.entity_id || "").toLowerCase().endsWith(`_${key}`) ||
+          String(entity?.entity_id || "").toLowerCase().endsWith(`.${key}`)
+        );
     const localized = (translationKey && translations[translationKey][state]) || commonStates[state];
     return localized?.[language] || localized?.en || entity?.state || "—";
   }
@@ -2998,7 +3021,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
             const systemDetailId = `system-details-${systemIndex}`;
             return `<article class="system-card"><div class="system-head"><div>${deviceImage ? `<strong class="system-name">${this._escape(system.name || this._t("system"))}</strong><img class="system-device-image" src="${deviceImage}" alt="${this._escape(system.name || this._t("system"))}" title="${this._escape(system.name || this._t("system"))}" loading="lazy">` : `<strong>${this._escape(system.name || this._t("system"))}</strong>${showSecondaryName ? `<small>${this._escape(secondaryName)}</small>` : ""}`}</div><div class="system-actions"><span class="status ${system.online ? "" : "offline"}">${this._escape(this._t(system.online ? "online" : "offline"))}</span><button class="details-toggle" type="button" data-details-toggle="${systemDetailId}" aria-controls="${systemDetailId}" aria-expanded="false">${this._escape(this._t("details"))}</button></div></div><div class="device-meta">${this._escape(this._t("configured_path"))}: ${this._escape(this._topologyTransport(system.configured_transport))} · ${this._escape(this._topologyStatus(system.status))} · ${this._escape(this._t("setup_state"))}: ${this._escape(this._topologySetupStatus(system.setup_status))}</div><div class="packs">${packCards || `<div class="device-meta">${this._escape(this._t("no_packs"))}</div>`}</div><aside class="hover-details" id="${systemDetailId}"><h3>${this._escape(system.name || this._t("system"))}</h3>${systemDetails}${this._detailRows(systemEntities)}</aside></article>`;
           }).join("")}</div>` : `<div class="empty">${this._escape(this._t("native_empty"))}</div>`}
-        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${systemSignals.length} ${this._escape(this._t("additional_signals"))}</small></div><div class="inventory signal-grid">${systemSignals.map((entity) => { const watchdog = entity.entity_id.includes("native_zendure_watchdog"); const watchdogState = watchdog ? String(entity.state || "unknown") : ""; const numeric = Number.isFinite(Number(entity.state)) && String(entity.state).trim() !== ""; const displayedValue = watchdog ? this._t(`watchdog_${watchdogState}`) : numeric ? this._value(entity) : this._localizedSystemSignalState(entity); return `<div class="entity signal-entity history-card${watchdog ? ` watchdog-signal watchdog-${this._escape(watchdogState)}` : ""}" data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${this._signalLabel(entity)} · ${displayedValue} · ${this._t("show_history")}`)}"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(displayedValue)}">${watchdog ? `<i class="watchdog-light" aria-hidden="true"></i>` : ""}${this._escape(displayedValue)}</strong></div>`; }).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
+        </section><section class="section"><div class="section-head"><h2>${this._escape(this._t("system_signals"))}</h2><small>${systemSignals.length} ${this._escape(this._t("additional_signals"))}</small></div><div class="inventory signal-grid">${systemSignals.map((entity) => { const watchdog = this._systemSignalSensorKey(entity) === "native_zendure_watchdog"; const watchdogState = watchdog ? String(entity.state || "unknown") : ""; const numeric = Number.isFinite(Number(entity.state)) && String(entity.state).trim() !== ""; const displayedValue = watchdog ? this._t(`watchdog_${watchdogState}`) : numeric ? this._value(entity) : this._localizedSystemSignalState(entity); return `<div class="entity signal-entity history-card${watchdog ? ` watchdog-signal watchdog-${this._escape(watchdogState)}` : ""}" data-history-entity="${this._escape(entity.entity_id)}" role="button" tabindex="0" aria-label="${this._escape(`${this._signalLabel(entity)} · ${displayedValue} · ${this._t("show_history")}`)}"><span>${this._escape(this._signalLabel(entity))}</span><strong class="signal-value" title="${this._escape(displayedValue)}">${watchdog ? `<i class="watchdog-light" aria-hidden="true"></i>` : ""}${this._escape(displayedValue)}</strong></div>`; }).join("") || `<div class="empty">${this._escape(this._t("waiting_entities"))}</div>`}</div></section>`;
 
     const markup = `
       <style>
