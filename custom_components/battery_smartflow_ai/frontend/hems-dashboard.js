@@ -2884,8 +2884,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         const value = wattsFor(lane);
         return value === null || (lane.nonNegative && value < -1) ? 0 : Math.abs(value);
       }));
-      const pvLane = lanes.find((lane) => lane.kind === "pv") || lanes.find((lane) => lane.kind === "native-pv");
+      const configuredPvLane = lanes.find((lane) => lane.kind === "pv");
       const nativePvLane = lanes.find((lane) => lane.kind === "native-pv");
+      const pvLane = configuredPvLane && wattsFor(configuredPvLane) !== null
+        ? configuredPvLane
+        : nativePvLane || configuredPvLane;
       const batteryWatts = batteryLane ? wattsFor(batteryLane) : null;
       const gridWatts = gridLane ? wattsFor(gridLane) : null;
       const houseLane = lanes.find((lane) => lane.kind === "house");
@@ -2925,7 +2928,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
         return `<path class="flow-wire-base" d="${path}"/><path class="flow-wire ${state}" data-wire="${key}" d="${path}"/>`;
       };
       const pvDetail = [
-        pvLane ? nodeDetail(pvWatts, "pv") : this._t("flow_unavailable"),
+        pvLane
+          ? pvLane.kind === "native-pv"
+            ? `${this._t("native_pv_source")}: ${nodeDetail(pvWatts, "pv")}`
+            : nodeDetail(pvWatts, "pv")
+          : this._t("flow_unavailable"),
         nativePvLane && nativePvLane !== pvLane ? `${this._t("native_pv_source")}: ${amount(wattsFor(nativePvLane))}` : "",
       ].filter(Boolean).join(" · ");
       const batteryDetail = nodeDetail(
