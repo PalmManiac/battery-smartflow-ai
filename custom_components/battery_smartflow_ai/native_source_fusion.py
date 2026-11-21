@@ -30,6 +30,7 @@ from .hardware.zendure.pack_inventory import (
 )
 from .native_read_source import (
     NativeReadSourceArbiter,
+    ReadSourceStatus,
     SelectedMeasurement,
     SourceMeasurement,
 )
@@ -86,11 +87,13 @@ class NativeSourceFusion:
         )
         self._arbiter = NativeReadSourceArbiter(default_priority=priority)
         self._device_arbiters = {}
+        self._preferred_transports: dict[str, ZendureTransport | None] = {}
         for item in bootstrap.devices:
             system_id = item.candidate.candidate_id
             device_preference = (preferred_transports or {}).get(system_id)
             if device_preference is None:
                 device_preference = preferred_transport
+            self._preferred_transports[system_id] = device_preference
             device_priority = (
                 (device_preference,)
                 + tuple(
@@ -266,6 +269,34 @@ class NativeSourceFusion:
             )
             for name in scalar_names
         }
+        local_online = self._fresh_local_mqtt_online(system_id, states, current)
+        if (
+            self._preferred_transports.get(system_id)
+            is ZendureTransport.LOCAL_MQTT
+            and local_online is not None
+        ):
+            previous = trace["online"]
+            trace["online"] = SelectedMeasurement(
+                measurement=local_online,
+                transport=ZendureTransport.LOCAL_MQTT,
+                status=ReadSourceStatus.FALLBACK,
+                reason="fresh_local_telemetry_confirms_online",
+                alternatives=(
+                    (previous.transport,)
+                    if previous.transport is not None
+                    and previous.transport is not ZendureTransport.LOCAL_MQTT
+                    else previous.alternatives
+                ),
+            )
+            selected_values["online"] = local_online
+            previous_selection = self._selection.get(system_id, {}).get("online")
+            if (
+                previous_selection is None
+                or previous_selection.transport is not ZendureTransport.LOCAL_MQTT
+            ):
+                self._selection_changed_at.setdefault(system_id, {})[
+                    "online"
+                ] = current
         setpoints = ReportedDeviceSetpoints(
             **{
                 item.name: select(
@@ -352,6 +383,33 @@ class NativeSourceFusion:
                 )
             ),
         )
+
+    def _fresh_local_mqtt_online(
+        self,
+        system_id: str,
+        states: Mapping[ZendureTransport, Any],
+        now: datetime,
+    ) -> MeasuredValue[bool] | None:
+        """Infer online only from fresh, non-retained local SoC telemetry."""
+
+        local_state = states.get(ZendureTransport.LOCAL_MQTT)
+        if local_state is None:
+            return None
+        soc = local_state.soc_pct
+        observed_at = soc.observed_at
+        last_message_at = local_state.last_message_at
+        if (
+            not soc.valid
+            or observed_at is None
+            or last_message_at is None
+            or observed_at > now
+            or last_message_at < observed_at
+            or self._retained_main.get(
+                (ZendureTransport.LOCAL_MQTT, system_id), {}
+            ).get("soc_pct", False)
+        ):
+            return None
+        return MeasuredValue.available(True, observed_at=observed_at)
 
     def _record_complete_pack_membership(
         self, message: CloudMqttMessage
