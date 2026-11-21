@@ -388,11 +388,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _entities() {
     const states = Object.values((this._hass && this._hass.states) || {});
+    const registry = (this._hass && this._hass.entities) || {};
     return states
       .filter((state) => {
         const id = state.entity_id.toLowerCase();
         const name = String(state.attributes.friendly_name || "").toLowerCase();
         return (
+          registry[state.entity_id]?.platform === "battery_smartflow_ai" ||
           id.includes("battery_smartflow_ai") ||
           name.includes("battery smartflow ai") ||
           name.includes("solarflow") ||
@@ -693,7 +695,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       details: ["Details", "Details"], hide_details: ["Schließen", "Close"], seconds_ago: ["Sek. zuvor", "s ago"],
       configured_path: ["Eingestellt", "Configured"], selected_path: ["Gewählt / aktiv", "Selected / active"], observed_data_source: ["Zuletzt beobachtete Datenquelle", "Last observed data source"], zensdk_access: ["ZenSDK-Zugriffsweg (zuletzt erfolgreich)", "ZenSDK route (last successful)"], zensdk_fixed_ip: ["Feste ZenSDK-IP-Adresse", "Fixed ZenSDK IP address"], zensdk_route_fixed_ip: ["Feste IP-Adresse", "Fixed IP address"], zensdk_route_device_list_ip: ["IP aus Zendure-Geräteliste", "IP from Zendure device list"], zensdk_route_mdns: ["mDNS-Hostname", "mDNS hostname"], zensdk_route_unknown: ["Noch keine erfolgreiche Verbindung", "No successful connection yet"], zensdk_route_not_used: ["Nicht verwendet", "Not used"],
       home_assistant: ["Home Assistant", "Home Assistant"], show_history: ["Verlauf ansehen", "View history"], back_to_dashboard: ["Zurück zum Dashboard", "Back to dashboard"], current_value: ["Aktueller Wert", "Current value"], sensor_history: ["Sensorverlauf", "Sensor history"], day: ["Tag", "Day"], week: ["Woche", "Week"], month: ["Monat", "Month"], history_chart: ["Sensorverlauf", "Sensor history"], history_empty: ["Für diesen Zeitraum sind keine aufgezeichneten Verlaufsdaten verfügbar.", "No recorded history is available for this period."], history_error: ["Der Verlauf konnte nicht geladen werden. Prüfe, ob Home Assistant die Sensorhistorie speichert.", "History could not be loaded. Check whether Home Assistant records this sensor."], history_note: ["Der Verlauf wird aus den in Home Assistant gespeicherten Sensorzuständen erstellt.", "History is built from sensor states recorded by Home Assistant."], history_counter_note: ["Bei Zählern zeigt das Diagramm die Zunahme je Zeitabschnitt. Rücksetzungen werden nicht als negative Energie dargestellt.", "For counters, the chart shows increases per interval. Resets are not shown as negative energy."], period_increase: ["Zunahme im Zeitraum", "Increase in period"], max_interval: ["Größtes Intervall", "Largest interval"], minimum: ["Minimum", "Minimum"], maximum: ["Maximum", "Maximum"], latest: ["Letzter Wert", "Latest"],
-      system_health: ["Systemzustand", "System health"], all_online: ["Alle Systeme online", "All systems online"], attention: ["Prüfung erforderlich", "Attention required"], online_systems: ["Online", "Online"], offline_systems: ["Offline oder unbekannt", "Offline or unknown"], oldest_telemetry: ["Älteste Telemetrie", "Oldest telemetry"], minutes_ago: ["Min. zuvor", "min ago"],
+      system_health: ["Systemzustand", "System health"], all_online: ["Alle Systeme online", "All systems online"], attention: ["Prüfung erforderlich", "Attention required"], online_systems: ["Online", "Online"], offline_systems: ["Offline oder unbekannt", "Offline or unknown"], oldest_telemetry: ["Älteste Telemetrie", "Oldest telemetry"], minutes_ago: ["Min. zuvor", "min ago"], telemetry_age_fresh: ["Unter 1 Min.", "Under 1 min"], telemetry_age_recent: ["1–5 Min.", "1–5 min"], telemetry_age_delayed: ["5–15 Min.", "5–15 min"], telemetry_age_stale: ["Über 15 Min.", "Over 15 min"],
         topology: ["Hardware-Topologie", "Hardware topology"], model: ["Modell", "Model"], profile: ["Profil", "Profile"], communication: ["Kommunikation", "Communication"], status: ["Status", "Status"], last_data: ["Letzte Daten", "Last data"], battery_pack: ["Akku-Pack", "Battery Pack"], zendure_pack: ["Zendure-Akku-Pack", "Zendure battery pack"], telemetry: ["Telemetrie", "Telemetry"], unavailable: ["Nicht verfügbar", "Not available"], online: ["ONLINE", "ONLINE"], offline: ["OFFLINE", "OFFLINE"], unknown_path: ["Kommunikationsweg unbekannt", "Communication path unknown"], unknown_status: ["Status unbekannt", "Status unknown"], no_packs: ["Keine Akku-Packs erkannt", "No battery packs detected"], native_empty: ["Die native Hardwareübersicht ist noch nicht verfügbar. Erkannte Zendure-Geräte und angeschlossene Akku-Packs erscheinen hier.", "The native hardware inventory is not available yet. Discovered Zendure systems and attached battery packs will appear here."], system_signals: ["Systemsignale", "System signals"], watchdog_online: ["Erreichbar", "Reachable"], watchdog_degraded: ["Verbindung instabil", "Connection unstable"], watchdog_offline: ["Nicht erreichbar", "Unreachable"], watchdog_unknown: ["Unbekannt", "Unknown"], watchdog_not_supported: ["Direktprüfung nicht verfügbar", "Direct check unavailable"], matching_entities: ["passende Entitäten", "matching entities"], waiting_entities: ["Warte auf Battery-SmartFlow-AI-Entitäten.", "Waiting for Battery SmartFlow AI entities."], footer: ["Battery SmartFlow AI · Steuerung über Home Assistant", "Battery SmartFlow AI · Home Assistant-powered controls"],
     };
     const value = labels[key];
@@ -968,7 +970,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
     const sources = (this._panel && this._panel.config && this._panel.config.power_sources) || [];
     sources.forEach((source) => {
       const prefix = source.name ? `${source.name} · ` : "";
-      if (source.pv) cards.push(this._powerCard(`${prefix}${this._t("pv_source")}`, source.pv));
+      const nativePvEntityIds = new Set((source.native_pv_power || [])
+        .map((system) => system?.pv_entity).filter(Boolean));
+      if (source.pv && !nativePvEntityIds.has(source.pv)) {
+        cards.push(this._powerCard(`${prefix}${this._t("pv_source")}`, source.pv));
+      }
       const nativePvLane = this._nativePvPowerLane(source);
       if (nativePvLane && nativePvLane.watts !== null) {
         cards.push(this._nativePvPowerCard(`${prefix}${this._t("native_pv_source")}`, nativePvLane));
@@ -1176,16 +1182,27 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return `${Math.floor(age / 60)} ${this._t("minutes_ago")}`;
   }
 
-  _healthSummary(systems) {
+  _healthSummary(systems, entities) {
     if (!systems.length) return "";
     const online = systems.filter((system) => system.online).length;
     const offline = systems.length - online;
-    const ages = systems.map((system) => system.data_age_seconds == null ? NaN : Number(system.data_age_seconds)).filter((age) => Number.isFinite(age) && age >= 0);
-    const oldest = ages.length ? Math.max(...ages) : null;
-    const needsAttention = offline > 0 || (
-      ages.length > 0 && ages.length < systems.length
+    const ageRanks = { fresh: 0, recent: 1, delayed: 2, stale: 3 };
+    const buckets = systems.map((system) => {
+      if (["fresh", "recent", "delayed", "stale"].includes(system.telemetry_age_bucket)) {
+        return system.telemetry_age_bucket;
+      }
+      const age = this._telemetryAgeSeconds(system, entities);
+      if (!Number.isFinite(age) || age < 0) return null;
+      return age < 60 ? "fresh" : age < 300 ? "recent" : age < 900 ? "delayed" : "stale";
+    });
+    const knownBuckets = buckets.filter(Boolean);
+    const oldest = knownBuckets.reduce(
+      (result, bucket) => ageRanks[bucket] > ageRanks[result] ? bucket : result,
+      knownBuckets[0] || null,
     );
-    return `<section class="section health-summary ${needsAttention ? "attention" : "healthy"}" aria-label="${this._escape(this._t("system_health"))}"><div class="section-head"><h2>${this._escape(this._t("system_health"))}</h2><span class="health-state">${this._escape(this._t(needsAttention ? "attention" : "all_online"))}</span></div><div class="health-grid"><article><small>${this._escape(this._t("online_systems"))}</small><strong>${online} / ${systems.length}</strong></article><article><small>${this._escape(this._t("offline_systems"))}</small><strong>${offline}</strong></article><article><small>${this._escape(this._t("oldest_telemetry"))}</small><strong>${this._escape(oldest == null ? this._t("unavailable") : this._formatAge(oldest))}</strong></article></div></section>`;
+    const needsAttention = offline > 0 || knownBuckets.length < systems.length ||
+      (oldest !== null && ageRanks[oldest] >= ageRanks.delayed);
+    return `<section class="section health-summary ${needsAttention ? "attention" : "healthy"}" aria-label="${this._escape(this._t("system_health"))}"><div class="section-head"><h2>${this._escape(this._t("system_health"))}</h2><span class="health-state">${this._escape(this._t(needsAttention ? "attention" : "all_online"))}</span></div><div class="health-grid"><article><small>${this._escape(this._t("online_systems"))}</small><strong>${online} / ${systems.length}</strong></article><article><small>${this._escape(this._t("offline_systems"))}</small><strong>${offline}</strong></article><article><small>${this._escape(this._t("oldest_telemetry"))}</small><strong>${this._escape(oldest == null ? this._t("unavailable") : this._t(`telemetry_age_${oldest}`))}</strong></article></div></section>`;
   }
 
   _batteryGroupMemberCard(member, entities) {
@@ -1323,6 +1340,51 @@ class BatterySmartFlowDashboard extends HTMLElement {
     return registered.length
       ? registered
       : this._deviceEntities(entities, systemName, packNumber);
+  }
+
+  _nativeSystemEntities(entities, system) {
+    const publicId = String(system?.id || "");
+    const marker = publicId ? `_native_main_${publicId}_` : "";
+    const registry = (this._hass && this._hass.entities) || {};
+    const registered = marker
+      ? entities.filter((entity) => {
+          const entry = registry[entity.entity_id];
+          return entry?.platform === "battery_smartflow_ai" &&
+            String(entry.unique_id || "").includes(marker);
+        })
+      : [];
+    const named = this._deviceEntities(entities, system?.name, null);
+    return [
+      ...new Map(
+        [...registered, ...named].map((entity) => [entity.entity_id, entity]),
+      ).values(),
+    ];
+  }
+
+  _telemetryAgeSeconds(system, entities) {
+    const hardwareEntities = [
+      ...this._nativeSystemEntities(entities, system),
+      ...(system?.packs || []).flatMap((pack) =>
+        this._packEntities(entities, pack, system?.name, null)),
+    ];
+    const entityTimestamps = hardwareEntities
+      .filter((entity) => entity.entity_id.startsWith("sensor.") &&
+        !["unknown", "unavailable"].includes(String(entity.state).toLowerCase()))
+      .map((entity) => Date.parse(entity.last_reported || entity.last_updated || ""))
+      .filter(Number.isFinite);
+    if (entityTimestamps.length) {
+      return Math.max(0, (Date.now() - Math.max(...entityTimestamps)) / 1000);
+    }
+    return system?.data_age_seconds == null ? null : Number(system.data_age_seconds);
+  }
+
+  _telemetryAgeLabel(system, entities) {
+    const bucket = system?.telemetry_age_bucket;
+    if (["fresh", "recent", "delayed", "stale"].includes(bucket)) {
+      return this._t(`telemetry_age_${bucket}`);
+    }
+    const age = this._telemetryAgeSeconds(system, entities);
+    return age == null ? "—" : this._formatAge(age);
   }
 
   _detailLabel(entity, systemName = "", packNumber = null) {
@@ -2276,8 +2338,8 @@ class BatterySmartFlowDashboard extends HTMLElement {
       if (Math.abs(totals.charge - totals.discharge) < 5) return "";
       return totals.discharge > totals.charge ? "discharge" : "charge";
     };
-    const packEntities = (system.packs || []).flatMap((_, index) =>
-      this._deviceEntities(entities, system.name, index + 1));
+    const packEntities = (system.packs || []).flatMap((pack, index) =>
+      this._packEntities(entities, pack, system.name, index + 1));
     return directionFrom(packEntities) || directionFrom(systemEntities || []);
   }
 
@@ -2754,9 +2816,13 @@ class BatterySmartFlowDashboard extends HTMLElement {
         lanes.push({ ...spec, entity });
       };
 
-      add(source.pv, allowFallback ? ["pv power", "pv leistung", "solar power", "solarleistung"] : null, {
-        title: "pv_source", kind: "pv", from: "node_pv", to: "node_bus", side: "left", nonNegative: true,
-      });
+      const nativePvEntityIds = new Set((source.native_pv_power || [])
+        .map((system) => system?.pv_entity).filter(Boolean));
+      if (!source.pv || !nativePvEntityIds.has(source.pv)) {
+        add(source.pv, allowFallback ? ["pv power", "pv leistung", "solar power", "solarleistung"] : null, {
+          title: "pv_source", kind: "pv", from: "node_pv", to: "node_bus", side: "left", nonNegative: true,
+        });
+      }
       const nativePvHardwareLane = this._nativePvPowerLane(source);
       if (nativePvHardwareLane && nativePvHardwareLane.watts !== null) {
         lanes.push(nativePvHardwareLane);
@@ -3051,9 +3117,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
           ? this._controls(entities)
           : this._view === "settings"
             ? this._trainingView()
-        : `${this._healthSummary(systems)}<section class="section"><div class="section-head"><h2>${this._escape(this._t("topology"))}</h2><small>${systems.length} ${this._escape(this._t("systems"))} · ${packCount} ${this._escape(this._t("packs"))}</small></div>
+        : `${this._healthSummary(systems, entities)}<section class="section"><div class="section-head"><h2>${this._escape(this._t("topology"))}</h2><small>${systems.length} ${this._escape(this._t("systems"))} · ${packCount} ${this._escape(this._t("packs"))}</small></div>
           ${systems.length ? `<div class="systems">${systems.map((system, systemIndex) => {
-            const systemEntities = this._deviceEntities(entities, system.name, null);
+            const systemEntities = this._nativeSystemEntities(entities, system);
             const flowDirection = this._topologyFlowDirection(system, systems.length, systemEntities, entities);
             const deviceImage = this._topologyDeviceImage(system);
             const secondaryName = system.model || system.profile || "";
@@ -3068,7 +3134,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
               ...(usesZenSdk && system.zensdk_ip_address ? [[this._t("zensdk_fixed_ip"), system.zensdk_ip_address]] : []),
               [this._t("observed_data_source"), this._topologyTransport(system.observed_transport)],
               [this._t("status"), system.status],
-              [this._t("last_data"), system.data_age_seconds == null ? "—" : `${system.data_age_seconds} ${this._t("seconds_ago")}`],
+              [this._t("last_data"), this._telemetryAgeLabel(system, entities)],
             ].map(([label, value]) => `<div class="detail-row"><span>${label}</span><strong>${this._escape(value || "—")}</strong></div>`).join("");
             const packCards = (system.packs || []).map((pack, index) => {
               const packNumber = index + 1;

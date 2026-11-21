@@ -661,6 +661,24 @@ class NativeZendureRuntime:
             # The portal health card reports the oldest telemetry age. Include
             # pack-only reports when the main-system timestamp is unavailable.
             last_data = min(telemetry_timestamps) if telemetry_timestamps else None
+            data_age_seconds = (
+                max(0.0, round((now - last_data).total_seconds(), 1))
+                if last_data is not None
+                else None
+            )
+            # The recorder-facing topology publishes only coarse age buckets.
+            # This keeps the portal's health summary useful without writing a
+            # new sensor state for every incoming telemetry message.
+            if data_age_seconds is None:
+                data_age_bucket = None
+            elif data_age_seconds < 60:
+                data_age_bucket = "fresh"
+            elif data_age_seconds < 300:
+                data_age_bucket = "recent"
+            elif data_age_seconds < 900:
+                data_age_bucket = "delayed"
+            else:
+                data_age_bucket = "stale"
             configured_transport = self._device_configured_transport(system_id)
             selected_control_transport = (
                 self._selected_control_transport(device).transport
@@ -714,10 +732,9 @@ class NativeZendureRuntime:
                     "hems_blocks_control": item.control_block_reason is not None,
                     "control_block_reason": item.control_block_reason,
                     "data_age_seconds": (
-                        max(0.0, round((now - last_data).total_seconds(), 1))
-                        if last_data is not None
-                        else None
+                        data_age_seconds
                     ),
+                    "telemetry_age_bucket": data_age_bucket,
                     "packs": [
                         {
                             "id": pack.public_id,
@@ -780,7 +797,8 @@ class NativeZendureRuntime:
 
         The full overview includes per-message timestamps and ages. Publishing
         those on a recorder-facing entity causes unnecessary state writes, so
-        expose only the hierarchy and low-frequency status fields here.
+        expose only the hierarchy, low-frequency status fields, and a coarse
+        age bucket that changes only when a recency threshold is crossed.
         """
 
         overview = self.overview_attributes()
@@ -800,6 +818,7 @@ class NativeZendureRuntime:
             "zensdk_success_source",
             "zensdk_ip_address",
             "observed_transport",
+            "telemetry_age_bucket",
         )
         return {
             "systems": [
