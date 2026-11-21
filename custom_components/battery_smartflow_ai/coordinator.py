@@ -1002,6 +1002,88 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             total_limit_w += max(0.0, member_limit_w)
         return total_limit_w
 
+    def _native_group_max_input_w(
+        self,
+        runtime: Any,
+        *,
+        selected_max_input_w: float,
+        reserve_soc_pct: float,
+        maximum_soc_pct: float,
+    ) -> float | None:
+        """Return the aggregate AC input capability for the active group.
+
+        Group input targets are aggregate values. Keep the selected device's
+        configured/runtime cap, then add each other member's own AC input
+        capability. The group allocator still applies every member and circuit
+        limit before issuing device commands.
+        """
+
+        from .battery_groups import reconcile_group_config
+        from .const import CONF_BATTERY_GROUPS
+
+        selected_id = getattr(runtime, "selected_device_id", None)
+        if (
+            not bool(getattr(runtime, "control_enabled", False))
+            or not isinstance(selected_id, str)
+            or not selected_id
+        ):
+            return None
+        try:
+            groups = reconcile_group_config(
+                self.entry.options.get(CONF_BATTERY_GROUPS)
+            )["groups"]
+        except (TypeError, ValueError):
+            return None
+
+        selected_group = next(
+            (
+                group
+                for group in groups.values()
+                if selected_id in group.get("members", ())
+                and group.get("control_enabled") is True
+            ),
+            None,
+        )
+        if not isinstance(selected_group, Mapping):
+            return None
+        members = selected_group.get("members", ())
+        if (
+            not isinstance(members, Sequence)
+            or isinstance(members, (str, bytes))
+            or len(members) < 2
+        ):
+            return None
+
+        try:
+            snapshots = runtime.shadow_allocation_snapshots(
+                reserve_soc_pct=reserve_soc_pct,
+                maximum_soc_pct=maximum_soc_pct,
+            )
+        except (AttributeError, TypeError, ValueError):
+            return None
+        snapshot_by_id = {
+            item.get("device_id"): item
+            for item in snapshots
+            if isinstance(item, Mapping)
+        }
+        if any(device_id not in snapshot_by_id for device_id in members):
+            return None
+
+        total_limit_w = 0.0
+        for device_id in members:
+            member_limit_w = _to_float(
+                snapshot_by_id[device_id].get("max_charge_w"), 0.0
+            )
+            if member_limit_w is None or not math.isfinite(member_limit_w):
+                return None
+            if device_id == selected_id:
+                member_limit_w = min(
+                    member_limit_w,
+                    max(0.0, float(selected_max_input_w)),
+                )
+            total_limit_w += max(0.0, member_limit_w)
+        return total_limit_w
+
     def _productive_group_targets(
         self,
         command: DeviceCommand,
@@ -8627,6 +8709,41 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 }
             )
 
+            group_max_input_w = self._native_group_max_input_w(
+                native_runtime,
+                selected_max_input_w=float(max_ac_input),
+                reserve_soc_pct=float(soc_min),
+                maximum_soc_pct=float(soc_max),
+            )
+            regulation_max_input_w = (
+                group_max_input_w
+                if group_max_input_w is not None
+                else float(max_ac_input)
+            )
+            requested_charge_w = _to_float(
+                strategy_intent.requested_power_w,
+                None,
+            )
+            if (
+                group_max_input_w is not None
+                and group_max_input_w > float(max_ac_input) + 0.5
+                and str(strategy_intent.requested_mode).lower() == "input"
+                and requested_charge_w is not None
+                and float(max_ac_input) > 0.0
+                and abs(requested_charge_w - float(max_ac_input)) <= 1.0
+            ):
+                # A request exactly at the selected device's AC input ceiling
+                # represents its full charge capability. In an enabled group,
+                # lift that saturated target to the aggregate ceiling so the
+                # allocator can use the other members too. Explicit lower
+                # targets remain unchanged.
+                strategy_intent.requested_power_w = group_max_input_w
+                strategy_intent.metadata.update(
+                    {
+                        "group_input_target_expanded": True,
+                        "group_max_input_w": round(group_max_input_w, 2),
+                    }
+                )
             group_max_output_w = self._native_group_max_output_w(
                 native_runtime,
                 selected_max_output_w=soc_min_discharge_taper_max_output_w,
@@ -8992,6 +9109,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
                 max_input_w=float(max_ac_input),
                 max_output_w=float(soc_min_discharge_taper_max_output_w),
+                group_max_input_w=(
+                    float(group_max_input_w)
+                    if group_max_input_w is not None
+                    else None
+                ),
                 group_max_output_w=(
                     float(group_max_output_w)
                     if group_max_output_w is not None
@@ -9014,7 +9136,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     native_discharge.observed_at,
                 )
 
-            feedforward_max_input_w = float(max_ac_input)
+            feedforward_max_input_w = float(regulation_max_input_w)
             if strategy_intent.intent == "pv_charge":
                 target_import_w = float(
                     regulation_power_result.metadata.get(
@@ -9080,7 +9202,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     self._state(self.entities.output_limit),
                     None,
                 ),
-                max_input_w=float(max_ac_input),
+                max_input_w=float(regulation_max_input_w),
                 max_output_w=float(regulation_max_output_w),
             )
             if technical_decision_started is not None:
