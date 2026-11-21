@@ -920,6 +920,88 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         }
         return selected_lead
 
+    def _native_group_max_output_w(
+        self,
+        runtime: Any,
+        *,
+        selected_max_output_w: float,
+        reserve_soc_pct: float,
+        maximum_soc_pct: float,
+    ) -> float | None:
+        """Return the aggregate output capability for the active group.
+
+        ``None`` keeps the established single-device limit. In a productive
+        multi-device group the regulation target represents the group's total
+        power, so its ceiling is the sum of member capabilities rather than
+        the selected lead device's profile limit.
+        """
+
+        from .battery_groups import reconcile_group_config
+        from .const import CONF_BATTERY_GROUPS
+
+        selected_id = getattr(runtime, "selected_device_id", None)
+        if (
+            not bool(getattr(runtime, "control_enabled", False))
+            or not isinstance(selected_id, str)
+            or not selected_id
+        ):
+            return None
+        try:
+            groups = reconcile_group_config(
+                self.entry.options.get(CONF_BATTERY_GROUPS)
+            )["groups"]
+        except (TypeError, ValueError):
+            return None
+
+        selected_group = next(
+            (
+                group
+                for group in groups.values()
+                if selected_id in group.get("members", ())
+                and group.get("control_enabled") is True
+            ),
+            None,
+        )
+        if not isinstance(selected_group, Mapping):
+            return None
+        members = selected_group.get("members", ())
+        if (
+            not isinstance(members, Sequence)
+            or isinstance(members, (str, bytes))
+            or len(members) < 2
+        ):
+            return None
+
+        try:
+            snapshots = runtime.shadow_allocation_snapshots(
+                reserve_soc_pct=reserve_soc_pct,
+                maximum_soc_pct=maximum_soc_pct,
+            )
+        except (AttributeError, TypeError, ValueError):
+            return None
+        snapshot_by_id = {
+            item.get("device_id"): item
+            for item in snapshots
+            if isinstance(item, Mapping)
+        }
+        if any(device_id not in snapshot_by_id for device_id in members):
+            return None
+
+        total_limit_w = 0.0
+        for device_id in members:
+            member_limit_w = _to_float(
+                snapshot_by_id[device_id].get("max_discharge_w"), 0.0
+            )
+            if member_limit_w is None or not math.isfinite(member_limit_w):
+                return None
+            if device_id == selected_id:
+                member_limit_w = min(
+                    member_limit_w,
+                    max(0.0, float(selected_max_output_w)),
+                )
+            total_limit_w += max(0.0, member_limit_w)
+        return total_limit_w
+
     def _productive_group_targets(
         self,
         command: DeviceCommand,
@@ -1181,6 +1263,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             if objective == GROUP_OBJECTIVE_UPS_PRICE_ARBITRAGE and target_w < 0
             else grid_circuits_by_device
         )
+        intent_metadata = getattr(strategy_intent, "metadata", {})
+        selected_max_discharge_w = (
+            _to_float(
+                intent_metadata.get("soc_min_discharge_taper_max_output_w"),
+                None,
+            )
+            if isinstance(intent_metadata, Mapping)
+            else None
+        )
         devices = tuple(
             ShadowDevice(
                 device_id=device_id,
@@ -1195,7 +1286,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 maximum_soc_pct=float(snapshot_by_id[device_id]["maximum_soc_pct"]),
                 capacity_kwh=snapshot_by_id[device_id]["capacity_kwh"],
                 max_charge_w=float(snapshot_by_id[device_id]["max_charge_w"]),
-                max_discharge_w=float(snapshot_by_id[device_id]["max_discharge_w"]),
+                max_discharge_w=(
+                    min(
+                        float(snapshot_by_id[device_id]["max_discharge_w"]),
+                        max(0.0, selected_max_discharge_w),
+                    )
+                    if device_id == selected_id
+                    and selected_max_discharge_w is not None
+                    else float(snapshot_by_id[device_id]["max_discharge_w"])
+                ),
                 circuit_ids=tuple(device_circuits[device_id]),
             )
             for device_id in members
@@ -8527,6 +8626,18 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ),
                 }
             )
+
+            group_max_output_w = self._native_group_max_output_w(
+                native_runtime,
+                selected_max_output_w=soc_min_discharge_taper_max_output_w,
+                reserve_soc_pct=float(soc_min),
+                maximum_soc_pct=float(soc_max),
+            )
+            regulation_max_output_w = (
+                group_max_output_w
+                if group_max_output_w is not None
+                else soc_min_discharge_taper_max_output_w
+            )
             
             strategy_intent.metadata.update(
                 {
@@ -8881,6 +8992,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
                 max_input_w=float(max_ac_input),
                 max_output_w=float(soc_min_discharge_taper_max_output_w),
+                group_max_output_w=(
+                    float(group_max_output_w)
+                    if group_max_output_w is not None
+                    else None
+                ),
             )
 
             native_power_observed_at = None
@@ -8919,9 +9035,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     current_grid_safe_cap_w,
                 )
 
-            feedforward_max_output_w = float(
-                soc_min_discharge_taper_max_output_w
-            )
+            feedforward_max_output_w = float(regulation_max_output_w)
             requested_discharge_w = float(
                 strategy_intent.requested_power_w or 0.0
             )
@@ -8967,7 +9081,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     None,
                 ),
                 max_input_w=float(max_ac_input),
-                max_output_w=float(soc_min_discharge_taper_max_output_w),
+                max_output_w=float(regulation_max_output_w),
             )
             if technical_decision_started is not None:
                 technical_decision_seconds = max(
