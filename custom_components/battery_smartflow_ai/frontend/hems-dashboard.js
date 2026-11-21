@@ -2757,15 +2757,15 @@ class BatterySmartFlowDashboard extends HTMLElement {
       add(source.pv, allowFallback ? ["pv power", "pv leistung", "solar power", "solarleistung"] : null, {
         title: "pv_source", kind: "pv", from: "node_pv", to: "node_bus", side: "left", nonNegative: true,
       });
-      const nativePvLane = this._nativePvPowerLane(source);
-      if (nativePvLane && nativePvLane.watts !== null) {
-        lanes.push(nativePvLane);
+      const nativePvHardwareLane = this._nativePvPowerLane(source);
+      if (nativePvHardwareLane && nativePvHardwareLane.watts !== null) {
+        lanes.push(nativePvHardwareLane);
       } else if (source.native_pv) {
         add(source.native_pv, null, {
           title: "native_pv_source", kind: "native-pv", from: "node_native_pv", to: "node_bus", side: "left", nonNegative: true,
         });
-      } else if (nativePvLane) {
-        lanes.push(nativePvLane);
+      } else if (nativePvHardwareLane) {
+        lanes.push(nativePvHardwareLane);
       }
       const batterySpec = {
         title: "battery_source", kind: "battery", from: "node_battery", to: "node_bus",
@@ -2948,11 +2948,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
             .replace("{total}", String(nativeSocSummary.totalSystems)),
         );
       }
-      if (nativePvLane?.partial && nativePvLane.availableSystems > 0) {
+      if (nativePvHardwareLane?.partial && nativePvHardwareLane.availableSystems > 0) {
         batteryWarnings.push(
           this._t("native_pv_flow_partial")
-            .replace("{available}", String(nativePvLane.availableSystems))
-            .replace("{total}", String(nativePvLane.totalSystems)),
+            .replace("{available}", String(nativePvHardwareLane.availableSystems))
+            .replace("{total}", String(nativePvHardwareLane.totalSystems)),
         );
       }
       const batteryWarning = batteryWarnings.length
