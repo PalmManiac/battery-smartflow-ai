@@ -424,6 +424,7 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                     ("_discharge_power_w", "discharge_entity"),
                     ("_soc_pct", "soc_entity"),
                     ("_online", "online_entity"),
+                    ("_pv_power_w", "pv_entity"),
                 ):
                     if registry_entry.unique_id.endswith(suffix):
                         public_id = registry_entry.unique_id[
@@ -433,6 +434,18 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                             registry_entry.entity_id
                         )
         sources["native_battery_power"] = list(native_battery_power.values())
+        sources["native_pv_power"] = [
+            {
+                "pv_entity": source["pv_entity"],
+                **(
+                    {"online_entity": source["online_entity"]}
+                    if source.get("online_entity")
+                    else {}
+                ),
+            }
+            for source in native_battery_power.values()
+            if source.get("pv_entity")
+        ]
         if any(value for key, value in sources.items() if key not in {"name", "entry_id"}):
             power_sources.append(sources)
 
