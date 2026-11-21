@@ -15,6 +15,7 @@ from ...native_command_verification import (
 )
 from ...native_device_command_gate import AuthorizedNativeCommand
 from .cloud import ZendureCloudBootstrap
+from .cloud_mqtt_commands import CloudPropertyWrite
 from .device_matrix import VerificationLevel, resolve_zendure_device
 
 
@@ -32,6 +33,12 @@ class LocalMqttInvocation:
 
 
 @dataclass(frozen=True, slots=True)
+class LocalMqttPropertiesWrite:
+    properties: Mapping[str, int]
+    expected_properties: Mapping[str, float]
+
+
+@dataclass(frozen=True, slots=True)
 class LocalMqttCommandResult:
     status: LocalMqttCommandStatus
     reason: str
@@ -40,6 +47,13 @@ class LocalMqttCommandResult:
 
 
 class LocalMqttPublisher(Protocol):
+    def write_properties(
+        self,
+        product_id: str,
+        device_id: str,
+        writes: tuple[CloudPropertyWrite, ...],
+    ) -> bool: ...
+
     def invoke_function(
         self,
         product_id: str,
@@ -53,8 +67,8 @@ class LocalMqttPublisher(Protocol):
 def map_local_mqtt_command(
     authorized: AuthorizedNativeCommand,
     bootstrap: ZendureCloudBootstrap,
-) -> LocalMqttInvocation:
-    """Translate one neutral command to a verified legacy deviceAutomation call."""
+) -> LocalMqttInvocation | LocalMqttPropertiesWrite:
+    """Map an approved local command to its typed Zendure MQTT operation."""
 
     if not isinstance(authorized, AuthorizedNativeCommand):
         raise ValueError("gate_authorization_required")
@@ -85,6 +99,30 @@ def map_local_mqtt_command(
     input_w = _whole_watts(command.input_limit_w)
     output_w = _whole_watts(command.output_limit_w)
     model = matrix.profile_key
+
+    if (
+        model == "Hyper 2000"
+        and input_w == 0
+        and output_w == 0
+        and command.should_write_input
+        and command.should_write_output
+    ):
+        # Hyper power-off can leave a previously configured limit active.
+        # Zero both hardware limits directly so handover verification observes
+        # the stop that the group controller is waiting for.
+        properties = {
+            "inputLimit": 0,
+            "outputLimit": 0,
+        }
+        if command.should_write_mode:
+            properties = {
+                "acMode": 1 if command.ac_mode == "input" else 2,
+                **properties,
+            }
+        return LocalMqttPropertiesWrite(
+            properties,
+            {name: float(value) for name, value in properties.items()},
+        )
 
     if command.ac_mode == "input" and input_w > 0:
         if model != "Hyper 2000":
@@ -177,12 +215,12 @@ class ZendureLocalMqttCommandAdapter:
     def execute(self, authorized: AuthorizedNativeCommand) -> LocalMqttCommandResult:
         now = self._clock()
         try:
-            invocation = map_local_mqtt_command(authorized, self._bootstrap)
+            mapped_command = map_local_mqtt_command(authorized, self._bootstrap)
         except ValueError as error:
             return LocalMqttCommandResult(LocalMqttCommandStatus.REJECTED, str(error))
 
         prepared: list[str] = []
-        for property_name, value in invocation.expected_properties.items():
+        for property_name, value in mapped_command.expected_properties.items():
             verification = self._verification.prepare(
                 device_id=authorized.device_id,
                 command_type=property_name,
@@ -199,13 +237,34 @@ class ZendureLocalMqttCommandAdapter:
             prepared.append(verification.command_id)
 
         self._message_id += 1
-        sent = self._publisher.invoke_function(
-            _product_id(self._bootstrap, authorized.device_id),
-            _device_id(self._bootstrap, authorized.device_id),
-            invocation,
-            self._message_id,
-            int(now.timestamp()),
-        )
+        product_id = _product_id(self._bootstrap, authorized.device_id)
+        device_id = _device_id(self._bootstrap, authorized.device_id)
+        try:
+            if isinstance(mapped_command, LocalMqttPropertiesWrite):
+                writes = tuple(
+                    CloudPropertyWrite(
+                        property_name,
+                        value,
+                        self._message_id,
+                        int(now.timestamp()),
+                    )
+                    for property_name, value in mapped_command.properties.items()
+                )
+                sent = self._publisher.write_properties(
+                    product_id,
+                    device_id,
+                    writes,
+                )
+            else:
+                sent = self._publisher.invoke_function(
+                    product_id,
+                    device_id,
+                    mapped_command,
+                    self._message_id,
+                    int(now.timestamp()),
+                )
+        except Exception:  # noqa: BLE001 - keep local publisher failures contained
+            sent = False
         for command_id in prepared:
             self._verification.transport_result(
                 command_id,
