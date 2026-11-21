@@ -266,6 +266,7 @@ class RegulationPowerController:
         previous_output_w: float = 0.0,
         max_input_w: float | None = None,
         max_output_w: float | None = None,
+        group_max_input_w: float | None = None,
         group_max_output_w: float | None = None,
     ) -> PowerControllerResult:
         effective_max_input_w = self._effective_runtime_limit(
@@ -276,6 +277,11 @@ class RegulationPowerController:
             profile_limit_w=self.config.max_output_w,
             runtime_limit_w=max_output_w,
         )
+        if group_max_input_w is not None:
+            # The group target is the sum of member AC input capabilities.
+            # Each member's profile and topology limits are still enforced by
+            # the group allocator before individual commands are written.
+            effective_max_input_w = max(0.0, float(group_max_input_w))
         if group_max_output_w is not None:
             # A group's target is the sum of its member-device limits. The
             # selected device profile is still enforced for each member later
