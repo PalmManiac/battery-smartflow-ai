@@ -203,6 +203,7 @@ class NativeZendureRuntime:
         self._reported_message_count = 0
         self._last_message_count_sensor_update: float | None = None
         self._last_processed_message: Any | None = None
+        self._last_processed_local_message: Any | None = None
         self._last_received_at: Any | None = None
         self._bootstrap: Any | None = None
         self._zensdk_failures: dict[str, int] = {}
@@ -2086,10 +2087,17 @@ class NativeZendureRuntime:
         if self._local_transport is None or self._normalizer is None:
             return
         messages = self._local_transport.messages
-        start = getattr(self, "_local_processed_count", 0)
+        start = 0
+        last_processed = self._last_processed_local_message
+        if last_processed is not None:
+            for index, message in enumerate(messages):
+                if message is last_processed:
+                    start = index + 1
+                    break
         new_messages = messages[start:]
         self._apply_messages(new_messages)
-        self._local_processed_count = len(messages)
+        if new_messages:
+            self._last_processed_local_message = new_messages[-1]
 
     def _consume_captured_messages(self, messages: tuple[Any, ...]) -> None:
         """Apply ZenSDK seed data and MQTT messages captured during startup."""
