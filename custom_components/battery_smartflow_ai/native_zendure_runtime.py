@@ -2379,11 +2379,17 @@ class NativeZendureRuntime:
                     "last_message_at": state.last_message_at,
                     "online": state.online,
                     "property_count": len(state.property_updated_at),
+                    "property_updated_at": dict(
+                        sorted(state.property_updated_at.items())
+                    ),
                 }
                 for candidate_id, state in sorted(
                     transport.device_states.items()
                 )
             ],
+            "recent_message_count_total": transport.diagnostic_message_count,
+            "recent_messages_dropped": transport.diagnostic_messages_dropped,
+            "recent_messages": list(transport.diagnostic_messages),
             "command_verification": transport.command_diagnostics,
         }
 
