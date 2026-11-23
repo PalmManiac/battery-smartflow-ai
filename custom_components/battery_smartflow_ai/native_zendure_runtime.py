@@ -102,6 +102,7 @@ STATUS_ERROR = "error"
 ZENSDK_POLL_INTERVAL = 3.0
 ZENSDK_OFFLINE_AFTER_FAILURES = 3
 ZENSDK_MAX_DATA_AGE = 30.0
+NATIVE_CONTROL_MAX_DATA_AGE = 30.0
 ZENSDK_MAX_RETRY_INTERVAL = 60.0
 ZENSDK_DEBUG_ATTEMPT_LIMIT = 120
 SMART_MODE_STANDBY_DELAY_SECONDS = 60.0
@@ -2609,6 +2610,9 @@ class NativeZendureRuntime:
             target_device_id = (
                 device_id if device_id is not None else self._selected_device
             )
+            maximum_data_age = _native_state_maximum_age_seconds(
+                self._inventory.devices.get(target_device_id or "")
+            )
             if (
                 self._local_transport is None
                 or self._local_transport.state is not ConnectionState.CONNECTED
@@ -2628,11 +2632,14 @@ class NativeZendureRuntime:
                 last is not None
                 and properties
                 and 0 <= (datetime.now(timezone.utc) - last).total_seconds()
-                <= ZENSDK_MAX_DATA_AGE
+                <= maximum_data_age
             )
         if transport is ZendureTransport.CLOUD_MQTT:
             target_device_id = (
                 device_id if device_id is not None else self._selected_device
+            )
+            maximum_data_age = _native_state_maximum_age_seconds(
+                self._inventory.devices.get(target_device_id or "")
             )
             if (
                 self._transport is None
@@ -2651,7 +2658,7 @@ class NativeZendureRuntime:
                 last is not None
                 and properties
                 and 0 <= (datetime.now(timezone.utc) - last).total_seconds()
-                <= ZENSDK_MAX_DATA_AGE
+                <= maximum_data_age
             )
         return False
 
@@ -2893,7 +2900,7 @@ def _numeric_value(measured: Any) -> float | None:
 def _fresh_native_state(
     state: Any,
     *,
-    maximum_age_seconds: float = 30.0,
+    maximum_age_seconds: float = NATIVE_CONTROL_MAX_DATA_AGE,
     device: MainDevice | None = None,
 ) -> bool:
     """Require fresh SoC control data; HEMS/protection have their own gates.
@@ -2916,17 +2923,9 @@ def _fresh_native_state(
     # infrequent updates. Match the normalizer's bounded 180-second window
     # only for these explicitly identified models; every other device keeps
     # the strict 30-second control gate.
-    model = "".join(
-        character
-        for character in str(
-            (device.model or device.profile_key) if device else ""
-        ).casefold()
-        if character.isalnum()
+    maximum_age_seconds = _native_state_maximum_age_seconds(
+        device, default=maximum_age_seconds
     )
-    if model in _LEGACY_GROUPED_CONTROL_MODELS:
-        maximum_age_seconds = max(
-            maximum_age_seconds, LEGACY_GROUPED_CONTROL_MAX_DATA_AGE
-        )
     now = datetime.now(timezone.utc)
     required = (state.soc_pct,)
     return all(
@@ -2935,6 +2934,25 @@ def _fresh_native_state(
         and 0 <= (now - item.observed_at).total_seconds() <= maximum_age_seconds
         for item in required
     )
+
+
+def _native_state_maximum_age_seconds(
+    device: MainDevice | None,
+    *,
+    default: float = NATIVE_CONTROL_MAX_DATA_AGE,
+) -> float:
+    """Return the bounded freshness window used by native control paths."""
+
+    model = "".join(
+        character
+        for character in str(
+            (device.model or device.profile_key) if device else ""
+        ).casefold()
+        if character.isalnum()
+    )
+    if model in _LEGACY_GROUPED_CONTROL_MODELS:
+        return max(default, LEGACY_GROUPED_CONTROL_MAX_DATA_AGE)
+    return default
 
 
 def _fresh_measured_value(
