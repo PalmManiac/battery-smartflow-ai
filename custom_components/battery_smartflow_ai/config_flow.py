@@ -43,6 +43,7 @@ from .const import (
     CONF_INSTALLED_PV_WP,
     CONF_NATIVE_PV_ENTITY,
     CONF_NATIVE_ZENDURE_ALWAYS_SMART_MODE_1,
+    CONF_NATIVE_ZENDURE_ACTIVE_DEVICE,
     CONF_NATIVE_ZENDURE_APP_TOKEN,
     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
     CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT,
@@ -2793,6 +2794,8 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             ),
             None,
         )
+        if pending is None:
+            return await self.async_step_native_zendure_controller()
         if user_input is not None:
             selected = str(user_input[CONF_NATIVE_ZENDURE_SELECTED_DEVICE])
             valid = {item.candidate.candidate_id for item in devices}
@@ -2808,6 +2811,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                             ),
                         )),
                         self.config_entry.options,
+                        target_device_id=pending,
                     ),
                     errors={"base": "device_not_found"},
                     description_placeholders={
@@ -2864,27 +2868,13 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         devices,
                         bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
                         options,
+                        target_device_id=pending,
                     ),
                     errors={"base": "device_not_found"},
                     description_placeholders={
                         "device_summary": self._native_device_summary(devices)
                     },
                 )
-            # Once setup is complete, this selection explicitly chooses the
-            # active single-device controller. While configuring pending
-            # devices, preserve the current controller so a secondary system
-            # cannot silently take over control.
-            is_active_device = False
-            if pending is None:
-                options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
-                is_active_device = True
-            elif not options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
-                options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
-                options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
-                options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = (
-                    chosen_transport.value
-                )
-                is_active_device = True
             # Native control is an integration-wide gate. The form is also
             # shown while configuring non-selected group members, so persist
             # its submitted value regardless of which device is being set up.
@@ -3009,8 +2999,6 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 clear_blank=pending is not None,
             )
             options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
-            if is_active_device:
-                options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = chosen_transport.value
             self._working_options = options
             migration = self.config_entry.data.get("v5_migration")
             if isinstance(migration, Mapping):
@@ -3049,8 +3037,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         "device_summary": self._native_device_summary(devices)
                     },
                 )
-            options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
-            return self.async_create_entry(title="", data=options)
+            return await self.async_step_native_zendure_controller()
 
         return self.async_show_form(
             step_id="native_zendure_device",
@@ -3065,6 +3052,116 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "device_summary": self._native_device_summary(devices)
             },
+        )
+
+    async def async_step_native_zendure_controller(
+        self, user_input: dict[str, Any] | None = None
+    ):
+        """Choose explicitly which configured system receives single-device control."""
+
+        if self._native_bootstrap is None or self._native_token is None:
+            return await self.async_step_native_zendure()
+
+        devices = self._native_bootstrap.devices
+        options = dict(self.config_entry.options)
+        options.update(self._working_options)
+        setup_map = self._native_setup_map or reconcile_device_setups(
+            devices,
+            options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+            legacy_selected_device=options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
+            legacy_transport=options.get(CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT),
+        )
+        setup_records = setup_map.get("devices", {})
+        choices = {
+            item.candidate.candidate_id: item
+            for item in devices
+            if item.candidate.supported
+            and isinstance(setup_records.get(item.candidate.candidate_id), Mapping)
+            and setup_records[item.candidate.candidate_id].get("setup_status")
+            == SETUP_COMPLETE
+        }
+        if not choices:
+            return await self.async_step_native_zendure_device()
+
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            selected_id = str(user_input.get(CONF_NATIVE_ZENDURE_ACTIVE_DEVICE, ""))
+            if selected_id not in choices:
+                errors["base"] = "controller_device_not_configured"
+            else:
+                selected_device = choices[selected_id]
+                setup_record = setup_records[selected_id]
+                configured_transport = setup_record.get("transport")
+                try:
+                    transport = ZendureTransport(str(configured_transport))
+                except ValueError:
+                    transport = ZendureTransport.CLOUD_MQTT
+                if transport not in _native_transport_options(
+                    selected_device.candidate.identity
+                ):
+                    transport = (
+                        preferred_local_transport(selected_device.candidate.identity)
+                        or ZendureTransport.CLOUD_MQTT
+                    )
+                options[CONF_NATIVE_ZENDURE_APP_TOKEN] = self._native_token
+                options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = setup_map
+                options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected_id
+                options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = transport.value
+                options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = bool(
+                    user_input.get(
+                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                        options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False),
+                    )
+                )
+                return self.async_create_entry(title="", data=options)
+
+        selected_default = options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+        if selected_default not in choices:
+            selected_default = next(iter(choices))
+        return self.async_show_form(
+            step_id="native_zendure_controller",
+            data_schema=self._native_controller_schema(
+                choices,
+                selected_default,
+                bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+            ),
+            errors=errors,
+            description_placeholders={
+                "device_summary": self._native_device_summary(devices),
+            },
+        )
+
+    @staticmethod
+    def _native_controller_schema(
+        devices, selected_default: str, control_enabled: bool
+    ) -> vol.Schema:
+        device_choices = [
+            {
+                "value": device_id,
+                "label": native_device_label(
+                    item.candidate.display_name,
+                    item.candidate.identity.product_model,
+                    item.pack_count,
+                ),
+            }
+            for device_id, item in devices.items()
+        ]
+        return vol.Schema(
+            {
+                vol.Required(
+                    CONF_NATIVE_ZENDURE_ACTIVE_DEVICE,
+                    default=selected_default,
+                ): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=device_choices,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Required(
+                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                    default=control_enabled,
+                ): selector.BooleanSelector(),
+            }
         )
 
     @staticmethod
