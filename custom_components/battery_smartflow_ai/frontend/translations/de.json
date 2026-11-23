@@ -11,7 +11,7 @@
   "menu_settings": "Einstellungen & Training",
   "general_settings": "Allgemein",
   "expert_settings": "Expertenmodus",
-  "smart_mode_settings": "SmartMode-Verhalten",
+  "smart_mode_settings": "SmartMode-Verhalten", "native_zendure_settings": "Natives Zendure", "native_zendure_controller": "Aktives Steuergerät auswählen", "option_native_zendure_active_device": "Aktives Steuergerät",
   "smart_mode_help": "Bei Geräten mit direkter SmartMode-Steuerung: Aktiviert bleibt smartMode=1 im Leerlauf gesetzt. Deaktiviert nutzt das bisherige Modellverhalten.",
   "debug_settings": "Debug-Modus",
   "settings_shortcuts": "Einstellungen",

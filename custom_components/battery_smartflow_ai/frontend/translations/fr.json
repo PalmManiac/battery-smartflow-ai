@@ -11,7 +11,7 @@
   "menu_settings": "Réglages et entraînement",
   "general_settings": "Général",
   "expert_settings": "Mode expert",
-  "smart_mode_settings": "Comportement SmartMode",
+  "smart_mode_settings": "Comportement SmartMode", "native_zendure_settings": "Zendure natif", "native_zendure_controller": "Choisir le système de commande actif", "option_native_zendure_active_device": "Système de commande actif",
   "smart_mode_help": "Pour les appareils compatibles avec le contrôle direct SmartMode : activé, smartMode=1 reste défini en veille ; désactivé, le comportement habituel du modèle est utilisé.",
   "debug_settings": "Mode débogage",
   "settings_shortcuts": "Réglages",

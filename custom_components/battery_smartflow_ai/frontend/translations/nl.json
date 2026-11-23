@@ -11,7 +11,7 @@
   "menu_settings": "Settings & training",
   "general_settings": "General",
   "expert_settings": "Expert mode",
-  "smart_mode_settings": "Smart Mode behavior",
+  "smart_mode_settings": "Smart Mode behavior", "native_zendure_settings": "Native Zendure", "native_zendure_controller": "Actief Zendure-besturingssysteem kiezen", "option_native_zendure_active_device": "Actief besturingssysteem",
   "smart_mode_help": "For devices with direct Smart Mode control: enabled keeps smartMode=1 while idle; disabled uses the existing model behavior.",
   "debug_settings": "Debug mode",
   "settings_shortcuts": "Settings",
