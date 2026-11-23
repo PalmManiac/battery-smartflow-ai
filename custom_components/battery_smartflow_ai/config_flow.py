@@ -574,11 +574,12 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             errors=errors,
                             data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
                                 devices,
-                                bool(
+                                bool(user_input.get(
+                                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
                                     getattr(self, "_native_options", {}).get(
                                         CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
-                                    )
-                                ),
+                                    ),
+                                )),
                                 getattr(self, "_native_options", None),
                                 target_device_id=pending,
                             ),
@@ -608,20 +609,22 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         self._native_options[
                             CONF_NATIVE_ZENDURE_SELECTED_DEVICE
                         ] = active_device_id
+                    # This is an integration-wide permission, so a value
+                    # submitted while configuring any device must be retained.
+                    self._native_options[
+                        CONF_NATIVE_ZENDURE_CONTROL_ENABLED
+                    ] = bool(
+                        user_input.get(
+                            CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                            self._native_options.get(
+                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                            ),
+                        )
+                    )
                     if selected.candidate.candidate_id == active_device_id:
                         self._native_options[
                             CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT
                         ] = chosen_transport.value
-                        self._native_options[
-                            CONF_NATIVE_ZENDURE_CONTROL_ENABLED
-                        ] = bool(
-                            user_input.get(
-                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
-                                self._native_options.get(
-                                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
-                                ),
-                            )
-                        )
                     for key in (
                         CONF_NATIVE_ZENDURE_LOCAL_MQTT_SERVER,
                         CONF_NATIVE_ZENDURE_LOCAL_MQTT_PORT,
@@ -722,7 +725,14 @@ class ZendureSmartFlowConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return self.async_show_form(
                         step_id="native_device",
                         data_schema=ZendureSmartFlowOptionsFlow._native_device_schema(
-                            devices, target_device_id=next_id
+                            devices,
+                            bool(
+                                self._native_options.get(
+                                    CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                                )
+                            ),
+                            self._native_options,
+                            target_device_id=next_id,
                         ),
                         description_placeholders={
                             "device_summary": (
@@ -2791,8 +2801,11 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     step_id="native_zendure_device",
                     data_schema=self._native_device_schema(
                         devices,
-                        bool(self.config_entry.options.get(
-                            CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                        bool(user_input.get(
+                            CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
+                            self.config_entry.options.get(
+                                CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False
+                            ),
                         )),
                         self.config_entry.options,
                     ),
