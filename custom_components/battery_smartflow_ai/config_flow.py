@@ -2812,7 +2812,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 return self.async_show_form(
                     step_id="native_zendure_device",
                     data_schema=self._native_device_schema(
-                        devices, True, options, target_device_id=pending
+                        devices,
+                        bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+                        options,
+                        target_device_id=pending,
                     ),
                     errors={"base": "unsupported_device"},
                     description_placeholders={
@@ -2844,19 +2847,25 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             ):
                 return self.async_show_form(
                     step_id="native_zendure_device",
-                    data_schema=self._native_device_schema(devices, True, options),
+                    data_schema=self._native_device_schema(
+                        devices,
+                        bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+                        options,
+                    ),
                     errors={"base": "device_not_found"},
                     description_placeholders={
                         "device_summary": self._native_device_summary(devices)
                     },
                 )
-            # Keep the existing single-device controller as the V5-compatible
-            # fallback. New accounts use the first configured device; setup of
-            # further devices never silently changes the active controller.
-            is_active_device = (
-                options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE) == selected
-            )
-            if not options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
+            # Once setup is complete, this selection explicitly chooses the
+            # active single-device controller. While configuring pending
+            # devices, preserve the current controller so a secondary system
+            # cannot silently take over control.
+            is_active_device = False
+            if pending is None:
+                options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
+                is_active_device = True
+            elif not options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE):
                 options[CONF_NATIVE_ZENDURE_SELECTED_DEVICE] = selected
                 options[CONF_NATIVE_ZENDURE_CONTROL_ENABLED] = True
                 options[CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT] = (
@@ -2921,7 +2930,11 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     if local_port != 1883:
                         return self.async_show_form(
                             step_id="native_zendure_device",
-                            data_schema=self._native_device_schema(devices, True, options),
+                            data_schema=self._native_device_schema(
+                                devices,
+                                bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+                                options,
+                            ),
                             errors={"base": "legacy_port_required"},
                             description_placeholders={
                                 "device_summary": self._native_device_summary(devices)
@@ -2931,7 +2944,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         return self.async_show_form(
                             step_id="native_zendure_device",
                             data_schema=self._native_device_schema(
-                                devices, True, options
+                                devices,
+                                bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+                                options,
                             ),
                             errors={"base": "legacy_wifi_required"},
                             description_placeholders={
@@ -2959,7 +2974,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         return self.async_show_form(
                             step_id="native_zendure_device",
                             data_schema=self._native_device_schema(
-                                devices, True, options
+                                devices,
+                                bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+                                options,
                             ),
                             errors={
                                 "base": reason if reason in allowed else "legacy_provision_failed"
@@ -3010,7 +3027,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 return self.async_show_form(
                     step_id="native_zendure_device",
                     data_schema=self._native_device_schema(
-                        devices, True, options, target_device_id=next_pending
+                        devices,
+                        bool(options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)),
+                        options,
+                        target_device_id=next_pending,
                     ),
                     description_placeholders={
                         "device_summary": self._native_device_summary(devices)
@@ -3162,7 +3182,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                         mode=selector.SelectSelectorMode.DROPDOWN,
                     )
                 ),
-                vol.Optional(
+                vol.Required(
                     CONF_NATIVE_ZENDURE_CONTROL_ENABLED,
                     default=native_control_enabled,
                 ): selector.BooleanSelector(),
