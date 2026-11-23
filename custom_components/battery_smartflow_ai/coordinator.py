@@ -1099,6 +1099,22 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         safe to control as a unit.
         """
 
+        intent_metadata = getattr(strategy_intent, "metadata", {})
+        if (
+            str(getattr(strategy_intent, "intent", "") or "") == "passthrough"
+            and isinstance(intent_metadata, Mapping)
+            and bool(
+                intent_metadata.get(
+                    "pv_houseload_passthrough_native_pv_source",
+                    False,
+                )
+            )
+        ):
+            # Passthrough is sourced from the selected device's native PV input.
+            # Do not spread that PV-limited request over group members, where it
+            # could become battery discharge from another system.
+            return None
+
         from collections.abc import Sequence
 
         from .battery_groups import (
@@ -5432,15 +5448,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         return start_counter, stop_counter, latched
 
-    def _sf800_compute_passthrough_output(
+    def _compute_pv_houseload_passthrough_output(
         self,
         profile: dict[str, Any],
         raw_target_w: float,
         max_output_w: float,
         latch_active: bool,
         force_zero: bool = False,
+        strict_source_cap: bool = False,
     ) -> float:
-        """Smooth and rate-limit SF800Pro passthrough output."""
+        """Smooth and rate-limit PV house-load passthrough output."""
         if force_zero:
             self._persist["sf800_passthrough_prev_output_w"] = 0.0
             self._persist["sf800_passthrough_smoothed_target_w"] = 0.0
@@ -5475,6 +5492,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         alpha = max(0.05, min(alpha, 1.0))
 
         smoothed_target = (prev_smoothed * (1.0 - alpha)) + (raw_target * alpha)
+        if strict_source_cap:
+            # At the SoC floor the output must never outlive or exceed current
+            # PV availability, even while the normal output smoother is
+            # stepping down from a previous target.
+            smoothed_target = min(smoothed_target, raw_target)
 
         if smoothed_target > prev_output:
             next_output = prev_output + min(smoothed_target - prev_output, max_step_up)
@@ -5488,6 +5510,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         if not latch_active and next_output < min_output:
             next_output = 0.0
+
+        if strict_source_cap:
+            next_output = min(next_output, raw_target)
+            if next_output < min_output:
+                next_output = 0.0
 
         self._persist["sf800_passthrough_prev_output_w"] = float(next_output)
         self._persist["sf800_passthrough_smoothed_target_w"] = float(smoothed_target)
@@ -5549,10 +5576,15 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             )
         )
 
-        protection_active = bool(
-            discharge_blocked_by_soc_min
-            or cell_voltage_discharge_blocked
-            or cell_voltage_emergency_active
+        low_soc_passthrough = bool(
+            profile.get("PV_HOUSELOAD_PASSTHROUGH_LOW_SOC", False)
+            and (discharge_blocked_by_soc_min or float(soc) <= float(soc_min))
+        )
+        soc_protection_active = bool(
+            discharge_blocked_by_soc_min or float(soc) <= float(soc_min)
+        )
+        cell_protection_active = bool(
+            cell_voltage_discharge_blocked or cell_voltage_emergency_active
         )
 
         if not enabled:
@@ -5560,20 +5592,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             target_w = 0.0
             stop_reason = "disabled"
 
-        elif protection_active:
+        elif cell_protection_active:
             active = False
             target_w = 0.0
             stop_reason = "protection_active"
+
+        elif soc_protection_active and not low_soc_passthrough:
+            active = False
+            target_w = 0.0
+            stop_reason = "soc_min"
 
         elif float(additional_battery_charge_w or 0.0) > 0.0:
             active = False
             target_w = 0.0
             stop_reason = "additional_battery_charging"
-
-        elif float(soc) <= float(soc_min):
-            active = False
-            target_w = 0.0
-            stop_reason = "soc_min"
 
         else:
             pv_val = max(0.0, float(pv_w or 0.0))
@@ -5652,6 +5684,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 house_val,
                 float(max_output_w or 0.0),
             )
+            low_soc_load_deficit = bool(
+                low_soc_passthrough and pv_val <= house_val
+            )
 
             target_w = raw_target_w
 
@@ -5698,11 +5733,14 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 )
                 stop_reason = "full_battery_pv_passthrough"
 
-            elif forecast_blocks_pv_passthrough_start(
-                mppt_clips_without_output=mppt_clips_without_output,
-                already_active=active,
-                battery_near_full=battery_near_full,
-                forecast_surplus_expected=forecast_surplus_expected,
+            elif (
+                not low_soc_passthrough
+                and forecast_blocks_pv_passthrough_start(
+                    mppt_clips_without_output=mppt_clips_without_output,
+                    already_active=active,
+                    battery_near_full=battery_near_full,
+                    forecast_surplus_expected=forecast_surplus_expected,
+                )
             ):
                 # The forecast threshold is a start gate, not an exit signal.
                 # Remaining forecast and battery headroom converge while PV is
@@ -5752,13 +5790,20 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 export_counter = 0
 
                 if (
-                    not bool(pv_charge_latched)
+                    (
+                        not bool(pv_charge_latched)
+                        or low_soc_load_deficit
+                    )
                     and enough_pv
                     and enough_house_load
                     and useful_target
-                    and export_val < float(pv_charge_start_export_w or 0.0)
                     and (
-                        forecast_surplus_expected
+                        low_soc_load_deficit
+                        or export_val < float(pv_charge_start_export_w or 0.0)
+                    )
+                    and (
+                        low_soc_load_deficit
+                        or forecast_surplus_expected
                         or import_val <= max(250.0, house_val * 0.50)
                     )
                 ):
@@ -5776,15 +5821,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             export_counter = 0
 
         if active:
-            target_w = self._sf800_compute_passthrough_output(
+            target_w = self._compute_pv_houseload_passthrough_output(
                 profile=profile,
                 raw_target_w=float(target_w or 0.0),
                 max_output_w=float(max_output_w or 0.0),
                 latch_active=True,
                 force_zero=False,
+                strict_source_cap=low_soc_passthrough,
             )
         else:
-            target_w = self._sf800_compute_passthrough_output(
+            target_w = self._compute_pv_houseload_passthrough_output(
                 profile=profile,
                 raw_target_w=0.0,
                 max_output_w=float(max_output_w or 0.0),
@@ -7353,6 +7399,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 pv_houseload_passthrough_target_w = 0.0
                 pv_houseload_passthrough_stop_reason = sf800_stop_reason
             else:
+                passthrough_pv_w = float(pv_w or 0.0)
+                if profile.get("PV_HOUSELOAD_PASSTHROUGH_USE_NATIVE_PV", False):
+                    # The output is physically supplied by this Zendure
+                    # system's DC PV input. Do not mistake unrelated household
+                    # PV production for power available to this device.
+                    passthrough_pv_w = (
+                        float(native_pv_w)
+                        if native_pv_sensor_valid
+                        else 0.0
+                    )
                 pv_houseload_passthrough_active, pv_houseload_passthrough_target_w, pv_houseload_passthrough_stop_reason = (
                     self._update_pv_houseload_passthrough(
                         now=now,
@@ -7360,7 +7416,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         soc=float(soc),
                         soc_min=float(soc_min),
                         soc_max=float(soc_max),
-                        pv_w=float(pv_w),
+                        pv_w=passthrough_pv_w,
                         house_load_w=float(house_load),
                         grid_import_w=float(grid_import or 0.0),
                         grid_export_w=float(grid_export or 0.0),
@@ -7760,6 +7816,27 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     decision.reason = "pv_charge_blocked_by_discharge_protection"
                     
             soc_limit = self._get_soc_limit()
+            pv_houseload_passthrough_selected = bool(
+                decision.reason == "pv_house_load_passthrough"
+            )
+            native_pv_passthrough_selected = bool(
+                pv_houseload_passthrough_selected
+                and profile.get(
+                    "PV_HOUSELOAD_PASSTHROUGH_USE_NATIVE_PV",
+                    False,
+                )
+                and native_pv_sensor_valid
+                and float(native_pv_w) > 0.0
+            )
+            if native_pv_passthrough_selected:
+                # The 2400Pro can route its own live PV input to AC output.
+                # Clamp once more at the final strategic decision boundary so
+                # neither an earlier target nor a stale smoothing value can
+                # request more output than the measured native PV source.
+                decision.discharge_w = min(
+                    max(0.0, float(decision.discharge_w or 0.0)),
+                    max(0.0, float(native_pv_w)),
+                )
 
             # V4.3.0-dev8:
             # Off-Grid load remains visible in diagnostics but no longer
@@ -7770,7 +7847,12 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 decision.charge_w = 0.0
                 decision.action = "idle"
                 decision.reason = "soc_limit_upper"
-            elif soc_limit == 2 and decision.ac_mode == "output" and float(decision.discharge_w or 0.0) > 0:
+            elif (
+                soc_limit == 2
+                and decision.ac_mode == "output"
+                and float(decision.discharge_w or 0.0) > 0
+                and not native_pv_passthrough_selected
+            ):
                 decision.discharge_w = 0.0
                 decision.action = "idle"
                 decision.reason = "soc_limit_lower"
@@ -8743,17 +8825,38 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         "group_max_input_w": round(group_max_input_w, 2),
                     }
                 )
-            group_max_output_w = self._native_group_max_output_w(
-                native_runtime,
-                selected_max_output_w=soc_min_discharge_taper_max_output_w,
-                reserve_soc_pct=float(soc_min),
-                maximum_soc_pct=float(soc_max),
+            selected_output_limit_w = (
+                min(
+                    float(max_discharge),
+                    max(0.0, float(decision.discharge_w or 0.0)),
+                )
+                if native_pv_passthrough_selected
+                else soc_min_discharge_taper_max_output_w
+            )
+            group_max_output_w = (
+                None
+                if native_pv_passthrough_selected
+                else self._native_group_max_output_w(
+                    native_runtime,
+                    selected_max_output_w=selected_output_limit_w,
+                    reserve_soc_pct=float(soc_min),
+                    maximum_soc_pct=float(soc_max),
+                )
             )
             regulation_max_output_w = (
                 group_max_output_w
                 if group_max_output_w is not None
-                else soc_min_discharge_taper_max_output_w
+                else selected_output_limit_w
             )
+            if native_pv_passthrough_selected:
+                # Passthrough output represents PV sent directly to the house,
+                # not battery discharge. Keep the command at or below this
+                # cycle's PV-limited request rather than applying SoC taper or
+                # allowing the output smoother to draw from the battery.
+                regulation_max_output_w = min(
+                    regulation_max_output_w,
+                    selected_output_limit_w,
+                )
             
             strategy_intent.metadata.update(
                 {
@@ -8823,6 +8926,9 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     ),
                     "load_coverage_priority": bool(
                         strategy_intent.load_coverage_priority
+                    ),
+                    "pv_houseload_passthrough_native_pv_source": bool(
+                        native_pv_passthrough_selected
                     ),
                     "charge_source_allocation_active": bool(
                         charge_source_allocation.active
@@ -9077,10 +9183,21 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             # from a previous cycle. This explicit flag prevents such technical
             # holds from producing a short output pulse at SoC minimum or during
             # cell-voltage discharge protection.
-            discharge_allowed_for_regulation = not bool(
-                discharge_blocked_by_soc_min
-                or cell_voltage_discharge_blocked
-                or soc_limit == 2
+            low_soc_passthrough_allowed = bool(
+                native_pv_passthrough_selected
+                and profile.get("PV_HOUSELOAD_PASSTHROUGH_LOW_SOC", False)
+                and (
+                    discharge_blocked_by_soc_min
+                    or float(soc) <= float(soc_min)
+                )
+            )
+            discharge_allowed_for_regulation = bool(
+                not cell_voltage_discharge_blocked
+                and (soc_limit != 2 or native_pv_passthrough_selected)
+                and (
+                    not discharge_blocked_by_soc_min
+                    or low_soc_passthrough_allowed
+                )
             )
 
             technical_decision_started = (
@@ -9107,7 +9224,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 previous_input_w=float(self._persist.get("last_set_input_w", 0.0) or 0.0),
                 previous_output_w=float(self._persist.get("last_set_output_w", 0.0) or 0.0),
                 max_input_w=float(max_ac_input),
-                max_output_w=float(soc_min_discharge_taper_max_output_w),
+                max_output_w=float(regulation_max_output_w),
                 group_max_input_w=(
                     float(group_max_input_w)
                     if group_max_input_w is not None
@@ -10474,7 +10591,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     "charge_commit_acceptable_price_per_kwh"
                 ),
 
-                # SF800Pro passthrough / arbiter debug
+                # PV house-load passthrough / arbiter debug
                 "pv_houseload_passthrough_enabled": bool(
                     profile.get("PV_HOUSELOAD_PASSTHROUGH", False)
                 ),

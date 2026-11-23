@@ -968,7 +968,7 @@
           "summer_cover_deficit": "Autarkie: huislast dekken",
           "pv_surplus_charge": "PV-overschot laden",
           "soc_min_enforced": "Ontladen gestopt (SoC-minimum bereikt)",
-          "pv_house_load_passthrough": "SF800Pro: PV-huislast-passthrough actief",
+          "pv_house_load_passthrough": "PV-huislast-passthrough actief",
           "soc_limit_upper": "Laden geblokkeerd (bovenste SoC-limiet actief)",
           "soc_limit_lower": "Ontladen geblokkeerd (onderste SoC-limiet actief)",
           "manual_mode": "Handmatige modus actief",
@@ -1028,7 +1028,7 @@
           "manual_discharge": "Handmatig ontladen",
           "manual_constant_discharge": "Constante ontlading actief",
           "emergency_charge": "Noodladen",
-          "pv_house_load_passthrough_active": "SF800Pro: PV-huislast-passthrough actief",
+          "pv_house_load_passthrough_active": "PV-huislast-passthrough actief",
 		  "discharge_waiting_for_import": "Ontladen toegestaan – wacht op netafname"
         }
       },
