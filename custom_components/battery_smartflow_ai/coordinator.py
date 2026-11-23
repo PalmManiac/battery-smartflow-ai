@@ -8649,9 +8649,10 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 load_coverage_priority=load_coverage_priority,
             )
 
-            # Smooth Autarky discharge after the SoC-minimum resume lock lifts.
-            # Some SolarFlow 2400 Pro installations otherwise jump straight from
-            # zero output to full house-load coverage at the resume boundary.
+            # Smooth Autarky output within the configured band above the actual
+            # SoC minimum. Keep this taper separate from the resume hysteresis:
+            # anchoring it at the resume threshold creates a zero-output region
+            # while discharge is already allowed above the configured minimum.
             soc_min_discharge_taper_range_pct = max(
                 0.0,
                 float(
@@ -8659,9 +8660,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                     or 0.0
                 ),
             )
-            soc_min_discharge_taper_start_pct = (
-                float(soc_min) + max(0.0, float(resume_margin))
-            )
+            soc_min_discharge_taper_start_pct = float(soc_min)
             soc_min_discharge_taper_end_pct = (
                 soc_min_discharge_taper_start_pct
                 + soc_min_discharge_taper_range_pct
