@@ -360,6 +360,8 @@ GROUP_LEAD_MINIMUM_RUNTIME_SECONDS = 600.0
 GROUP_LEAD_SOC_HYSTERESIS_PCT = 10.0
 GROUP_LEAD_IDLE_RESET_SECONDS = 60.0
 GROUP_HANDOVER_POWER_TOLERANCE_W = 50.0
+GROUP_HANDOVER_FLOW_MAX_AGE_SECONDS = 30.0
+GROUP_HANDOVER_SETPOINT_MAX_AGE_SECONDS = 30.0
 
 
 def _to_float(v: Any, default: float | None = None) -> float | None:
@@ -4234,6 +4236,52 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         )
                         return None, 0.0, observed_at
 
+                    def zero_setpoints_confirmed(
+                        device_id: str,
+                    ) -> bool:
+                        """Accept recent zero setpoint readback as stop confirmation.
+
+                        Some devices do not publish a new physical power sample
+                        for every setpoint update, and may not republish an
+                        unchanged zero setpoint after the stop request. A recent
+                        zero readback is a safe fallback when measured flow is
+                        absent or stale; a newer active power sample still keeps
+                        the handover paused below.
+                        """
+                        state = device_states.get(device_id)
+                        setpoints = getattr(state, "setpoints", None)
+                        if state is None or setpoints is None:
+                            return False
+                        now = dt_util.as_utc(self._clock.utc_now())
+                        for measured in (
+                            getattr(setpoints, "input_limit_w", None),
+                            getattr(setpoints, "output_limit_w", None),
+                        ):
+                            if (
+                                measured is None
+                                or not measured.valid
+                                or measured.value is None
+                                or measured.observed_at is None
+                            ):
+                                return False
+                            observed_at = dt_util.as_utc(measured.observed_at)
+                            age_seconds = (now - observed_at).total_seconds()
+                            if (
+                                age_seconds < 0
+                                or age_seconds > GROUP_HANDOVER_SETPOINT_MAX_AGE_SECONDS
+                            ):
+                                return False
+                            try:
+                                value = float(measured.value)
+                            except (TypeError, ValueError, OverflowError):
+                                return False
+                            if (
+                                not math.isfinite(value)
+                                or abs(value) > GROUP_HANDOVER_POWER_TOLERANCE_W
+                            ):
+                                return False
+                        return True
+
                     handover_ids: set[str] = set()
                     waiting_for_handover = False
                     if pending_handover is not None:
@@ -4255,11 +4303,31 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                                 # The handover threshold is measured in watts.
                                 # A detectable direction below that threshold
                                 # is already within the safe zero tolerance.
-                                if (
-                                    observed_at is None
-                                    or requested_at is None
-                                    or dt_util.as_utc(observed_at) <= requested_at
-                                    or observed_w > GROUP_HANDOVER_POWER_TOLERANCE_W
+                                flow_age_seconds = (
+                                    (dt_util.as_utc(self._clock.utc_now())
+                                     - dt_util.as_utc(observed_at)).total_seconds()
+                                    if observed_at is not None
+                                    else None
+                                )
+                                flow_observed_after_request = bool(
+                                    observed_at is not None
+                                    and requested_at is not None
+                                    and dt_util.as_utc(observed_at) > requested_at
+                                    and flow_age_seconds is not None
+                                    and 0 <= flow_age_seconds
+                                    <= GROUP_HANDOVER_FLOW_MAX_AGE_SECONDS
+                                )
+                                flow_still_active = bool(
+                                    flow_observed_after_request
+                                    and observed_w > GROUP_HANDOVER_POWER_TOLERANCE_W
+                                )
+                                flow_zero_confirmed = bool(
+                                    flow_observed_after_request
+                                    and observed_w <= GROUP_HANDOVER_POWER_TOLERANCE_W
+                                )
+                                if flow_still_active or not (
+                                    flow_zero_confirmed
+                                    or zero_setpoints_confirmed(str(device_id))
                                 ):
                                     waiting_for_handover = True
                         else:
