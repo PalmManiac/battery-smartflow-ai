@@ -982,7 +982,7 @@
           "summer_cover_deficit": "Autarkie: Hauslast decken",
           "pv_surplus_charge": "PV-Überschuss laden",
           "soc_min_enforced": "Entladung gestoppt (SoC-Minimum erreicht)",
-          "pv_house_load_passthrough": "SF800Pro: PV-Hauslast-Passthrough aktiv",
+          "pv_house_load_passthrough": "PV-Hauslast-Passthrough aktiv",
           "soc_limit_upper": "Laden blockiert (oberes SoC-Limit aktiv)",
           "soc_limit_lower": "Entladen blockiert (unteres SoC-Limit aktiv)",
           "manual_mode": "Manueller Modus aktiv",
@@ -1043,7 +1043,7 @@
           "manual_discharge": "Manuelle Entladung",
           "manual_constant_discharge": "Konstante Entladung aktiv",
           "emergency_charge": "Notladung",
-          "pv_house_load_passthrough_active": "SF800Pro: PV-Hauslast-Passthrough aktiv"
+          "pv_house_load_passthrough_active": "PV-Hauslast-Passthrough aktiv"
         }
       },
       "next_action_time": {

@@ -306,6 +306,25 @@ SF800PRO_PASSTHROUGH_DEFAULTS = {
 }
 
 
+SF2400PRO_PASSTHROUGH_DEFAULTS = {
+    # The SF2400Pro uses its DC-coupled PV input to support direct PV-to-load
+    # passthrough. At the configured SoC minimum, only measured PV power may
+    # be sent to the AC output; the battery must not supplement it.
+    "PV_HOUSELOAD_PASSTHROUGH": True,
+    "PV_HOUSELOAD_PASSTHROUGH_LOW_SOC": True,
+    "PV_HOUSELOAD_PASSTHROUGH_USE_NATIVE_PV": True,
+    "PV_HOUSELOAD_PASSTHROUGH_IN_AUTARKY": True,
+    "PV_HOUSELOAD_PASSTHROUGH_HOLD_SECONDS": 120.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_PV_W": 120.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_HOUSE_LOAD_W": 120.0,
+    "PV_HOUSELOAD_PASSTHROUGH_EXPORT_STOP_CYCLES": 18,
+    "PV_HOUSELOAD_PASSTHROUGH_MIN_OUTPUT_W": 80.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_UP_W": 100.0,
+    "PV_HOUSELOAD_PASSTHROUGH_MAX_STEP_DOWN_W": 150.0,
+    "PV_HOUSELOAD_PASSTHROUGH_SMOOTHING_ALPHA": 0.30,
+}
+
+
 # ---------------------------------------------------------------------------
 # Device profiles
 # ---------------------------------------------------------------------------
@@ -614,7 +633,9 @@ SF2400PRO_PROFILE = {
 
     # --- V4.2.0 regulation / capabilities ---
     **V42_COMMON_DEFAULTS,
-    **PASSTHROUGH_DISABLED_DEFAULTS,
+    "SUPPORTS_PASSTHROUGH": True,
+    "MPPT_CLIPS_WITHOUT_OUTPUT": True,
+    **SF2400PRO_PASSTHROUGH_DEFAULTS,
 
     # --- Charge controller tuning ---
     "CHARGE_DEADBAND_W": 30.0,

@@ -650,7 +650,15 @@ class PvHouseLoadPassthroughRule(BaseRule):
         if not engine._pv_houseload_passthrough_enabled(ctx):
             return None
 
-        if ctx.ai_mode == "summer":
+        if (
+            ctx.ai_mode == "summer"
+            and not bool(
+                ctx.profile.get(
+                    "PV_HOUSELOAD_PASSTHROUGH_IN_AUTARKY",
+                    False,
+                )
+            )
+        ):
             return None
 
         if not bool(ctx.pv_houseload_passthrough_active):

@@ -1151,7 +1151,7 @@
           "summer_cover_deficit": "Autarky: cover house load",
           "pv_surplus_charge": "Charge PV surplus",
           "soc_min_enforced": "Discharge stopped (SoC minimum reached)",
-          "pv_house_load_passthrough": "SF800Pro: PV house-load passthrough active",
+          "pv_house_load_passthrough": "PV house-load passthrough active",
           "soc_limit_upper": "Charging blocked (upper SoC limit active)",
           "soc_limit_lower": "Discharging blocked (lower SoC limit active)",
           "manual_mode": "Manual mode active",
@@ -1211,7 +1211,7 @@
           "manual_discharge": "Manual discharging",
           "manual_constant_discharge": "Constant discharge active",
           "emergency_charge": "Emergency charging",
-          "pv_house_load_passthrough_active": "SF800Pro: PV house-load passthrough active",
+          "pv_house_load_passthrough_active": "PV house-load passthrough active",
 		      "discharge_waiting_for_import": "Discharge allowed – waiting for grid import"
         }
       },

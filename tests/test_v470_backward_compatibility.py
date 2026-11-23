@@ -234,7 +234,7 @@ from custom_components.battery_smartflow_ai.device_profiles import (  # noqa: E4
 class V460DeviceProfileCompatibilityTests(unittest.TestCase):
     EXPECTED_PROFILE_SURFACE = {
         "SF2400AC": (2400.0, 2400.0, False, True, True, True, 10.0, -10.0, 30.0),
-        "SF2400Pro": (2400.0, 2400.0, False, True, True, True, 10.0, -5.0, 30.0),
+        "SF2400Pro": (2400.0, 2400.0, True, True, True, True, 10.0, -5.0, 30.0),
         "SF2400AC+": (2400.0, 2400.0, False, True, True, True, 10.0, -10.0, 30.0),
         "SF800Pro": (1000.0, 800.0, True, False, False, False, 30.0, 0.0, 35.0),
     }
