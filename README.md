@@ -51,7 +51,7 @@ V5 is now the **current stable release**. Start with the illustrated
 [quick start](docs/user-guide.md#quick-start-connect-zendure-directly)
 or the [German guide](docs/anleitung.md#schnellstart-zendure-direkt-verbinden).
 
-## V5.1.0 adds the BSFAI HEMS Portal
+## The BSFAI HEMS Portal
 
 V5.1.0 introduces an optional, purpose-built dashboard for energy flows,
 forecasts, economics, controls, and Zendure hardware topology. It includes
@@ -140,7 +140,7 @@ Goal:
 
 ---
 
-# ✨ V4.6.0 – Economics, prices and a clearer UI
+# ✨ Economics, prices and a clearer UI
 
 V4.6.0 adds a complete, persistent view of the battery's energy flows and
 economic result. Home Assistant now presents the integration as two clearly
@@ -653,7 +653,7 @@ V5 ist jetzt die **aktuelle stabile Version**. Der bebilderte
 und der [englische User Guide](docs/user-guide.md#quick-start-connect-zendure-directly)
 führen durch die neue Ersteinrichtung.
 
-## V5.1.0 bringt das BSFAI-HEMS-Portal
+## Das BSFAI-HEMS-Portal
 
 V5.1.0 ergänzt ein optionales, eigens gestaltetes Dashboard für Energieflüsse,
 Prognosen, Wirtschaftlichkeit, Steuerung und Zendure-Hardware-Topologie. Es
