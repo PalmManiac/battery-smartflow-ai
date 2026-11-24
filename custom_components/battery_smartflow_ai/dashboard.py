@@ -423,6 +423,7 @@ async def _async_update_dashboard_panel_locked(hass: HomeAssistant) -> None:
                     ("_charge_power_w", "charge_entity"),
                     ("_discharge_power_w", "discharge_entity"),
                     ("_soc_pct", "soc_entity"),
+                    ("_capacity_kwh", "capacity_entity"),
                     ("_online", "online_entity"),
                     ("_pv_power_w", "pv_entity"),
                 ):

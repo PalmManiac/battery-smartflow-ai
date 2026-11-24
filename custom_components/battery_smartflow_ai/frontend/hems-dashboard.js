@@ -644,10 +644,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
       energy_scope_save: { de: "Sensorzuordnung speichern", en: "Save sensor assignment", fr: "Enregistrer l’affectation de capteurs", nl: "Sensortoewijzing opslaan" },
       scope_id: { de: "Sensorzuordnung", en: "Sensor assignment", fr: "Affectation de capteurs", nl: "Sensortoewijzing" },
       scope_none: { de: "Noch keine Sensorzuordnungen konfiguriert.", en: "No sensor assignments configured yet.", fr: "Aucune affectation de capteurs n’est encore configurée.", nl: "Er zijn nog geen sensortoewijzingen ingesteld." },
-      battery_soc_average: { de: "SoC-Mittel", en: "Average SoC", fr: "SoC moyen", nl: "Gemiddelde SoC" },
+      battery_soc_average: { de: "Kapazitätsgewichteter SoC", en: "Capacity-weighted SoC", fr: "SoC pondéré par capacité", nl: "Capaciteitsgewogen SoC" },
+      battery_stored_energy: { de: "Geschätzt gespeichert: {stored} / {capacity} kWh", en: "Estimated stored energy: {stored} / {capacity} kWh", fr: "Énergie stockée estimée : {stored} / {capacity} kWh", nl: "Geschatte opgeslagen energie: {stored} / {capacity} kWh" },
       battery_flow_partial: { de: "Teilleistung aus {available} von {total} Systemen", en: "Partial battery power from {available} of {total} systems", fr: "Puissance batterie partielle : {available} systèmes sur {total}", nl: "Gedeeltelijk batterijvermogen van {available} van {total} systemen" },
       native_pv_flow_partial: { de: "Native PV-Leistung aus {available} von {total} Systemen", en: "Native PV power from {available} of {total} systems", fr: "Puissance PV native de {available} systèmes sur {total}", nl: "Native PV-vermogen van {available} van {total} systemen" },
-      battery_soc_partial: { de: "SoC-Mittel aus {available} von {total} Systemen", en: "Average SoC from {available} of {total} systems", fr: "SoC moyen calculé sur {available} systèmes sur {total}", nl: "Gemiddelde SoC van {available} van {total} systemen" },
+      battery_soc_partial: { de: "SoC und Kapazität aus {available} von {total} Systemen", en: "SoC and capacity from {available} of {total} systems", fr: "SoC et capacité de {available} systèmes sur {total}", nl: "SoC en capaciteit van {available} van {total} systemen" },
     };
     if (energyMappingLabels[key]) {
       return energyMappingLabels[key][language] || energyMappingLabels[key].en;
@@ -2884,26 +2885,32 @@ class BatterySmartFlowDashboard extends HTMLElement {
       };
       const nativeBatterySocSummary = () => {
         if (!nativeBatterySources.length) return null;
-        let totalSoc = 0;
+        let totalCapacityKwh = 0;
+        let storedKwh = 0;
         let availableSystems = 0;
         for (const pair of nativeBatterySources) {
           const onlineEntity = resolve(pair.online_entity, null);
           if (String(onlineEntity?.state || "").toLowerCase() === "offline") continue;
           const socEntity = resolve(pair.soc_entity, null);
+          const capacityEntity = resolve(pair.capacity_entity, null);
           const rawSoc = String(socEntity?.state || "").trim();
+          const rawCapacity = String(capacityEntity?.state || "").trim();
           const soc = rawSoc ? Number(rawSoc) : Number.NaN;
-          if (!Number.isFinite(soc) || soc < 0 || soc > 100) continue;
-          totalSoc += soc;
+          const capacityKwh = rawCapacity ? Number(rawCapacity) : Number.NaN;
+          if (!Number.isFinite(soc) || soc < 0 || soc > 100
+            || !Number.isFinite(capacityKwh) || capacityKwh <= 0) continue;
+          storedKwh += capacityKwh * soc / 100;
+          totalCapacityKwh += capacityKwh;
           availableSystems += 1;
         }
-        return availableSystems > 0
-          ? {
-              value: totalSoc / availableSystems,
-              partial: availableSystems < nativeBatterySources.length,
-              availableSystems,
-              totalSystems: nativeBatterySources.length,
-            }
-          : null;
+        return {
+          value: totalCapacityKwh > 0 ? storedKwh / totalCapacityKwh * 100 : null,
+          storedKwh: totalCapacityKwh > 0 ? storedKwh : null,
+          capacityKwh: totalCapacityKwh > 0 ? totalCapacityKwh : null,
+          partial: availableSystems < nativeBatterySources.length,
+          availableSystems,
+          totalSystems: nativeBatterySources.length,
+        };
       };
       // Native Zendure charge/discharge telemetry is the authoritative battery
       // flow. A configured sensor can represent a derived residual (for
@@ -2964,10 +2971,10 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const nativeSocSummary = nativeBatterySocSummary();
       const configuredSocEntity = (source.soc && this._hass?.states?.[source.soc])
         || (allowFallback ? this._findBatterySoc(entities, null) : null);
-      const useNativeSoc = nativeSocSummary !== null;
-      const socText = useNativeSoc
+      const useNativeSoc = nativeBatterySources.length > 0;
+      const socText = nativeSocSummary?.value !== null && nativeSocSummary?.value !== undefined
         ? `${nativeSocSummary.value.toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 1 })} %`
-        : configuredSocEntity && !["unknown", "unavailable"].includes(configuredSocEntity.state)
+        : !useNativeSoc && configuredSocEntity && !["unknown", "unavailable"].includes(configuredSocEntity.state)
           ? this._value(configuredSocEntity)
           : "";
       const socLabel = useNativeSoc ? this._t("battery_soc_average") : this._t("battery");
@@ -3032,6 +3039,11 @@ class BatterySmartFlowDashboard extends HTMLElement {
       const batteryWarning = batteryWarnings.length
         ? `<p class="live-flow-partial-note">${this._escape(batteryWarnings.join(" · "))}</p>`
         : "";
+      const storedEnergyNote = nativeSocSummary?.storedKwh !== null && nativeSocSummary?.storedKwh !== undefined
+        ? `<p class="live-flow-note">${this._escape(this._t("battery_stored_energy")
+          .replace("{stored}", nativeSocSummary.storedKwh.toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 2 }))
+          .replace("{capacity}", nativeSocSummary.capacityKwh.toLocaleString(this._hass?.locale?.language, { maximumFractionDigits: 2 })))}</p>`
+        : "";
       const gridDetail = nodeDetail(gridWatts, "grid");
       const houseDetail = houseLane ? nodeDetail(houseWatts, "house") : this._t("flow_unavailable");
       const wires = [
@@ -3045,7 +3057,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         ? `<div class="live-flow-offgrid">${this._liveFlowBranch(offgridLane, maxWatts, socText, "full")}</div>`
         : "";
       const groupKey = this._escape(source.entry_id || source.name || "system");
-      return `<section class="live-flow-group" data-render-key="flow-group:${groupKey}"><h3>${this._escape(source.name || this._t("system"))}</h3>${map}${batteryWarning}${offgrid}</section>`;
+      return `<section class="live-flow-group" data-render-key="flow-group:${groupKey}"><h3>${this._escape(source.name || this._t("system"))}</h3>${map}${storedEnergyNote}${batteryWarning}${offgrid}</section>`;
     }).filter(Boolean);
     return groups.length
       ? `<div class="live-flow-overview">${groups.join("")}<p class="live-flow-note">${this._escape(this._t("energy_flow_hint"))}</p></div>`
