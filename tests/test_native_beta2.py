@@ -356,11 +356,55 @@ class NativeSetupTests(unittest.IsolatedAsyncioTestCase):
             const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "cloud_mqtt",
         })
 
-        self.assertEqual(result["type"], "create_entry")
+        self.assertEqual(result["type"], "form")
+        self.assertEqual(result["step_id"], "native_zendure_controller")
+        saved = await flow.async_step_native_zendure_controller({
+            const.CONF_NATIVE_ZENDURE_ACTIVE_DEVICE: "cloud_mqtt:device-1",
+            const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: False,
+        })
+        self.assertEqual(saved["type"], "create_entry")
         self.assertIn(
             "cloud_mqtt:offline",
-            result["data"][const.CONF_NATIVE_ZENDURE_DEVICE_SETUPS]["devices"],
+            saved["data"][const.CONF_NATIVE_ZENDURE_DEVICE_SETUPS]["devices"],
         )
+
+    async def test_configured_device_is_offered_as_active_controller(self):
+        flow = load_flow_namespace()["ZendureSmartFlowOptionsFlow"]()
+        old_device = "cloud_mqtt:device-1"
+        new_device = "cloud_mqtt:device-2"
+        flow.config_entry = SimpleNamespace(
+            data={},
+            options={
+                const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: old_device,
+                const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "cloud_mqtt",
+            },
+        )
+        flow._native_bootstrap = await make_bootstrap(device_ids=("device-1", "device-2"))
+        flow._native_token = "private-test-token"
+        flow._native_setup_map = reconcile_device_setups(flow._native_bootstrap.devices)
+        flow._native_setup_map["devices"][old_device].update(
+            setup_status=SETUP_COMPLETE, transport="cloud_mqtt"
+        )
+
+        form = await flow.async_step_native_zendure_device({
+            const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE: new_device,
+            const.CONF_NATIVE_ZENDURE_CONTROL_TRANSPORT: "cloud_mqtt",
+            const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: True,
+        })
+
+        self.assertEqual(form["step_id"], "native_zendure_controller")
+        controller_key = next(
+            key for key in form["data_schema"].schema
+            if key.schema == const.CONF_NATIVE_ZENDURE_ACTIVE_DEVICE
+        )
+        self.assertEqual(controller_key.default(), new_device)
+        saved = await flow.async_step_native_zendure_controller({
+            const.CONF_NATIVE_ZENDURE_ACTIVE_DEVICE: new_device,
+            const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED: True,
+        })
+        self.assertEqual(saved["type"], "create_entry")
+        self.assertEqual(saved["data"][const.CONF_NATIVE_ZENDURE_SELECTED_DEVICE], new_device)
+        self.assertTrue(saved["data"][const.CONF_NATIVE_ZENDURE_CONTROL_ENABLED])
 
     async def test_smart_mode_option_defaults_on_and_can_be_disabled(self):
         options_flow = load_flow_namespace()["ZendureSmartFlowOptionsFlow"]()
