@@ -643,11 +643,10 @@ class NativeZendureRuntime:
 
     def overview_attributes(self) -> dict[str, Any]:
         systems = []
-        overview = build_native_device_overview(
-            self._inventory,
-            self._states,
-            migration_bound_device=self._migration_bound_device,
-        )
+        # Keep the portal status in sync with the runtime-derived control
+        # state used by the HA hardware entities. Inventory state alone stays
+        # at observation after discovery even when native control is active.
+        overview = self.hardware_overview()
         now = datetime.now(timezone.utc)
         for system_id, item in zip(sorted(self._inventory.devices), overview):
             state = self._states.get(system_id)

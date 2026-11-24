@@ -405,6 +405,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(idle_overview.control_state, DeviceControlState.ENABLED)
         self.assertTrue(idle_overview.control_enabled)
         self.assertFalse(idle_overview.actively_controlled)
+        self.assertEqual(idle.overview_attributes()["systems"][0]["status"], "Control enabled")
 
         active = runtime(
             current_state=state(output_w=300, discharge_w=300)
@@ -413,6 +414,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
         active_overview = active.hardware_overview()[0]
         self.assertEqual(active_overview.control_state, DeviceControlState.ACTIVE)
         self.assertTrue(active_overview.actively_controlled)
+        self.assertEqual(active.overview_attributes()["systems"][0]["status"], "Actively controlled")
 
         disabled = runtime(enabled=False)
         disabled._refresh_write_authority()
@@ -420,6 +422,7 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             disabled.hardware_overview()[0].control_state,
             DeviceControlState.OBSERVATION,
         )
+        self.assertEqual(disabled.overview_attributes()["systems"][0]["status"], "Observation mode")
 
     def test_hardware_overview_keeps_configured_local_path_while_unready(self):
         target = legacy_runtime()

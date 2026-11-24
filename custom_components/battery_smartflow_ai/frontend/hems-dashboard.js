@@ -547,6 +547,9 @@ class BatterySmartFlowDashboard extends HTMLElement {
       return language === "de" ? "Der Dialog konnte nicht geöffnet werden. Technische Meldung:" : "The dialog could not be opened. Technical message:";
     }
     const energyMappingLabels = {
+      control_enabled_status: { de: "Steuerung aktiviert", en: "Control enabled", fr: "Commande activée", nl: "Besturing ingeschakeld" },
+      actively_controlled_status: { de: "Wird aktiv geregelt", en: "Actively controlled", fr: "Régulation active", nl: "Actief geregeld" },
+      eligible_for_control_status: { de: "Steuerungsbereit", en: "Ready for control", fr: "Prêt pour la commande", nl: "Gereed voor besturing" },
       economics_intro: { de: "Was die Zahlen für deinen Akku bedeuten", en: "What these figures mean for your battery", fr: "Ce que ces chiffres signifient pour votre batterie", nl: "Wat deze cijfers voor je accu betekenen" },
       economics_daily_balance: { de: "Tagesbilanz des Akkus", en: "Battery balance today", fr: "Bilan quotidien de la batterie", nl: "Dagbalans van de accu" },
       economics_daily_balance_help: { de: "Vermiedene Netzbezugskosten abzüglich der Energie, die zum Laden eingesetzt wurde.", en: "Avoided grid import cost minus the energy used to charge the battery.", fr: "Coût d’achat au réseau évité, moins l’énergie utilisée pour charger la batterie.", nl: "Vermeden netafnamekosten min de energie die is gebruikt om de accu te laden." },
@@ -1129,6 +1132,12 @@ class BatterySmartFlowDashboard extends HTMLElement {
 
   _topologyStatus(value) {
     const status = String(value || "");
+    const controlStates = {
+      "Control enabled": "control_enabled_status",
+      "Actively controlled": "actively_controlled_status",
+      "Eligible for control": "eligible_for_control_status",
+    };
+    if (controlStates[status]) return this._t(controlStates[status]);
     return status.replace(/^observation mode/i, this._t("observation_mode")) || this._t("unknown_status");
   }
 
