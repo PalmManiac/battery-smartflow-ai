@@ -1415,6 +1415,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         self._native_bootstrap = None
         self._native_token: str | None = None
         self._native_setup_map: dict[str, Any] | None = None
+        self._native_controller_candidate: str | None = None
 
     def _get_battery_packs(self) -> int:
         try:
@@ -2722,6 +2723,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                     post_json
                 ).async_discover(token)
                 self._native_token = token
+                self._native_controller_candidate = None
                 self._native_setup_map = reconcile_device_setups(
                     self._native_bootstrap.devices,
                     self.config_entry.options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
@@ -3000,6 +3002,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             )
             options[CONF_NATIVE_ZENDURE_DEVICE_SETUPS] = self._native_setup_map
             self._working_options = options
+            # The device just configured is the user's most recent explicit
+            # choice. Offer it on the final controller page without changing
+            # the active controller until that page is submitted.
+            self._native_controller_candidate = selected
             migration = self.config_entry.data.get("v5_migration")
             if isinstance(migration, Mapping):
                 from .v5_migration import confirm_native_binding
@@ -3115,7 +3121,9 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 )
                 return self.async_create_entry(title="", data=options)
 
-        selected_default = options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
+        selected_default = self._native_controller_candidate
+        if selected_default not in choices:
+            selected_default = options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE)
         if selected_default not in choices:
             selected_default = next(iter(choices))
         return self.async_show_form(

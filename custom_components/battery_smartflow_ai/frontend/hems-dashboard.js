@@ -1948,7 +1948,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
         ? step.step_id.endsWith("_add") ? "topology_add_to_draft"
           : step.step_id.endsWith("_edit") ? "topology_apply_draft"
             : step.step_id.endsWith("_remove") ? "topology_remove_from_draft" : "options_continue"
-        : ["general", "smart_mode", "expert_cell_voltage_config", "group_edit", "group_remove"].includes(step.step_id) ? "options_save" : "options_continue";
+        : ["general", "smart_mode", "expert_cell_voltage_config", "group_edit", "group_remove", "native_zendure_controller"].includes(step.step_id) ? "options_save" : "options_continue";
       const groupBack = step.step_id === "group_wizard_strategy" ? `<button class="apply options-wizard-back" type="button" data-options-next="group_wizard_back_systems">${this._escape(this._t("group_wizard_back_systems"))}</button>` : "";
       content = `${this._groupWizardChrome(step.step_id)}${this._groupWizardActive ? "" : this._topologyWizardChrome(step.step_id)}${fields}${groupBack}<button class="apply" type="button" data-options-submit>${this._escape(this._t(topologyAction))}</button>`;
     }
