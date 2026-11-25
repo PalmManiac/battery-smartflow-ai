@@ -80,7 +80,8 @@ class DashboardContractTests(unittest.TestCase):
 
         self.assertIn("import hashlib", dashboard)
         self.assertIn("panel_module_version = hashlib.sha256(", dashboard)
-        self.assertIn('(frontend_dir / "hems-dashboard.js").read_bytes()', dashboard)
+        self.assertIn('await hass.async_add_executor_job(', dashboard)
+        self.assertIn('(frontend_dir / "hems-dashboard.js").read_bytes', dashboard)
         self.assertIn(
             'module_url=f"{_PANEL_URL}?v={panel_module_version}"',
             dashboard,
