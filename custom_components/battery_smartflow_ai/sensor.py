@@ -2291,7 +2291,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
             self._display_grace_cancel = None
 
     def _parent_system(self):
-        for system in self.coordinator.native_zendure.hardware_overview():
+        for system in self.coordinator.native_zendure.entity_hardware_overview():
             if system.public_id == self._parent_public_id:
                 return system
         return None
@@ -2383,7 +2383,7 @@ class NativeZendureHardwareSensor(CoordinatorEntity, SensorEntity):
         return state.value if state.available else None
 
     def _item(self):
-        for system in self.coordinator.native_zendure.hardware_overview():
+        for system in self.coordinator.native_zendure.entity_hardware_overview():
             if self._kind == "main" and system.public_id == self._public_id:
                 return system
             if self._kind == "pack":
