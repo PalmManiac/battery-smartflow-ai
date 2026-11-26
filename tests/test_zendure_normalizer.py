@@ -244,6 +244,29 @@ class ZendureNormalizerTests(unittest.IsolatedAsyncioTestCase):
             result.unknown_pack_properties, ("futurePackProperty",)
         )
 
+    async def test_pack_power_uses_same_report_current_when_state_is_omitted(self):
+        normalizer = ZendureCloudNormalizer(self.bootstrap)
+        normalizer.apply(report(self.at, self.full_payload()))
+
+        later = self.at + timedelta(seconds=45)
+        result = normalizer.apply(report(later, {
+            "packData": [
+                {"sn": "pack-a", "power": 167, "batcur": 65502},
+                {"sn": "pack-b", "power": 83, "batcur": 17},
+            ],
+        }))
+        self.assertEqual(result.state.packs[0].charge_power_w.value, 0.0)
+        self.assertEqual(result.state.packs[0].discharge_power_w.value, 167.0)
+        self.assertEqual(result.state.packs[1].charge_power_w.value, 83.0)
+        self.assertEqual(result.state.packs[1].discharge_power_w.value, 0.0)
+        self.assertEqual(result.state.packs[0].discharge_power_w.observed_at, later)
+
+        unknown = normalizer.apply(report(later + timedelta(seconds=1), {
+            "packData": [{"sn": "pack-b", "power": 100}],
+        }))
+        unknown_pack = next(pack for pack in unknown.state.packs if pack.pack_id == "pack-b")
+        self.assertEqual(unknown_pack.discharge_power_w.validity, ValueValidity.INVALID)
+
     async def test_complete_report_retires_packs_missing_from_inventory(self):
         normalizer = ZendureCloudNormalizer(self.bootstrap)
         initial = normalizer.apply(report(self.at, self.full_payload()))
