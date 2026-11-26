@@ -220,6 +220,32 @@ def legacy_runtime(*, current_state=None, control_transport=None):
 
 
 class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
+    def test_entity_overview_is_reused_until_native_update(self):
+        target = runtime()
+        with patch.object(target, "hardware_overview", wraps=target.hardware_overview) as build:
+            first = target.entity_hardware_overview()
+            self.assertIs(target.entity_hardware_overview(), first)
+            self.assertEqual(build.call_count, 1)
+
+            # Control and diagnostics still request a fresh runtime view.
+            target.hardware_overview()
+            self.assertEqual(build.call_count, 2)
+
+            target._notify()
+            self.assertIsNot(target.entity_hardware_overview(), first)
+            self.assertEqual(build.call_count, 3)
+
+    def test_entity_overview_expires_without_native_notification(self):
+        target = runtime()
+        with (
+            patch.object(target, "hardware_overview", wraps=target.hardware_overview) as build,
+            patch("custom_components.battery_smartflow_ai.native_zendure_runtime.time.monotonic", side_effect=[10.0, 10.5, 11.0]),
+        ):
+            first = target.entity_hardware_overview()
+            self.assertIs(target.entity_hardware_overview(), first)
+            self.assertIsNot(target.entity_hardware_overview(), first)
+            self.assertEqual(build.call_count, 2)
+
     def test_grouped_legacy_hyper_safety_window_is_model_scoped(self):
         old = NOW - timedelta(seconds=45)
         measured_state = state()

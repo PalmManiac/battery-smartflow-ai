@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
@@ -178,7 +179,9 @@ class NativeZendureRuntime:
         self._control_enabled = bool(control_enabled)
         self._always_smart_mode_1 = bool(always_smart_mode_1)
         self._configured_transport = _parse_transport(control_transport)
-        self._notify = notify
+        self._notify_callback = notify
+        self._entity_overview_cache = None
+        self._entity_overview_cached_at = 0.0
         self._task: asyncio.Task[None] | None = None
         self._transport: ZendureCloudMqttTransport | None = None
         self._local_transport: ZendureLocalMqttTransport | None = None
@@ -906,6 +909,21 @@ class NativeZendureRuntime:
                 item = with_control_state(item, self._hardware_control_state())
             displayed.append(item)
         return tuple(displayed)
+
+    def entity_hardware_overview(self):
+        """Share a short-lived native snapshot across HA entity reads."""
+
+        now = time.monotonic()
+        if self._entity_overview_cache is None or now - self._entity_overview_cached_at >= 1.0:
+            self._entity_overview_cache = self.hardware_overview()
+            self._entity_overview_cached_at = now
+        return self._entity_overview_cache
+
+    def _notify(self) -> None:
+        """Invalidate entity presentation before notifying HA of fresh data."""
+
+        self._entity_overview_cache = None
+        self._notify_callback()
 
     def setup_id_for_public_id(self, public_id: str) -> str | None:
         """Resolve a known setup record from its privacy-safe HA device ID."""
@@ -2164,6 +2182,7 @@ class NativeZendureRuntime:
         )
 
     def _record_zensdk_cycle(self, result: ZenSdkReadResult) -> None:
+        self._entity_overview_cache = None
         recorded_at = datetime.now(timezone.utc)
         for attempt in result.attempts:
             self._zensdk_attempt_history.append(
@@ -2810,6 +2829,7 @@ class NativeZendureRuntime:
         return "native_local_unsupported"
 
     def _apply_state(self, state: Any) -> None:
+        self._entity_overview_cache = None
         self._states[state.system_id] = state
         self._update_statistics(state)
         device = self._inventory.devices[state.system_id]
