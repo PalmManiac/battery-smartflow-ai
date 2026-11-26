@@ -165,12 +165,13 @@ class FakeLocalTransport:
 
 def runtime(
     *, enabled=True, current_state=None, migration_bound_device=None,
-    control_transport=None, always_smart_mode_1=True,
+    control_transport=None, always_smart_mode_1=True, battery_groups=None,
 ):
     result = NativeZendureRuntime(
         SimpleNamespace(), app_token="configured", selected_device=DEVICE,
         notify=lambda: None, control_enabled=enabled,
         migration_bound_device=migration_bound_device,
+        battery_groups=battery_groups,
         control_transport=control_transport,
         always_smart_mode_1=always_smart_mode_1,
     )
@@ -449,6 +450,40 @@ class NativePowerControllerTests(unittest.IsolatedAsyncioTestCase):
             DeviceControlState.OBSERVATION,
         )
         self.assertEqual(disabled.overview_attributes()["systems"][0]["status"], "Observation mode")
+
+    def test_active_group_member_has_own_control_status(self):
+        second_id = "cloud_mqtt:main-2"
+        target = runtime(
+            current_state=state(output_w=300, discharge_w=300),
+            battery_groups={"groups": {"home": {
+                "control_enabled": True, "members": [DEVICE, second_id],
+            }}},
+        )
+        second = MainDevice(
+            second_id, "Second", model="SolarFlow 2400 AC", profile_key="SF2400AC",
+            selected_transport=ZendureTransport.ZENSDK,
+            available_transports=frozenset({ZendureTransport.ZENSDK}),
+            native_identities=(NativeDeviceIdentity(
+                ZendureTransport.ZENSDK, device_id="main-2",
+                product_id="product-a", product_model="SolarFlow 2400 AC",
+            ),),
+        )
+        target._inventory = DeviceInventory(devices=(*target._inventory.devices.values(), second))
+        target._states[second_id] = state(output_w=400, discharge_w=400)
+        target._device_setups[second_id] = {
+            "setup_status": "configured", "transport": ZendureTransport.ZENSDK.value,
+        }
+        target._zensdk_last_success[second_id] = NOW
+        target._zensdk_failures[second_id] = 0
+        target._refresh_write_authority()
+
+        self.assertEqual(target.hardware_overview()[1].control_state, DeviceControlState.ACTIVE)
+        self.assertEqual(target.overview_attributes()["systems"][1]["status"], "Actively controlled")
+        target._controlled_group_members = frozenset()
+        self.assertEqual(target.hardware_overview()[1].control_state, DeviceControlState.OBSERVATION)
+        target._controlled_group_members = frozenset((DEVICE, second_id))
+        target._control_enabled = False
+        self.assertEqual(target.hardware_overview()[1].control_state, DeviceControlState.OBSERVATION)
 
     def test_hardware_overview_keeps_configured_local_path_while_unready(self):
         target = legacy_runtime()

@@ -143,6 +143,7 @@ class NativeZendureRuntime:
         notify: Callable[[], None],
         migration_bound_device: str | None = None,
         device_setups: Mapping[str, Any] | None = None,
+        battery_groups: Mapping[str, Any] | None = None,
         control_enabled: bool = False,
         always_smart_mode_1: bool = True,
         control_transport: str | None = None,
@@ -161,6 +162,17 @@ class NativeZendureRuntime:
             else {}
         )
         self._device_setups = dict(raw_setups) if isinstance(raw_setups, Mapping) else {}
+        groups = battery_groups.get("groups", {}) if isinstance(battery_groups, Mapping) else {}
+        self._controlled_group_members = frozenset(
+            member
+            for group in groups.values()
+            if isinstance(group, Mapping)
+            and group.get("control_enabled") is True
+            and isinstance(group.get("members"), (list, tuple))
+            and selected_device in group.get("members", ())
+            for member in group.get("members", ())
+            if isinstance(member, str)
+        ) if isinstance(groups, Mapping) else frozenset()
         self._zensdk_address_overrides: dict[str, str] = {}
         for device_id, record in self._device_setups.items():
             if not isinstance(device_id, str) or not isinstance(record, Mapping):
@@ -341,8 +353,8 @@ class NativeZendureRuntime:
             if device is None:
                 continue
             control_state = (
-                self._hardware_control_state()
-                if system_id == self._selected_device
+                self._hardware_control_state(system_id)
+                if system_id == self._selected_device or system_id in self._controlled_group_members
                 else device.control_state
             )
             runtime_status.append(
@@ -905,8 +917,8 @@ class NativeZendureRuntime:
                 zensdk_success_source=connection_source,
                 zensdk_ip_address=ip_address,
             )
-            if system_id == self._selected_device:
-                item = with_control_state(item, self._hardware_control_state())
+            if system_id == self._selected_device or system_id in self._controlled_group_members:
+                item = with_control_state(item, self._hardware_control_state(system_id))
             displayed.append(item)
         return tuple(displayed)
 
@@ -1175,13 +1187,16 @@ class NativeZendureRuntime:
             self._available_energy_pending_soc[system_id] = decision.pending_soc
         self._available_energy_pending_count[system_id] = decision.pending_count
 
-    def _hardware_control_state(self) -> DeviceControlState:
+    def _hardware_control_state(self, system_id: str | None = None) -> DeviceControlState:
         """Describe readiness separately from the current strategy decision."""
 
         if not self._control_enabled or self._selected_device is None:
             return DeviceControlState.OBSERVATION
-        device = self._inventory.devices.get(self._selected_device)
-        state = self._states.get(self._selected_device)
+        system_id = system_id or self._selected_device
+        if system_id != self._selected_device and system_id not in self._controlled_group_members:
+            return DeviceControlState.OBSERVATION
+        device = self._inventory.devices.get(system_id)
+        state = self._states.get(system_id)
         if device is None:
             return DeviceControlState.OBSERVATION
         if device.control_state in {
@@ -1198,7 +1213,13 @@ class NativeZendureRuntime:
             return DeviceControlState.OFFLINE
         if self._selected_control_transport(device).transport is None:
             return DeviceControlState.UNSUPPORTED
-        if not self._transport_router.snapshot.synchronized:
+        if system_id != self._selected_device and self._setup_status(system_id, True) != "configured":
+            return DeviceControlState.OBSERVATION
+        if system_id == self._selected_device and not self._transport_router.snapshot.synchronized:
+            return DeviceControlState.ELIGIBLE
+        if system_id != self._selected_device and not self._control_transport_ready(
+            self._selected_control_transport(device).transport, device_id=system_id
+        ):
             return DeviceControlState.ELIGIBLE
         return (
             DeviceControlState.ACTIVE

@@ -310,6 +310,7 @@ async def _async_setup_entry_once(hass: HomeAssistant, entry: ConfigEntry) -> bo
             selected_device=entry.options.get(CONF_NATIVE_ZENDURE_SELECTED_DEVICE),
             migration_bound_device=migration_bound_device,
             device_setups=entry.options.get(CONF_NATIVE_ZENDURE_DEVICE_SETUPS),
+            battery_groups=entry.options.get(CONF_BATTERY_GROUPS),
             control_enabled=bool(
                 entry.options.get(CONF_NATIVE_ZENDURE_CONTROL_ENABLED, False)
             ),
