@@ -766,7 +766,17 @@ class ZendureCloudNormalizer:
     ) -> None:
         power = raw_pack.get("power")
         state = raw_pack.get("state")
-        if _is_number(power) and state in (0, 1, 2):
+        if state is None and _is_number(power):
+            # Hyper pack reports often split state and power into different
+            # messages. A current in this same report gives the direction
+            # without relying on an old, possibly stale state code.
+            current = raw_pack.get("batcur")
+            if power == 0:
+                state = 0
+            elif isinstance(current, int) and not isinstance(current, bool):
+                signed_current = _signed_16_tenths(current)
+                state = 1 if signed_current > 0 else 2 if signed_current < 0 else None
+        if _is_number(power) and power >= 0 and state in (0, 1, 2):
             accumulator.values["charge_power_w"] = _Observed(
                 float(power) if state == 1 else 0.0,
                 ValueValidity.VALID,
