@@ -20,7 +20,8 @@ class NativeEnergyAccumulator:
     charged_kwh: float = 0.0
     discharged_kwh: float = 0.0
     pv_energy_kwh: float = 0.0
-    last_timestamp: float | None = None
+    last_charge_timestamp: float | None = None
+    last_discharge_timestamp: float | None = None
     last_pv_timestamp: float | None = None
 
     @classmethod
@@ -31,8 +32,12 @@ class NativeEnergyAccumulator:
             charge = max(0.0, float(data.get("charged_kwh", 0.0)))
             discharge = max(0.0, float(data.get("discharged_kwh", 0.0)))
             pv_energy = max(0.0, float(data.get("pv_energy_kwh", 0.0)))
-            stamp = data.get("last_timestamp")
-            stamp = float(stamp) if stamp is not None else None
+            # The former shared timestamp cannot establish whether either
+            # measurement stayed valid. Start both channels with a fresh sample.
+            charge_stamp = data.get("last_charge_timestamp")
+            charge_stamp = float(charge_stamp) if charge_stamp is not None else None
+            discharge_stamp = data.get("last_discharge_timestamp")
+            discharge_stamp = float(discharge_stamp) if discharge_stamp is not None else None
             pv_stamp = data.get("last_pv_timestamp")
             pv_stamp = float(pv_stamp) if pv_stamp is not None else None
         except (TypeError, ValueError):
@@ -41,7 +46,8 @@ class NativeEnergyAccumulator:
             charged_kwh=charge,
             discharged_kwh=discharge,
             pv_energy_kwh=pv_energy,
-            last_timestamp=stamp,
+            last_charge_timestamp=charge_stamp,
+            last_discharge_timestamp=discharge_stamp,
             last_pv_timestamp=pv_stamp,
         )
 
@@ -49,7 +55,8 @@ class NativeEnergyAccumulator:
         state = {
             "charged_kwh": self.charged_kwh,
             "discharged_kwh": self.discharged_kwh,
-            "last_timestamp": self.last_timestamp,
+            "last_charge_timestamp": self.last_charge_timestamp,
+            "last_discharge_timestamp": self.last_discharge_timestamp,
         }
         if self.last_pv_timestamp is not None:
             state.update({
@@ -73,19 +80,31 @@ class NativeEnergyAccumulator:
         except (TypeError, ValueError):
             return False
 
-        battery_valid = True
+        charge_valid = False
         try:
             charge = max(0.0, float(charge_power_w))
-            discharge = max(0.0, float(discharge_power_w))
+            charge_valid = True
         except (TypeError, ValueError):
-            battery_valid = False
-        if battery_valid:
-            if self.last_timestamp is not None:
-                delta = now - self.last_timestamp
+            self.last_charge_timestamp = None
+        if charge_valid:
+            if self.last_charge_timestamp is not None:
+                delta = now - self.last_charge_timestamp
                 if 0 < delta <= max_interval_seconds:
                     self.charged_kwh += charge * delta / 3_600_000
+            self.last_charge_timestamp = now
+
+        discharge_valid = False
+        try:
+            discharge = max(0.0, float(discharge_power_w))
+            discharge_valid = True
+        except (TypeError, ValueError):
+            self.last_discharge_timestamp = None
+        if discharge_valid:
+            if self.last_discharge_timestamp is not None:
+                delta = now - self.last_discharge_timestamp
+                if 0 < delta <= max_interval_seconds:
                     self.discharged_kwh += discharge * delta / 3_600_000
-            self.last_timestamp = now
+            self.last_discharge_timestamp = now
 
         pv_valid = True
         try:
@@ -99,7 +118,7 @@ class NativeEnergyAccumulator:
                     self.pv_energy_kwh += pv_power * delta / 3_600_000
             self.last_pv_timestamp = now
 
-        return battery_valid or pv_valid
+        return charge_valid or discharge_valid or pv_valid
 
 
 def roundtrip_efficiency_pct(charged_kwh: Any, discharged_kwh: Any) -> float | None:

@@ -41,7 +41,38 @@ class NativeStatisticsTests(unittest.TestCase):
             pv_power_w=3600,
         )
         self.assertAlmostEqual(accumulator.pv_energy_kwh, 0.01)
-        self.assertIsNone(accumulator.last_timestamp)
+        self.assertIsNone(accumulator.last_charge_timestamp)
+        self.assertIsNone(accumulator.last_discharge_timestamp)
+
+    def test_discharge_continues_when_charge_measurement_is_stale(self):
+        accumulator = NativeEnergyAccumulator()
+        accumulator.add(timestamp=100, charge_power_w=None, discharge_power_w=3600)
+        accumulator.add(timestamp=110, charge_power_w=None, discharge_power_w=3600)
+        self.assertAlmostEqual(accumulator.discharged_kwh, 0.01)
+        self.assertEqual(accumulator.charged_kwh, 0.0)
+        restored = NativeEnergyAccumulator.from_dict(accumulator.as_dict())
+        restored.add(timestamp=120, charge_power_w=None, discharge_power_w=3600)
+        self.assertAlmostEqual(restored.discharged_kwh, 0.02)
+
+    def test_invalid_channel_does_not_bridge_gap_or_block_other_channel(self):
+        accumulator = NativeEnergyAccumulator()
+        accumulator.add(timestamp=100, charge_power_w=3600, discharge_power_w=3600)
+        accumulator.add(timestamp=110, charge_power_w=None, discharge_power_w=3600)
+        accumulator.add(timestamp=120, charge_power_w=3600, discharge_power_w=3600)
+        self.assertAlmostEqual(accumulator.charged_kwh, 0.0)
+        self.assertAlmostEqual(accumulator.discharged_kwh, 0.02)
+        accumulator.add(timestamp=130, charge_power_w=3600, discharge_power_w=None)
+        self.assertAlmostEqual(accumulator.charged_kwh, 0.01)
+        self.assertAlmostEqual(accumulator.discharged_kwh, 0.02)
+
+    def test_legacy_timestamp_does_not_bridge_unknown_channel_state(self):
+        restored = NativeEnergyAccumulator.from_dict({
+            "charged_kwh": 1.0,
+            "discharged_kwh": 2.0,
+            "last_timestamp": 100,
+        })
+        restored.add(timestamp=110, charge_power_w=None, discharge_power_w=3600)
+        self.assertEqual(restored.discharged_kwh, 2.0)
 
     def test_device_without_pv_does_not_publish_a_false_zero_total(self):
         accumulator = NativeEnergyAccumulator()
