@@ -1129,9 +1129,7 @@ class NativeZendureRuntime:
         charge = _numeric_value(getattr(state, "charge_power_w", None))
         discharge = _numeric_value(getattr(state, "discharge_power_w", None))
         pv_power = _numeric_value(getattr(state, "pv_power_w", None))
-        if timestamp is None or (
-            (charge is None or discharge is None) and pv_power is None
-        ):
+        if timestamp is None:
             return
         system_id = str(state.system_id)
         accumulator = self._energy_accumulators.setdefault(
