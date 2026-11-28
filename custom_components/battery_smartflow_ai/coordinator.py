@@ -380,6 +380,28 @@ def _to_float(v: Any, default: float | None = None) -> float | None:
         return default
 
 
+def _native_battery_power_sample(charge, discharge) -> tuple[float, float] | None:
+    """Use a valid active channel even when the inactive one is stale."""
+
+    charge_value = (
+        _to_float(charge.value) if charge is not None and charge.valid else None
+    )
+    discharge_value = (
+        _to_float(discharge.value) if discharge is not None and discharge.valid else None
+    )
+    if charge_value is not None and not math.isfinite(charge_value):
+        charge_value = None
+    if discharge_value is not None and not math.isfinite(discharge_value):
+        discharge_value = None
+    if charge_value is not None and discharge_value is not None:
+        return max(0.0, charge_value), max(0.0, discharge_value)
+    if charge_value is not None and charge_value > 1.0:
+        return charge_value, 0.0
+    if discharge_value is not None and discharge_value > 1.0:
+        return 0.0, discharge_value
+    return None
+
+
 def _native_battery_power_totals(states) -> tuple[float, float] | None:
     """Return complete native charge/discharge totals across main systems."""
 
@@ -390,36 +412,13 @@ def _native_battery_power_totals(states) -> tuple[float, float] | None:
     charge_total = 0.0
     discharge_total = 0.0
     for state in states:
-        charge = state.charge_power_w
-        discharge = state.discharge_power_w
-        charge_value = (
-            _to_float(charge.value)
-            if charge is not None and charge.valid
-            else None
+        sample = _native_battery_power_sample(
+            state.charge_power_w, state.discharge_power_w
         )
-        discharge_value = (
-            _to_float(discharge.value)
-            if discharge is not None and discharge.valid
-            else None
-        )
-        if charge_value is not None and not math.isfinite(charge_value):
-            charge_value = None
-        if discharge_value is not None and not math.isfinite(discharge_value):
-            discharge_value = None
-
-        if charge_value is not None and discharge_value is not None:
-            charge_total += max(0.0, charge_value)
-            discharge_total += max(0.0, discharge_value)
-        elif charge_value is not None and charge_value > 1.0 and (
-            discharge_value is None or discharge_value <= 1.0
-        ):
-            charge_total += charge_value
-        elif discharge_value is not None and discharge_value > 1.0 and (
-            charge_value is None or charge_value <= 1.0
-        ):
-            discharge_total += discharge_value
-        else:
+        if sample is None:
             return None
+        charge_total += sample[0]
+        discharge_total += sample[1]
 
     return charge_total, discharge_total
 
@@ -7081,14 +7080,11 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             native_discharge = (
                 native_state.discharge_power_w if native_state is not None else None
             )
-            if (
-                native_charge is not None
-                and native_charge.valid
-                and native_discharge is not None
-                and native_discharge.valid
-            ):
-                battery_charge_w = max(0.0, float(native_charge.value))
-                battery_discharge_w = max(0.0, float(native_discharge.value))
+            native_power_sample = _native_battery_power_sample(
+                native_charge, native_discharge
+            )
+            if native_power_sample is not None:
+                battery_charge_w, battery_discharge_w = native_power_sample
                 battery_power = battery_discharge_w - battery_charge_w
                 battery_ac_power_sensor_valid = True
                 battery_power_source = "native_zendure"
@@ -8379,10 +8375,8 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 native_pv_sensor_valid
                 and native_ac_output is not None
                 and native_ac_output.valid
-                and native_charge is not None
-                and native_charge.valid
-                and native_discharge is not None
-                and native_discharge.valid
+                and native_power_sample is not None
+                and battery_power_source == "native_zendure"
             )
             native_pv_to_home_w = (
                 direct_native_pv_to_home_power(
