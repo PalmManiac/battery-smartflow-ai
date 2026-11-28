@@ -57,6 +57,7 @@ from custom_components.battery_smartflow_ai.const import (
 )
 from custom_components.battery_smartflow_ai.coordinator import (
     ZendureSmartFlowCoordinator,
+    _native_battery_power_sample,
     _native_battery_power_totals,
 )
 
@@ -105,6 +106,27 @@ def test_native_battery_power_totals_require_complete_system_readings() -> None:
     )
 
     assert _native_battery_power_totals(states) is None
+
+
+def test_native_power_uses_discharge_when_inactive_charge_is_stale() -> None:
+    state = _device_state(None, 750.0)
+    assert _native_battery_power_sample(
+        state.charge_power_w, state.discharge_power_w
+    ) == (0.0, 750.0)
+
+
+def test_native_power_uses_charge_when_inactive_discharge_is_stale() -> None:
+    state = _device_state(800.0, None)
+    assert _native_battery_power_sample(
+        state.charge_power_w, state.discharge_power_w
+    ) == (800.0, 0.0)
+
+
+def test_native_power_requires_valid_direction_when_both_are_idle_or_stale() -> None:
+    state = _device_state(0.0, None)
+    assert _native_battery_power_sample(
+        state.charge_power_w, state.discharge_power_w
+    ) is None
 
 
 def test_native_cell_voltage_measurements_include_all_systems_when_protection_off() -> None:
