@@ -102,6 +102,7 @@ from .const import (
     SETTING_CELL_VOLTAGE_RESUME,
     SETTING_CELL_VOLTAGE_WARNING,
     SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+    SETTING_COLD_PROTECTION_WAKEUP_ENABLED,
     SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
     SETTING_LEARNED_PLANNING_ENABLED,
 )
@@ -1478,6 +1479,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
         if SETTING_FULL_CHARGE_MAINTENANCE_ENABLED in user_input:
             merged_options[SETTING_FULL_CHARGE_MAINTENANCE_ENABLED] = bool(
                 user_input[SETTING_FULL_CHARGE_MAINTENANCE_ENABLED]
+            )
+        if SETTING_COLD_PROTECTION_WAKEUP_ENABLED in user_input:
+            merged_options[SETTING_COLD_PROTECTION_WAKEUP_ENABLED] = bool(
+                user_input[SETTING_COLD_PROTECTION_WAKEUP_ENABLED]
             )
         if SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS in user_input:
             merged_options[SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS] = int(
@@ -3636,6 +3641,7 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(CONF_EXPERT_MODE_ENABLED): selector.BooleanSelector(),
                 vol.Optional(SETTING_LEARNED_PLANNING_ENABLED): selector.BooleanSelector(),
                 vol.Optional(SETTING_FULL_CHARGE_MAINTENANCE_ENABLED): selector.BooleanSelector(),
+                vol.Optional(SETTING_COLD_PROTECTION_WAKEUP_ENABLED): selector.BooleanSelector(),
                 vol.Optional(SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=7,
@@ -3671,6 +3677,10 @@ class ZendureSmartFlowOptionsFlow(config_entries.OptionsFlow):
             SETTING_FULL_CHARGE_MAINTENANCE_ENABLED: preview.get(
                 SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
                 DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
+            ),
+            SETTING_COLD_PROTECTION_WAKEUP_ENABLED: preview.get(
+                SETTING_COLD_PROTECTION_WAKEUP_ENABLED,
+                False,
             ),
             SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS: preview.get(
                 SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,

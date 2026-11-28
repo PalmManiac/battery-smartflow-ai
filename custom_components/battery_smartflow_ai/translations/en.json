@@ -466,6 +466,7 @@
         "data": {
           "expert_mode_enabled": "Enable expert mode",
           "full_charge_maintenance_enabled": "Use full-charge maintenance",
+          "cold_protection_wakeup_enabled": "Wake battery heating in cold protection (SF2400Pro test)",
           "full_charge_maintenance_interval_days": "Recommended full-charge interval",
           "learned_planning_enabled": "Use learned charge-window planning",
           "native_capacity_override_kwh": "Total capacity for an unknown pack profile (kWh)"
@@ -473,6 +474,7 @@
         "data_description": {
           "expert_mode_enabled": "Enables the advanced expert area for additional protection and diagnostic functions.",
           "full_charge_maintenance_enabled": "Allows BSFAI to plan a protective full charge at favorable times. This is not a BMS calibration command.",
+          "cold_protection_wakeup_enabled": "Experimental: with confirmed cold protection and a daytime PV forecast, request AC input mode at a 0 W limit to wake the battery heater. No other protection command is unlocked.",
           "full_charge_maintenance_interval_days": "Days between recommended confirmed full charges (7–90).",
           "learned_planning_enabled": "When enabled, Battery SmartFlow AI automatically uses learned charge-window planning once enough learning data is available. Until then, classic planning remains active. When disabled, classic planning is always used.",
           "native_capacity_override_kwh": "Unknown packs only: verified total capacity of all packs in this system. 0 disables the override. Missing measurements still block control."

@@ -382,6 +382,7 @@
         "data": {
           "expert_mode_enabled": "Activer le mode expert",
           "full_charge_maintenance_enabled": "Utiliser l’entretien par charge complète",
+          "cold_protection_wakeup_enabled": "Réveiller le chauffage en cas de protection contre le froid (test SF2400Pro)",
           "full_charge_maintenance_interval_days": "Intervalle recommandé de charge complète",
           "learned_planning_enabled": "Utiliser la planification apprise des fenêtres de charge",
           "native_capacity_override_kwh": "Total capacity for an unknown pack profile (kWh)"
@@ -389,6 +390,7 @@
         "data_description": {
           "expert_mode_enabled": "Active la zone expert avancée pour des fonctions supplémentaires de protection et de diagnostic.",
           "full_charge_maintenance_enabled": "Autorise BSFAI à planifier une charge complète protectrice à un moment favorable. Il ne s’agit pas d’une commande d’étalonnage du BMS.",
+          "cold_protection_wakeup_enabled": "Expérimental : en cas de protection contre le froid confirmée et de prévision PV diurne, demander le mode d’entrée CA avec une limite de 0 W pour réveiller le chauffage. Les autres protections restent actives.",
           "full_charge_maintenance_interval_days": "Jours entre les charges complètes confirmées recommandées (7–90).",
           "learned_planning_enabled": "Si activé, Battery SmartFlow AI utilise automatiquement la planification apprise des fenêtres de charge dès que suffisamment de données sont disponibles. Jusque-là, la planification classique reste active. Si désactivé, la planification classique est toujours utilisée.",
           "native_capacity_override_kwh": "Unknown packs only: verified total capacity of all packs in this system. 0 disables the override. Missing measurements still block control."

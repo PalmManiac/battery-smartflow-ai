@@ -535,6 +535,7 @@
   "option_expert_mode_enabled": "Activer le mode expert",
   "option_learned_planning_enabled": "Activer la planification de charge apprise",
   "option_full_charge_maintenance_enabled": "Activer la charge complète périodique",
+  "option_cold_protection_wakeup_enabled": "Réveiller le chauffage en cas de protection contre le froid (test SF2400Pro)",
   "option_full_charge_maintenance_interval_days": "Intervalle en jours",
   "option_cell_voltage_protection_enabled": "Activer la protection par tension de cellule",
   "option_cell_voltage_warning": "Seuil d'alerte (V)",

@@ -1701,6 +1701,7 @@ class BatterySmartFlowDashboard extends HTMLElement {
       expert_mode_enabled: ["Expertenmodus aktivieren", "Enable expert mode"],
       learned_planning_enabled: ["Lernende Ladeplanung aktivieren", "Enable learned charge planning"],
       full_charge_maintenance_enabled: ["Regelmäßige Vollladung aktivieren", "Enable periodic full charge"],
+      cold_protection_wakeup_enabled: ["Batterieheizung bei Kälteschutz anstoßen (SF2400Pro-Test)", "Wake battery heating in cold protection (SF2400Pro test)"],
       full_charge_maintenance_interval_days: ["Intervall in Tagen", "Interval in days"],
       cell_voltage_protection_enabled: ["Zellspannungs-Schutz aktivieren", "Enable cell-voltage protection"],
       cell_voltage_warning: ["Warnschwelle (V)", "Warning threshold (V)"],

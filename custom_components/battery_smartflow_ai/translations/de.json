@@ -382,6 +382,7 @@
         "data": {
           "expert_mode_enabled": "Expertenmodus aktivieren",
           "full_charge_maintenance_enabled": "Volladungswartung verwenden",
+          "cold_protection_wakeup_enabled": "Batterieheizung bei Kälteschutz anstoßen (SF2400Pro-Test)",
           "full_charge_maintenance_interval_days": "Empfohlenes Volladeintervall",
           "learned_planning_enabled": "Lernbasierte Ladefenster-Planung verwenden",
           "native_capacity_override_kwh": "Gesamtkapazität bei unbekanntem Pack-Profil (kWh)"
@@ -389,6 +390,7 @@
         "data_description": {
           "expert_mode_enabled": "Aktiviert den erweiterten Expertenbereich für zusätzliche Schutz- und Diagnosefunktionen.",
           "full_charge_maintenance_enabled": "Erlaubt BSFAI, zu günstigen Zeitpunkten eine schonende Volladung zu planen. Dies ist kein BMS-Kalibrierungsbefehl.",
+          "cold_protection_wakeup_enabled": "Experimentell: Bei bestätigtem Kälteschutz und PV-Tagesprognose den AC-Eingangsmodus mit 0 W Grenze anfordern, um die Heizung zu starten. Andere Schutzsperren bleiben bestehen.",
           "full_charge_maintenance_interval_days": "Tage zwischen empfohlenen bestätigten Volladungen (7–90).",
           "learned_planning_enabled": "Wenn aktiviert, nutzt Battery SmartFlow AI die lernbasierte Ladefenster-Planung automatisch, sobald genügend Lerndaten vorhanden sind. Bis dahin bleibt die klassische Planung aktiv. Wenn deaktiviert, wird dauerhaft die klassische Planung verwendet.",
           "native_capacity_override_kwh": "Nur bei unbekannten Packs: geprüfte Gesamtkapazität aller Packs dieses Systems. 0 deaktiviert die Ausnahme. Fehlende Messdaten werden damit nicht übergangen."

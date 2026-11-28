@@ -382,6 +382,7 @@
         "data": {
           "expert_mode_enabled": "Expertmodus inschakelen",
           "full_charge_maintenance_enabled": "Onderhoud met volledige lading gebruiken",
+          "cold_protection_wakeup_enabled": "Accuverwarming bij koudebeveiliging activeren (SF2400Pro-test)",
           "full_charge_maintenance_interval_days": "Aanbevolen interval voor volledige lading",
           "learned_planning_enabled": "Lerende laadvensterplanning gebruiken",
           "native_capacity_override_kwh": "Total capacity for an unknown pack profile (kWh)"
@@ -389,6 +390,7 @@
         "data_description": {
           "expert_mode_enabled": "Activeert het uitgebreide expertgedeelte voor aanvullende beschermings- en diagnosefuncties.",
           "full_charge_maintenance_enabled": "Laat BSFAI op gunstige momenten een beschermende volledige lading plannen. Dit is geen BMS-kalibratieopdracht.",
+          "cold_protection_wakeup_enabled": "Experimenteel: bij bevestigde koudebeveiliging en een PV-dagprognose de AC-ingangsmodus met een limiet van 0 W aanvragen om de verwarming te starten. Andere beveiligingen blijven actief.",
           "full_charge_maintenance_interval_days": "Dagen tussen aanbevolen bevestigde volledige ladingen (7–90).",
           "learned_planning_enabled": "Indien ingeschakeld gebruikt Battery SmartFlow AI automatisch de lerende laadvensterplanning zodra voldoende leerdata beschikbaar is. Tot die tijd blijft de klassieke planning actief. Indien uitgeschakeld wordt altijd de klassieke planning gebruikt.",
           "native_capacity_override_kwh": "Unknown packs only: verified total capacity of all packs in this system. 0 disables the override. Missing measurements still block control."

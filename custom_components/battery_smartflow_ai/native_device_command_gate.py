@@ -10,6 +10,11 @@ import math
 from typing import Any, TypeVar
 from uuid import uuid4
 
+from .cold_wakeup import (
+    cold_wakeup_command,
+    cold_wakeup_evidence,
+    cold_wakeup_stop_command,
+)
 from .core.models import (
     DeviceCommand,
     DeviceControlState,
@@ -226,7 +231,20 @@ class NativeDeviceCommandGate:
                 state.protection_active.valid
                 and state.protection_active.value
             ):
-                reasons.append("protection_active")
+                cold_wakeup = bool(
+                    matrix is not None
+                    and matrix.profile_key == "SF2400Pro"
+                    and request.transport is ZendureTransport.ZENSDK
+                    and (
+                        cold_wakeup_stop_command(request.command)
+                        or (
+                            cold_wakeup_command(request.command)
+                            and cold_wakeup_evidence(state, now=evaluated_at)
+                        )
+                    )
+                )
+                if not cold_wakeup:
+                    reasons.append("protection_active")
             # A protection event is actionable while fresh. Once stale, it is
             # no longer evidence that the device is currently protected.
 
