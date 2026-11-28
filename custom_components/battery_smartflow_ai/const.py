@@ -39,7 +39,7 @@ def virtual_device_model(language: str | None) -> str:
 
 INTEGRATION_MANUFACTURER = "PalmManiac"
 INTEGRATION_MODEL = "Home Assistant Integration"
-INTEGRATION_VERSION = "6.0.15"
+INTEGRATION_VERSION = "6.0.16-test1"
 
 # V5 native Zendure discovery is observation-only in the first development
 # build. The App Token is account discovery material and must never be copied
@@ -163,6 +163,7 @@ SETTING_FORECAST_BASE_LOAD = "forecast_base_load"
 
 SETTING_LEARNED_PLANNING_ENABLED = "learned_planning_enabled"
 SETTING_FULL_CHARGE_MAINTENANCE_ENABLED = "full_charge_maintenance_enabled"
+SETTING_COLD_PROTECTION_WAKEUP_ENABLED = "cold_protection_wakeup_enabled"
 SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS = "full_charge_maintenance_interval_days"
 
 # Default

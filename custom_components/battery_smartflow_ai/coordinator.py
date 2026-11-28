@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .ai_status import map_ai_status
+from .cold_wakeup import cold_wakeup_evidence
 from .soc_plausibility import SocAccountingDecision, evaluate_soc_for_accounting
 from .const import (
     DOMAIN,
@@ -93,6 +94,7 @@ from .const import (
     SETTING_FORECAST_BASE_LOAD,
     SETTING_LEARNED_PLANNING_ENABLED,
     SETTING_FULL_CHARGE_MAINTENANCE_ENABLED,
+    SETTING_COLD_PROTECTION_WAKEUP_ENABLED,
     SETTING_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
     DEFAULT_FULL_CHARGE_MAINTENANCE_ENABLED,
     DEFAULT_FULL_CHARGE_MAINTENANCE_INTERVAL_DAYS,
@@ -4133,11 +4135,16 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         try:
             native_runtime = getattr(self, "native_zendure", None)
             if native_runtime is not None and native_runtime.control_enabled:
-                group_plan = self._productive_group_targets(
-                    command,
-                    native_runtime,
-                    strategy_intent=strategy_intent,
-                )
+                if command.reason in {
+                    "cold_protection_wakeup", "cold_protection_wakeup_stop"
+                }:
+                    group_plan = None
+                else:
+                    group_plan = self._productive_group_targets(
+                        command,
+                        native_runtime,
+                        strategy_intent=strategy_intent,
+                    )
                 if group_plan is None:
                     self._persist.pop("group_control_handover_pending", None)
                     previous_members = self._persist.get("group_control_members", ())
@@ -9521,6 +9528,7 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             manual_standby_no_command = bool(
                 ai_mode == AI_MODE_MANUAL
                 and str(manual_action) == MANUAL_STANDBY
+                and not self._persist.get("cold_wakeup_active_since")
             )
             command_execution_started = None
 
@@ -9598,6 +9606,97 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
             else:
                 self._persist["manual_standby_stop_applied"] = False
+                cold_wakeup_stop = False
+                active_since_raw = self._persist.get("cold_wakeup_active_since")
+                if active_since_raw and native_state is not None:
+                    try:
+                        active_seconds = (
+                            now - datetime.fromisoformat(active_since_raw)
+                        ).total_seconds()
+                    except (TypeError, ValueError):
+                        active_seconds = 180.0
+                    protected = native_state.protection_active
+                    ac_input = native_state.ac_input_power_w
+                    heating = native_state.heating_active
+                    pv_input = native_state.pv_power_w
+                    if protected.valid and not protected.value:
+                        self._persist["cold_wakeup_active_since"] = None
+                    else:
+                        cold_wakeup_stop = bool(
+                            (
+                                ai_mode == AI_MODE_MANUAL
+                                and str(manual_action) == MANUAL_STANDBY
+                            )
+                            or not self.entry.options.get(
+                                SETTING_COLD_PROTECTION_WAKEUP_ENABLED, False
+                            )
+                            or (ac_input.valid and float(ac_input.value) > 150)
+                            or (
+                                active_seconds >= 180
+                                and not (
+                                    heating.valid and heating.value
+                                    and ac_input.valid
+                                    and pv_input.valid
+                                    and float(pv_input.value) > 5
+                                )
+                            )
+                        )
+                cold_wakeup_requested = False
+                if (
+                    not cold_wakeup_stop
+                    and not self._persist.get("cold_wakeup_active_since")
+                    and native_runtime is not None
+                    and bool(getattr(native_runtime, "control_enabled", False))
+                    and bool(self.entry.options.get(
+                        SETTING_COLD_PROTECTION_WAKEUP_ENABLED, False
+                    ))
+                    and native_state is not None
+                    and cold_wakeup_evidence(native_state, now=now)
+                ):
+                    last_attempt_raw = self._persist.get("cold_wakeup_last_attempt")
+                    try:
+                        last_attempt = datetime.fromisoformat(last_attempt_raw)
+                        retry_ready = (now - last_attempt).total_seconds() >= 900
+                    except (TypeError, ValueError):
+                        retry_ready = True
+                    manual_request = bool(
+                        ai_mode == AI_MODE_MANUAL
+                        and str(manual_action) == "charge"
+                    )
+                    sun_state = self.hass.states.get("sun.sun")
+                    forecast_request = bool(
+                        ai_mode != AI_MODE_MANUAL
+                        and sun_state is not None
+                        and sun_state.state == "above_horizon"
+                        and forecast_summary.status == "available"
+                        and forecast_summary.gross_next_3h_kwh >= 0.3
+                    )
+                    cold_wakeup_requested = bool(
+                        retry_ready and (manual_request or forecast_request)
+                    )
+                if cold_wakeup_stop:
+                    regulation_device_command = DeviceCommand(
+                        ac_mode=ZENDURE_MODE_OUTPUT,
+                        input_limit_w=0.0,
+                        output_limit_w=0.0,
+                        reason="cold_protection_wakeup_stop",
+                        should_write_mode=True,
+                        should_write_input=True,
+                        should_write_output=True,
+                        metadata={"command_path": "cold_protection_wakeup_stop"},
+                    )
+                elif cold_wakeup_requested:
+                    regulation_device_command = DeviceCommand(
+                        ac_mode=ZENDURE_MODE_INPUT,
+                        input_limit_w=0.0,
+                        output_limit_w=0.0,
+                        reason="cold_protection_wakeup",
+                        should_write_mode=True,
+                        should_write_input=False,
+                        should_write_output=False,
+                        metadata={"command_path": "cold_protection_wakeup"},
+                    )
+                    self._persist["cold_wakeup_last_attempt"] = now.isoformat()
                 # DeviceCommandBuilder already applied the write tolerance.
                 # Force the selected active-side command so a direction change
                 # cannot be skipped merely because the Number entity still
@@ -9611,6 +9710,13 @@ class ZendureSmartFlowCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         force_power=True,
                         strategy_intent=strategy_intent,
                     )
+                    if (
+                        cold_wakeup_requested
+                        and execution_result.status is CommandExecutionStatus.APPLIED
+                    ):
+                        self._persist["cold_wakeup_active_since"] = now.isoformat()
+                    if cold_wakeup_stop and execution_result.status is CommandExecutionStatus.APPLIED:
+                        self._persist["cold_wakeup_active_since"] = None
                 except DeviceBackendExecutionError as err:
                     # A rejected write does not invalidate measurements already
                     # collected for this update. Keep the coordinator data
